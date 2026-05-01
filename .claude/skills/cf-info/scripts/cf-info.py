@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-info v1.0 — Compact summary of 1C configuration root
+# cf-info v1.1 — Compact summary of 1C configuration root
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -125,6 +125,53 @@ type_ru_names = {
     "Task": "Задачи", "IntegrationService": "Сервисы интеграции",
 }
 
+# --- Read panel layout (Ext/ClientApplicationInterface.xml) ---
+PANEL_NAMES = {
+    "cbab57f2-a0f3-4f0a-89ea-4cb19570ab75": "Открытых",
+    "b553047f-c9aa-4157-978d-448ecad24248": "Разделов",
+    "13322b22-3960-4d68-93a6-fe2dd7f28ca3": "Избранного",
+    "c933ac92-92cd-459d-81cc-e0c8a83ced99": "История",
+    "b2735bd3-d822-4430-ba59-c9e869693b24": "Функций",
+}
+CAI_NS = "http://v8.1c.ru/8.2/managed-application/core"
+
+def get_panels_layout():
+    cfg_dir = os.path.dirname(config_path)
+    cai_path = os.path.join(cfg_dir, "Ext", "ClientApplicationInterface.xml")
+    if not os.path.isfile(cai_path):
+        return None
+    try:
+        cai_tree = etree.parse(cai_path)
+    except Exception:
+        return None
+    cai_root = cai_tree.getroot()
+    layout = {"top": [], "left": [], "right": [], "bottom": [], "declared": []}
+    for side in ("top", "left", "right", "bottom"):
+        for side_el in cai_root.findall(f"{{{CAI_NS}}}{side}"):
+            slot = []
+            for u in side_el.iter(f"{{{CAI_NS}}}uuid"):
+                key = (u.text or "").strip()
+                slot.append(PANEL_NAMES.get(key, f"?{key}"))
+            if slot:
+                layout[side].append(slot)
+    for pd in cai_root.findall(f"{{{CAI_NS}}}panelDef"):
+        key = pd.get("id", "")
+        layout["declared"].append(PANEL_NAMES.get(key, f"?{key}"))
+    return layout
+
+def format_layout_slots(slots):
+    if not slots:
+        return ""
+    parts = []
+    for slot in slots:
+        if len(slot) == 1:
+            parts.append(slot[0])
+        else:
+            parts.append("Стек(" + ", ".join(slot) + ")")
+    return " | ".join(parts)
+
+panel_layout = get_panels_layout()
+
 # --- Count objects in ChildObjects ---
 object_counts = OrderedDict()
 total_objects = 0
@@ -186,6 +233,13 @@ if args.Mode == "overview":
     out(f"Модальность:    {cfg_modality}")
     out(f"Интерфейс:      {cfg_intf_compat}")
     out()
+
+    if panel_layout and any(panel_layout[s] for s in ("top", "left", "right", "bottom")):
+        out("--- Раскладка панелей ---")
+        for s in ("top", "left", "right", "bottom"):
+            if panel_layout[s]:
+                out(f"  {s.ljust(7)} {format_layout_slots(panel_layout[s])}")
+        out()
 
     # Object counts table
     out(f"--- Состав ({total_objects} объектов) ---")
@@ -282,6 +336,19 @@ if args.Mode == "full":
     out(f"Управл.формы в обычн.: {use_mf}")
     out(f"Обычн.формы в управл.: {use_of}")
     out()
+
+    # --- Section: Panel layout ---
+    if panel_layout:
+        out("--- Раскладка панелей ---")
+        for s in ("top", "left", "right", "bottom"):
+            slots = panel_layout[s]
+            if slots:
+                out(f"  {s.ljust(7)} {format_layout_slots(slots)}")
+            else:
+                out(f"  {s.ljust(7)} —")
+        if panel_layout["declared"]:
+            out(f"  объявлено: {', '.join(panel_layout['declared'])}")
+        out()
 
     # --- Section: Storages & default forms ---
     out("--- Хранилища и формы по умолчанию ---")

@@ -1,4 +1,4 @@
-﻿# cf-info v1.0 — Compact summary of 1C configuration root
+﻿# cf-info v1.1 — Compact summary of 1C configuration root
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)][Alias('Path')][string]$ConfigPath,
@@ -118,6 +118,59 @@ $typeRuNames = @{
 	"Task"="Задачи"; "IntegrationService"="Сервисы интеграции"
 }
 
+# --- Read panel layout (Ext/ClientApplicationInterface.xml) ---
+$script:panelNames = @{
+	"cbab57f2-a0f3-4f0a-89ea-4cb19570ab75" = "Открытых"
+	"b553047f-c9aa-4157-978d-448ecad24248" = "Разделов"
+	"13322b22-3960-4d68-93a6-fe2dd7f28ca3" = "Избранного"
+	"c933ac92-92cd-459d-81cc-e0c8a83ced99" = "История"
+	"b2735bd3-d822-4430-ba59-c9e869693b24" = "Функций"
+}
+
+function Get-PanelsLayout {
+	$configDir = [System.IO.Path]::GetDirectoryName($ConfigPath)
+	$caiPath = Join-Path (Join-Path $configDir "Ext") "ClientApplicationInterface.xml"
+	if (-not (Test-Path $caiPath)) { return $null }
+	try { [xml]$caiDoc = Get-Content -Path $caiPath -Encoding UTF8 } catch { return $null }
+	if (-not $caiDoc.DocumentElement) { return $null }
+	$caiNs = New-Object System.Xml.XmlNamespaceManager($caiDoc.NameTable)
+	$caiNs.AddNamespace("ca", "http://v8.1c.ru/8.2/managed-application/core")
+	$layout = [ordered]@{ top=@(); left=@(); right=@(); bottom=@(); declared=@() }
+	foreach ($side in @("top","left","right","bottom")) {
+		foreach ($sideEl in $caiDoc.DocumentElement.SelectNodes("ca:$side", $caiNs)) {
+			$slot = @()
+			foreach ($u in $sideEl.SelectNodes(".//ca:panel/ca:uuid", $caiNs)) {
+				$key = $u.InnerText.Trim()
+				$nm = if ($script:panelNames.Contains($key)) { $script:panelNames[$key] } else { "?$key" }
+				$slot += $nm
+			}
+			if ($slot.Count -gt 0) { $layout[$side] += ,$slot }
+		}
+	}
+	foreach ($pd in $caiDoc.DocumentElement.SelectNodes("ca:panelDef", $caiNs)) {
+		$key = $pd.GetAttribute("id")
+		$nm = if ($script:panelNames.Contains($key)) { $script:panelNames[$key] } else { "?$key" }
+		$layout.declared += $nm
+	}
+	return $layout
+}
+
+function Format-LayoutSlots($slots) {
+	# slots is array of arrays (each inner array = one side-tag's panels, may be 1+)
+	# Single inner array, single panel -> just name
+	# Single inner array, multiple panels -> "Стек(a, b)"
+	# Multiple inner arrays -> separate entries joined by " | "
+	if (-not $slots -or $slots.Count -eq 0) { return "" }
+	$parts = @()
+	foreach ($slot in $slots) {
+		if ($slot.Count -eq 1) { $parts += $slot[0] }
+		else { $parts += ("Стек(" + ($slot -join ", ") + ")") }
+	}
+	return ($parts -join " | ")
+}
+
+$script:panelLayout = Get-PanelsLayout
+
 # --- Count objects in ChildObjects ---
 $objectCounts = [ordered]@{}
 $totalObjects = 0
@@ -180,6 +233,23 @@ if ($Mode -eq "overview") {
 	Out "Модальность:    $cfgModality"
 	Out "Интерфейс:      $cfgIntfCompat"
 	Out ""
+
+	# Panel layout (if file exists)
+	if ($script:panelLayout) {
+		$hasPlaced = $false
+		foreach ($s in @("top","left","right","bottom")) {
+			if ($script:panelLayout[$s].Count -gt 0) { $hasPlaced = $true; break }
+		}
+		if ($hasPlaced) {
+			Out "--- Раскладка панелей ---"
+			foreach ($s in @("top","left","right","bottom")) {
+				if ($script:panelLayout[$s].Count -gt 0) {
+					Out "  $($s.PadRight(7)) $(Format-LayoutSlots $script:panelLayout[$s])"
+				}
+			}
+			Out ""
+		}
+	}
 
 	# Object counts table
 	Out "--- Состав ($totalObjects объектов) ---"
@@ -274,6 +344,23 @@ if ($Mode -eq "full") {
 	Out "Управл.формы в обычн.: $useMF"
 	Out "Обычн.формы в управл.: $useOF"
 	Out ""
+
+	# --- Section: Panel layout ---
+	if ($script:panelLayout) {
+		Out "--- Раскладка панелей ---"
+		foreach ($s in @("top","left","right","bottom")) {
+			$slots = $script:panelLayout[$s]
+			if ($slots.Count -gt 0) {
+				Out "  $($s.PadRight(7)) $(Format-LayoutSlots $slots)"
+			} else {
+				Out "  $($s.PadRight(7)) —"
+			}
+		}
+		if ($script:panelLayout.declared.Count -gt 0) {
+			Out "  объявлено: $($script:panelLayout.declared -join ', ')"
+		}
+		Out ""
+	}
 
 	# --- Section: Storages & default forms ---
 	Out "--- Хранилища и формы по умолчанию ---"
