@@ -480,8 +480,8 @@ export const steps = [
         { name: 'Объект', type: 'CatalogObject.Номенклатура', main: true },
       ],
       elements: [
-        { pages: 'Страницы', children: [
-          { page: 'Основное', children: [
+        { pages: 'Страницы', pagesRepresentation: 'TabsOnTop', children: [
+          { page: 'Основное', title: 'Основное', children: [
             { input: 'Наименование', path: 'Объект.Description', title: 'Наименование' },
             { input: 'Артикул', path: 'Объект.Артикул', title: 'Артикул' },
             { input: 'ВидНоменклатуры', path: 'Объект.ВидНоменклатуры', title: 'Вид номенклатуры' },
@@ -490,7 +490,7 @@ export const steps = [
             { input: 'Активен', path: 'Объект.Активен', title: 'Активен' },
             { input: 'ДатаПоступления', path: 'Объект.ДатаПоступления', title: 'Дата поступления' },
           ]},
-          { page: 'Дополнительно', children: [
+          { page: 'Дополнительно', title: 'Дополнительно', children: [
             { input: 'ЕдиницаИзмерения', path: 'Объект.ЕдиницаИзмерения', title: 'Единица измерения' },
             { input: 'Комментарий', path: 'Объект.Комментарий', title: 'Комментарий' },
           ]},
