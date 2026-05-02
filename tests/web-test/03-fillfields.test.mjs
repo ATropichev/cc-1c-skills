@@ -14,7 +14,7 @@ export default async function({ navigateSection, openCommand, clickElement, fill
 
     const result = await fillFields({
       'Артикул': 'TEST-001',
-      'Активен': 'Нет',                       // Boolean → "Да/Нет" dropdown в 1С
+      'Активен': false,                       // Boolean → CheckBoxField, toggle
       'ДатаПоступления': '15.05.2026',        // date
       'ВидНоменклатуры': 'Услуга',            // EnumRef dropdown
     });
@@ -26,11 +26,11 @@ export default async function({ navigateSection, openCommand, clickElement, fill
 
     const state = await getFormState();
     assert.equal(findField(state, 'Артикул')?.value, 'TEST-001', 'Артикул text');
-    assert.equal(findField(state, 'Активен')?.value, 'Нет', 'Активен dropdown=Нет');
+    assert.equal(findField(state, 'Активен')?.value, false, 'Активен checkbox=false');
     assert.equal(findField(state, 'ДатаПоступления')?.value, '15.05.2026', 'ДатаПоступления');
     assert.equal(findField(state, 'ВидНоменклатуры')?.value, 'Услуга', 'ВидНоменклатуры dropdown');
 
-    await closeForm();
+    await closeForm({ save: false });
   });
 
   await step('reference-dropdown: Контрагент → CatalogRef.Контрагенты в новой накладной', async () => {
@@ -49,6 +49,6 @@ export default async function({ navigateSection, openCommand, clickElement, fill
     log(`Контрагент value='${contractor?.value}'`);
     assert.includes(contractor?.value || '', 'Север', 'Контрагент должен показать выбранное значение');
 
-    await closeForm();   // close without save
+    await closeForm({ save: false });
   });
 }
