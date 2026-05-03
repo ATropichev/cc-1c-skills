@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// web-test run v1.6 — CLI runner for 1C web client automation
+// web-test run v1.7 — CLI runner for 1C web client automation
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * CLI runner for 1C web client automation.
@@ -336,7 +336,7 @@ function cmdStatus() {
 
 async function cmdTest(rawArgs) {
   // Parse flags
-  const opts = { bail: false, retry: 0, timeout: 30000, report: null, format: 'json', screenshot: null, reportDir: null };
+  const opts = { bail: false, retry: 0, timeout: 30000, report: null, format: 'json', screenshot: null, reportDir: null, record: false };
   let tags = null, grep = null;
   const positional = [];
   for (const a of rawArgs) {
@@ -349,6 +349,7 @@ async function cmdTest(rawArgs) {
     else if (a.startsWith('--format=')) opts.format = a.slice(9);
     else if (a.startsWith('--screenshot=')) opts.screenshot = a.slice(13);
     else if (a.startsWith('--report-dir=')) opts.reportDir = a.slice(13);
+    else if (a === '--record')         opts.record = true;
     else if (!a.startsWith('--'))      positional.push(a);
   }
 
@@ -381,6 +382,7 @@ async function cmdTest(rawArgs) {
   if (!tags && config.tags) tags = config.tags;
   opts.timeout = rawArgs.some(a => a.startsWith('--timeout=')) ? opts.timeout : (config.timeout || opts.timeout);
   opts.retry = rawArgs.some(a => a.startsWith('--retry=')) ? opts.retry : (config.retries || opts.retry);
+  opts.record = opts.record || !!config.record;
   opts.screenshot = opts.screenshot || config.screenshot || 'on-failure';
   if (!['on-failure', 'every-step', 'off'].includes(opts.screenshot)) {
     die(`Invalid --screenshot=${opts.screenshot} (expected on-failure|every-step|off)`);
@@ -408,7 +410,7 @@ async function cmdTest(rawArgs) {
   let hasOnly = false;
   for (const file of testFiles) {
     const mod = await import('file:///' + file.replace(/\\/g, '/'));
-    const t = {
+    const base = {
       file: relative(testDir, file).replace(/\\/g, '/'),
       name: mod.name || basename(file, '.test.mjs'),
       tags: mod.tags || [],
@@ -418,9 +420,18 @@ async function cmdTest(rawArgs) {
       setup: mod.setup,
       teardown: mod.teardown,
       fn: mod.default,
+      param: undefined,
     };
-    if (t.only) hasOnly = true;
-    tests.push(t);
+    if (base.only) hasOnly = true;
+    if (Array.isArray(mod.params) && mod.params.length) {
+      for (let i = 0; i < mod.params.length; i++) {
+        const p = mod.params[i];
+        const name = base.name.includes('{') ? interpolate(base.name, p) : `${base.name}[${i}]`;
+        tests.push({ ...base, name, param: p });
+      }
+    } else {
+      tests.push(base);
+    }
   }
 
   // Filter
@@ -485,6 +496,12 @@ async function cmdTest(rawArgs) {
         let stepIdx = 0;
         const t0 = Date.now();
 
+        let videoFile = null;
+        if (opts.record) {
+          videoFile = resolve(reportDir, `${testIdx}-${slugify(t.name)}.mp4`);
+          try { await browser.startRecording(videoFile, { force: true }); } catch { videoFile = null; }
+        }
+
         // Wire up per-test log and step
         ctx.log = (...a) => output.push(a.map(String).join(' '));
         ctx.step = async (name, fn) => {
@@ -523,7 +540,7 @@ async function cmdTest(rawArgs) {
 
           // Run test with timeout
           await Promise.race([
-            t.fn(ctx),
+            t.fn(ctx, t.param),
             new Promise((_, reject) => setTimeout(() => reject(new Error(`Timeout (${t.timeout}ms)`)), t.timeout)),
           ]);
 
@@ -534,8 +551,11 @@ async function cmdTest(rawArgs) {
           // Built-in state reset
           await resetState(ctx);
 
+          if (videoFile) {
+            try { await browser.stopRecording(); } catch {}
+          }
           const dur = elapsed(t0);
-          testResult = { name: t.name, file: t.file, tags: t.tags, status: 'passed', duration: dur, attempts: attempt, start: t0, stop: Date.now(), steps, output: output.join('\n'), error: null, screenshot: null };
+          testResult = { name: t.name, file: t.file, tags: t.tags, status: 'passed', duration: dur, attempts: attempt, start: t0, stop: Date.now(), steps, output: output.join('\n'), error: null, screenshot: null, video: videoFile };
           lastError = null;
           break;
 
@@ -557,9 +577,12 @@ async function cmdTest(rawArgs) {
             } catch {}
           }
 
+          if (videoFile) {
+            try { await browser.stopRecording(); } catch {}
+          }
           lastError = { message: e.message, step: e.onecError?.step, screenshot: shotFile };
           const dur = elapsed(t0);
-          testResult = { name: t.name, file: t.file, tags: t.tags, status: 'failed', duration: dur, attempts: attempt, start: t0, stop: Date.now(), steps, output: output.join('\n'), error: lastError, screenshot: shotFile };
+          testResult = { name: t.name, file: t.file, tags: t.tags, status: 'failed', duration: dur, attempts: attempt, start: t0, stop: Date.now(), steps, output: output.join('\n'), error: lastError, screenshot: shotFile, video: videoFile };
         }
       }
 
@@ -631,11 +654,10 @@ function writeAllure(results, reportDir) {
       stop: tr.stop,
       labels: (tr.tags || []).map(t => ({ name: 'tag', value: t })),
       steps: (tr.steps || []).map(allureStep),
-      attachments: tr.screenshot ? [{
-        name: 'Screenshot on failure',
-        source: basename(tr.screenshot),
-        type: 'image/png',
-      }] : [],
+      attachments: [
+        ...(tr.screenshot ? [{ name: 'Screenshot on failure', source: basename(tr.screenshot), type: 'image/png' }] : []),
+        ...(tr.video ? [{ name: 'Video', source: basename(tr.video), type: 'video/mp4' }] : []),
+      ],
     };
     if (tr.status === 'failed' && tr.error) {
       out.statusDetails = { message: tr.error.message || '', trace: tr.output || '' };
@@ -736,6 +758,11 @@ function printSteps(W, steps, indent) {
 
 function elapsed2(start, stop) {
   return Math.round(((stop || Date.now()) - start) / 100) / 10;
+}
+
+function interpolate(template, params) {
+  return String(template).replace(/\{(\w+)\}/g, (_, key) =>
+    params[key] !== undefined ? String(params[key]) : `{${key}}`);
 }
 
 function slugify(s) {
@@ -890,5 +917,6 @@ Options for test:
   --report=path            Write JSON report to file
   --report-dir=path        Directory for screenshots and other artifacts
   --screenshot=mode        on-failure (default) | every-step | off
-  --format=fmt             json (default) | allure | junit`);
+  --format=fmt             json (default) | allure | junit
+  --record                 Record video for each test (mp4 in report-dir)`);
 }
