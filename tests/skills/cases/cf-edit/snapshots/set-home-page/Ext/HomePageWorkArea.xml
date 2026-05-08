@@ -3,14 +3,14 @@
 	<WorkingAreaTemplate>TwoColumnsVariableWidth</WorkingAreaTemplate>
 	<LeftColumn>
 		<Item>
-			<Form>CommonForm.НачалоРаботы</Form>
+			<Form>Catalog.Товары.Form.ФормаСписка</Form>
 			<Height>10</Height>
 			<Visibility>
 				<xr:Common>true</xr:Common>
 			</Visibility>
 		</Item>
 		<Item>
-			<Form>CommonForm.СписокЗадач</Form>
+			<Form>Catalog.Товары.Form.ФормаЭлемента</Form>
 			<Height>100</Height>
 			<Visibility>
 				<xr:Common>false</xr:Common>
@@ -24,7 +24,7 @@
 			</Visibility>
 		</Item>
 		<Item>
-			<Form>CommonForm.РабочийСтолОператора</Form>
+			<Form>Catalog.Контрагенты.Form.ФормаОбъекта</Form>
 			<Height>10</Height>
 			<Visibility>
 				<xr:Common>false</xr:Common>

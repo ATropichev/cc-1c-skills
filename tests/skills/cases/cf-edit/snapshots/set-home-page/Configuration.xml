@@ -246,6 +246,11 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
+			<Catalog>Товары</Catalog>
+			<Catalog>Контрагенты</Catalog>
+			<DataProcessor>Поиск</DataProcessor>
+			<Role>Оператор</Role>
+			<Role>ПолныеПрава</Role>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>
