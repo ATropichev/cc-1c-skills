@@ -36,6 +36,18 @@ export default async function({ navigateSection, openCommand, clickElement, fill
     assert.equal(t.rows[0]['Количество'], '10,000', 'Количество строки 0 = 10');
   });
 
+  await step('tab-loop: изменить два числовых поля в строке 1 одним вызовом', async () => {
+    const r = await fillTableRow(
+      { 'Количество': '7', 'Цена': '150' },
+      { table: 'Товары', row: 1 }
+    );
+    log(`tab-loop result: ${JSON.stringify(r)}`);
+    const t = await readTable({ table: 'Товары' });
+    log(`row 1 after tab-loop: ${JSON.stringify(t.rows[1])}`);
+    assert.equal(t.rows[1]['Количество'], '7,000', 'Количество строки 1 = 7');
+    assert.equal(t.rows[1]['Цена'], '150,00', 'Цена строки 1 = 150');
+  });
+
   await step('delete: удалить первую строку', async () => {
     await deleteTableRow(0, { table: 'Товары' });
     const t = await readTable({ table: 'Товары' });
