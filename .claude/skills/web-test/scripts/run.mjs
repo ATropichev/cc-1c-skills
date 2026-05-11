@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// web-test run v1.9 — CLI runner for 1C web client automation
+// web-test run v1.10 — CLI runner for 1C web client automation
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * CLI runner for 1C web client automation.
@@ -113,8 +113,8 @@ async function handleRequest(req, res) {
  * is prefixed with `setActiveContext(name)` so the test can interleave actions
  * across contexts (`ctx.a.click(...); ctx.b.click(...)`).
  */
-function buildScopedContext(name, { noRecord = false } = {}) {
-  const inner = buildContext({ noRecord });
+function buildScopedContext(name) {
+  const inner = buildContext({ noRecord: false });
   const scoped = {};
   for (const [k, v] of Object.entries(inner)) {
     if (typeof v === 'function') {
@@ -512,8 +512,11 @@ async function cmdTest(rawArgs) {
     // Connect: create the default context up front (so beforeAll has a working browser)
     await ensureContext(defaultContextName);
 
-    // Build context — flat API for single-context tests; reused across tests via setActiveContext
-    const ctx = buildContext({ noRecord: true });
+    // Build context — flat API for single-context tests; reused across tests via setActiveContext.
+    // noRecord: false → tests get full API (showCaption, startRecording, etc.). The runner manages
+    // its own recording via --record; if a test author calls startRecording while the runner already
+    // records, browser.startRecording throws "Already recording" (loud failure beats silent no-op).
+    const ctx = buildContext({ noRecord: false });
     ctx.assert = createAssertions();
     ctx.log = (...a) => { /* per-test, overridden below */ };
 
@@ -599,7 +602,7 @@ async function cmdTest(rawArgs) {
         const scopedKeys = [];
         if (t.contexts && t.contexts.length) {
           for (const cn of t.contexts) {
-            ctx[cn] = buildScopedContext(cn, { noRecord: true });
+            ctx[cn] = buildScopedContext(cn);
             scopedKeys.push(cn);
           }
         }
