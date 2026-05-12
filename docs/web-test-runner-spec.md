@@ -269,8 +269,15 @@ assert.noErrors(state, msg)
 ### Два уровня
 
 **Инфраструктурный уровень** (без браузера):
-- `prepare()` -- до подключения (восстановление БД, публикация, загрузка данных)
-- `cleanup()` -- после отключения (удаление публикации, очистка)
+- `prepare({ hookArgs, log, config })` -- до подключения (восстановление БД, публикация, загрузка данных)
+- `cleanup({ hookArgs, log, config })` -- после отключения (удаление публикации, очистка)
+
+Поля:
+- `hookArgs: string[]` -- всё что в командной строке передано после разделителя `--`,
+  без интерпретации со стороны раннера. Хук парсит сам (см. §6.1 ниже).
+- `log: (...args) => void` -- функция логирования раннера (структурированный вывод
+  с префиксом `[hooks]`). Использовать вместо `console.log` чтобы не ломать формат отчёта.
+- `config: object` -- разобранный `webtest.config.mjs` (URL контекстов, isolation, etc.).
 
 **Тестовый уровень** (с контекстом браузера):
 - `beforeAll(ctx)` -- после подключения, перед первым тестом
@@ -317,12 +324,17 @@ while (есть открытые формы) {
 ```js
 import { execSync } from 'child_process';
 
-export async function prepare() {
+export async function prepare({ hookArgs, log, config }) {
+  // Простой парсер ad-hoc флагов: hookArgs приходит как есть, без интерпретации
+  // раннером (см. §6.1 ниже).
+  const force = hookArgs.includes('--rebuild-stand');
+  log('preparing stand, force=', force);
   execSync('powershell.exe -File scripts/restore-db.ps1');
   execSync('powershell.exe -File scripts/publish.ps1');
 }
 
-export async function cleanup() {
+export async function cleanup({ log }) {
+  log('cleaning up stand');
   execSync('powershell.exe -File scripts/unpublish.ps1');
 }
 
@@ -334,6 +346,27 @@ export async function afterEach({ closeForm }) {
   // пользовательская очистка после теста (необязательно, встроенный сброс тоже сработает)
 }
 ```
+
+### 6.1. Проброс пользовательских флагов через `--`
+
+Раннер не знает о пользовательских флагах хуков. Чтобы хуки получили ad-hoc
+параметры без правки `webtest.config.mjs` или окружения, используется стандартная
+shell-конвенция `--` (как у `npm`, `cargo`, `pytest`): всё что идёт после `--`
+в CLI раннера передаётся в `prepare`/`cleanup` через поле `hookArgs: string[]`
+без интерпретации.
+
+```
+node run.mjs test tests/web-test/ --bail -- --rebuild-stand --reload-data
+                                  └─ runner ─┘ └──── hookArgs ────────────┘
+```
+
+В этом примере раннер получает `--bail`, а `hookArgs` хуков становится
+`['--rebuild-stand', '--reload-data']`. Парсинг этого массива — ответственность
+хуков.
+
+Если разделитель `--` не указан, `hookArgs` — пустой массив. Это позволяет
+раннеру и хукам эволюционировать независимо: новый builtin-флаг раннера
+никогда не пересечётся с пользовательским.
 
 ---
 

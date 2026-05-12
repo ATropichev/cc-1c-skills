@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// web-test run v1.10 — CLI runner for 1C web client automation
+// web-test run v1.11 — CLI runner for 1C web client automation
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * CLI runner for 1C web client automation.
@@ -356,11 +356,18 @@ function cmdStatus() {
 // ============================================================
 
 async function cmdTest(rawArgs) {
+  // Split off everything after `--` — those args belong to user-defined hooks
+  // (see spec §6: "all arguments after `--` are forwarded verbatim to _hooks.mjs
+  // via the hookArgs field; the runner does not interpret them").
+  const sepIdx = rawArgs.indexOf('--');
+  const ownArgs  = sepIdx >= 0 ? rawArgs.slice(0, sepIdx) : rawArgs;
+  const hookArgs = sepIdx >= 0 ? rawArgs.slice(sepIdx + 1) : [];
+
   // Parse flags
   const opts = { bail: false, retry: 0, timeout: 30000, report: null, format: 'json', screenshot: null, reportDir: null, record: false };
   let tags = null, grep = null;
   const positional = [];
-  for (const a of rawArgs) {
+  for (const a of ownArgs) {
     if (a.startsWith('--tags='))       tags = a.slice(7).split(',');
     else if (a.startsWith('--grep='))  grep = new RegExp(a.slice(7), 'i');
     else if (a === '--bail')           opts.bail = true;
@@ -417,8 +424,8 @@ async function cmdTest(rawArgs) {
 
   // Apply config defaults (CLI flags override)
   if (!tags && config.tags) tags = config.tags;
-  opts.timeout = rawArgs.some(a => a.startsWith('--timeout=')) ? opts.timeout : (config.timeout || opts.timeout);
-  opts.retry = rawArgs.some(a => a.startsWith('--retry=')) ? opts.retry : (config.retries || opts.retry);
+  opts.timeout = ownArgs.some(a => a.startsWith('--timeout=')) ? opts.timeout : (config.timeout || opts.timeout);
+  opts.retry = ownArgs.some(a => a.startsWith('--retry=')) ? opts.retry : (config.retries || opts.retry);
   opts.record = opts.record || !!config.record;
   opts.screenshot = opts.screenshot || config.screenshot || 'on-failure';
   if (!['on-failure', 'every-step', 'off'].includes(opts.screenshot)) {
@@ -498,7 +505,10 @@ async function cmdTest(rawArgs) {
   let passCount = 0, failCount = 0, skipCount = 0;
 
   // Prepare: infrastructure hooks (no browser)
-  if (hooks.prepare) await hooks.prepare();
+  // Spec §6: prepare receives { hookArgs, log, config } — see ExternalDoc.
+  const hookLog = (...a) => W.write(`[hooks] ${a.map(String).join(' ')}\n`);
+  const hookEnv = { hookArgs, log: hookLog, config };
+  if (hooks.prepare) await hooks.prepare(hookEnv);
 
   // Lazy context creation: ensures the named browser context exists, creating it on first request.
   async function ensureContext(name) {
@@ -692,8 +702,8 @@ async function cmdTest(rawArgs) {
   } finally {
     // Disconnect
     try { await browser.disconnect(); } catch {}
-    // Cleanup: infrastructure hooks
-    if (hooks.cleanup) try { await hooks.cleanup(); } catch {}
+    // Cleanup: infrastructure hooks (same signature as prepare)
+    if (hooks.cleanup) try { await hooks.cleanup(hookEnv); } catch {}
   }
 
   const finishedAt = new Date().toISOString();
@@ -1002,5 +1012,8 @@ Options for test:
   --report-dir=path        Directory for screenshots and other artifacts
   --screenshot=mode        on-failure (default) | every-step | off
   --format=fmt             json (default) | allure | junit
-  --record                 Record video for each test (mp4 in report-dir)`);
+  --record                 Record video for each test (mp4 in report-dir)
+  -- <hook-args...>        Everything after \`--\` is forwarded to _hooks.mjs
+                           prepare/cleanup as hookArgs (runner does not parse it).
+                           Example: ... tests/web-test/ -- --rebuild-stand`);
 }
