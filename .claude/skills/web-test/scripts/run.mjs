@@ -571,25 +571,29 @@ async function cmdTest(rawArgs) {
     let testIdx = 0;
     for (const t of filtered) {
       testIdx++;
+      // Declared contexts — нужны и в skip-ветке, и в основной, чтобы все
+      // testResult-записи в отчёте всегда содержали `contexts` поле.
+      const declaredContexts = t.contexts && t.contexts.length
+        ? t.contexts
+        : [t.context || defaultContextName];
+
       if (t.skip) {
         const reason = typeof t.skip === 'string' ? t.skip : '';
         W.write(`  \u25CB ${t.name}${reason ? ` (skip: ${reason})` : ' (skip)'}\n`);
-        results.push({ name: t.name, file: t.file, tags: t.tags, status: 'skipped', duration: 0, attempts: 0, steps: [], output: '', error: null, screenshot: null });
+        results.push({ name: t.name, file: t.file, tags: t.tags, contexts: declaredContexts, status: 'skipped', duration: 0, attempts: 0, steps: [], output: '', error: null, screenshot: null });
         skipCount++;
         continue;
       }
 
       // Resolve test's contexts: multi (t.contexts) or single (t.context || default).
       // Lazy-create them and set active to the primary one.
-      const testContextNames = t.contexts && t.contexts.length
-        ? t.contexts
-        : [t.context || defaultContextName];
+      const testContextNames = declaredContexts;
       try {
         for (const cn of testContextNames) await ensureContext(cn);
         await browser.setActiveContext(testContextNames[0]);
       } catch (e) {
         W.write(`  ✗ ${t.name} (context setup failed: ${e.message})\n`);
-        results.push({ name: t.name, file: t.file, tags: t.tags, status: 'failed', duration: 0, attempts: 0, steps: [], output: '', error: { message: e.message }, screenshot: null });
+        results.push({ name: t.name, file: t.file, tags: t.tags, contexts: declaredContexts, status: 'failed', duration: 0, attempts: 0, steps: [], output: '', error: { message: e.message }, screenshot: null });
         failCount++;
         if (opts.bail) break;
         continue;
@@ -697,7 +701,7 @@ async function cmdTest(rawArgs) {
             try { await browser.stopRecording(); } catch {}
           }
           const dur = elapsed(t0);
-          testResult = { name: t.name, file: t.file, tags: t.tags, status: 'passed', duration: dur, attempts: attempt, start: t0, stop: Date.now(), steps, output: output.join('\n'), error: null, screenshot: null, video: videoFile };
+          testResult = { name: t.name, file: t.file, tags: t.tags, contexts: testContextNames, status: 'passed', duration: dur, attempts: attempt, start: t0, stop: Date.now(), steps, output: output.join('\n'), error: null, screenshot: null, video: videoFile };
           lastError = null;
           break;
 
@@ -731,7 +735,7 @@ async function cmdTest(rawArgs) {
           }
           lastError = { message: e.message, step: e.onecError?.step, screenshot: shotFile };
           const dur = elapsed(t0);
-          testResult = { name: t.name, file: t.file, tags: t.tags, status: 'failed', duration: dur, attempts: attempt, start: t0, stop: Date.now(), steps, output: output.join('\n'), error: lastError, screenshot: shotFile, video: videoFile };
+          testResult = { name: t.name, file: t.file, tags: t.tags, contexts: testContextNames, status: 'failed', duration: dur, attempts: attempt, start: t0, stop: Date.now(), steps, output: output.join('\n'), error: lastError, screenshot: shotFile, video: videoFile };
         }
       }
 
