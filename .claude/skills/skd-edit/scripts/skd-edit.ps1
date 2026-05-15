@@ -1,4 +1,4 @@
-﻿# skd-edit v1.11 — Atomic 1C DCS editor
+﻿# skd-edit v1.12 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -11,7 +11,7 @@ param(
 		"add-dataParameter","add-order","add-selection","add-dataSetLink",
 		"add-dataSet","add-variant","add-conditionalAppearance","add-drilldown",
 		"set-query","patch-query","set-outputParameter","set-structure",
-		"modify-field","modify-filter","modify-dataParameter","modify-parameter",
+		"modify-field","modify-filter","modify-dataParameter","modify-parameter","modify-structure",
 		"rename-parameter","reorder-parameters",
 		"clear-selection","clear-order","clear-filter",
 		"remove-field","remove-total","remove-calculated-field","remove-parameter","remove-filter")]
@@ -581,15 +581,17 @@ function Parse-StructureShorthand {
 		$seg = $segments[$i].Trim()
 		$group = @{ type = "group" }
 
-		if ($seg -match '@name=(.+)') {
-			$group["name"] = $Matches[1].Trim()
-			$seg = ($seg -replace '\s*@name=.+', '').Trim()
+		if ($seg -match '@name=(?:"([^"]+)"|''([^'']+)''|(\S+))') {
+			$rawName = if ($Matches[1]) { $Matches[1] } elseif ($Matches[2]) { $Matches[2] } else { $Matches[3] }
+			$group["name"] = $rawName.Trim()
+			$seg = ($seg -replace '\s*@name=(?:"[^"]+"|''[^'']+''|\S+)', '').Trim()
 		}
 
 		if ($seg -match '^(?i)(details|детали)$') {
 			$group["groupBy"] = @()
 		} else {
-			$group["groupBy"] = @($seg)
+			$fields = @($seg -split '\s*,\s*' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+			$group["groupBy"] = $fields
 		}
 
 		if ($null -ne $innermost) {
@@ -804,6 +806,48 @@ function Build-CalcFieldFragment {
 	return $lines -join "`r`n"
 }
 
+function Build-ParamValueXml {
+	# Returns array of XML lines for a <value xsi:type=...>...</value> element (or StandardPeriod block).
+	# Selects xsi:type by declared type, then falls back to value pattern.
+	param([string]$type, [string]$value, [string]$indent, [string]$tagName = "value", [string]$tagNs = "")
+
+	$i = $indent
+	$valStr = "$value"
+	$open = if ($tagNs) { "$tagNs`:$tagName" } else { $tagName }
+	$lines = @()
+
+	if ($type -eq "StandardPeriod") {
+		$lines += "$i<$open xsi:type=`"v8:StandardPeriod`">"
+		$lines += "$i`t<v8:variant xsi:type=`"v8:StandardPeriodVariant`">$(Esc-Xml $valStr)</v8:variant>"
+		$lines += "$i`t<v8:startDate>0001-01-01T00:00:00</v8:startDate>"
+		$lines += "$i`t<v8:endDate>0001-01-01T00:00:00</v8:endDate>"
+		$lines += "$i</$open>"
+		return $lines
+	}
+
+	$xsi = $null
+	if ($type -match '^date') { $xsi = "xs:dateTime" }
+	elseif ($type -eq "boolean") { $xsi = "xs:boolean" }
+	elseif ($type -match '^decimal') { $xsi = "xs:decimal" }
+	elseif ($type -match '^string') { $xsi = "xs:string" }
+	elseif ($type -match '^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|BusinessProcessRef|TaskRef|ExchangePlanRef)\.') {
+		$xsi = "dcscor:DesignTimeValue"
+	}
+	else {
+		# Type unknown or empty — guess from value
+		if ($valStr -match '^\d{4}-\d{2}-\d{2}T') { $xsi = "xs:dateTime" }
+		elseif ($valStr -eq "true" -or $valStr -eq "false") { $xsi = "xs:boolean" }
+		elseif ($valStr -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.' -or
+		        $valStr -match '^(Catalog|Document|Enum|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') {
+			$xsi = "dcscor:DesignTimeValue"
+		}
+		else { $xsi = "xs:string" }
+	}
+
+	$lines += "$i<$open xsi:type=`"$xsi`">$(Esc-Xml $valStr)</$open>"
+	return $lines
+}
+
 function Build-ParamFragment {
 	param($parsed, [string]$indent)
 
@@ -825,22 +869,8 @@ function Build-ParamFragment {
 	}
 
 	if ($null -ne $parsed.value) {
-		$valStr = "$($parsed.value)"
-		if ($parsed.type -eq "StandardPeriod") {
-			$lines += "$i`t<value xsi:type=`"v8:StandardPeriod`">"
-			$lines += "$i`t`t<v8:variant xsi:type=`"v8:StandardPeriodVariant`">$(Esc-Xml $valStr)</v8:variant>"
-			$lines += "$i`t`t<v8:startDate>0001-01-01T00:00:00</v8:startDate>"
-			$lines += "$i`t`t<v8:endDate>0001-01-01T00:00:00</v8:endDate>"
-			$lines += "$i`t</value>"
-		} elseif ($parsed.type -match '^date') {
-			$lines += "$i`t<value xsi:type=`"xs:dateTime`">$(Esc-Xml $valStr)</value>"
-		} elseif ($parsed.type -eq "boolean") {
-			$lines += "$i`t<value xsi:type=`"xs:boolean`">$(Esc-Xml $valStr)</value>"
-		} elseif ($parsed.type -match '^decimal') {
-			$lines += "$i`t<value xsi:type=`"xs:decimal`">$(Esc-Xml $valStr)</value>"
-		} else {
-			$lines += "$i`t<value xsi:type=`"xs:string`">$(Esc-Xml $valStr)</value>"
-		}
+		$valueLines = Build-ParamValueXml -type $parsed.type -value $parsed.value -indent "$i`t"
+		foreach ($vl in $valueLines) { $lines += $vl }
 	}
 
 	$lines += "$i</parameter>"
@@ -1565,10 +1595,10 @@ $corNs = "http://v8.1c.ru/8.1/data-composition-system/core"
 
 # --- 7. Batch value splitting ---
 
-if ($Operation -eq "set-query" -or $Operation -eq "set-structure" -or $Operation -eq "add-dataSet") {
+if ($Operation -eq "set-query" -or $Operation -eq "set-structure" -or $Operation -eq "modify-structure" -or $Operation -eq "add-dataSet") {
 	$values = @($Value)
 } elseif ($Operation -eq "patch-query") {
-	$values = @($Value -split ';;' | Where-Object { $_.Trim() })
+	$values = @($Value -split ';;' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 } elseif ($Operation -eq "add-drilldown") {
 	if ($Value.Contains(';;')) {
 		$values = @($Value -split ';;' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
@@ -1810,15 +1840,63 @@ switch ($Operation) {
 				$avPart = $rest.Substring($avIdx)
 			}
 
-			# Process simple key=value pairs (use, denyIncompleteValues, etc.)
+			# Process simple key=value pairs (use, denyIncompleteValues, value, etc.)
 			if ($simpleRest) {
 				$kvPairs = [regex]::Matches($simpleRest, '(\w+)=(\S+)')
 				foreach ($kv in $kvPairs) {
 					$key = $kv.Groups[1].Value
 					$value = $kv.Groups[2].Value
 
-					$existing = $paramEl.SelectSingleNode($key)
-					if ($existing) {
+					# Namespace-aware lookup (children live in $schNs)
+					$existing = $null
+					foreach ($ch in $paramEl.ChildNodes) {
+						if ($ch.NodeType -eq 'Element' -and $ch.LocalName -eq $key -and $ch.NamespaceURI -eq $schNs) {
+							$existing = $ch; break
+						}
+					}
+
+					if ($key -eq "value") {
+						# Special-case: rebuild <value> with correct xsi:type from <valueType>
+						$declaredType = ""
+						$vtEl = $null
+						foreach ($ch in $paramEl.ChildNodes) {
+							if ($ch.NodeType -eq 'Element' -and $ch.LocalName -eq 'valueType' -and $ch.NamespaceURI -eq $schNs) { $vtEl = $ch; break }
+						}
+						if ($vtEl) {
+							foreach ($tnode in $vtEl.ChildNodes) {
+								if ($tnode.NodeType -eq 'Element' -and $tnode.LocalName -eq 'Type') {
+									$declaredType = $tnode.InnerText.Trim() -replace '^d\d+p\d+:', ''
+									break
+								}
+							}
+						}
+						$valueLines = Build-ParamValueXml -type $declaredType -value $value -indent $childIndent
+						$fragXml = $valueLines -join "`r`n"
+
+						$wasExisting = ($null -ne $existing)
+						if ($existing) {
+							# Capture position by next-element sibling, then remove existing
+							$refNode = $existing.NextSibling
+							while ($refNode -and ($refNode.NodeType -eq 'Whitespace' -or $refNode.NodeType -eq 'SignificantWhitespace')) {
+								$refNode = $refNode.NextSibling
+							}
+							Remove-NodeWithWhitespace $existing
+						} else {
+							# Insert before useRestriction/availableValue/denyIncompleteValues/use
+							$refNode = $null
+							foreach ($child in $paramEl.ChildNodes) {
+								if ($child.NodeType -eq 'Element' -and $child.LocalName -in @('useRestriction','availableValue','denyIncompleteValues','use')) {
+									$refNode = $child; break
+								}
+							}
+						}
+						$nodes = Import-Fragment $xmlDoc $fragXml
+						foreach ($node in $nodes) {
+							Insert-BeforeElement $paramEl $node $refNode $childIndent
+						}
+						$verb = if ($wasExisting) { "updated" } else { "added" }
+						Write-Host "[OK] Parameter `"$paramName`": value $verb to $value"
+					} elseif ($existing) {
 						$existing.InnerText = $value
 						Write-Host "[OK] Parameter `"$paramName`": $key updated to $value"
 					} else {
@@ -1849,15 +1927,25 @@ switch ($Operation) {
 				$avValue = $avParts[0].Trim()
 				$avPresentation = if ($avParts.Count -gt 1) { $avParts[1].Trim() } else { "" }
 
-				# Detect value type
-				$avType = "xs:string"
-				if ($avValue -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.') {
-					$avType = "dcscor:DesignTimeValue"
+				# Detect value type: prefer declared <valueType> of the parameter, else guess from value
+				$declaredType = ""
+				$vtEl = $null
+				foreach ($ch in $paramEl.ChildNodes) {
+					if ($ch.NodeType -eq 'Element' -and $ch.LocalName -eq 'valueType' -and $ch.NamespaceURI -eq $schNs) { $vtEl = $ch; break }
+				}
+				if ($vtEl) {
+					foreach ($tnode in $vtEl.ChildNodes) {
+						if ($tnode.NodeType -eq 'Element' -and $tnode.LocalName -eq 'Type') {
+							$declaredType = $tnode.InnerText.Trim() -replace '^d\d+p\d+:', ''
+							break
+						}
+					}
 				}
 
 				$avLines = @()
 				$avLines += "$childIndent<availableValue>"
-				$avLines += "$childIndent`t<value xsi:type=`"$avType`">$(Esc-Xml $avValue)</value>"
+				$valueLines = Build-ParamValueXml -type $declaredType -value $avValue -indent "$childIndent`t"
+				foreach ($vl in $valueLines) { $avLines += $vl }
 				if ($avPresentation) {
 					$avLines += "$childIndent`t<presentation xsi:type=`"v8:LocalStringType`">"
 					$avLines += "$childIndent`t`t<v8:item>"
@@ -2287,6 +2375,102 @@ switch ($Operation) {
 		}
 
 		Write-Host "[OK] Structure set in variant `"$varName`": $Value"
+	}
+
+	"modify-structure" {
+		$settings = Resolve-VariantSettings
+		$varName = Get-VariantName
+
+		$structItems = Parse-StructureShorthand $Value
+
+		# Flatten parsed tree into (name, groupBy) targets
+		$targets = @()
+		$stack = New-Object System.Collections.Stack
+		foreach ($it in $structItems) { $stack.Push($it) }
+		while ($stack.Count -gt 0) {
+			$it = $stack.Pop()
+			if ($it["name"]) {
+				$targets += @{ name = $it["name"]; groupBy = $it["groupBy"] }
+			}
+			if ($it["children"]) {
+				foreach ($ch in $it["children"]) { $stack.Push($ch) }
+			}
+		}
+
+		if ($targets.Count -eq 0) {
+			Write-Error "modify-structure requires @name= for at least one group: $Value"
+			exit 1
+		}
+
+		$nsMgr = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
+		$nsMgr.AddNamespace("dcsset", $setNs)
+		$nsMgr.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
+
+		foreach ($t in $targets) {
+			$groupEl = $settings.SelectSingleNode(".//dcsset:item[@xsi:type='dcsset:StructureItemGroup'][dcsset:name='$($t.name)']", $nsMgr)
+			if (-not $groupEl) {
+				Write-Host "[WARN] Group with @name=`"$($t.name)`" not found — skipped"
+				continue
+			}
+
+			$giEl = $null
+			foreach ($ch in $groupEl.ChildNodes) {
+				if ($ch.NodeType -eq 'Element' -and $ch.LocalName -eq 'groupItems' -and $ch.NamespaceURI -eq $setNs) {
+					$giEl = $ch; break
+				}
+			}
+			$groupIndent = Get-ChildIndent $groupEl
+			if (-not $giEl) {
+				# Create <groupItems> after <name>, before <order>/<selection>/...
+				$nameEl = $null
+				$refAfterName = $null
+				foreach ($ch in $groupEl.ChildNodes) {
+					if ($ch.NodeType -eq 'Element' -and $ch.LocalName -eq 'name' -and $ch.NamespaceURI -eq $setNs) {
+						$nameEl = $ch
+					} elseif ($ch.NodeType -eq 'Element' -and $nameEl -and -not $refAfterName) {
+						$refAfterName = $ch; break
+					}
+				}
+				$giFrag = "$groupIndent<dcsset:groupItems></dcsset:groupItems>"
+				$nodes = Import-Fragment $xmlDoc $giFrag
+				foreach ($node in $nodes) {
+					Insert-BeforeElement $groupEl $node $refAfterName $groupIndent
+				}
+				# Re-find
+				foreach ($ch in $groupEl.ChildNodes) {
+					if ($ch.NodeType -eq 'Element' -and $ch.LocalName -eq 'groupItems' -and $ch.NamespaceURI -eq $setNs) {
+						$giEl = $ch; break
+					}
+				}
+			}
+
+			$toRemove = @()
+			foreach ($ch in $giEl.ChildNodes) {
+				if ($ch.NodeType -eq 'Element') { $toRemove += $ch }
+			}
+			foreach ($el in $toRemove) { Remove-NodeWithWhitespace $el }
+
+			$itemIndent = "$groupIndent`t"
+
+			foreach ($field in $t.groupBy) {
+				$lines = @()
+				$lines += "$itemIndent<dcsset:item xsi:type=`"dcsset:GroupItemField`">"
+				$lines += "$itemIndent`t<dcsset:field>$(Esc-Xml $field)</dcsset:field>"
+				$lines += "$itemIndent`t<dcsset:groupType>Items</dcsset:groupType>"
+				$lines += "$itemIndent`t<dcsset:periodAdditionType>None</dcsset:periodAdditionType>"
+				$lines += "$itemIndent`t<dcsset:periodAdditionBegin xsi:type=`"xs:dateTime`">0001-01-01T00:00:00</dcsset:periodAdditionBegin>"
+				$lines += "$itemIndent`t<dcsset:periodAdditionEnd xsi:type=`"xs:dateTime`">0001-01-01T00:00:00</dcsset:periodAdditionEnd>"
+				$lines += "$itemIndent</dcsset:item>"
+				$fragXml = $lines -join "`r`n"
+				$nodes = Import-Fragment $xmlDoc $fragXml
+				foreach ($node in $nodes) {
+					Insert-BeforeElement $giEl $node $null $itemIndent
+				}
+			}
+
+			$desc = if ($t.groupBy.Count -eq 0) { "details" } else { $t.groupBy -join ', ' }
+			Write-Host "[OK] Group `"$($t.name)`" groupItems updated: $desc"
+		}
 	}
 
 	"add-dataSetLink" {

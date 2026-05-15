@@ -1,4 +1,4 @@
-﻿# skd-compile v1.21 — Compile 1C DCS from JSON
+﻿# skd-compile v1.22 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -1130,6 +1130,8 @@ function Emit-ParamValue {
 		X "$indent<value xsi:type=`"xs:decimal`">$(Esc-Xml $valStr)</value>"
 	} elseif ($type -match '^string') {
 		X "$indent<value xsi:type=`"xs:string`">$(Esc-Xml $valStr)</value>"
+	} elseif ($type -match '^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|BusinessProcessRef|TaskRef|ExchangePlanRef)\.') {
+		X "$indent<value xsi:type=`"dcscor:DesignTimeValue`">$(Esc-Xml $valStr)</value>"
 	} else {
 		# Guess from value
 		if ($valStr -match '^\d{4}-\d{2}-\d{2}T') {

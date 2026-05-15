@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.21 — Compile 1C DCS from JSON
+# skd-compile v1.22 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -811,6 +811,8 @@ def emit_param_value(lines, type_str, val, indent):
         lines.append(f'{indent}<value xsi:type="xs:decimal">{esc_xml(val_str)}</value>')
     elif type_str and re.match(r'^string', type_str):
         lines.append(f'{indent}<value xsi:type="xs:string">{esc_xml(val_str)}</value>')
+    elif type_str and re.match(r'^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|BusinessProcessRef|TaskRef|ExchangePlanRef)\.', type_str):
+        lines.append(f'{indent}<value xsi:type="dcscor:DesignTimeValue">{esc_xml(val_str)}</value>')
     else:
         # Guess from value
         if re.match(r'^\d{4}-\d{2}-\d{2}T', val_str):

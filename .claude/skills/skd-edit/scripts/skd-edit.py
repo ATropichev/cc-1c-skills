@@ -1,4 +1,4 @@
-# skd-edit v1.11 — Atomic 1C DCS editor (Python port)
+# skd-edit v1.12 — Atomic 1C DCS editor (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -18,7 +18,7 @@ VALID_OPS = [
     "add-dataParameter", "add-order", "add-selection", "add-dataSetLink",
     "add-dataSet", "add-variant", "add-conditionalAppearance", "add-drilldown",
     "set-query", "patch-query", "set-outputParameter", "set-structure",
-    "modify-field", "modify-filter", "modify-dataParameter", "modify-parameter",
+    "modify-field", "modify-filter", "modify-dataParameter", "modify-parameter", "modify-structure",
     "rename-parameter", "reorder-parameters",
     "clear-selection", "clear-order", "clear-filter",
     "remove-field", "remove-total", "remove-calculated-field", "remove-parameter", "remove-filter",
@@ -545,15 +545,17 @@ def parse_structure_shorthand(s):
         seg = segments[i].strip()
         group = {"type": "group"}
 
-        name_m = re.search(r'\s*@name=(.+)', seg)
+        name_m = re.search(r'@name=(?:"([^"]+)"|\'([^\']+)\'|(\S+))', seg)
         if name_m:
-            group["name"] = name_m.group(1).strip()
-            seg = re.sub(r'\s*@name=.+', '', seg).strip()
+            raw_name = name_m.group(1) or name_m.group(2) or name_m.group(3)
+            group["name"] = raw_name.strip()
+            seg = re.sub(r'\s*@name=(?:"[^"]+"|\'[^\']+\'|\S+)', '', seg).strip()
 
         if re.match(r'^(details|\u0434\u0435\u0442\u0430\u043b\u0438)$', seg, re.IGNORECASE):
             group["groupBy"] = []
         else:
-            group["groupBy"] = [seg]
+            fields = [f.strip() for f in re.split(r'\s*,\s*', seg) if f.strip()]
+            group["groupBy"] = fields
 
         if innermost is not None:
             group["children"] = [innermost]
@@ -724,6 +726,47 @@ def build_calc_field_fragment(parsed, indent):
     return "\r\n".join(lines)
 
 
+def build_param_value_xml(type_str, value, indent, tag_name="value", tag_ns=""):
+    """Return list of XML lines for <value xsi:type=...>...</value>."""
+    val_str = "" if value is None else str(value)
+    open_tag = f"{tag_ns}:{tag_name}" if tag_ns else tag_name
+    lines = []
+
+    if type_str == "StandardPeriod":
+        lines.append(f'{indent}<{open_tag} xsi:type="v8:StandardPeriod">')
+        lines.append(f'{indent}\t<v8:variant xsi:type="v8:StandardPeriodVariant">{esc_xml(val_str)}</v8:variant>')
+        lines.append(f"{indent}\t<v8:startDate>0001-01-01T00:00:00</v8:startDate>")
+        lines.append(f"{indent}\t<v8:endDate>0001-01-01T00:00:00</v8:endDate>")
+        lines.append(f"{indent}</{open_tag}>")
+        return lines
+
+    t = type_str or ""
+    xsi = None
+    if t.startswith("date"):
+        xsi = "xs:dateTime"
+    elif t == "boolean":
+        xsi = "xs:boolean"
+    elif t.startswith("decimal"):
+        xsi = "xs:decimal"
+    elif t.startswith("string"):
+        xsi = "xs:string"
+    elif re.match(r'^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|BusinessProcessRef|TaskRef|ExchangePlanRef)\.', t):
+        xsi = "dcscor:DesignTimeValue"
+    else:
+        if re.match(r'^\d{4}-\d{2}-\d{2}T', val_str):
+            xsi = "xs:dateTime"
+        elif val_str in ("true", "false"):
+            xsi = "xs:boolean"
+        elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.', val_str) or \
+             re.match(r'^(Catalog|Document|Enum|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', val_str):
+            xsi = "dcscor:DesignTimeValue"
+        else:
+            xsi = "xs:string"
+
+    lines.append(f'{indent}<{open_tag} xsi:type="{xsi}">{esc_xml(val_str)}</{open_tag}>')
+    return lines
+
+
 def build_param_fragment(parsed, indent):
     i = indent
     fragments = []
@@ -739,21 +782,8 @@ def build_param_fragment(parsed, indent):
         lines.append(f"{i}\t</valueType>")
 
     if parsed["value"] is not None:
-        val_str = str(parsed["value"])
-        if parsed.get("type") == "StandardPeriod":
-            lines.append(f'{i}\t<value xsi:type="v8:StandardPeriod">')
-            lines.append(f'{i}\t\t<v8:variant xsi:type="v8:StandardPeriodVariant">{esc_xml(val_str)}</v8:variant>')
-            lines.append(f"{i}\t\t<v8:startDate>0001-01-01T00:00:00</v8:startDate>")
-            lines.append(f"{i}\t\t<v8:endDate>0001-01-01T00:00:00</v8:endDate>")
-            lines.append(f"{i}\t</value>")
-        elif parsed.get("type", "").startswith("date"):
-            lines.append(f'{i}\t<value xsi:type="xs:dateTime">{esc_xml(val_str)}</value>')
-        elif parsed.get("type") == "boolean":
-            lines.append(f'{i}\t<value xsi:type="xs:boolean">{esc_xml(val_str)}</value>')
-        elif parsed.get("type", "").startswith("decimal"):
-            lines.append(f'{i}\t<value xsi:type="xs:decimal">{esc_xml(val_str)}</value>')
-        else:
-            lines.append(f'{i}\t<value xsi:type="xs:string">{esc_xml(val_str)}</value>')
+        for vl in build_param_value_xml(parsed.get("type", ""), parsed["value"], f"{i}\t"):
+            lines.append(vl)
 
     lines.append(f"{i}</parameter>")
     fragments.append("\r\n".join(lines))
@@ -1361,10 +1391,10 @@ xml_doc = tree.getroot()
 
 # ── 7. Batch value splitting ────────────────────────────────
 
-if operation in ("set-query", "set-structure", "add-dataSet"):
+if operation in ("set-query", "set-structure", "modify-structure", "add-dataSet"):
     values = [value_arg]
 elif operation == "patch-query":
-    values = [v for v in value_arg.split(";;") if v.strip()]
+    values = [v.strip() for v in value_arg.split(";;") if v.strip()]
 elif operation == "add-drilldown":
     if ";;" in value_arg:
         values = [v.strip() for v in value_arg.split(";;") if v.strip()]
@@ -1568,8 +1598,33 @@ elif operation == "modify-parameter":
         if simple_rest:
             for m in re.finditer(r'(\w+)=(\S+)', simple_rest):
                 key, value = m.group(1), m.group(2)
-                existing = next((ch for ch in param_el if isinstance(ch.tag, str) and local_name(ch) == key), None)
-                if existing is not None:
+                existing = next((ch for ch in param_el if isinstance(ch.tag, str) and local_name(ch) == key and etree.QName(ch.tag).namespace == SCH_NS), None)
+
+                if key == "value":
+                    # Rebuild <value> with correct xsi:type from <valueType>
+                    declared_type = ""
+                    vt_el = next((ch for ch in param_el if isinstance(ch.tag, str) and local_name(ch) == "valueType" and etree.QName(ch.tag).namespace == SCH_NS), None)
+                    if vt_el is not None:
+                        for tnode in vt_el:
+                            if isinstance(tnode.tag, str) and local_name(tnode) == "Type":
+                                declared_type = re.sub(r'^d\d+p\d+:', '', (tnode.text or "").strip())
+                                break
+                    value_lines = build_param_value_xml(declared_type, value, child_indent)
+                    frag_xml = "\r\n".join(value_lines)
+                    was_existing = existing is not None
+                    if existing is not None:
+                        # Find next-element sibling as ref before removing
+                        idx = list(param_el).index(existing)
+                        ref_node = param_el[idx + 1] if idx + 1 < len(param_el) else None
+                        remove_node_with_whitespace(existing)
+                    else:
+                        ref_node = next((ch for ch in param_el if isinstance(ch.tag, str) and local_name(ch) in ("useRestriction", "availableValue", "denyIncompleteValues", "use")), None)
+                    nodes = import_fragment(xml_doc, frag_xml)
+                    for node in nodes:
+                        insert_before_element(param_el, node, ref_node, child_indent)
+                    verb = "updated" if was_existing else "added"
+                    print(f'[OK] Parameter "{param_name}": value {verb} to {value}')
+                elif existing is not None:
                     existing.text = value
                     print(f'[OK] Parameter "{param_name}": {key} updated to {value}')
                 else:
@@ -1591,12 +1646,22 @@ elif operation == "modify-parameter":
             av_value = av_parts[0].strip()
             av_presentation = av_parts[1].strip() if len(av_parts) > 1 else ""
 
-            av_type = "xs:string"
-            if re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.', av_value):
-                av_type = "dcscor:DesignTimeValue"
+            # Prefer declared <valueType> of the parameter; fall back to value pattern
+            declared_type = ""
+            vt_el = None
+            for ch in param_el:
+                if isinstance(ch.tag, str) and local_name(ch) == "valueType" and etree.QName(ch.tag).namespace == SCH_NS:
+                    vt_el = ch
+                    break
+            if vt_el is not None:
+                for tnode in vt_el:
+                    if isinstance(tnode.tag, str) and local_name(tnode) == "Type":
+                        declared_type = re.sub(r'^d\d+p\d+:', '', (tnode.text or "").strip())
+                        break
 
             av_lines = [f"{child_indent}<availableValue>"]
-            av_lines.append(f'{child_indent}\t<value xsi:type="{av_type}">{esc_xml(av_value)}</value>')
+            for vl in build_param_value_xml(declared_type, av_value, f"{child_indent}\t"):
+                av_lines.append(vl)
             if av_presentation:
                 av_lines.append(f'{child_indent}\t<presentation xsi:type="v8:LocalStringType">')
                 av_lines.append(f"{child_indent}\t\t<v8:item>")
@@ -1921,6 +1986,85 @@ elif operation == "set-structure":
             insert_before_element(settings, node, ref_node, settings_indent)
 
     print(f'[OK] Structure set in variant "{var_name}": {value_arg}')
+
+elif operation == "modify-structure":
+    settings = resolve_variant_settings()
+    var_name = get_variant_name()
+
+    struct_items = parse_structure_shorthand(value_arg)
+
+    # Flatten parsed tree into (name, groupBy) targets
+    targets = []
+    stack = list(struct_items)
+    while stack:
+        it = stack.pop()
+        if it.get("name"):
+            targets.append({"name": it["name"], "groupBy": it.get("groupBy", [])})
+        for ch in it.get("children", []) or []:
+            stack.append(ch)
+
+    if not targets:
+        print(f"modify-structure requires @name= for at least one group: {value_arg}", file=sys.stderr)
+        sys.exit(1)
+
+    ns = {"dcsset": SET_NS, "xsi": XSI_NS}
+
+    for t in targets:
+        xpath = f".//dcsset:item[@xsi:type='dcsset:StructureItemGroup'][dcsset:name='{t['name']}']"
+        group_el = settings.find(xpath, ns)
+        if group_el is None:
+            print(f'[WARN] Group with @name="{t["name"]}" not found — skipped')
+            continue
+
+        gi_el = None
+        for ch in group_el:
+            if isinstance(ch.tag, str) and local_name(ch) == "groupItems" and etree.QName(ch.tag).namespace == SET_NS:
+                gi_el = ch
+                break
+
+        group_indent = get_child_indent(group_el)
+        if gi_el is None:
+            # Insert <groupItems> after <name>, before first non-name sibling
+            ref_after_name = None
+            saw_name = False
+            for ch in group_el:
+                if not isinstance(ch.tag, str):
+                    continue
+                if local_name(ch) == "name" and etree.QName(ch.tag).namespace == SET_NS:
+                    saw_name = True
+                elif saw_name:
+                    ref_after_name = ch
+                    break
+            gi_frag = f"{group_indent}<dcsset:groupItems></dcsset:groupItems>"
+            for node in import_fragment(xml_doc, gi_frag):
+                insert_before_element(group_el, node, ref_after_name, group_indent)
+            for ch in group_el:
+                if isinstance(ch.tag, str) and local_name(ch) == "groupItems" and etree.QName(ch.tag).namespace == SET_NS:
+                    gi_el = ch
+                    break
+
+        to_remove = [ch for ch in gi_el if isinstance(ch.tag, str)]
+        for el in to_remove:
+            remove_node_with_whitespace(el)
+
+        item_indent = group_indent + "\t"
+
+        for field in t["groupBy"]:
+            lines = [
+                f'{item_indent}<dcsset:item xsi:type="dcsset:GroupItemField">',
+                f'{item_indent}\t<dcsset:field>{esc_xml(field)}</dcsset:field>',
+                f'{item_indent}\t<dcsset:groupType>Items</dcsset:groupType>',
+                f'{item_indent}\t<dcsset:periodAdditionType>None</dcsset:periodAdditionType>',
+                f'{item_indent}\t<dcsset:periodAdditionBegin xsi:type="xs:dateTime">0001-01-01T00:00:00</dcsset:periodAdditionBegin>',
+                f'{item_indent}\t<dcsset:periodAdditionEnd xsi:type="xs:dateTime">0001-01-01T00:00:00</dcsset:periodAdditionEnd>',
+                f'{item_indent}</dcsset:item>',
+            ]
+            frag_xml = "\r\n".join(lines)
+            for node in import_fragment(xml_doc, frag_xml):
+                insert_before_element(gi_el, node, None, item_indent)
+
+        desc = "details" if not t["groupBy"] else ", ".join(t["groupBy"])
+        print(f'[OK] Group "{t["name"]}" groupItems updated: {desc}')
 
 elif operation == "add-dataSetLink":
     for val in values:
