@@ -17,6 +17,6 @@
   "params": {
     "templatePath": "Template.xml",
     "operation": "modify-parameter",
-    "value": "ПорядокОкругления use=Always ;; ПорядокОкругления denyIncompleteValues=true ;; ПорядокОкругления availableValue=Перечисление.Округления.Окр1_00 presentation=руб. коп ;; ПорядокОкругления availableValue=Перечисление.Округления.Окр1 presentation=руб."
+    "value": "ПорядокОкругления use=Always ;; ПорядокОкругления denyIncompleteValues=true ;; ПорядокОкругления availableValue=Перечисление.Округления.Окр1_00: руб. коп, Перечисление.Округления.Окр1: руб."
   }
 }

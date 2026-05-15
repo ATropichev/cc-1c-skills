@@ -1,4 +1,4 @@
-﻿# skd-edit v1.14 — Atomic 1C DCS editor
+﻿# skd-edit v1.15 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -297,7 +297,13 @@ function Parse-CalcShorthand {
 function Parse-ParamShorthand {
 	param([string]$s)
 
-	$result = @{ name = ""; type = ""; value = $null; autoDates = $false; title = $null; hidden = $false; always = $false }
+	$result = @{ name = ""; type = ""; value = $null; autoDates = $false; title = $null; hidden = $false; always = $false; availableValues = @() }
+
+	# Extract availableValue=... (must be before main parse — captures to end of string)
+	if ($s -match '\s*availableValue=(.+)$') {
+		$result.availableValues = Parse-AvailableValueList $Matches[1].Trim()
+		$s = ($s -replace '\s*availableValue=.+$', '').Trim()
+	}
 
 	if ($s -match '@autoDates') {
 		$result.autoDates = $true
@@ -626,6 +632,75 @@ function Parse-OutputParamShorthand {
 	return @{ key = $s.Trim(); value = "" }
 }
 
+function Parse-AvailableValueList {
+	# Returns array of @{ value=...; presentation=... } from comma-separated list.
+	# Items can use 'single' or "double" quotes (stripped). Quoted spans preserve commas/colons.
+	param([string]$s)
+
+	$result = @()
+	if (-not $s) { return ,$result }
+
+	# Tokenize by ',' respecting quoted spans
+	$items = @()
+	$buf = New-Object System.Text.StringBuilder
+	$inQuote = $null
+	for ($i = 0; $i -lt $s.Length; $i++) {
+		$ch = $s[$i]
+		if ($inQuote) {
+			[void]$buf.Append($ch)
+			if ($ch -eq $inQuote) { $inQuote = $null }
+		} elseif ($ch -eq "'" -or $ch -eq '"') {
+			$inQuote = $ch
+			[void]$buf.Append($ch)
+		} elseif ($ch -eq ',') {
+			$items += $buf.ToString()
+			[void]$buf.Clear()
+		} else {
+			[void]$buf.Append($ch)
+		}
+	}
+	if ($buf.Length -gt 0) { $items += $buf.ToString() }
+
+	# For each item: split into value[:presentation], strip quotes
+	$stripQuotes = {
+		param($t)
+		$t = $t.Trim()
+		if ($t.Length -ge 2 -and (($t[0] -eq "'" -and $t[-1] -eq "'") -or ($t[0] -eq '"' -and $t[-1] -eq '"'))) {
+			return $t.Substring(1, $t.Length - 2)
+		}
+		return $t
+	}
+
+	foreach ($raw in $items) {
+		$item = $raw.Trim()
+		if (-not $item) { continue }
+
+		# Find first ':' outside quotes
+		$colonIdx = -1
+		$q = $null
+		for ($j = 0; $j -lt $item.Length; $j++) {
+			$c = $item[$j]
+			if ($q) {
+				if ($c -eq $q) { $q = $null }
+			} elseif ($c -eq "'" -or $c -eq '"') {
+				$q = $c
+			} elseif ($c -eq ':') {
+				$colonIdx = $j; break
+			}
+		}
+
+		if ($colonIdx -ge 0) {
+			$valPart = $item.Substring(0, $colonIdx)
+			$presPart = $item.Substring($colonIdx + 1)
+			$result += @{ value = (& $stripQuotes $valPart); presentation = (& $stripQuotes $presPart) }
+		} else {
+			$result += @{ value = (& $stripQuotes $item); presentation = "" }
+		}
+	}
+
+	return ,$result
+}
+
 # --- 4. Build-* functions (XML fragment generators) ---
 
 function Build-ValueTypeXml {
@@ -858,6 +933,26 @@ function Build-ParamValueXml {
 	return $lines
 }
 
+function Build-AvailableValueFragment {
+	# Returns XML lines (array) for a single <availableValue> block.
+	param($item, [string]$declaredType, [string]$indent)
+
+	$lines = @()
+	$lines += "$indent<availableValue>"
+	$valueLines = Build-ParamValueXml -type $declaredType -value $item.value -indent "$indent`t"
+	foreach ($vl in $valueLines) { $lines += $vl }
+	if ($item.presentation) {
+		$lines += "$indent`t<presentation xsi:type=`"v8:LocalStringType`">"
+		$lines += "$indent`t`t<v8:item>"
+		$lines += "$indent`t`t`t<v8:lang>ru</v8:lang>"
+		$lines += "$indent`t`t`t<v8:content>$(Esc-Xml $item.presentation)</v8:content>"
+		$lines += "$indent`t`t</v8:item>"
+		$lines += "$indent`t</presentation>"
+	}
+	$lines += "$indent</availableValue>"
+	return $lines
+}
+
 function Build-ParamFragment {
 	param($parsed, [string]$indent)
 
@@ -886,6 +981,13 @@ function Build-ParamFragment {
 	if ($parsed.hidden) {
 		$lines += "$i`t<useRestriction>true</useRestriction>"
 		$lines += "$i`t<availableAsField>false</availableAsField>"
+	}
+
+	if ($parsed.availableValues -and $parsed.availableValues.Count -gt 0) {
+		foreach ($av in $parsed.availableValues) {
+			$avLines = Build-AvailableValueFragment -item $av -declaredType $parsed.type -indent "$i`t"
+			foreach ($l in $avLines) { $lines += $l }
+		}
 	}
 
 	if ($parsed.always) {
@@ -1944,13 +2046,10 @@ switch ($Operation) {
 				}
 			}
 
-			# Process availableValue
+			# Process availableValue — replace whole list with new items
 			if ($avPart) {
-				$avRest = $avPart -replace '^availableValue=', ''
-				# Parse: "Перечисление...X presentation=текст с пробелами"
-				$avParts = $avRest -split '\s+presentation=', 2
-				$avValue = $avParts[0].Trim()
-				$avPresentation = if ($avParts.Count -gt 1) { $avParts[1].Trim() } else { "" }
+				$avRest = ($avPart -replace '^availableValue=', '').Trim()
+				$avItems = Parse-AvailableValueList $avRest
 
 				# Detect value type: prefer declared <valueType> of the parameter, else guess from value
 				$declaredType = ""
@@ -1967,33 +2066,31 @@ switch ($Operation) {
 					}
 				}
 
-				$avLines = @()
-				$avLines += "$childIndent<availableValue>"
-				$valueLines = Build-ParamValueXml -type $declaredType -value $avValue -indent "$childIndent`t"
-				foreach ($vl in $valueLines) { $avLines += $vl }
-				if ($avPresentation) {
-					$avLines += "$childIndent`t<presentation xsi:type=`"v8:LocalStringType`">"
-					$avLines += "$childIndent`t`t<v8:item>"
-					$avLines += "$childIndent`t`t`t<v8:lang>ru</v8:lang>"
-					$avLines += "$childIndent`t`t`t<v8:content>$(Esc-Xml $avPresentation)</v8:content>"
-					$avLines += "$childIndent`t`t</v8:item>"
-					$avLines += "$childIndent`t</presentation>"
+				# Remove all existing <availableValue> elements
+				$toRemove = @()
+				foreach ($ch in $paramEl.ChildNodes) {
+					if ($ch.NodeType -eq 'Element' -and $ch.LocalName -eq 'availableValue' -and $ch.NamespaceURI -eq $schNs) {
+						$toRemove += $ch
+					}
 				}
-				$avLines += "$childIndent</availableValue>"
-				$fragXml = $avLines -join "`r`n"
+				foreach ($el in $toRemove) { Remove-NodeWithWhitespace $el }
 
-				# Insert before first of (denyIncompleteValues, use) in document order
+				# Insert each new <availableValue> before (denyIncompleteValues, use)
 				$refNode = $null
 				foreach ($child in $paramEl.ChildNodes) {
 					if ($child.NodeType -eq 'Element' -and ($child.LocalName -eq 'denyIncompleteValues' -or $child.LocalName -eq 'use')) {
 						$refNode = $child; break
 					}
 				}
-				$nodes = Import-Fragment $xmlDoc $fragXml
-				foreach ($node in $nodes) {
-					Insert-BeforeElement $paramEl $node $refNode $childIndent
+				foreach ($av in $avItems) {
+					$avLines = Build-AvailableValueFragment -item $av -declaredType $declaredType -indent $childIndent
+					$fragXml = $avLines -join "`r`n"
+					$nodes = Import-Fragment $xmlDoc $fragXml
+					foreach ($node in $nodes) {
+						Insert-BeforeElement $paramEl $node $refNode $childIndent
+					}
 				}
-				Write-Host "[OK] Parameter `"$paramName`": availableValue added"
+				Write-Host "[OK] Parameter `"$paramName`": availableValue set to $($avItems.Count) item(s)"
 			}
 
 			# Process @hidden / @always flags (idempotent)
