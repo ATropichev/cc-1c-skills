@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-info v1.3 — Analyze 1C DCS structure
+# skd-info v1.4 — Analyze 1C DCS structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -777,8 +777,15 @@ def main():
                 role_parts = []
                 if role is not None:
                     for child in role:
-                        if isinstance(child.tag, str) and (child.text or "").strip() == "true":
+                        if not isinstance(child.tag, str):
+                            continue
+                        txt = (child.text or "").strip()
+                        if txt == "true":
                             role_parts.append(localname(child))
+                        elif txt == "false":
+                            pass
+                        else:
+                            role_parts.append(f"{localname(child)}={txt}")
                 info["role"] = ", ".join(role_parts)
 
                 # UseRestriction

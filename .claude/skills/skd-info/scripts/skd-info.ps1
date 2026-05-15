@@ -1,4 +1,4 @@
-﻿# skd-info v1.3 — Analyze 1C DCS structure
+﻿# skd-info v1.4 — Analyze 1C DCS structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)]
@@ -824,8 +824,14 @@ function Show-Fields {
 				$roleParts = @()
 				if ($role) {
 					foreach ($child in $role.ChildNodes) {
-						if ($child.NodeType -eq "Element" -and $child.InnerText -eq "true") {
+						if ($child.NodeType -ne "Element") { continue }
+						$txt = $child.InnerText.Trim()
+						if ($txt -eq "true") {
 							$roleParts += $child.LocalName
+						} elseif ($txt -eq "false") {
+							# skip default-false flags
+						} else {
+							$roleParts += "$($child.LocalName)=$txt"
 						}
 					}
 				}
