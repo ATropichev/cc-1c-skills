@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.4 — Validate 1C managed form
+# form-validate v1.5 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -379,8 +379,34 @@ def main():
             path_checked += 1
 
             clean_path = re.sub(r'\[\d+\]', '', data_path)
+            # Strip leading '~' (current row of DynamicList: ~\u0421\u043f\u0438\u0441\u043e\u043a.\u041f\u043e\u043b\u0435)
+            if clean_path.startswith('~'):
+                clean_path = clean_path[1:]
             segments = clean_path.split(".")
             root_attr = segments[0]
+
+            # Resolve Items.<TableName>.CurrentData.<Field>... \u2014 table element, not attribute
+            if root_attr == 'Items':
+                if len(segments) < 3 or segments[2] != 'CurrentData':
+                    report_warn(f"[{tag}] '{el_name}': DataPath='{data_path}' \u2014 unknown Items.* shape, expected Items.<Table>.CurrentData.*")
+                    continue
+                table_name = segments[1]
+                table_el = None
+                for candidate in all_elements:
+                    if candidate["Tag"] == 'Table' and candidate["Name"] == table_name:
+                        table_el = candidate
+                        break
+                if table_el is None:
+                    report_error(f"[{tag}] '{el_name}': DataPath='{data_path}' \u2014 table element '{table_name}' not found")
+                    path_errors += 1
+                    continue
+                table_dp_node = table_el["Node"].find(f"{{{F_NS}}}DataPath")
+                if table_dp_node is None or not (table_dp_node.text or "").strip():
+                    continue
+                table_dp = re.sub(r'\[\d+\]', '', (table_dp_node.text or "").strip())
+                if table_dp.startswith('~'):
+                    table_dp = table_dp[1:]
+                root_attr = table_dp.split(".")[0]
 
             if root_attr not in attr_map:
                 report_error(f"[{tag}] '{el_name}': DataPath='{data_path}' \u2014 attribute '{root_attr}' not found")

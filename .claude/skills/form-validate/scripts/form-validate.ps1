@@ -1,4 +1,4 @@
-﻿# form-validate v1.4 — Validate 1C managed form
+﻿# form-validate v1.5 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -370,8 +370,39 @@ if (-not $stopped) {
 
 		# Extract root segment of path, strip array indices like [0]
 		$cleanPath = $dataPath -replace '\[\d+\]', ''
+		# Strip leading '~' (current row of DynamicList: ~Список.Поле)
+		if ($cleanPath.StartsWith('~')) { $cleanPath = $cleanPath.Substring(1) }
 		$segments = $cleanPath -split '\.'
 		$rootAttr = $segments[0]
+
+		# Resolve Items.<TableName>.CurrentData.<Field>... — table element, not attribute
+		if ($rootAttr -eq 'Items') {
+			if ($segments.Count -lt 3 -or $segments[2] -ne 'CurrentData') {
+				Report-Warn "[$tag] '$elName': DataPath='$dataPath' — unknown Items.* shape, expected Items.<Table>.CurrentData.*"
+				continue
+			}
+			$tableName = $segments[1]
+			$tableEl = $null
+			foreach ($candidate in $allElements) {
+				if ($candidate.Tag -eq 'Table' -and $candidate.Name -eq $tableName) {
+					$tableEl = $candidate
+					break
+				}
+			}
+			if (-not $tableEl) {
+				Report-Error "[$tag] '$elName': DataPath='$dataPath' — table element '$tableName' not found"
+				$pathErrors++
+				continue
+			}
+			$tableDpNode = $tableEl.Node.SelectSingleNode("f:DataPath", $nsMgr)
+			if (-not $tableDpNode -or -not $tableDpNode.InnerText.Trim()) {
+				# Table without DataPath — can't resolve further, accept silently
+				continue
+			}
+			$tableDp = $tableDpNode.InnerText.Trim() -replace '\[\d+\]', ''
+			if ($tableDp.StartsWith('~')) { $tableDp = $tableDp.Substring(1) }
+			$rootAttr = ($tableDp -split '\.')[0]
+		}
 
 		if (-not $attrMap.ContainsKey($rootAttr)) {
 			Report-Error "[$tag] '$elName': DataPath='$dataPath' — attribute '$rootAttr' not found"
