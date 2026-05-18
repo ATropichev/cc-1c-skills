@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// web-test run v1.12 — CLI runner for 1C web client automation
+// web-test run v1.13 — CLI runner for 1C web client automation
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * CLI runner for 1C web client automation.
@@ -728,8 +728,11 @@ async function cmdTest(rawArgs) {
 
           // per-test teardown (always)
           if (t.teardown) try { await t.teardown(ctx); } catch {}
-          // Expose preliminary testResult to afterEach (final testResult assembled below).
-          const errInfo = { message: e.message, step: e.onecError?.step, screenshot: shotFile };
+          // Build the error record once: shared between ctx.testResult (afterEach), lastError
+          // (retry-loop carry-over and console output), and the final report record.
+          // onecError carries the structured 1C exception payload (stack, formState, args, ...)
+          // produced by ACTION_FN wrappers — preserve it in the report.
+          const errInfo = { message: e.message, step: e.onecError?.step, screenshot: shotFile, onecError: e.onecError };
           ctx.testResult = { status: 'failed', duration: elapsed(t0), attempts: attempt, error: errInfo, steps };
           // afterEach (always)
           if (hooks.afterEach) try { await hooks.afterEach(ctx); } catch {}
@@ -742,9 +745,9 @@ async function cmdTest(rawArgs) {
           if (videoFile) {
             try { await browser.stopRecording(); } catch {}
           }
-          lastError = { message: e.message, step: e.onecError?.step, screenshot: shotFile };
+          lastError = errInfo;
           const dur = elapsed(t0);
-          testResult = { name: t.name, file: t.file, tags: t.tags, contexts: testContextNames, severity: t.severity, status: 'failed', duration: dur, attempts: attempt, start: t0, stop: Date.now(), steps, output: output.join('\n'), error: lastError, screenshot: shotFile, video: videoFile };
+          testResult = { name: t.name, file: t.file, tags: t.tags, contexts: testContextNames, severity: t.severity, status: 'failed', duration: dur, attempts: attempt, start: t0, stop: Date.now(), steps, output: output.join('\n'), error: errInfo, screenshot: shotFile, video: videoFile };
         }
       }
 
@@ -882,7 +885,17 @@ function writeAllure(results, reportDir, severityIndex) {
       ],
     };
     if (tr.status === 'failed' && tr.error) {
-      out.statusDetails = { message: tr.error.message || '', trace: tr.output || '' };
+      // Allure UI shows statusDetails.trace right next to the error message. We compose it
+      // from the test's log() output plus, when present, the platform 1C stack — so the
+      // raw call chain is visible without opening attachments.
+      const traceParts = [];
+      if (tr.output) traceParts.push(tr.output);
+      const onecStack = tr.error.onecError?.stack?.raw;
+      if (onecStack) {
+        if (traceParts.length) traceParts.push('\n--- 1C stack ---\n');
+        traceParts.push(onecStack);
+      }
+      out.statusDetails = { message: tr.error.message || '', trace: traceParts.join('') };
     }
     writeFileSync(resolve(reportDir, `${uuid}-result.json`), JSON.stringify(out, null, 2));
   }
