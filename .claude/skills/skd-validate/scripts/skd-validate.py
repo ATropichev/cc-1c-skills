@@ -698,6 +698,9 @@ _VALID_TYPE_QUALIFIER = {
     'xs:boolean':        '',
     'v8:StandardPeriod': '',
     'v8:UUID':           '',
+    'v8:Null':           '',
+    'v8:Type':           '',
+    'v8:ValueStorage':   '',
 }
 _VALID_SIGN      = ('Any', 'Nonnegative', 'Negative')
 _VALID_LENGTH    = ('Variable', 'Fixed')
@@ -705,90 +708,107 @@ _VALID_FRACTIONS = ('Date', 'DateTime', 'Time')
 _V8_NS_URI       = 'http://v8.1c.ru/8.1/data/core'
 _CONFIG_NS_URI   = 'http://v8.1c.ru/8.1/data/enterprise/current-config'
 
+# DCS supports composite types: multiple <v8:Type> blocks may share a single
+# trailing qualifier block (e.g. xs:string + CatalogRef.X + StringQualifiers).
+# So we collect all types and qualifiers per valueType, then check consistency.
+_QUALIFIER_PRODUCERS = {
+    'v8:NumberQualifiers': 'xs:decimal',
+    'v8:StringQualifiers': 'xs:string',
+    'v8:DateQualifiers':   'xs:dateTime',
+}
+
 vt_nodes = find_all(root, "//s:valueType")
 vt_checked = 0
 vt_ok = True
 for vt in vt_nodes:
     vt_checked += 1
-    last_type = None  # short form 'xs:decimal' or '' (ref — no qualifiers)
+    types = []        # short type strings; '' marks a ref type
+    qualifiers = []   # list of (qName, node)
+
     for child in vt:
         if not isinstance(child.tag, str):
-            continue  # comments etc.
-        qname_local = etree.QName(child.tag).localname
-        qname_ns = etree.QName(child.tag).namespace
+            continue
+        qn = etree.QName(child.tag)
+        if qn.namespace != _V8_NS_URI:
+            continue
+        local = qn.localname
 
-        if qname_local == 'Type' and qname_ns == _V8_NS_URI:
+        if local == 'Type':
             t = (child.text or '').strip()
             if not t:
                 report_error("valueType: <v8:Type> is empty")
                 vt_ok = False
-                last_type = None
                 continue
             m = _re_vt.match(r'^([A-Za-z][A-Za-z0-9]*):(.+)$', t)
             if not m:
                 report_error(f"valueType: type '{t}' has no namespace prefix (expected xs:/v8:/d5p1: — e.g. xs:decimal not decimal)")
                 vt_ok = False
-                last_type = None
                 continue
-            prefix, local = m.group(1), m.group(2)
-            last_type = t
+            prefix, local_t = m.group(1), m.group(2)
             if prefix in ('xs', 'v8'):
                 if t not in _VALID_TYPE_QUALIFIER:
                     report_error(f"valueType: unknown type '{t}' (allowed: xs:decimal/xs:string/xs:dateTime/xs:boolean/v8:StandardPeriod or <prefix>:*Ref.X)")
                     vt_ok = False
-                    last_type = None
-            else:
-                # Inline-declared prefix — must resolve to current-config namespace
-                prefix_ns = child.nsmap.get(prefix)
-                if prefix_ns != _CONFIG_NS_URI:
-                    report_error(f"valueType: type '{t}' uses prefix '{prefix}' which is not bound to enterprise/current-config namespace")
-                    vt_ok = False
-                    last_type = None
-                elif not _re_vt.match(r'^[A-Za-z]+(Ref)?\.', local):
-                    report_error(f"valueType: ref type '{t}' must look like '<prefix>:<Kind>.<Name>' (e.g. d5p1:CatalogRef.X)")
-                    vt_ok = False
-                    last_type = ''
                 else:
-                    last_type = ''  # ref — no qualifier expected
-
-        elif qname_local.endswith('Qualifiers') and qname_ns == _V8_NS_URI:
-            q_name = f"v8:{qname_local}"
-            expected = _VALID_TYPE_QUALIFIER.get(last_type) if last_type else None
-            if expected is None or expected == '':
-                report_error(f"valueType: <{q_name}> after <v8:Type>{last_type}</v8:Type> — this type has no qualifiers")
-                vt_ok = False
-            elif q_name != expected:
-                report_error(f"valueType: <{q_name}> doesn't match <v8:Type>{last_type}</v8:Type> (expected <{expected}>)")
-                vt_ok = False
+                    types.append(t)
             else:
-                if q_name == 'v8:NumberQualifiers':
-                    digits = find(child, "v8:Digits")
-                    frac   = find(child, "v8:FractionDigits")
-                    sign   = find(child, "v8:AllowedSign")
-                    if digits is None or not _re_vt.match(r'^\d+$', text_of(digits)):
-                        report_error("v8:NumberQualifiers: <v8:Digits> missing or not a non-negative integer")
+                prefix_ns = child.nsmap.get(prefix)
+                if prefix_ns == _CONFIG_NS_URI:
+                    if not _re_vt.match(r'^[A-Za-z]+(Ref)?\.', local_t):
+                        report_error(f"valueType: ref type '{t}' must look like '<prefix>:<Kind>.<Name>' (e.g. d5p1:CatalogRef.X)")
                         vt_ok = False
-                    if frac is None or not _re_vt.match(r'^\d+$', text_of(frac)):
-                        report_error("v8:NumberQualifiers: <v8:FractionDigits> missing or not a non-negative integer")
+                    else:
+                        types.append('')   # ref — no qualifier needed
+                elif prefix_ns == 'http://v8.1c.ru/8.1/data/enterprise':
+                    # System types: AccumulationRecordType etc. — no qualifiers
+                    if not _re_vt.match(r'^[A-Za-z][A-Za-z0-9]*$', local_t):
+                        report_error(f"valueType: system type '{t}' has unexpected local-name shape")
                         vt_ok = False
-                    if sign is not None and text_of(sign) and text_of(sign) not in _VALID_SIGN:
-                        report_error(f"v8:NumberQualifiers: <v8:AllowedSign>{text_of(sign)}</v8:AllowedSign> — must be one of: {', '.join(_VALID_SIGN)}")
-                        vt_ok = False
-                elif q_name == 'v8:StringQualifiers':
-                    length = find(child, "v8:Length")
-                    al     = find(child, "v8:AllowedLength")
-                    if length is None or not _re_vt.match(r'^\d+$', text_of(length)):
-                        report_error("v8:StringQualifiers: <v8:Length> missing or not a non-negative integer")
-                        vt_ok = False
-                    if al is not None and text_of(al) and text_of(al) not in _VALID_LENGTH:
-                        report_error(f"v8:StringQualifiers: <v8:AllowedLength>{text_of(al)}</v8:AllowedLength> — must be one of: {', '.join(_VALID_LENGTH)}")
-                        vt_ok = False
-                elif q_name == 'v8:DateQualifiers':
-                    df = find(child, "v8:DateFractions")
-                    if df is not None and text_of(df) and text_of(df) not in _VALID_FRACTIONS:
-                        report_error(f"v8:DateQualifiers: <v8:DateFractions>{text_of(df)}</v8:DateFractions> — must be one of: {', '.join(_VALID_FRACTIONS)}")
-                        vt_ok = False
-            last_type = None  # consumed
+                    else:
+                        types.append('')
+                else:
+                    report_error(f"valueType: type '{t}' uses prefix '{prefix}' bound to unexpected namespace '{prefix_ns}'")
+                    vt_ok = False
+
+        elif local.endswith('Qualifiers'):
+            q_name = f"v8:{local}"
+            qualifiers.append((q_name, child))
+            if q_name == 'v8:NumberQualifiers':
+                digits = find(child, "v8:Digits")
+                frac   = find(child, "v8:FractionDigits")
+                sign   = find(child, "v8:AllowedSign")
+                if digits is None or not _re_vt.match(r'^\d+$', text_of(digits)):
+                    report_error("v8:NumberQualifiers: <v8:Digits> missing or not a non-negative integer")
+                    vt_ok = False
+                if frac is None or not _re_vt.match(r'^\d+$', text_of(frac)):
+                    report_error("v8:NumberQualifiers: <v8:FractionDigits> missing or not a non-negative integer")
+                    vt_ok = False
+                if sign is not None and text_of(sign) and text_of(sign) not in _VALID_SIGN:
+                    report_error(f"v8:NumberQualifiers: <v8:AllowedSign>{text_of(sign)}</v8:AllowedSign> — must be one of: {', '.join(_VALID_SIGN)}")
+                    vt_ok = False
+            elif q_name == 'v8:StringQualifiers':
+                length = find(child, "v8:Length")
+                al     = find(child, "v8:AllowedLength")
+                if length is None or not _re_vt.match(r'^\d+$', text_of(length)):
+                    report_error("v8:StringQualifiers: <v8:Length> missing or not a non-negative integer")
+                    vt_ok = False
+                if al is not None and text_of(al) and text_of(al) not in _VALID_LENGTH:
+                    report_error(f"v8:StringQualifiers: <v8:AllowedLength>{text_of(al)}</v8:AllowedLength> — must be one of: {', '.join(_VALID_LENGTH)}")
+                    vt_ok = False
+            elif q_name == 'v8:DateQualifiers':
+                df = find(child, "v8:DateFractions")
+                if df is not None and text_of(df) and text_of(df) not in _VALID_FRACTIONS:
+                    report_error(f"v8:DateQualifiers: <v8:DateFractions>{text_of(df)}</v8:DateFractions> — must be one of: {', '.join(_VALID_FRACTIONS)}")
+                    vt_ok = False
+
+    # Cross-check: every qualifier must have a matching scalar type in this valueType
+    for q_name, _ in qualifiers:
+        producer = _QUALIFIER_PRODUCERS.get(q_name)
+        if not producer:
+            continue
+        if producer not in types:
+            report_error(f"valueType: <{q_name}> has no matching <v8:Type>{producer}</v8:Type> in this valueType")
+            vt_ok = False
 
 if vt_checked > 0 and vt_ok:
     report_ok(f"{vt_checked} valueType block(s): structure and qualifiers OK")

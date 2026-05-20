@@ -745,111 +745,127 @@ $validTypeQualifier = @{
 	'xs:boolean'        = ''
 	'v8:StandardPeriod' = ''
 	'v8:UUID'           = ''
+	'v8:Null'           = ''
+	'v8:Type'           = ''
+	'v8:ValueStorage'   = ''
 }
 $validSign       = @('Any', 'Nonnegative', 'Negative')
 $validLength     = @('Variable', 'Fixed')
 $validFractions  = @('Date', 'DateTime', 'Time')
+
+# DCS supports composite types: multiple <v8:Type> blocks may share a single
+# trailing qualifier block (e.g. xs:string + CatalogRef.X + StringQualifiers).
+# So we collect all types and qualifiers per valueType, then check consistency.
+$qualifierProducers = @{
+	'v8:NumberQualifiers' = 'xs:decimal'
+	'v8:StringQualifiers' = 'xs:string'
+	'v8:DateQualifiers'   = 'xs:dateTime'
+}
 
 $valueTypeNodes = $root.SelectNodes("//s:valueType", $ns)
 $vtChecked = 0
 $vtOk = $true
 foreach ($vt in $valueTypeNodes) {
 	$vtChecked++
-	# Walk children in document order
-	$children = @($vt.ChildNodes | Where-Object { $_.NodeType -eq 'Element' })
-	$lastType = $null   # short form like 'xs:decimal' or '' (ref types resolved to '')
+	$types = @()       # list of short type strings; '' marks a ref type
+	$qualifiers = @()  # list of @{ name = 'v8:XQualifiers'; node = $child }
 
-	foreach ($child in $children) {
-		$qName = "$($child.Prefix):$($child.LocalName)"
-		if ($child.LocalName -eq 'Type' -and $child.NamespaceURI -eq 'http://v8.1c.ru/8.1/data/core') {
-			$t = $child.InnerText.Trim()
+	foreach ($child in $vt.ChildNodes) {
+		if ($child.NodeType -ne 'Element') { continue }
+		if ($child.NamespaceURI -ne 'http://v8.1c.ru/8.1/data/core') { continue }
+		$localName = $child.LocalName
+
+		if ($localName -eq 'Type') {
+			$t = "$($child.InnerText)".Trim()
 			if (-not $t) {
 				Report-Error "valueType: <v8:Type> is empty"
 				$vtOk = $false
-				$lastType = $null
 				continue
 			}
-			# Must have a known prefix — xs:, v8:, or any prefix bound to current-config namespace
 			if ($t -match '^([A-Za-z][A-Za-z0-9]*):(.+)$') {
 				$prefix = $Matches[1]
-				$localName = $Matches[2]
-				$lastType = $t
+				$localT = $Matches[2]
 				if ($prefix -eq 'xs' -or $prefix -eq 'v8') {
 					if (-not $validTypeQualifier.ContainsKey($t)) {
 						Report-Error "valueType: unknown type '$t' (allowed: xs:decimal/xs:string/xs:dateTime/xs:boolean/v8:StandardPeriod or <prefix>:*Ref.X)"
 						$vtOk = $false
-						$lastType = $null
+					} else {
+						$types += $t
 					}
 				} else {
-					# Inline-declared prefix — should resolve to current-config namespace
 					$prefixNs = $child.GetNamespaceOfPrefix($prefix)
-					if ($prefixNs -ne 'http://v8.1c.ru/8.1/data/enterprise/current-config') {
-						Report-Error "valueType: type '$t' uses prefix '$prefix' which is not bound to enterprise/current-config namespace"
-						$vtOk = $false
-						$lastType = $null
-					} elseif (-not ($localName -match '^[A-Za-z]+(Ref)?\.')) {
-						Report-Error "valueType: ref type '$t' must look like '<prefix>:<Kind>.<Name>' (e.g. d5p1:CatalogRef.X)"
-						$vtOk = $false
-						$lastType = ''
+					if ($prefixNs -eq 'http://v8.1c.ru/8.1/data/enterprise/current-config') {
+						if (-not ($localT -match '^[A-Za-z]+(Ref)?\.')) {
+							Report-Error "valueType: ref type '$t' must look like '<prefix>:<Kind>.<Name>' (e.g. d5p1:CatalogRef.X)"
+							$vtOk = $false
+						} else {
+							$types += ''   # ref — no qualifier needed
+						}
+					} elseif ($prefixNs -eq 'http://v8.1c.ru/8.1/data/enterprise') {
+						# System types: AccumulationRecordType etc. — no qualifiers
+						if (-not ($localT -match '^[A-Za-z][A-Za-z0-9]*$')) {
+							Report-Error "valueType: system type '$t' has unexpected local-name shape"
+							$vtOk = $false
+						} else {
+							$types += ''
+						}
 					} else {
-						$lastType = ''   # ref type — no qualifier expected
+						Report-Error "valueType: type '$t' uses prefix '$prefix' bound to unexpected namespace '$prefixNs'"
+						$vtOk = $false
 					}
 				}
 			} else {
 				Report-Error "valueType: type '$t' has no namespace prefix (expected xs:/v8:/d5p1: — e.g. xs:decimal not decimal)"
 				$vtOk = $false
-				$lastType = $null
 			}
-		} elseif ($child.LocalName -match 'Qualifiers$' -and $child.NamespaceURI -eq 'http://v8.1c.ru/8.1/data/core') {
-			# Qualifier block — must match preceding Type
-			$expected = if ($lastType -and $validTypeQualifier.ContainsKey($lastType)) {
-				$validTypeQualifier[$lastType]
-			} else { $null }
-
-			if ($null -eq $expected -or $expected -eq '') {
-				Report-Error "valueType: <$qName> after <v8:Type>$lastType</v8:Type> — this type has no qualifiers"
-				$vtOk = $false
-			} elseif ($qName -ne $expected) {
-				Report-Error "valueType: <$qName> doesn't match <v8:Type>$lastType</v8:Type> (expected <$expected>)"
-				$vtOk = $false
-			} else {
-				# Validate qualifier internals
-				if ($qName -eq 'v8:NumberQualifiers') {
-					$digits = $child.SelectSingleNode("v8:Digits", $ns)
-					$frac   = $child.SelectSingleNode("v8:FractionDigits", $ns)
-					$sign   = $child.SelectSingleNode("v8:AllowedSign", $ns)
-					if (-not $digits -or -not ($digits.InnerText -match '^\d+$')) {
-						Report-Error "v8:NumberQualifiers: <v8:Digits> missing or not a non-negative integer"
-						$vtOk = $false
-					}
-					if (-not $frac -or -not ($frac.InnerText -match '^\d+$')) {
-						Report-Error "v8:NumberQualifiers: <v8:FractionDigits> missing or not a non-negative integer"
-						$vtOk = $false
-					}
-					if ($sign -and $sign.InnerText -and $sign.InnerText -notin $validSign) {
-						Report-Error "v8:NumberQualifiers: <v8:AllowedSign>$($sign.InnerText)</v8:AllowedSign> — must be one of: $($validSign -join ', ')"
-						$vtOk = $false
-					}
-				} elseif ($qName -eq 'v8:StringQualifiers') {
-					$len = $child.SelectSingleNode("v8:Length", $ns)
-					$al  = $child.SelectSingleNode("v8:AllowedLength", $ns)
-					if (-not $len -or -not ($len.InnerText -match '^\d+$')) {
-						Report-Error "v8:StringQualifiers: <v8:Length> missing or not a non-negative integer"
-						$vtOk = $false
-					}
-					if ($al -and $al.InnerText -and $al.InnerText -notin $validLength) {
-						Report-Error "v8:StringQualifiers: <v8:AllowedLength>$($al.InnerText)</v8:AllowedLength> — must be one of: $($validLength -join ', ')"
-						$vtOk = $false
-					}
-				} elseif ($qName -eq 'v8:DateQualifiers') {
-					$df = $child.SelectSingleNode("v8:DateFractions", $ns)
-					if ($df -and $df.InnerText -and $df.InnerText -notin $validFractions) {
-						Report-Error "v8:DateQualifiers: <v8:DateFractions>$($df.InnerText)</v8:DateFractions> — must be one of: $($validFractions -join ', ')"
-						$vtOk = $false
-					}
+		} elseif ($localName -match 'Qualifiers$') {
+			$qName = "v8:$localName"
+			$qualifiers += @{ name = $qName; node = $child }
+			# Validate qualifier internals
+			if ($qName -eq 'v8:NumberQualifiers') {
+				$digits = $child.SelectSingleNode("v8:Digits", $ns)
+				$frac   = $child.SelectSingleNode("v8:FractionDigits", $ns)
+				$sign   = $child.SelectSingleNode("v8:AllowedSign", $ns)
+				if (-not $digits -or -not ($digits.InnerText -match '^\d+$')) {
+					Report-Error "v8:NumberQualifiers: <v8:Digits> missing or not a non-negative integer"
+					$vtOk = $false
+				}
+				if (-not $frac -or -not ($frac.InnerText -match '^\d+$')) {
+					Report-Error "v8:NumberQualifiers: <v8:FractionDigits> missing or not a non-negative integer"
+					$vtOk = $false
+				}
+				if ($sign -and $sign.InnerText -and $sign.InnerText -notin $validSign) {
+					Report-Error "v8:NumberQualifiers: <v8:AllowedSign>$($sign.InnerText)</v8:AllowedSign> — must be one of: $($validSign -join ', ')"
+					$vtOk = $false
+				}
+			} elseif ($qName -eq 'v8:StringQualifiers') {
+				$len = $child.SelectSingleNode("v8:Length", $ns)
+				$al  = $child.SelectSingleNode("v8:AllowedLength", $ns)
+				if (-not $len -or -not ($len.InnerText -match '^\d+$')) {
+					Report-Error "v8:StringQualifiers: <v8:Length> missing or not a non-negative integer"
+					$vtOk = $false
+				}
+				if ($al -and $al.InnerText -and $al.InnerText -notin $validLength) {
+					Report-Error "v8:StringQualifiers: <v8:AllowedLength>$($al.InnerText)</v8:AllowedLength> — must be one of: $($validLength -join ', ')"
+					$vtOk = $false
+				}
+			} elseif ($qName -eq 'v8:DateQualifiers') {
+				$df = $child.SelectSingleNode("v8:DateFractions", $ns)
+				if ($df -and $df.InnerText -and $df.InnerText -notin $validFractions) {
+					Report-Error "v8:DateQualifiers: <v8:DateFractions>$($df.InnerText)</v8:DateFractions> — must be one of: $($validFractions -join ', ')"
+					$vtOk = $false
 				}
 			}
-			$lastType = $null   # qualifier consumed; next must be another Type or end
+		}
+	}
+
+	# Cross-check: every qualifier must have a matching scalar type in this valueType
+	foreach ($q in $qualifiers) {
+		$producer = $qualifierProducers[$q.name]
+		if (-not $producer) { continue }
+		if ($types -notcontains $producer) {
+			Report-Error "valueType: <$($q.name)> has no matching <v8:Type>$producer</v8:Type> in this valueType"
+			$vtOk = $false
 		}
 	}
 }
