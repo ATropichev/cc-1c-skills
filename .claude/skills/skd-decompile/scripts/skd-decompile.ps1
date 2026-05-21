@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.4 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.5 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -788,6 +788,367 @@ function Build-Template {
 	return $tmplObj
 }
 
+# --- 3c. Filter / settings helpers ---
+
+$script:filterOpMap = @{
+	'Equal'='='; 'NotEqual'='<>'; 'Greater'='>'; 'GreaterOrEqual'='>=';
+	'Less'='<'; 'LessOrEqual'='<='; 'InList'='in'; 'NotInList'='notIn';
+	'InHierarchy'='inHierarchy'; 'InListByHierarchy'='inListByHierarchy';
+	'Contains'='contains'; 'NotContains'='notContains';
+	'BeginsWith'='beginsWith'; 'NotBeginsWith'='notBeginsWith';
+	'Filled'='filled'; 'NotFilled'='notFilled'
+}
+
+# Render a filter value node to a shorthand-acceptable scalar string
+function Get-FilterValue {
+	param($valNode)
+	if (-not $valNode) { return '_' }
+	$nil = $valNode.GetAttribute("nil", $NS_XSI)
+	if ($nil -eq 'true') { return '_' }
+	$vType = Get-LocalXsiType $valNode
+	if ($vType -eq 'DesignTimeValue') { return $valNode.InnerText }
+	if ($vType -eq 'LocalStringType') { return (Get-MLText $valNode) }
+	$txt = $valNode.InnerText
+	if (-not $txt) { return '_' }
+	return $txt
+}
+
+# Convert filter item node → shorthand string or object form
+function Build-FilterItem {
+	param($itemNode, [string]$loc)
+	$xtype = Get-LocalXsiType $itemNode
+	if ($xtype -eq 'FilterItemGroup') {
+		$gt = Get-Text $itemNode "dcsset:groupType"
+		$groupName = switch ($gt) { 'OrGroup' { 'Or' } 'NotGroup' { 'Not' } default { 'And' } }
+		$items = @()
+		foreach ($c in $itemNode.SelectNodes("dcsset:item", $ns)) {
+			$items += (Build-FilterItem -itemNode $c -loc "$loc/item")
+		}
+		return [ordered]@{ group = $groupName; items = $items }
+	}
+	if ($xtype -ne 'FilterItemComparison') {
+		return (New-Sentinel -kind "FilterItemType:$xtype" -loc $loc -detail 'Неизвестный тип фильтра')
+	}
+	$leftNode = $itemNode.SelectSingleNode("dcsset:left", $ns)
+	$field = if ($leftNode) { $leftNode.InnerText } else { $null }
+	$ct = Get-Text $itemNode "dcsset:comparisonType"
+	$op = $script:filterOpMap[$ct]
+	if (-not $op) { $op = $ct }
+	$rightNode = $itemNode.SelectSingleNode("dcsset:right", $ns)
+	$value = Get-FilterValue $rightNode
+
+	$use = Get-Text $itemNode "dcsset:use"
+	$userId = Get-Text $itemNode "dcsset:userSettingID"
+	$viewMode = Get-Text $itemNode "dcsset:viewMode"
+	$userPresNode = $itemNode.SelectSingleNode("dcsset:userSettingPresentation", $ns)
+
+	$flags = @()
+	if ($use -eq 'false') { $flags += '@off' }
+	if ($userId) { $flags += '@user' }
+	if ($viewMode -eq 'QuickAccess') { $flags += '@quickAccess' }
+	elseif ($viewMode -eq 'Normal') { $flags += '@normal' }
+	elseif ($viewMode -eq 'Inaccessible') { $flags += '@inaccessible' }
+
+	# nullity ops have no value
+	$noValueOps = @('filled','notFilled')
+
+	if ($userPresNode) {
+		# object form
+		$obj = [ordered]@{ field = $field; op = $op }
+		if ($op -notin $noValueOps -and $null -ne $value) { $obj['value'] = $value }
+		if ($use -eq 'false') { $obj['use'] = $false }
+		if ($userId) { $obj['userSettingID'] = 'auto' }
+		if ($viewMode) { $obj['viewMode'] = $viewMode }
+		$obj['userSettingPresentation'] = Get-MLText $userPresNode
+		return $obj
+	}
+
+	# shorthand
+	$s = $field
+	if ($op -in $noValueOps) {
+		$s += " $op"
+	} else {
+		$s += " $op $value"
+	}
+	if ($flags) { $s += ' ' + ($flags -join ' ') }
+	return $s
+}
+
+# Build selection items array
+function Build-Selection {
+	param($selNode, [string]$loc)
+	if (-not $selNode) { return @() }
+	$out = @()
+	foreach ($it in $selNode.SelectNodes("dcsset:item", $ns)) {
+		$xt = Get-LocalXsiType $it
+		switch ($xt) {
+			'SelectedItemAuto'   { $out += 'Auto' }
+			'SelectedItemField'  { $out += (Get-Text $it "dcsset:field") }
+			'SelectedItemFolder' {
+				$titleNode = $it.SelectSingleNode("dcsset:lwsTitle", $ns)
+				$folderTitle = Get-MLText $titleNode
+				$inner = @()
+				foreach ($sub in $it.SelectNodes("dcsset:item", $ns)) {
+					$st = Get-LocalXsiType $sub
+					if ($st -eq 'SelectedItemField')      { $inner += (Get-Text $sub "dcsset:field") }
+					elseif ($st -eq 'SelectedItemAuto')   { $inner += 'Auto' }
+					else { $inner += (New-Sentinel -kind "SelectionInFolder:$st" -loc "$loc/folder" -detail 'Неизвестный тип элемента папки выбора') }
+				}
+				$out += [ordered]@{ folder = $folderTitle; items = $inner }
+			}
+			default {
+				$out += (New-Sentinel -kind "SelectionItem:$xt" -loc $loc -detail 'Неизвестный тип элемента selection')
+			}
+		}
+	}
+	return ,$out
+}
+
+# Build order items array
+function Build-Order {
+	param($ordNode, [string]$loc)
+	if (-not $ordNode) { return @() }
+	$out = @()
+	foreach ($it in $ordNode.SelectNodes("dcsset:item", $ns)) {
+		$xt = Get-LocalXsiType $it
+		switch ($xt) {
+			'OrderItemAuto'  { $out += 'Auto' }
+			'OrderItemField' {
+				$fn = Get-Text $it "dcsset:field"
+				$ot = Get-Text $it "dcsset:orderType"
+				if ($ot -eq 'Desc') { $out += "$fn desc" } else { $out += $fn }
+			}
+			default { $out += (New-Sentinel -kind "OrderItem:$xt" -loc $loc -detail 'Неизвестный тип сортировки') }
+		}
+	}
+	return ,$out
+}
+
+# Build appearance dict from <dcsset:appearance> or <dcscor:item> list
+function Get-SettingsAppearance {
+	param($appNode)
+	if (-not $appNode) { return $null }
+	$dict = [ordered]@{}
+	foreach ($it in $appNode.SelectNodes("dcscor:item", $ns)) {
+		$pName = Get-Text $it "dcscor:parameter"
+		$val = $it.SelectSingleNode("dcscor:value", $ns)
+		if (-not $pName -or -not $val) { continue }
+		$valType = Get-LocalXsiType $val
+		if ($valType -eq 'LocalStringType') {
+			$dict[$pName] = Get-MLText $val
+		} else {
+			$dict[$pName] = $val.InnerText
+		}
+	}
+	return $dict
+}
+
+# Build conditionalAppearance array
+function Build-ConditionalAppearance {
+	param($caNode, [string]$loc)
+	if (-not $caNode) { return @() }
+	$out = @()
+	$i = 0
+	foreach ($it in $caNode.SelectNodes("dcsset:item", $ns)) {
+		$entry = [ordered]@{}
+		$selNode = $it.SelectSingleNode("dcsset:selection", $ns)
+		if ($selNode -and $selNode.SelectNodes("dcsset:item", $ns).Count -gt 0) {
+			$entry['selection'] = Build-Selection -selNode $selNode -loc "$loc/$i/selection"
+		}
+		$filterNode = $it.SelectSingleNode("dcsset:filter", $ns)
+		if ($filterNode -and $filterNode.SelectNodes("dcsset:item", $ns).Count -gt 0) {
+			$f = @()
+			foreach ($fc in $filterNode.SelectNodes("dcsset:item", $ns)) {
+				$f += (Build-FilterItem -itemNode $fc -loc "$loc/$i/filter")
+			}
+			$entry['filter'] = $f
+		}
+		$appNode = $it.SelectSingleNode("dcsset:appearance", $ns)
+		$ap = Get-SettingsAppearance $appNode
+		if ($ap -and $ap.Count -gt 0) { $entry['appearance'] = $ap }
+		$pres = Get-Text $it "dcsset:presentation"
+		if ($pres) { $entry['presentation'] = $pres }
+		$vm = Get-Text $it "dcsset:viewMode"
+		if ($vm) { $entry['viewMode'] = $vm }
+		$usid = Get-Text $it "dcsset:userSettingID"
+		if ($usid) { $entry['userSettingID'] = 'auto' }
+		$out += $entry
+		$i++
+	}
+	return ,$out
+}
+
+# Build outputParameters dict
+function Build-OutputParameters {
+	param($opNode)
+	if (-not $opNode) { return $null }
+	$d = [ordered]@{}
+	foreach ($it in $opNode.SelectNodes("dcscor:item", $ns)) {
+		$pName = Get-Text $it "dcscor:parameter"
+		$val = $it.SelectSingleNode("dcscor:value", $ns)
+		if (-not $pName -or -not $val) { continue }
+		$vType = Get-LocalXsiType $val
+		if ($vType -eq 'LocalStringType') { $d[$pName] = Get-MLText $val }
+		else { $d[$pName] = $val.InnerText }
+	}
+	return $d
+}
+
+# Build dataParameters — return "auto" if every non-hidden top-level param appears
+# with userSettingID and value matches default; otherwise return explicit list.
+function Build-DataParameters {
+	param($dpNode, $topParams)
+	if (-not $dpNode) { return $null }
+	$items = $dpNode.SelectNodes("dcscor:item", $ns)
+	if ($items.Count -eq 0) { return $null }
+	# Build a quick map name → top-level rawParam
+	$visibleTop = @{}
+	foreach ($tp in $topParams) {
+		if (-not $tp.hidden -and -not $script:autoDatesCompanions.ContainsKey($tp.name)) {
+			$visibleTop[$tp.name] = $tp
+		}
+	}
+	$canAuto = $true
+	$presentNames = @{}
+	$entries = @()
+	foreach ($it in $items) {
+		$pn = Get-Text $it "dcscor:parameter"
+		$presentNames[$pn] = $true
+		$usid = Get-Text $it "dcsset:userSettingID"
+		if (-not $usid) { $canAuto = $false }
+		# Compare value to top-level param value
+		$valNode = $it.SelectSingleNode("dcscor:value", $ns)
+		$use = Get-Text $it "dcsset:use"
+		$tp = $visibleTop[$pn]
+		$flags = @()
+		if ($usid) { $flags += '@user' }
+		if ($use -eq 'false') { $flags += '@off' }
+		$vt = Get-LocalXsiType $valNode
+		$vDisplay = $null
+		if ($vt -eq 'StandardPeriod') {
+			$variant = Get-Text $valNode "v8:variant"
+			if ($variant -and $variant -ne 'Custom') { $vDisplay = $variant }
+		} elseif ($vt -eq 'DesignTimeValue') {
+			$vDisplay = $valNode.InnerText
+		} elseif ($vt -eq 'LocalStringType') {
+			$vDisplay = Get-MLText $valNode
+		} else {
+			if ($valNode) { $vDisplay = $valNode.InnerText }
+		}
+		# Compare to top-level default
+		if ($tp -and $tp.valueDisplay -ne $vDisplay) { $canAuto = $false }
+		if (-not $tp) { $canAuto = $false }   # extra param not in top-level
+		# Build shorthand entry
+		$s = $pn
+		if ($null -ne $vDisplay -and $vDisplay -ne '') { $s += " = $vDisplay" }
+		if ($flags) { $s += ' ' + ($flags -join ' ') }
+		$entries += $s
+	}
+	# Check that all visible top-level params are present
+	foreach ($vn in $visibleTop.Keys) { if (-not $presentNames.ContainsKey($vn)) { $canAuto = $false } }
+	if ($canAuto) { return 'auto' }
+	return ,$entries
+}
+
+# Build structure recursively. Returns array of structure items (object form).
+# Caller can later try to fold linear chain into string shorthand.
+function Build-Structure {
+	param($node, [string]$loc)
+	if (-not $node) { return @() }
+	$items = @()
+	foreach ($it in $node.SelectNodes("dcsset:item", $ns)) {
+		$xt = Get-LocalXsiType $it
+		if ($xt -ne 'StructureItemGroup') {
+			$items += (New-Sentinel -kind "StructureItem:$xt" -loc $loc -detail 'Тип структуры пока не покрыт')
+			continue
+		}
+		$entry = [ordered]@{}
+		# Optional name
+		$nm = Get-Text $it "dcsset:name"
+		if ($nm) { $entry['name'] = $nm }
+		# groupItems → groupFields
+		$gi = $it.SelectSingleNode("dcsset:groupItems", $ns)
+		$gFields = @()
+		if ($gi) {
+			foreach ($gItem in $gi.SelectNodes("dcsset:item", $ns)) {
+				$gxt = Get-LocalXsiType $gItem
+				if ($gxt -eq 'GroupItemField') {
+					$gf = Get-Text $gItem "dcsset:field"
+					# Look at periodAdditionType — non-None or non-default → sentinel
+					$pat = Get-Text $gItem "dcsset:periodAdditionType"
+					$gt = Get-Text $gItem "dcsset:groupType"
+					if (($pat -and $pat -ne 'None') -or ($gt -and $gt -ne 'Items')) {
+						# Non-default grouping — record but don't fail
+						# We still emit the field; flag in warnings only
+						$null = Add-Warning -kind 'GroupItemDetails' -loc "$loc/groupItems" -detail "Группировка $gf использует groupType=$gt, periodAdditionType=$pat — не воспроизводится в shorthand"
+					}
+					$gFields += $gf
+				} else {
+					$gFields += (New-Sentinel -kind "GroupItem:$gxt" -loc "$loc/groupItems" -detail 'Тип элемента группировки не покрыт')
+				}
+			}
+		}
+		if ($gFields.Count -gt 0) { $entry['groupFields'] = $gFields }
+
+		# Local selection — only emit if not "[Auto]" default
+		$selNode = $it.SelectSingleNode("dcsset:selection", $ns)
+		$selItems = Build-Selection -selNode $selNode -loc "$loc/selection"
+		if ($selItems.Count -gt 0 -and -not ($selItems.Count -eq 1 -and $selItems[0] -eq 'Auto')) {
+			$entry['selection'] = $selItems
+		}
+		# Local order
+		$ordNode = $it.SelectSingleNode("dcsset:order", $ns)
+		$ordItems = Build-Order -ordNode $ordNode -loc "$loc/order"
+		if ($ordItems.Count -gt 0 -and -not ($ordItems.Count -eq 1 -and $ordItems[0] -eq 'Auto')) {
+			$entry['order'] = $ordItems
+		}
+		# Local filter
+		$filterNode = $it.SelectSingleNode("dcsset:filter", $ns)
+		if ($filterNode -and $filterNode.SelectNodes("dcsset:item", $ns).Count -gt 0) {
+			$f = @()
+			foreach ($fc in $filterNode.SelectNodes("dcsset:item", $ns)) { $f += (Build-FilterItem -itemNode $fc -loc "$loc/filter") }
+			$entry['filter'] = $f
+		}
+
+		# Children — recursive
+		$children = Build-Structure -node $it -loc "$loc/children"
+		if ($children.Count -gt 0) { $entry['children'] = $children }
+
+		$items += $entry
+	}
+	return ,$items
+}
+
+# Try to fold a structure tree into string shorthand "A > B > details".
+# Conditions: linear chain (each level has exactly one child), each level is
+# a plain group with single groupField and no local selection/order/filter.
+function Try-StructureShorthand {
+	param($items)
+	if ($items.Count -ne 1) { return $null }
+	$parts = @()
+	$cur = $items[0]
+	while ($null -ne $cur) {
+		# Disallow extras
+		if ($cur.Contains('name')) { return $null }
+		if ($cur.Contains('selection')) { return $null }
+		if ($cur.Contains('order')) { return $null }
+		if ($cur.Contains('filter')) { return $null }
+		$gfs = $cur['groupFields']
+		if ($null -eq $gfs -or $gfs.Count -eq 0) {
+			# details level (terminal)
+			$parts += 'details'
+			break
+		}
+		if ($gfs.Count -ne 1) { return $null }
+		$parts += $gfs[0]
+		$children = $cur['children']
+		if ($null -eq $children -or $children.Count -eq 0) { break }
+		if ($children.Count -ne 1) { return $null }
+		$cur = $children[0]
+	}
+	return ($parts -join ' > ')
+}
+
 # --- 4. dataSources ---
 
 $dataSources = @()
@@ -869,6 +1230,8 @@ foreach ($tf in $tfNodes) { $totalFields += (Build-TotalField -tfNode $tf) }
 
 # --- 5d. parameters with autoDates folding ---
 
+$script:autoDatesCompanions = @{}
+
 $paramsRaw = @()
 $pi = 0
 $pNodes = $root.SelectNodes("r:parameter", $ns)
@@ -884,6 +1247,7 @@ $paramByName = @{}
 foreach ($p in $paramsRaw) { $paramByName[$p.name] = $p }
 
 $removedNames = @{}
+$script:autoDatesCompanions = @{}
 foreach ($p in $paramsRaw) {
 	if ($p.typeShort -ne 'StandardPeriod') { continue }
 	$parentName = $p.name
@@ -900,6 +1264,8 @@ foreach ($p in $paramsRaw) {
 		$p['autoDates'] = $true
 		$removedNames[$startMatch] = $true
 		$removedNames[$endMatch] = $true
+		$script:autoDatesCompanions[$startMatch] = $true
+		$script:autoDatesCompanions[$endMatch]   = $true
 	}
 }
 
@@ -929,6 +1295,104 @@ foreach ($tn in $tNodes) {
 }
 if ($templates.Count -gt 0) { $out['templates'] = $templates }
 
+# --- 5f. groupTemplates ---
+
+$groupTemplates = @()
+# <groupHeaderTemplate> → templateType = "GroupHeader"
+foreach ($ght in $root.SelectNodes("r:groupHeaderTemplate", $ns)) {
+	$entry = [ordered]@{}
+	$gn = Get-Text $ght "r:groupName"
+	$gf = Get-Text $ght "r:groupField"
+	if ($gn) { $entry['groupName'] = $gn }
+	if ($gf) { $entry['groupField'] = $gf }
+	$entry['templateType'] = 'GroupHeader'
+	$entry['template'] = Get-Text $ght "r:template"
+	$groupTemplates += $entry
+}
+# <groupTemplate> → templateType from inner <templateType>
+foreach ($gt in $root.SelectNodes("r:groupTemplate", $ns)) {
+	$entry = [ordered]@{}
+	$gn = Get-Text $gt "r:groupName"
+	$gf = Get-Text $gt "r:groupField"
+	if ($gn) { $entry['groupName'] = $gn }
+	if ($gf) { $entry['groupField'] = $gf }
+	$entry['templateType'] = Get-Text $gt "r:templateType"
+	$entry['template'] = Get-Text $gt "r:template"
+	$groupTemplates += $entry
+}
+if ($groupTemplates.Count -gt 0) { $out['groupTemplates'] = $groupTemplates }
+
+# --- 5g. settingsVariants ---
+
+$settingsVariants = @()
+$svNodes = $root.SelectNodes("r:settingsVariant", $ns)
+$vi = 0
+foreach ($sv in $svNodes) {
+	$vname = Get-Text $sv "dcsset:name"
+	$presNode = $sv.SelectSingleNode("dcsset:presentation", $ns)
+	$presentation = Get-MLText $presNode
+
+	$settingsNode = $sv.SelectSingleNode("dcsset:settings", $ns)
+	$settings = [ordered]@{}
+
+	# selection (top-level)
+	$selTop = $settingsNode.SelectSingleNode("dcsset:selection", $ns)
+	$selItems = Build-Selection -selNode $selTop -loc "variant[$vi]/selection"
+	if ($selItems.Count -gt 0) { $settings['selection'] = $selItems }
+
+	# filter
+	$fTop = $settingsNode.SelectSingleNode("dcsset:filter", $ns)
+	if ($fTop -and $fTop.SelectNodes("dcsset:item", $ns).Count -gt 0) {
+		$fa = @()
+		foreach ($fc in $fTop.SelectNodes("dcsset:item", $ns)) { $fa += (Build-FilterItem -itemNode $fc -loc "variant[$vi]/filter") }
+		$settings['filter'] = $fa
+	}
+
+	# order
+	$ordTop = $settingsNode.SelectSingleNode("dcsset:order", $ns)
+	$ordItems = Build-Order -ordNode $ordTop -loc "variant[$vi]/order"
+	if ($ordItems.Count -gt 0) { $settings['order'] = $ordItems }
+
+	# conditionalAppearance
+	$caTop = $settingsNode.SelectSingleNode("dcsset:conditionalAppearance", $ns)
+	if ($caTop) {
+		$ca = Build-ConditionalAppearance -caNode $caTop -loc "variant[$vi]/ca"
+		if ($ca.Count -gt 0) { $settings['conditionalAppearance'] = $ca }
+	}
+
+	# outputParameters
+	$opTop = $settingsNode.SelectSingleNode("dcsset:outputParameters", $ns)
+	$op = Build-OutputParameters -opNode $opTop
+	if ($op -and $op.Count -gt 0) { $settings['outputParameters'] = $op }
+
+	# dataParameters
+	$dpTop = $settingsNode.SelectSingleNode("dcsset:dataParameters", $ns)
+	$dp = Build-DataParameters -dpNode $dpTop -topParams $paramsRaw
+	if ($null -ne $dp) { $settings['dataParameters'] = $dp }
+
+	# structure — top-level <dcsset:item> children of <dcsset:settings>
+	$structItems = Build-Structure -node $settingsNode -loc "variant[$vi]/structure"
+	if ($structItems.Count -gt 0) {
+		$short = Try-StructureShorthand $structItems
+		if ($short) { $settings['structure'] = $short }
+		else        { $settings['structure'] = $structItems }
+	}
+
+	# Skip pure-default variants: settings contains only "details" structure (or nothing) +
+	# name=Основной + no distinctive title.
+	$nonStructKeys = @($settings.Keys | Where-Object { $_ -ne 'structure' })
+	$structOnlyDetails = (-not $settings.Contains('structure')) -or ($settings['structure'] -eq 'details')
+	$isDefault = ($nonStructKeys.Count -eq 0) -and $structOnlyDetails -and ($vname -eq 'Основной') -and (-not $presentation -or $presentation -eq $vname)
+	if (-not $isDefault) {
+		$entry = [ordered]@{ name = $vname }
+		if ($presentation -and $presentation -ne $vname) { $entry['title'] = $presentation }
+		$entry['settings'] = $settings
+		$settingsVariants += $entry
+	}
+	$vi++
+}
+if ($settingsVariants.Count -gt 0) { $out['settingsVariants'] = $settingsVariants }
+
 # --- 7. Serialize ---
 
 $json = $out | ConvertTo-Json -Depth 32
@@ -954,13 +1418,14 @@ if ($OutputPath) {
 		[void]$sb.AppendLine("Source: $TemplatePath")
 		[void]$sb.AppendLine("")
 		foreach ($w in $script:warnings) {
-			[void]$sb.AppendLine("- **$($w.id)** ($($w.kind)) at `$($w.loc)`: $($w.detail)")
+			$wId = $w.id; $wKind = $w.kind; $wLoc = $w.loc; $wDetail = $w.detail
+			[void]$sb.AppendLine("- **$wId** ($wKind) at $wLoc — $wDetail")
 		}
 		[System.IO.File]::WriteAllText($wPath, $sb.ToString(), $enc)
 		Write-Host "Warnings: $wPath ($($script:warnings.Count) issue(s))" -ForegroundColor Yellow
 	}
 
-	[Console]::Error.WriteLine("Decompiled: dataSets=$($dataSets.Count), calc=$($calculatedFields.Count), totals=$($totalFields.Count), params=$($parameters.Count), templates=$($templates.Count), warnings=$($script:warnings.Count)")
+	[Console]::Error.WriteLine("Decompiled: dataSets=$($dataSets.Count), calc=$($calculatedFields.Count), totals=$($totalFields.Count), params=$($parameters.Count), templates=$($templates.Count), groupTemplates=$($groupTemplates.Count), variants=$($settingsVariants.Count), warnings=$($script:warnings.Count)")
 } else {
 	Write-Output $json
 	if ($script:warnings.Count -gt 0) {
