@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.9 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.10 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -214,47 +214,76 @@ function Get-ValueTypeShorthand {
 	return ,$shorts
 }
 
-# <role> → @{ tokens, extras } where:
-#   tokens — list of @-flags (для shorthand или массива role: [...])
-#   extras — hashtable с accountTypeExpression/balanceGroup и т.п. (форсит object-форму)
-# Если попадается non-dcscom-child или periodNumber≠1 — sentinel.
+# <role> → @{ tokens, extras }
+#   tokens — список @-флагов (boolean dcscom children); @period — sugar для periodNumber=1+periodType=Main
+#   extras — любые dcscom:KEY со строковым значением (balanceGroupName/balanceType/parentDimension/...).
+# compile/skd-edit принимают произвольные KV — никакого whitelist'а.
 function Get-RoleInfo {
 	param($roleNode, [string]$loc)
 	if (-not $roleNode) { return $null }
 	$tokens = @()
 	$extras = [ordered]@{}
 	$hasComplex = $false
+	# Сначала проверяем @period sugar: periodNumber=1 + periodType=Main
+	$pnNode = $roleNode.SelectSingleNode("dcscom:periodNumber", $ns)
+	$ptNode = $roleNode.SelectSingleNode("dcscom:periodType", $ns)
+	$periodHandled = $false
+	if ($pnNode -and $ptNode -and $pnNode.InnerText -eq '1' -and $ptNode.InnerText -eq 'Main') {
+		$tokens += '@period'
+		$periodHandled = $true
+	}
 	foreach ($child in $roleNode.ChildNodes) {
 		if ($child.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
 		if ($child.NamespaceURI -ne $NS_COM) { $hasComplex = $true; continue }
-		switch ($child.LocalName) {
-			'periodNumber' {
-				$pType = Get-Text $roleNode "dcscom:periodType"
-				if ($child.InnerText -eq '1' -and $pType -eq 'Main') { $tokens += '@period' } else { $hasComplex = $true }
-			}
-			'periodType' { } # paired с periodNumber
-			'accountTypeExpression' {
-				if ($child.InnerText) { $extras['accountTypeExpression'] = $child.InnerText }
-			}
-			'balanceGroup' {
-				if ($child.InnerText) { $extras['balanceGroup'] = $child.InnerText }
-			}
-			default {
-				# Любой dcscom:KEY с true → @KEY (compile принимает любой ключ в object form role).
-				if ($child.InnerText -eq 'true') {
-					$tokens += '@' + $child.LocalName
-				} elseif ($child.InnerText -eq 'false' -or -not $child.InnerText) {
-					# Игнорируем явный false (не нужно эмитить — это дефолт)
-				} else {
-					$hasComplex = $true
-				}
-			}
+		# Skip periodNumber/periodType if уже свернули в @period
+		if ($periodHandled -and ($child.LocalName -eq 'periodNumber' -or $child.LocalName -eq 'periodType')) { continue }
+		$txt = $child.InnerText
+		if ($txt -eq 'true') {
+			$tokens += '@' + $child.LocalName
+		} elseif ($txt -eq 'false' -or -not $txt) {
+			# Игнорируем явный false (дефолт)
+		} else {
+			# Любая строка → extra (без whitelist — compile эмитит любой ключ)
+			$extras[$child.LocalName] = $txt
 		}
 	}
 	if ($hasComplex) {
-		$null = New-Sentinel -kind 'ComplexRole' -loc $loc -detail 'Роль с не-bool атрибутами не сворачивается в DSL'
+		$null = New-Sentinel -kind 'ComplexRole' -loc $loc -detail 'Роль с не-dcscom-атрибутами не сворачивается в DSL'
 	}
 	return [ordered]@{ tokens = $tokens; extras = $extras }
+}
+
+# Render role into shorthand string (если все extras "простые") или object form.
+# Returns hashtable @{ value = <string|object|array>; isString = $true|$false } or $null если роль пустая.
+function Render-Role {
+	param($tokens, $extras)
+	$hasExtras = $extras -and $extras.Count -gt 0
+	$hasTokens = $tokens -and $tokens.Count -gt 0
+	if (-not $hasExtras -and -not $hasTokens) { return $null }
+	if (-not $hasExtras) {
+		# Только флаги: одиночный — без @ (back-compat), множественный — "@a @b" string.
+		$plain = @($tokens | ForEach-Object { $_ -replace '^@','' })
+		if ($plain.Count -eq 1) { return @{ value = $plain[0]; isString = $true } }
+		$withAt = @($plain | ForEach-Object { "@$_" })
+		return @{ value = ($withAt -join ' '); isString = $true }
+	}
+	# Есть extras — проверяем, все ли значения "простые" (без пробелов и кавычек)
+	$allSimple = $true
+	foreach ($v in $extras.Values) {
+		if ("$v" -notmatch '^[\w\.\-]+$') { $allSimple = $false; break }
+	}
+	if ($allSimple) {
+		# Shorthand: "@flag1 @flag2 K=V K=V"
+		$parts = @()
+		foreach ($t in $tokens) { $parts += $t }
+		foreach ($k in $extras.Keys) { $parts += "$k=$($extras[$k])" }
+		return @{ value = ($parts -join ' '); isString = $true }
+	}
+	# Object form
+	$obj = [ordered]@{}
+	foreach ($t in $tokens) { $obj[($t -replace '^@','')] = $true }
+	foreach ($k in $extras.Keys) { $obj[$k] = $extras[$k] }
+	return @{ value = $obj; isString = $false }
 }
 
 # <useRestriction> → array of #tokens
@@ -332,24 +361,34 @@ function Build-Field {
 	$roleInfo = Get-RoleInfo $fieldNode.SelectSingleNode("r:role", $ns) "$loc/role"
 	$roleTokens = if ($roleInfo) { $roleInfo.tokens } else { @() }
 	$roleExtras = if ($roleInfo) { $roleInfo.extras } else { [ordered]@{} }
+	$roleRendered = Render-Role -tokens $roleTokens -extras $roleExtras
 	$restrictTokens = Get-RestrictionTokens $fieldNode.SelectSingleNode("r:useRestriction", $ns)
 	$appNode = $fieldNode.SelectSingleNode("r:appearance", $ns)
 	$appearance = Get-AppearanceDict $appNode
 	$presExpr = Get-Text $fieldNode "r:presentationExpression"
 
-	$needsObject = $title -or $appearance -or $presExpr -or ($typeShort -is [array]) -or ($roleExtras -and $roleExtras.Count -gt 0)
+	# Можно ли роль положить в shorthand-строку?
+	$roleInString = $roleRendered -and $roleRendered.isString
+	$needsObject = $title -or $appearance -or $presExpr -or ($typeShort -is [array]) -or ($roleRendered -and -not $roleInString)
 
 	if (-not $needsObject) {
-		# shorthand: "Name: type @role #restrict"
-		$parts = @($fieldName)
-		if ($typeShort) { $parts[0] = "$fieldName`: $typeShort" }
-		if ($roleTokens) { $parts[0] += ' ' + ($roleTokens -join ' ') }
-		if ($restrictTokens) { $parts[0] += ' ' + ($restrictTokens -join ' ') }
+		# shorthand: "Name: type @role K=V #restrict"
+		$s = $fieldName
+		if ($typeShort) { $s = "$fieldName`: $typeShort" }
+		if ($roleInString) {
+			# Если значение — одиночный флаг (без @ и без =) — добавляем как @flag.
+			# Если уже содержит @ или K=V — добавляем как есть.
+			$rv = $roleRendered.value
+			if ($rv -match '@' -or $rv -match '=' -or $rv -match '\s') {
+				$s += ' ' + $rv
+			} else {
+				$s += " @$rv"
+			}
+		}
+		if ($restrictTokens) { $s += ' ' + ($restrictTokens -join ' ') }
 		# dataPath ≠ field — fall back to object form
-		if ($dataPath -and $dataPath -ne $fieldName) {
-			# unusual case; use object form
-		} else {
-			return $parts[0]
+		if (-not ($dataPath -and $dataPath -ne $fieldName)) {
+			return $s
 		}
 	}
 
@@ -357,16 +396,7 @@ function Build-Field {
 	if ($dataPath -and $dataPath -ne $fieldName) { $obj['dataPath'] = $dataPath }
 	if ($title) { $obj['title'] = $title }
 	if ($typeShort) { $obj['type'] = $typeShort }
-	if ($roleExtras -and $roleExtras.Count -gt 0) {
-		# Object form: keys = @-flags + extras
-		$roleObj = [ordered]@{}
-		foreach ($t in $roleTokens) { $roleObj[($t -replace '^@','')] = $true }
-		foreach ($k in $roleExtras.Keys) { $roleObj[$k] = $roleExtras[$k] }
-		$obj['role'] = $roleObj
-	} elseif ($roleTokens) {
-		if ($roleTokens.Count -eq 1) { $obj['role'] = $roleTokens[0] -replace '^@','' }
-		else { $obj['role'] = ($roleTokens | ForEach-Object { $_ -replace '^@','' }) }
-	}
+	if ($roleRendered) { $obj['role'] = $roleRendered.value }
 	if ($restrictTokens) { $obj['restrict'] = ($restrictTokens | ForEach-Object { $_ -replace '^#','' }) }
 	if ($presExpr) { $obj['presentationExpression'] = $presExpr }
 	if ($appearance) { $obj['appearance'] = $appearance }
