@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.31 — Compile 1C DCS from JSON
+# skd-compile v1.32 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1163,6 +1163,12 @@ def emit_parameters(lines, defn):
 # === AreaTemplate DSL ===
 
 AREA_STYLE_PRESETS = {
+    'none': {
+        'font': None, 'fontSize': None, 'bold': False, 'italic': False,
+        'hAlign': None, 'vAlign': None, 'wrap': False,
+        'bgColor': None, 'textColor': None,
+        'borderColor': None, 'borders': False,
+    },
     'data': {
         'font': 'Arial', 'fontSize': 10, 'bold': False, 'italic': False,
         'hAlign': None, 'vAlign': None, 'wrap': False,
@@ -1258,13 +1264,14 @@ def _emit_cell_appearance(lines, style, width=0, v_merge=False, h_merge=False, m
             lines.append(f'{ind}\t\t</dcscor:value>')
             lines.append(f'{ind}\t</dcscor:item>')
         lines.append(f'{ind}</dcscor:item>')
-    # Font
-    bold_str = 'true' if style.get('bold') else 'false'
-    italic_str = 'true' if style.get('italic') else 'false'
-    lines.append(f'{ind}<dcscor:item>')
-    lines.append(f'{ind}\t<dcscor:parameter>\u0428\u0440\u0438\u0444\u0442</dcscor:parameter>')
-    lines.append(f'{ind}\t<dcscor:value xsi:type="v8ui:Font" faceName="{style["font"]}" height="{style["fontSize"]}" bold="{bold_str}" italic="{italic_str}" underline="false" strikeout="false" kind="Absolute" scale="100"/>')
-    lines.append(f'{ind}</dcscor:item>')
+    # Font (skip if style has no font configured \u2014 for "none" preset)
+    if style.get('font'):
+        bold_str = 'true' if style.get('bold') else 'false'
+        italic_str = 'true' if style.get('italic') else 'false'
+        lines.append(f'{ind}<dcscor:item>')
+        lines.append(f'{ind}\t<dcscor:parameter>\u0428\u0440\u0438\u0444\u0442</dcscor:parameter>')
+        lines.append(f'{ind}\t<dcscor:value xsi:type="v8ui:Font" faceName="{style["font"]}" height="{style["fontSize"]}" bold="{bold_str}" italic="{italic_str}" underline="false" strikeout="false" kind="Absolute" scale="100"/>')
+        lines.append(f'{ind}</dcscor:item>')
     # Horizontal alignment
     if style.get('hAlign'):
         lines.append(f'{ind}<dcscor:item>')

@@ -1,4 +1,4 @@
-﻿# skd-compile v1.31 — Compile 1C DCS from JSON
+﻿# skd-compile v1.32 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -1412,6 +1412,12 @@ function Emit-ParamValue {
 
 # Built-in style presets
 $script:areaStylePresets = @{
+	none = @{
+		font = $null; fontSize = $null; bold = $false; italic = $false
+		hAlign = $null; vAlign = $null; wrap = $false
+		bgColor = $null; textColor = $null
+		borderColor = $null; borders = $false
+	}
 	data = @{
 		font = 'Arial'; fontSize = 10; bold = $false; italic = $false
 		hAlign = $null; vAlign = $null; wrap = $false
@@ -1530,13 +1536,15 @@ function Emit-CellAppearance {
 		}
 		X "$ind</dcscor:item>"
 	}
-	# Font
-	$boldStr = if ($style.bold) { "true" } else { "false" }
-	$italicStr = if ($style.italic) { "true" } else { "false" }
-	X "$ind<dcscor:item>"
-	X "$ind`t<dcscor:parameter>Шрифт</dcscor:parameter>"
-	X "$ind`t<dcscor:value xsi:type=`"v8ui:Font`" faceName=`"$($style.font)`" height=`"$($style.fontSize)`" bold=`"$boldStr`" italic=`"$italicStr`" underline=`"false`" strikeout=`"false`" kind=`"Absolute`" scale=`"100`"/>"
-	X "$ind</dcscor:item>"
+	# Font (skip if style has no font configured — for "none" preset)
+	if ($style.font) {
+		$boldStr = if ($style.bold) { "true" } else { "false" }
+		$italicStr = if ($style.italic) { "true" } else { "false" }
+		X "$ind<dcscor:item>"
+		X "$ind`t<dcscor:parameter>Шрифт</dcscor:parameter>"
+		X "$ind`t<dcscor:value xsi:type=`"v8ui:Font`" faceName=`"$($style.font)`" height=`"$($style.fontSize)`" bold=`"$boldStr`" italic=`"$italicStr`" underline=`"false`" strikeout=`"false`" kind=`"Absolute`" scale=`"100`"/>"
+		X "$ind</dcscor:item>"
+	}
 	# Horizontal alignment
 	if ($style.hAlign) {
 		X "$ind<dcscor:item>"

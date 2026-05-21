@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.13 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.14 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -858,6 +858,7 @@ function Build-Template {
 	$minHeight = $null
 	$detectedStyle = $null
 	$styleMismatch = $false
+	$hasAnyNonEmptyFp = $false  # true если хоть одна ячейка имеет стилевые атрибуты
 	$drilldownByParam = @{}   # param name → field name (X from Расшифровка_X)
 
 	$rowIdx = 0
@@ -875,12 +876,17 @@ function Build-Template {
 			# Style detection (skip empty cells with no appearance, and merge cells)
 			if ($appNode -and -not $perCell.mergeV -and -not $perCell.mergeH) {
 				$fp = Get-AppearanceFingerprint $appNode
-				$matched = Match-BuiltinStyle $fp
-				if ($null -eq $detectedStyle) {
-					$detectedStyle = $matched
-				} elseif ($matched -ne $detectedStyle) {
-					$styleMismatch = $true
+				if ($fp.Count -gt 0) {
+					# Ячейка имеет стилевые атрибуты — пробуем match с built-in
+					$hasAnyNonEmptyFp = $true
+					$matched = Match-BuiltinStyle $fp
+					if ($null -eq $detectedStyle) {
+						$detectedStyle = $matched
+					} elseif ($matched -ne $detectedStyle) {
+						$styleMismatch = $true
+					}
 				}
+				# Пустой fp (только per-cell width/merge) — ячейка без стиля, не контрибутирует.
 			}
 
 			# Drilldown attachment
@@ -930,7 +936,10 @@ function Build-Template {
 	# Decide output form
 	if ($detectedStyle -and -not $styleMismatch) {
 		$tmplObj['style'] = $detectedStyle
-	} elseif ($styleMismatch -or ($null -eq $detectedStyle -and $rows.Count -gt 0)) {
+	} elseif (-not $hasAnyNonEmptyFp -and $rows.Count -gt 0) {
+		# Все ячейки без стилевых атрибутов — это шаблон "без стиля"
+		$tmplObj['style'] = 'none'
+	} elseif ($styleMismatch -or ($null -eq $detectedStyle -and $hasAnyNonEmptyFp)) {
 		# Couldn't unify style — emit sentinel
 		$tmplObj['__unsupported__'] = (New-Sentinel -kind 'TemplateStyleMismatch' -loc $loc -detail 'Шаблон содержит ячейки с непокрытым/неоднородным оформлением (Кольцо 2)')['__unsupported__']
 	}
