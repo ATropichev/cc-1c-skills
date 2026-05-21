@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.17 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.18 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -696,6 +696,45 @@ foreach ($k in $script:builtinPresets.Keys) {
 
 # existingUserPresetsRaw — копия загруженного skd-styles.json (PSCustomObject) для merge при записи.
 $script:existingUserPresetsRaw = $null
+
+# Аккумулятор внешних SQL-файлов для записи рядом с outputPath: @{name = "filename.sql"; text = "...sql text..."}
+$script:queryFilesAccumulator = @()
+$script:queryFileNamesUsed = @{}
+
+# Если запрос ≥3 строк и есть outputPath — вынести в отдельный <name>.sql и вернуть "@<name>.sql".
+# Иначе — оставить inline.
+function Maybe-ExternalizeQuery {
+	param([string]$queryText, [string]$datasetName)
+	if (-not $queryText) { return $queryText }
+	if (-not $script:outputDir) { return $queryText }
+	# Считаем строки — \r\n или \n
+	$lineCount = ([regex]::Matches($queryText, "`n")).Count + 1
+	if ($lineCount -lt 3) { return $queryText }
+	# Уникализация имени файла
+	$safeName = ($datasetName -replace '[^\w\-]', '_')
+	if (-not $safeName) { $safeName = 'query' }
+	$fileName = "$safeName.sql"
+	$suffix = 1
+	while ($script:queryFileNamesUsed.ContainsKey($fileName)) {
+		$suffix++
+		$fileName = "$safeName`_$suffix.sql"
+	}
+	$script:queryFileNamesUsed[$fileName] = $true
+	$script:queryFilesAccumulator += [ordered]@{ fileName = $fileName; text = $queryText }
+	return "@$fileName"
+}
+
+# Записать все накопленные .sql файлы рядом с outputPath.
+function Save-QueryFiles {
+	if ($script:queryFilesAccumulator.Count -eq 0) { return }
+	if (-not $script:outputDir) { return }
+	$enc = New-Object System.Text.UTF8Encoding($false)
+	foreach ($qf in $script:queryFilesAccumulator) {
+		$path = Join-Path $script:outputDir $qf.fileName
+		[System.IO.File]::WriteAllText($path, $qf.text, $enc)
+	}
+	[Console]::Error.WriteLine("Saved $($script:queryFilesAccumulator.Count) external query file(s)")
+}
 
 # customStylesAccumulator — новые customN, накопленные в текущем прогоне, для записи в skd-styles.json.
 $script:customStylesAccumulator = [ordered]@{}
@@ -1592,7 +1631,8 @@ function Build-DataSet {
 
 	switch ($xsiType) {
 		'DataSetQuery' {
-			$ds['query'] = Get-Text $dsNode "r:query"
+			$queryText = Get-Text $dsNode "r:query"
+			$ds['query'] = Maybe-ExternalizeQuery -queryText $queryText -datasetName $name
 		}
 		'DataSetObject' {
 			$ds['objectName'] = Get-Text $dsNode "r:objectName"
@@ -1850,6 +1890,7 @@ if ($OutputPath) {
 	$enc = New-Object System.Text.UTF8Encoding($false)
 	[System.IO.File]::WriteAllText($OutputPath, $json, $enc)
 	Save-UserStyles -dirPath $script:outputDir
+	Save-QueryFiles
 
 	if ($script:warnings.Count -gt 0) {
 		$wPath = [System.IO.Path]::ChangeExtension($OutputPath, $null).TrimEnd('.') + '.warnings.md'
