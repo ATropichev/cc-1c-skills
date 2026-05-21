@@ -1,4 +1,4 @@
-﻿# skd-compile v1.35 — Compile 1C DCS from JSON
+﻿# skd-compile v1.36 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -121,8 +121,12 @@ function Resolve-QueryValue {
 }
 
 function Emit-MLText {
-	param([string]$tag, $text, [string]$indent)
-	X "$indent<$tag xsi:type=`"v8:LocalStringType`">"
+	param([string]$tag, $text, [string]$indent, [switch]$NoXsiType)
+	if ($NoXsiType) {
+		X "$indent<$tag>"
+	} else {
+		X "$indent<$tag xsi:type=`"v8:LocalStringType`">"
+	}
 	# Multi-lang: object form { ru: "...", en: "..." } → one <v8:item> per language
 	if ($text -is [System.Management.Automation.PSCustomObject] -or $text -is [hashtable] -or $text -is [System.Collections.IDictionary]) {
 		$props = if ($text -is [System.Management.Automation.PSCustomObject]) { $text.PSObject.Properties } else { $text.GetEnumerator() | ForEach-Object { @{ Name = $_.Key; Value = $_.Value } } }
@@ -1129,10 +1133,15 @@ function Emit-CalcFields {
 		if ($appearance) {
 			X "`t`t<appearance>"
 			foreach ($prop in $appearance.PSObject.Properties) {
-				X "`t`t`t<dcscor:item xsi:type=`"dcsset:SettingsParameterValue`">"
-				X "`t`t`t`t<dcscor:parameter>$(Esc-Xml $prop.Name)</dcscor:parameter>"
-				X "`t`t`t`t<dcscor:value xsi:type=`"xs:string`">$(Esc-Xml "$($prop.Value)")</dcscor:value>"
-				X "`t`t`t</dcscor:item>"
+				# ГоризонтальноеПоложение — особый xsi:type (если не multilang)
+				if ($prop.Name -eq "ГоризонтальноеПоложение" -and -not ($prop.Value -is [hashtable] -or $prop.Value -is [System.Collections.IDictionary] -or $prop.Value -is [PSCustomObject])) {
+					X "`t`t`t<dcscor:item xsi:type=`"dcsset:SettingsParameterValue`">"
+					X "`t`t`t`t<dcscor:parameter>$(Esc-Xml $prop.Name)</dcscor:parameter>"
+					X "`t`t`t`t<dcscor:value xsi:type=`"v8ui:HorizontalAlign`">$(Esc-Xml "$($prop.Value)")</dcscor:value>"
+					X "`t`t`t</dcscor:item>"
+				} else {
+					Emit-AppearanceValue -key $prop.Name -val $prop.Value -indent "`t`t`t"
+				}
 			}
 			X "`t`t</appearance>"
 		}
@@ -1847,12 +1856,7 @@ function Emit-SelectionItem {
 		if ($item.field) {
 			X "$indent`t<dcsset:field>$(Esc-Xml "$($item.field)")</dcsset:field>"
 		}
-		X "$indent`t<dcsset:lwsTitle>"
-		X "$indent`t`t<v8:item>"
-		X "$indent`t`t`t<v8:lang>ru</v8:lang>"
-		X "$indent`t`t`t<v8:content>$(Esc-Xml "$($item.folder)")</v8:content>"
-		X "$indent`t`t</v8:item>"
-		X "$indent`t</dcsset:lwsTitle>"
+		Emit-MLText -tag "dcsset:lwsTitle" -text $item.folder -indent "$indent`t" -NoXsiType
 		foreach ($sub in $item.items) {
 			Emit-SelectionItem -item $sub -indent "$indent`t"
 		}
@@ -1864,12 +1868,7 @@ function Emit-SelectionItem {
 	X "$indent<dcsset:item xsi:type=`"dcsset:SelectedItemField`">"
 	X "$indent`t<dcsset:field>$(Esc-Xml "$($item.field)")</dcsset:field>"
 	if ($item.title) {
-		X "$indent`t<dcsset:lwsTitle>"
-		X "$indent`t`t<v8:item>"
-		X "$indent`t`t`t<v8:lang>ru</v8:lang>"
-		X "$indent`t`t`t<v8:content>$(Esc-Xml "$($item.title)")</v8:content>"
-		X "$indent`t`t</v8:item>"
-		X "$indent`t</dcsset:lwsTitle>"
+		Emit-MLText -tag "dcsset:lwsTitle" -text $item.title -indent "$indent`t" -NoXsiType
 	}
 	X "$indent</dcsset:item>"
 }

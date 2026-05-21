@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.35 — Compile 1C DCS from JSON
+# skd-compile v1.36 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -36,11 +36,14 @@ def resolve_query_value(val, base_dir):
     sys.exit(1)
 
 
-def emit_mltext(lines, indent, tag, text):
+def emit_mltext(lines, indent, tag, text, no_xsi_type=False):
     if not text:
         lines.append(f"{indent}<{tag}/>")
         return
-    lines.append(f'{indent}<{tag} xsi:type="v8:LocalStringType">')
+    if no_xsi_type:
+        lines.append(f"{indent}<{tag}>")
+    else:
+        lines.append(f'{indent}<{tag} xsi:type="v8:LocalStringType">')
     # Multi-lang: object form { ru: "...", en: "..." } -- one <v8:item> per language
     if isinstance(text, dict):
         for lang, content in text.items():
@@ -886,10 +889,13 @@ def emit_calc_fields(lines, defn):
         if appearance:
             lines.append('\t\t<appearance>')
             for k, v in appearance.items():
-                lines.append('\t\t\t<dcscor:item xsi:type="dcsset:SettingsParameterValue">')
-                lines.append(f'\t\t\t\t<dcscor:parameter>{esc_xml(k)}</dcscor:parameter>')
-                lines.append(f'\t\t\t\t<dcscor:value xsi:type="xs:string">{esc_xml(str(v))}</dcscor:value>')
-                lines.append('\t\t\t</dcscor:item>')
+                if k == 'ГоризонтальноеПоложение' and not isinstance(v, dict):
+                    lines.append('\t\t\t<dcscor:item xsi:type="dcsset:SettingsParameterValue">')
+                    lines.append(f'\t\t\t\t<dcscor:parameter>{esc_xml(k)}</dcscor:parameter>')
+                    lines.append(f'\t\t\t\t<dcscor:value xsi:type="v8ui:HorizontalAlign">{esc_xml(str(v))}</dcscor:value>')
+                    lines.append('\t\t\t</dcscor:item>')
+                else:
+                    emit_appearance_value(lines, k, v, '\t\t\t')
             lines.append('\t\t</appearance>')
 
         lines.append('\t</calculatedField>')
@@ -1536,12 +1542,7 @@ def emit_selection_item(lines, item, indent):
         lines.append(f'{indent}<dcsset:item xsi:type="dcsset:SelectedItemFolder">')
         if item.get('field'):
             lines.append(f'{indent}\t<dcsset:field>{esc_xml(str(item["field"]))}</dcsset:field>')
-        lines.append(f'{indent}\t<dcsset:lwsTitle>')
-        lines.append(f'{indent}\t\t<v8:item>')
-        lines.append(f'{indent}\t\t\t<v8:lang>ru</v8:lang>')
-        lines.append(f'{indent}\t\t\t<v8:content>{esc_xml(str(item["folder"]))}</v8:content>')
-        lines.append(f'{indent}\t\t</v8:item>')
-        lines.append(f'{indent}\t</dcsset:lwsTitle>')
+        emit_mltext(lines, f'{indent}\t', 'dcsset:lwsTitle', item['folder'], no_xsi_type=True)
         for sub in (item.get('items') or []):
             emit_selection_item(lines, sub, f'{indent}\t')
         lines.append(f'{indent}\t<dcsset:placement>Auto</dcsset:placement>')
@@ -1551,12 +1552,7 @@ def emit_selection_item(lines, item, indent):
     lines.append(f'{indent}<dcsset:item xsi:type="dcsset:SelectedItemField">')
     lines.append(f'{indent}\t<dcsset:field>{esc_xml(str(item["field"]))}</dcsset:field>')
     if item.get('title'):
-        lines.append(f'{indent}\t<dcsset:lwsTitle>')
-        lines.append(f'{indent}\t\t<v8:item>')
-        lines.append(f'{indent}\t\t\t<v8:lang>ru</v8:lang>')
-        lines.append(f'{indent}\t\t\t<v8:content>{esc_xml(str(item["title"]))}</v8:content>')
-        lines.append(f'{indent}\t\t</v8:item>')
-        lines.append(f'{indent}\t</dcsset:lwsTitle>')
+        emit_mltext(lines, f'{indent}\t', 'dcsset:lwsTitle', item['title'], no_xsi_type=True)
     lines.append(f'{indent}</dcsset:item>')
 
 
