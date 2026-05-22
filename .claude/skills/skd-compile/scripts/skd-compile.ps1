@@ -1,4 +1,4 @@
-﻿# skd-compile v1.45 — Compile 1C DCS from JSON
+﻿# skd-compile v1.46 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -1884,6 +1884,13 @@ function Emit-SelectionItem {
 		}
 		return
 	}
+	# Object form: { auto: true, use: false } — отключённый Auto в selection
+	if ($item.auto -eq $true) {
+		X "$indent<dcsset:item xsi:type=`"dcsset:SelectedItemAuto`">"
+		if ($item.use -eq $false) { X "$indent`t<dcsset:use>false</dcsset:use>" }
+		X "$indent</dcsset:item>"
+		return
+	}
 	if ($item.folder -or (Has-JsonProp $item 'folder')) {
 		X "$indent<dcsset:item xsi:type=`"dcsset:SelectedItemFolder`">"
 		# Optional <dcsset:field> на folder (редкий случай, для round-trip-целостности)
@@ -1898,8 +1905,11 @@ function Emit-SelectionItem {
 		X "$indent</dcsset:item>"
 		return
 	}
-	# field with optional title
+	# field with optional title / use=false / viewMode
 	X "$indent<dcsset:item xsi:type=`"dcsset:SelectedItemField`">"
+	if ($item.use -eq $false) {
+		X "$indent`t<dcsset:use>false</dcsset:use>"
+	}
 	X "$indent`t<dcsset:field>$(Esc-Xml "$($item.field)")</dcsset:field>"
 	if ($item.title) {
 		Emit-MLText -tag "dcsset:lwsTitle" -text $item.title -indent "$indent`t" -NoXsiType

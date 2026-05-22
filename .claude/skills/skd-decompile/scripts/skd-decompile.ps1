@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.30 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.31 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1374,14 +1374,24 @@ function Build-SelectionItem {
 		if ($fieldEl) { return 'Auto' }
 	}
 	switch ($xt) {
-		'SelectedItemAuto' { return 'Auto' }
+		'SelectedItemAuto' {
+			# Auto может иметь <use>false</use> — отключённый Auto-элемент в selection.
+			$useV = Get-Text $item "dcsset:use"
+			if ($useV -eq 'false') {
+				return [ordered]@{ auto = $true; use = $false }
+			}
+			return 'Auto'
+		}
 		'SelectedItemField' {
 			$fName = Get-Text $item "dcsset:field"
 			$titleNode = $item.SelectSingleNode("dcsset:lwsTitle", $ns)
 			$title = Get-MLText $titleNode
 			$vmN = $item.SelectSingleNode("dcsset:viewMode", $ns)
-			if ($title -or $vmN) {
+			$useV = Get-Text $item "dcsset:use"
+			$useFalse = ($useV -eq 'false')
+			if ($title -or $vmN -or $useFalse) {
 				$obj = [ordered]@{ field = $fName }
+				if ($useFalse) { $obj['use'] = $false }
 				if ($title) { $obj['title'] = $title }
 				if ($vmN) { $obj['viewMode'] = $vmN.InnerText }
 				return $obj

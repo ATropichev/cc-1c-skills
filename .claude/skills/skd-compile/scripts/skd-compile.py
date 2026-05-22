@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.45 — Compile 1C DCS from JSON
+# skd-compile v1.46 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1570,6 +1570,13 @@ def emit_selection_item(lines, item, indent):
             lines.append(f'{indent}\t<dcsset:field>{esc_xml(item)}</dcsset:field>')
             lines.append(f'{indent}</dcsset:item>')
         return
+    # Object form: { auto: true, use: false } — отключённый Auto в selection
+    if item.get('auto') is True:
+        lines.append(f'{indent}<dcsset:item xsi:type="dcsset:SelectedItemAuto">')
+        if item.get('use') is False:
+            lines.append(f'{indent}\t<dcsset:use>false</dcsset:use>')
+        lines.append(f'{indent}</dcsset:item>')
+        return
     if 'folder' in item:
         lines.append(f'{indent}<dcsset:item xsi:type="dcsset:SelectedItemFolder">')
         if item.get('field'):
@@ -1580,8 +1587,10 @@ def emit_selection_item(lines, item, indent):
         lines.append(f'{indent}\t<dcsset:placement>Auto</dcsset:placement>')
         lines.append(f'{indent}</dcsset:item>')
         return
-    # field with optional title
+    # field with optional title / use=false / viewMode
     lines.append(f'{indent}<dcsset:item xsi:type="dcsset:SelectedItemField">')
+    if item.get('use') is False:
+        lines.append(f'{indent}\t<dcsset:use>false</dcsset:use>')
     lines.append(f'{indent}\t<dcsset:field>{esc_xml(str(item["field"]))}</dcsset:field>')
     if item.get('title'):
         emit_mltext(lines, f'{indent}\t', 'dcsset:lwsTitle', item['title'], no_xsi_type=True)
