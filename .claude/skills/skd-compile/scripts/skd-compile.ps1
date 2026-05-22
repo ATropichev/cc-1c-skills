@@ -1,4 +1,4 @@
-﻿# skd-compile v1.38 — Compile 1C DCS from JSON
+﻿# skd-compile v1.39 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -989,7 +989,7 @@ function Emit-Field {
 
 # === DataSets ===
 function Emit-DataSet {
-	param($ds, [string]$indent)
+	param($ds, [string]$indent, [string]$tagName = "dataSet")
 
 	# Determine type
 	if ($ds.items) {
@@ -1000,7 +1000,7 @@ function Emit-DataSet {
 		$dsType = "DataSetQuery"
 	}
 
-	X "$indent<dataSet xsi:type=`"$dsType`">"
+	X "$indent<$tagName xsi:type=`"$dsType`">"
 	X "$indent`t<name>$(Esc-Xml "$($ds.name)")</name>"
 
 	# Fields
@@ -1027,12 +1027,12 @@ function Emit-DataSet {
 		X "$indent`t<objectName>$(Esc-Xml "$($ds.objectName)")</objectName>"
 	} elseif ($dsType -eq "DataSetUnion") {
 		foreach ($item in $ds.items) {
-			# Union items are nested dataSets
-			Emit-DataSet -ds $item -indent "$indent`t" | Out-Null
+			# Union inner items are wrapped as <item xsi:type="...">
+			Emit-DataSet -ds $item -indent "$indent`t" -tagName "item" | Out-Null
 		}
 	}
 
-	X "$indent</dataSet>"
+	X "$indent</$tagName>"
 }
 
 function Emit-DataSets {

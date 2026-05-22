@@ -49,16 +49,16 @@
 				<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:CatalogRef.Подразделения</v8:Type>
 			</valueType>
 		</field>
-		<dataSet xsi:type="DataSetObject">
+		<item xsi:type="DataSetObject">
 			<name>Часть1</name>
 			<dataSource>ИсточникДанных1</dataSource>
 			<objectName>ДанныеЧасть1</objectName>
-		</dataSet>
-		<dataSet xsi:type="DataSetObject">
+		</item>
+		<item xsi:type="DataSetObject">
 			<name>Часть2</name>
 			<dataSource>ИсточникДанных1</dataSource>
 			<objectName>ДанныеЧасть2</objectName>
-		</dataSet>
+		</item>
 	</dataSet>
 	<settingsVariant>
 		<dcsset:name>Основной</dcsset:name>

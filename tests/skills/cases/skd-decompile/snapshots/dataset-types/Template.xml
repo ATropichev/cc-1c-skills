@@ -56,7 +56,7 @@
 	</dataSet>
 	<dataSet xsi:type="DataSetUnion">
 		<name>Объединение</name>
-		<dataSet xsi:type="DataSetQuery">
+		<item xsi:type="DataSetQuery">
 			<name>Часть1</name>
 			<field xsi:type="DataSetFieldField">
 				<dataPath>Поле</dataPath>
@@ -72,8 +72,8 @@
 			</field>
 			<dataSource>ИсточникДанных1</dataSource>
 			<query>ВЫБРАТЬ 1 КАК Поле</query>
-		</dataSet>
-		<dataSet xsi:type="DataSetQuery">
+		</item>
+		<item xsi:type="DataSetQuery">
 			<name>Часть2</name>
 			<field xsi:type="DataSetFieldField">
 				<dataPath>Поле</dataPath>
@@ -89,7 +89,7 @@
 			</field>
 			<dataSource>ИсточникДанных1</dataSource>
 			<query>ВЫБРАТЬ 2 КАК Поле</query>
-		</dataSet>
+		</item>
 	</dataSet>
 	<settingsVariant>
 		<dcsset:name>Основной</dcsset:name>

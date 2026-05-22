@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.38 — Compile 1C DCS from JSON
+# skd-compile v1.39 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -759,7 +759,7 @@ def emit_field(lines, field_def, indent):
 
 # === DataSets ===
 
-def emit_data_set(lines, ds, indent, default_source):
+def emit_data_set(lines, ds, indent, default_source, tag_name='dataSet'):
     # Determine type
     if ds.get('items'):
         ds_type = 'DataSetUnion'
@@ -768,7 +768,7 @@ def emit_data_set(lines, ds, indent, default_source):
     else:
         ds_type = 'DataSetQuery'
 
-    lines.append(f'{indent}<dataSet xsi:type="{ds_type}">')
+    lines.append(f'{indent}<{tag_name} xsi:type="{ds_type}">')
     lines.append(f'{indent}\t<name>{esc_xml(str(ds.get("name", "")))}</name>')
 
     # Fields
@@ -791,9 +791,10 @@ def emit_data_set(lines, ds, indent, default_source):
         lines.append(f'{indent}\t<objectName>{esc_xml(str(ds["objectName"]))}</objectName>')
     elif ds_type == 'DataSetUnion':
         for item in ds['items']:
-            emit_data_set(lines, item, f'{indent}\t', default_source)
+            # Union inner items are wrapped as <item xsi:type="...">
+            emit_data_set(lines, item, f'{indent}\t', default_source, tag_name='item')
 
-    lines.append(f'{indent}</dataSet>')
+    lines.append(f'{indent}</{tag_name}>')
 
 
 def emit_data_sets(lines, defn, default_source):
