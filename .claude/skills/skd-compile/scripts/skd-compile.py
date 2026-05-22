@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.55 — Compile 1C DCS from JSON
+# skd-compile v1.56 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -2137,6 +2137,8 @@ def emit_table_axis_block(lines, block, indent, emit_name=True):
         emit_order(lines, block['order'], indent)
     if block.get('selection'):
         emit_selection(lines, block['selection'], indent)
+    if block.get('conditionalAppearance'):
+        emit_conditional_appearance(lines, block['conditionalAppearance'], indent)
     if block.get('outputParameters'):
         emit_output_parameters(lines, block['outputParameters'], indent)
     # nested children (StructureItemGroup внутри table row/column или chart axis)
