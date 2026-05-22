@@ -519,13 +519,16 @@ XML-маппинг — по `<group>` на каждый элемент:
   "Наименование",
   { "field": "Количество", "title": "Кол-во" },
   { "field": "Контрагент", "viewMode": "Inaccessible" },
+  { "field": "Скрытое", "use": false },
+  { "auto": true, "use": false },
   "Auto"
 ]
 ```
 
 - Строка → `SelectedItemField`
 - `"Auto"` → `SelectedItemAuto` (только на уровне группировок; на верхнем уровне settings игнорируется)
-- Объект с `field`/`title`/`viewMode` → `SelectedItemField` с `lwsTitle`/`viewMode` (см. [viewMode](#viewmode-режим-доступности))
+- Объект с `field` + опц. `title`/`viewMode`/`use` → `SelectedItemField`. `use: false` = поле выборки отключено (видно в UI, но не применяется)
+- Объект `{ auto: true, use: false }` → отключённый `SelectedItemAuto`
 - Объект с `folder`/`items` → `SelectedItemFolder` — группа полей с заголовком и `placement=Auto`:
 
 ```json
@@ -550,14 +553,14 @@ XML-маппинг — по `<group>` на каждый элемент:
 ]
 ```
 
-Формат: `"<Поле> <оператор> [<значение>] [@off] [@user] [@quickAccess] [@normal] [@inaccessible]"`.
+Формат: `"<Поле> <оператор> [<значение>] [@off] [@user] [@quickAccess] [@inaccessible]"`.
 
 - Значение `_` — пустое (placeholder, не выводится в XML)
 - `@off` → `use=false`
 - `@user` → `userSettingID=auto` (генерировать GUID)
 - `@quickAccess` → `viewMode=QuickAccess`
-- `@normal` → `viewMode=Normal`
 - `@inaccessible` → `viewMode=Inaccessible`
+- `Normal` (default) — отдельным флагом не задаётся. Если в исходном XML был явный `<viewMode>Normal</viewMode>`, decompile переводит item в object form с `"viewMode": "Normal"`.
 - Типы значений автоопределяются: `true`/`false` → boolean, `2024-01-01T00:00:00` → dateTime, числа → decimal, `Перечисление.*`/`Справочник.*`/`ПланСчетов.*`/`Документ.*` → DesignTimeValue, прочее → string
 - OrGroup: `{"group": "Or", "items": ["условие1", "условие2"]}` — объединяет условия через ИЛИ
 
@@ -567,10 +570,13 @@ XML-маппинг — по `<group>` на каждый элемент:
 "filter": [
   { "field": "Организация", "op": "=", "use": false, "userSettingID": "auto" },
   { "field": "Дата", "op": ">=", "value": "0001-01-01T00:00:00", "valueType": "xs:dateTime" },
+  { "field": "СуммаДт", "op": "=", "value": "СуммаКт", "valueType": "dcscor:Field" },
+  { "field": "Статус", "op": "in", "value": [1, 3, 5] },
+  { "field": "Контрагенты", "op": "in", "value": [], "userSettingID": "auto" },
   { "group": "Or", "items": [
     { "field": "Статус", "op": "=", "value": true, "valueType": "xs:boolean" },
     { "field": "Пометка", "op": "filled" }
-  ]}
+  ], "userSettingID": "auto" }
 ]
 ```
 
@@ -578,13 +584,18 @@ XML-маппинг — по `<group>` на каждый элемент:
 |------|----------|
 | `field` | Имя поля |
 | `op` | Оператор (см. таблицу) |
-| `value` | Правая часть (опц.) |
-| `valueType` | xsi:type для значения (опц.) |
+| `value` | Правая часть (опц.). См. формы ниже |
+| `valueType` | xsi:type для значения (опц.). `"dcscor:Field"` = field-to-field comparison (значение — имя другого поля) |
 | `use` | Включён (`true` по умолчанию) |
 | `presentation` | Текст подсказки |
 | `viewMode` | `"Normal"`, `"QuickAccess"`, `"Inaccessible"` |
 | `userSettingID` | `"auto"` → генерировать GUID |
 | `userSettingPresentation` | Отображаемое имя настройки (LocalStringType) |
+
+**Формы `value`:**
+- Скаляр (`"X"`, `5`, `true`, `"2024-01-01T00:00:00"`) — single `<right>` (стандартный случай). Тип определяется автоматически: bool / число / дата / строка.
+- Массив `[a, b, c]` — несколько `<right>` подряд (для `in`/`notIn` с конкретными значениями).
+- Пустой массив `[]` — `<right xsi:type="v8:ValueListType">` placeholder (типичный паттерн для `in` с пользовательскими настройками — значения заполнит пользователь через UI).
 
 Операторы:
 
@@ -605,7 +616,7 @@ XML-маппинг — по `<group>` на каждый элемент:
 | `filled` | `Filled` |
 | `notFilled` | `NotFilled` |
 
-Группа условий: `{ "group": "And"|"Or"|"Not", "items": [...] }` → `FilterItemGroup` с `groupType`.
+Группа условий: `{ "group": "And"|"Or"|"Not", "items": [...] }` → `FilterItemGroup` с `groupType`. Группа также принимает item-level поля `presentation`, `viewMode`, `userSettingID`, `userSettingPresentation` — для регистрации группы как пункта пользовательских настроек.
 
 ### order
 
@@ -708,7 +719,7 @@ XML-маппинг — по `<group>` на каждый элемент:
 ]
 ```
 
-Формат: `"<Имя> [= <значение>] [@off] [@user] [@quickAccess] [@normal] [@inaccessible]"`.
+Формат: `"<Имя> [= <значение>] [@off] [@user] [@quickAccess] [@inaccessible]"`.
 
 - Значения-варианты периодов (`LastMonth`, `ThisYear` и др.) автоматически оборачиваются в `v8:StandardPeriod`
 - `@off` → `use=false`, `@user` → `userSettingID=auto`
@@ -789,17 +800,20 @@ XML-маппинг — по `<group>` на каждый элемент:
   ],
   "columns": [
     {
+      "name": "Период",
       "groupBy": ["Период"],
       "filter": ["Сумма > 0"],
       "selection": ["Auto"],
       "order": ["Auto"],
-      "outputParameters": { "РасположениеИтогов": "None" }
+      "outputParameters": { "РасположениеИтогов": "None" },
+      "userSettingID": "auto",
+      "userSettingPresentation": { "ru": "Колонка с периодом" }
     }
   ]
 }
 ```
 
-Каждая `column`/`row` принимает те же поля что и `group`: `groupBy`/`groupFields`, `filter`, `order`, `selection`, `outputParameters`.
+Каждая `column`/`row` принимает те же поля что и `group`: `name`, `groupBy`/`groupFields`, `filter`, `order`, `selection`, `outputParameters`, плюс user-settings — `viewMode`, `userSettingID`, `userSettingPresentation` (регистрация column/row как пункта «Изменить вариант»).
 
 #### Диаграмма (chart)
 
@@ -812,7 +826,7 @@ XML-маппинг — по `<group>` на каждый элемент:
 }
 ```
 
-`points` и `series` принимают те же поля что table column/row.
+`points` и `series` принимают те же поля что table column/row (включая `name` и user-settings).
 
 ### userFields (пользовательские вычисляемые поля)
 
@@ -924,7 +938,16 @@ Shorthand-флаги `@inaccessible`, `@quickAccess` доступны для `fi
 { "type": "group", "groupBy": ["Организация"], "viewMode": "Inaccessible", "itemsViewMode": "Inaccessible" }
 ```
 
-Поля опциональны: если не заданы, режим элемента наследуется. Платформа эмитит `viewMode`/`itemsViewMode` на структурных элементах не всегда — `skd-decompile` сохраняет значение точно как было в XML, чтобы round-trip был bit-perfect.
+**4. Table axis / chart axis** — на самой `column`/`row`/`points`/`series`. Через те же поля `viewMode`, `userSettingID`, `userSettingPresentation` (см. раздел Таблица).
+
+#### Стратегия сохранения
+
+Платформа эмитит `viewMode` непоследовательно: в одних местах `<viewMode>Normal</viewMode>` присутствует явно (когда элемент — пункт пользовательских настроек), в других — нет. Для bit-perfect round-trip:
+
+- `skd-decompile` сохраняет `viewMode` в JSON **точно как было в XML**, включая явный `"Normal"` если он физически присутствовал.
+- `skd-compile` эмитит `<viewMode>` только если значение задано в JSON (без `implicit Normal`-подстановки).
+
+При компиляции JSON, написанного с нуля моделью, `viewMode` опускается → платформа применит default `Normal` при загрузке схемы.
 
 ---
 
