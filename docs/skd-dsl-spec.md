@@ -638,7 +638,7 @@ XML-маппинг — по `<group>` на каждый элемент:
 - `"Field desc"` → `OrderItemField`, `orderType=Desc`
 - `"Field asc"` → `OrderItemField`, `orderType=Asc`
 - `"Auto"` → `OrderItemAuto` (только на уровне группировок; на верхнем уровне settings игнорируется)
-- Объект `{ field, direction?, viewMode? }` — нужен, когда требуется задать `viewMode` (см. [viewMode](#viewmode-режим-доступности))
+- Объект `{ field, direction?, viewMode?, use? }` — нужен, когда требуется задать `viewMode`, или отключить сортировку через `use: false` (см. [viewMode](#viewmode-режим-доступности))
 
 ### conditionalAppearance
 
@@ -718,6 +718,8 @@ XML-маппинг — по `<group>` на каждый элемент:
 - `"ТипМакета"` → `dcsset:DataCompositionGroupTemplateType`
 - Multilang dict `{ru, en}` для любого ключа → `v8:LocalStringType`
 - Прочие → `xs:string`
+
+Значение можно обернуть в `{ "value": ..., "use": false }` — отключённый параметр (платформа эмитит `<dcscor:use>false</dcscor:use>`). Такая же форма доступна в `appearance` items (см. раздел conditionalAppearance).
 
 ### dataParameters
 
@@ -836,6 +838,8 @@ XML-маппинг — по `<group>` на каждый элемент:
 ```
 
 Каждая `column`/`row` принимает те же поля что и `group`: `name`, `groupBy`/`groupFields`, `filter`, `order`, `selection`, `outputParameters`, `conditionalAppearance`, `children` (вложенные `StructureItemGroup`), плюс user-settings — `viewMode`, `userSettingID`, `userSettingPresentation` (регистрация column/row как пункта «Изменить вариант»).
+
+На самой `table` (отдельно от column/row) также допустимы `selection`, `conditionalAppearance`, `outputParameters` — общие настройки таблицы (заголовок, выводимые поля, форматирование).
 
 #### Диаграмма (chart)
 
