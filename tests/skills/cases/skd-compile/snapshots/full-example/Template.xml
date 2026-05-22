@@ -132,7 +132,6 @@
 					<dcsset:use>false</dcsset:use>
 					<dcsset:left xsi:type="dcscor:Field">Организация</dcsset:left>
 					<dcsset:comparisonType>Equal</dcsset:comparisonType>
-					<dcsset:viewMode>Normal</dcsset:viewMode>
 					<dcsset:userSettingID>UUID-001</dcsset:userSettingID>
 				</dcsset:item>
 			</dcsset:filter>
@@ -144,7 +143,6 @@
 						<v8:startDate>0001-01-01T00:00:00</v8:startDate>
 						<v8:endDate>0001-01-01T00:00:00</v8:endDate>
 					</dcscor:value>
-					<dcsset:viewMode>Normal</dcsset:viewMode>
 					<dcsset:userSettingID>UUID-002</dcsset:userSettingID>
 				</dcscor:item>
 			</dcsset:dataParameters>

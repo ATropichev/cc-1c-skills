@@ -1,4 +1,4 @@
-﻿# skd-compile v1.44 — Compile 1C DCS from JSON
+﻿# skd-compile v1.45 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -1957,10 +1957,8 @@ function Emit-FilterItem {
 		if ($item.presentation) {
 			Emit-MLText -tag "dcsset:presentation" -text $item.presentation -indent "$indent`t"
 		}
-		# Platform always emits viewMode when userSettingID is present (implicit Normal).
-		if ($item.viewMode -or $item.userSettingID) {
-			$gvm = if ($item.viewMode) { "$($item.viewMode)" } else { 'Normal' }
-			X "$indent`t<dcsset:viewMode>$(Esc-Xml $gvm)</dcsset:viewMode>"
+		if ($item.viewMode) {
+			X "$indent`t<dcsset:viewMode>$(Esc-Xml "$($item.viewMode)")</dcsset:viewMode>"
 		}
 		if ($item.userSettingID) {
 			$guid = if ("$($item.userSettingID)" -eq "auto") { New-Guid-String } else { "$($item.userSettingID)" }
@@ -2009,10 +2007,9 @@ function Emit-FilterItem {
 		Emit-MLText -tag "dcsset:presentation" -text $item.presentation -indent "$indent`t"
 	}
 
-	# Platform always emits viewMode when userSettingID is present (implicit Normal).
-	if ($item.viewMode -or $item.userSettingID) {
-		$vm = if ($item.viewMode) { "$($item.viewMode)" } else { 'Normal' }
-		X "$indent`t<dcsset:viewMode>$(Esc-Xml $vm)</dcsset:viewMode>"
+	# viewMode эмитим только если явно задан — присутствие в XML контекстно
+	if ($item.viewMode) {
+		X "$indent`t<dcsset:viewMode>$(Esc-Xml "$($item.viewMode)")</dcsset:viewMode>"
 	}
 
 	if ($item.userSettingID) {
@@ -2191,10 +2188,8 @@ function Emit-ConditionalAppearance {
 			X "$indent`t`t<dcsset:presentation xsi:type=`"xs:string`">$(Esc-Xml "$($ca.presentation)")</dcsset:presentation>"
 		}
 
-		# Platform always emits viewMode when userSettingID is present (implicit Normal).
-		if ($ca.viewMode -or $ca.userSettingID) {
-			$cvm = if ($ca.viewMode) { "$($ca.viewMode)" } else { 'Normal' }
-			X "$indent`t`t<dcsset:viewMode>$(Esc-Xml $cvm)</dcsset:viewMode>"
+		if ($ca.viewMode) {
+			X "$indent`t`t<dcsset:viewMode>$(Esc-Xml "$($ca.viewMode)")</dcsset:viewMode>"
 		}
 
 		# UserSettingID
@@ -2314,10 +2309,8 @@ function Emit-DataParameters {
 			}
 		}
 
-		# Platform always emits viewMode when userSettingID is present (implicit Normal).
-		if ($dp.viewMode -or $dp.userSettingID) {
-			$dvm = if ($dp.viewMode) { "$($dp.viewMode)" } else { 'Normal' }
-			X "$indent`t`t<dcsset:viewMode>$(Esc-Xml $dvm)</dcsset:viewMode>"
+		if ($dp.viewMode) {
+			X "$indent`t`t<dcsset:viewMode>$(Esc-Xml "$($dp.viewMode)")</dcsset:viewMode>"
 		}
 
 		if ($dp.userSettingID) {

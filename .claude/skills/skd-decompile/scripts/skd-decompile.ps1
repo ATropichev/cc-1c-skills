@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.29 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.30 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1297,9 +1297,9 @@ function Build-FilterItem {
 		$gObj = [ordered]@{ group = $groupName; items = $items }
 		$gPres = Get-Text $itemNode "dcsset:presentation"
 		if ($gPres) { $gObj['presentation'] = $gPres }
-		$gVM = Get-Text $itemNode "dcsset:viewMode"
-		# Normal — implicit when userSettingID present; skip unless non-default
-		if ($gVM -and $gVM -ne 'Normal') { $gObj['viewMode'] = $gVM }
+		# viewMode: сохраняем даже Normal если node присутствует (для bit-perfect)
+		$gVMNode = $itemNode.SelectSingleNode("dcsset:viewMode", $ns)
+		if ($gVMNode) { $gObj['viewMode'] = $gVMNode.InnerText }
 		$gUSID = Get-Text $itemNode "dcsset:userSettingID"
 		if ($gUSID) { $gObj['userSettingID'] = 'auto' }
 		$gUSPN = $itemNode.SelectSingleNode("dcsset:userSettingPresentation", $ns)
@@ -1322,7 +1322,9 @@ function Build-FilterItem {
 
 	$use = Get-Text $itemNode "dcsset:use"
 	$userId = Get-Text $itemNode "dcsset:userSettingID"
-	$viewMode = Get-Text $itemNode "dcsset:viewMode"
+	# viewMode: detect presence (даже = 'Normal') чтобы compile сделал bit-perfect
+	$vmNode = $itemNode.SelectSingleNode("dcsset:viewMode", $ns)
+	$viewMode = if ($vmNode) { $vmNode.InnerText } else { $null }
 	$userPresNode = $itemNode.SelectSingleNode("dcsset:userSettingPresentation", $ns)
 
 	$flags = @()
@@ -1330,19 +1332,20 @@ function Build-FilterItem {
 	if ($userId) { $flags += '@user' }
 	if ($viewMode -eq 'QuickAccess') { $flags += '@quickAccess' }
 	elseif ($viewMode -eq 'Inaccessible') { $flags += '@inaccessible' }
-	# Normal is the default — do not emit @normal
+	# Normal сохраняется только если node присутствовал — переходит в object form
 
 	# nullity ops have no value
 	$noValueOps = @('filled','notFilled')
 
-	if ($userPresNode) {
-		# object form
+	# Переход в object form: userSettingPresentation ИЛИ явный viewMode=Normal
+	# (Normal не выразим в shorthand, а отсутствие тоже нужно сохранить)
+	if ($userPresNode -or $viewMode -eq 'Normal') {
 		$obj = [ordered]@{ field = $field; op = $op }
 		if ($op -notin $noValueOps -and $null -ne $value) { $obj['value'] = $value }
 		if ($use -eq 'false') { $obj['use'] = $false }
 		if ($userId) { $obj['userSettingID'] = 'auto' }
-		if ($viewMode -and $viewMode -ne 'Normal') { $obj['viewMode'] = $viewMode }
-		$obj['userSettingPresentation'] = Get-MLText $userPresNode
+		if ($viewMode) { $obj['viewMode'] = $viewMode }
+		if ($userPresNode) { $obj['userSettingPresentation'] = Get-MLText $userPresNode }
 		return $obj
 	}
 
@@ -1376,12 +1379,11 @@ function Build-SelectionItem {
 			$fName = Get-Text $item "dcsset:field"
 			$titleNode = $item.SelectSingleNode("dcsset:lwsTitle", $ns)
 			$title = Get-MLText $titleNode
-			$vm = Get-Text $item "dcsset:viewMode"
-			$hasVM = $vm -and $vm -ne 'Normal'
-			if ($title -or $hasVM) {
+			$vmN = $item.SelectSingleNode("dcsset:viewMode", $ns)
+			if ($title -or $vmN) {
 				$obj = [ordered]@{ field = $fName }
 				if ($title) { $obj['title'] = $title }
-				if ($hasVM) { $obj['viewMode'] = $vm }
+				if ($vmN) { $obj['viewMode'] = $vmN.InnerText }
 				return $obj
 			}
 			return $fName
@@ -1428,11 +1430,11 @@ function Build-Order {
 			'OrderItemField' {
 				$fn = Get-Text $it "dcsset:field"
 				$ot = Get-Text $it "dcsset:orderType"
-				$vm = Get-Text $it "dcsset:viewMode"
-				if ($vm -and $vm -ne 'Normal') {
+				$vmN = $it.SelectSingleNode("dcsset:viewMode", $ns)
+				if ($vmN) {
 					$obj = [ordered]@{ field = $fn }
 					if ($ot -eq 'Desc') { $obj['direction'] = 'desc' }
-					$obj['viewMode'] = $vm
+					$obj['viewMode'] = $vmN.InnerText
 					$out += $obj
 				} else {
 					if ($ot -eq 'Desc') { $out += "$fn desc" } else { $out += $fn }
@@ -1493,8 +1495,8 @@ function Build-ConditionalAppearance {
 		if ($ap -and $ap.Count -gt 0) { $entry['appearance'] = $ap }
 		$pres = Get-Text $it "dcsset:presentation"
 		if ($pres) { $entry['presentation'] = $pres }
-		$vm = Get-Text $it "dcsset:viewMode"
-		if ($vm -and $vm -ne 'Normal') { $entry['viewMode'] = $vm }
+		$vmN = $it.SelectSingleNode("dcsset:viewMode", $ns)
+		if ($vmN) { $entry['viewMode'] = $vmN.InnerText }
 		$usid = Get-Text $it "dcsset:userSettingID"
 		if ($usid) { $entry['userSettingID'] = 'auto' }
 		$out += $entry
@@ -1640,8 +1642,9 @@ function Build-TableAxisBlock {
 	$op = Build-OutputParameters -opNode $opNode
 	if ($op -and $op.Count -gt 0) { $entry['outputParameters'] = $op }
 	# user-settings on the axis itself
-	$avm = Get-Text $node "dcsset:viewMode"
-	if ($avm -and $avm -ne 'Normal') { $entry['viewMode'] = $avm }
+	# viewMode: сохраняем даже Normal если node присутствует
+	$avmNode = $node.SelectSingleNode("dcsset:viewMode", $ns)
+	if ($avmNode) { $entry['viewMode'] = $avmNode.InnerText }
 	$ausid = Get-Text $node "dcsset:userSettingID"
 	if ($ausid) { $entry['userSettingID'] = 'auto' }
 	$ausPresNode = $node.SelectSingleNode("dcsset:userSettingPresentation", $ns)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.44 — Compile 1C DCS from JSON
+# skd-compile v1.45 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1628,10 +1628,8 @@ def emit_filter_item(lines, item, indent):
                 emit_filter_item(lines, sub, f'{indent}\t')
         if item.get('presentation'):
             emit_mltext(lines, f'{indent}\t', 'dcsset:presentation', item['presentation'])
-        # Platform always emits viewMode when userSettingID is present (implicit Normal).
-        if item.get('viewMode') or item.get('userSettingID'):
-            gvm = str(item['viewMode']) if item.get('viewMode') else 'Normal'
-            lines.append(f'{indent}\t<dcsset:viewMode>{esc_xml(gvm)}</dcsset:viewMode>')
+        if item.get('viewMode'):
+            lines.append(f'{indent}\t<dcsset:viewMode>{esc_xml(str(item["viewMode"]))}</dcsset:viewMode>')
         if item.get('userSettingID'):
             guid = new_uuid() if str(item['userSettingID']) == 'auto' else str(item['userSettingID'])
             lines.append(f'{indent}\t<dcsset:userSettingID>{esc_xml(guid)}</dcsset:userSettingID>')
@@ -1673,10 +1671,8 @@ def emit_filter_item(lines, item, indent):
     if item.get('presentation'):
         emit_mltext(lines, f'{indent}\t', 'dcsset:presentation', item["presentation"])
 
-    # Platform always emits viewMode when userSettingID is present (implicit Normal).
-    if item.get('viewMode') or item.get('userSettingID'):
-        vm = str(item['viewMode']) if item.get('viewMode') else 'Normal'
-        lines.append(f'{indent}\t<dcsset:viewMode>{esc_xml(vm)}</dcsset:viewMode>')
+    if item.get('viewMode'):
+        lines.append(f'{indent}\t<dcsset:viewMode>{esc_xml(str(item["viewMode"]))}</dcsset:viewMode>')
 
     if item.get('userSettingID'):
         uid = new_uuid() if str(item['userSettingID']) == 'auto' else str(item['userSettingID'])
@@ -1827,10 +1823,8 @@ def emit_conditional_appearance(lines, items, indent, block_view_mode=None):
         if ca.get('presentation'):
             lines.append(f'{indent}\t\t<dcsset:presentation xsi:type="xs:string">{esc_xml(str(ca["presentation"]))}</dcsset:presentation>')
 
-        # Platform always emits viewMode when userSettingID is present (implicit Normal).
-        if ca.get('viewMode') or ca.get('userSettingID'):
-            cvm = str(ca['viewMode']) if ca.get('viewMode') else 'Normal'
-            lines.append(f'{indent}\t\t<dcsset:viewMode>{esc_xml(cvm)}</dcsset:viewMode>')
+        if ca.get('viewMode'):
+            lines.append(f'{indent}\t\t<dcsset:viewMode>{esc_xml(str(ca["viewMode"]))}</dcsset:viewMode>')
 
         # UserSettingID
         if ca.get('userSettingID'):
@@ -1921,10 +1915,8 @@ def emit_data_parameters(lines, items, indent):
             else:
                 lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:string">{esc_xml(str(val))}</dcscor:value>')
 
-        # Platform always emits viewMode when userSettingID is present (implicit Normal).
-        if dp.get('viewMode') or dp.get('userSettingID'):
-            dvm = str(dp['viewMode']) if dp.get('viewMode') else 'Normal'
-            lines.append(f'{indent}\t\t<dcsset:viewMode>{esc_xml(dvm)}</dcsset:viewMode>')
+        if dp.get('viewMode'):
+            lines.append(f'{indent}\t\t<dcsset:viewMode>{esc_xml(str(dp["viewMode"]))}</dcsset:viewMode>')
 
         if dp.get('userSettingID'):
             uid = new_uuid() if str(dp['userSettingID']) == 'auto' else str(dp['userSettingID'])
