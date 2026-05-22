@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.23 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.24 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -84,6 +84,11 @@ foreach ($vt in $xmlDoc.SelectNodes("//*[local-name()='Type']")) {
 # templateCondition (variant templates) — top-level <template> with <templateCondition>
 foreach ($t in $xmlDoc.SelectNodes("//*[local-name()='templateCondition']")) {
 	Fail-Ring3 -kind "templateCondition (вариативные шаблоны)" -loc "template/templateCondition"
+}
+
+# nestedSchema — DCS внутри DCS со своими dataSet/parameters/templates
+foreach ($ns_el in $xmlDoc.SelectNodes("//*[local-name()='nestedSchema']")) {
+	Fail-Ring3 -kind "nestedSchema (вложенные подсхемы)" -loc "nestedSchema"
 }
 
 # --- 2. Warnings accumulator ---
@@ -1575,16 +1580,29 @@ function Build-TableAxisBlock {
 	}
 	$gf = Get-GroupFields -parentNode $node -loc $loc
 	if ($gf.Count -gt 0) { $entry['groupFields'] = $gf }
+	# filter block on column/row/point/series
+	$fNode = $node.SelectSingleNode("dcsset:filter", $ns)
+	if ($fNode -and $fNode.SelectNodes("dcsset:item", $ns).Count -gt 0) {
+		$fa = @()
+		foreach ($fc in $fNode.SelectNodes("dcsset:item", $ns)) { $fa += (Build-FilterItem -itemNode $fc -loc "$loc/filter") }
+		$entry['filter'] = $fa
+	}
+	# order — preserve presence (even [Auto]) for bit-perfect round-trip
 	$ordNode = $node.SelectSingleNode("dcsset:order", $ns)
-	$ordItems = Build-Order -ordNode $ordNode -loc "$loc/order"
-	if ($ordItems.Count -gt 0 -and -not ($ordItems.Count -eq 1 -and $ordItems[0] -eq 'Auto')) {
-		$entry['order'] = $ordItems
+	if ($ordNode) {
+		$ordItems = Build-Order -ordNode $ordNode -loc "$loc/order"
+		if ($ordItems.Count -gt 0) { $entry['order'] = $ordItems }
 	}
+	# selection — preserve presence (even [Auto])
 	$selNode = $node.SelectSingleNode("dcsset:selection", $ns)
-	$selItems = Build-Selection -selNode $selNode -loc "$loc/selection"
-	if ($selItems.Count -gt 0 -and -not ($selItems.Count -eq 1 -and $selItems[0] -eq 'Auto')) {
-		$entry['selection'] = $selItems
+	if ($selNode) {
+		$selItems = Build-Selection -selNode $selNode -loc "$loc/selection"
+		if ($selItems.Count -gt 0) { $entry['selection'] = $selItems }
 	}
+	# outputParameters block
+	$opNode = $node.SelectSingleNode("dcsset:outputParameters", $ns)
+	$op = Build-OutputParameters -opNode $opNode
+	if ($op -and $op.Count -gt 0) { $entry['outputParameters'] = $op }
 	return $entry
 }
 
