@@ -142,9 +142,15 @@
   "attrRestrict": ["noFilter"],
   "appearance": { "Формат": "ЧДЦ=2" },
   "presentationExpression": "Формат(Сумма, \"ЧДЦ=2\")",
-  "orderExpression": { "expression": "ЕстьNULL(Поле.Порядок, 10000)", "orderType": "Asc", "autoOrder": false }
+  "orderExpression": { "expression": "ЕстьNULL(Поле.Порядок, 10000)", "orderType": "Asc", "autoOrder": false },
+  "availableValues": [
+    { "value": 1, "presentation": { "ru": "Доход", "en": "Income" } },
+    { "value": 2, "presentation": { "ru": "Расход", "en": "Expense" } }
+  ]
 }
 ```
+
+`availableValues` — список допустимых значений поля с (опциональной multilang) подписью. Типы значений автоопределяются (`bool`/`decimal`/`dateTime`/`string`); можно указать `valueType` явно. Аналогичное поле существует на `parameters` — см. раздел 6.
 
 ### Парсинг shorthand
 
@@ -765,6 +771,7 @@ XML-маппинг — по `<group>` на каждый элемент:
 | `filter` | Отборы (как в settings) |
 | `order` | Сортировка (умолч. `["Auto"]`) |
 | `outputParameters` | Параметры вывода (как в settings) |
+| `conditionalAppearance` | Условное оформление группы (как в settings) |
 | `viewMode` | `"Normal"`, `"QuickAccess"`, `"Inaccessible"` — режим доступности группы в пользовательских настройках |
 | `itemsViewMode` | `"Normal"`, `"QuickAccess"`, `"Inaccessible"` — режим доступности подэлементов группы |
 | `children` | Вложенные элементы структуры |
