@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.54 — Compile 1C DCS from JSON
+# skd-compile v1.55 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -544,6 +544,11 @@ OUTPUT_PARAM_TYPES = {
     "\u0420\u0430\u0441\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435\u0420\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u043e\u0432": "dcsset:DataCompositionAttributesPlacement",
     "\u0413\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u0430\u043b\u044c\u043d\u043e\u0435\u0420\u0430\u0441\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435\u041e\u0431\u0449\u0438\u0445\u0418\u0442\u043e\u0433\u043e\u0432": "dcscor:DataCompositionTotalPlacement",
     "\u0412\u0435\u0440\u0442\u0438\u043a\u0430\u043b\u044c\u043d\u043e\u0435\u0420\u0430\u0441\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435\u041e\u0431\u0449\u0438\u0445\u0418\u0442\u043e\u0433\u043e\u0432": "dcscor:DataCompositionTotalPlacement",
+    "\u0420\u0430\u0441\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435\u041e\u0431\u0449\u0438\u0445\u0418\u0442\u043e\u0433\u043e\u0432": "dcscor:DataCompositionTotalPlacement",
+    "\u0420\u0430\u0441\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435\u0418\u0442\u043e\u0433\u043e\u0432": "dcscor:DataCompositionTotalPlacement",
+    "\u0420\u0430\u0441\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435\u0413\u0440\u0443\u043f\u043f\u0438\u0440\u043e\u0432\u043a\u0438": "dcsset:DataCompositionFieldGroupPlacement",
+    "\u0420\u0430\u0441\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435\u0420\u0435\u0441\u0443\u0440\u0441\u043e\u0432": "dcsset:DataCompositionResourcesPlacement",
+    "\u0422\u0438\u043f\u041c\u0430\u043a\u0435\u0442\u0430": "dcsset:DataCompositionGroupTemplateType",
 }
 
 
@@ -1823,13 +1828,28 @@ def emit_appearance_value(lines, key, val, indent):
         emit_mltext(lines, f'{indent}\t', 'dcscor:value', inner_val)
     else:
         actual_val = str(inner_val) if inner_val is not None else ''
-        if re.match(r'^(style|web|win):', actual_val):
+        # \u041f\u0430\u0440\u0430\u043c\u0435\u0442\u0440-\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u0447\u043d\u044b\u0439 \u0442\u0438\u043f \u0434\u043b\u044f \u0438\u0437\u0432\u0435\u0441\u0442\u043d\u044b\u0445 appearance keys
+        key_type_map = {
+            '\u0420\u0430\u0437\u043c\u0435\u0449\u0435\u043d\u0438\u0435':              'dcscor:DataCompositionTextPlacementType',
+            '\u0413\u043e\u0440\u0438\u0437\u043e\u043d\u0442\u0430\u043b\u044c\u043d\u043e\u0435\u041f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435': 'v8ui:HorizontalAlign',
+            '\u0412\u0435\u0440\u0442\u0438\u043a\u0430\u043b\u044c\u043d\u043e\u0435\u041f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435':   'v8ui:VerticalAlign',
+            '\u041e\u0440\u0438\u0435\u043d\u0442\u0430\u0446\u0438\u044f\u0422\u0435\u043a\u0441\u0442\u0430':        'xs:decimal',
+            '\u0420\u0430\u0441\u043f\u043e\u043b\u043e\u0436\u0435\u043d\u0438\u0435\u0418\u0442\u043e\u0433\u043e\u0432':      'dcscor:DataCompositionTotalPlacement',
+            '\u0422\u0438\u043f\u041c\u0430\u043a\u0435\u0442\u0430':               'dcsset:DataCompositionGroupTemplateType',
+        }
+        key_type = key_type_map.get(key)
+        if key_type:
+            lines.append(f'{indent}\t<dcscor:value xsi:type="{key_type}">{esc_xml(actual_val)}</dcscor:value>')
+        elif re.match(r'^(style|web|win):', actual_val):
             lines.append(f'{indent}\t<dcscor:value xsi:type="v8ui:Color">{esc_xml(actual_val)}</dcscor:value>')
         elif actual_val == 'true' or actual_val == 'false':
             lines.append(f'{indent}\t<dcscor:value xsi:type="xs:boolean">{actual_val}</dcscor:value>')
         elif key in ('\u0422\u0435\u043a\u0441\u0442', '\u0417\u0430\u0433\u043e\u043b\u043e\u0432\u043e\u043a', '\u0424\u043e\u0440\u043c\u0430\u0442'):
-            # \u0421\u0442\u0440\u043e\u043a\u043e\u0432\u044b\u0435 \u043a\u043b\u044e\u0447\u0438 \u0442\u0440\u0430\u0434\u0438\u0446\u0438\u043e\u043d\u043d\u043e \u044d\u043c\u0438\u0442\u044f\u0442\u0441\u044f \u043a\u0430\u043a LocalStringType (\u0434\u0430\u0436\u0435 \u0435\u0441\u043b\u0438 \u0442\u043e\u043b\u044c\u043a\u043e ru).
             emit_mltext(lines, f'{indent}\t', 'dcscor:value', actual_val)
+        elif re.match(r'^-?\d+(\.\d+)?$', actual_val):
+            lines.append(f'{indent}\t<dcscor:value xsi:type="xs:decimal">{actual_val}</dcscor:value>')
+        elif key in ('\u0426\u0432\u0435\u0442\u0422\u0435\u043a\u0441\u0442\u0430', '\u0426\u0432\u0435\u0442\u0424\u043e\u043d\u0430', '\u0426\u0432\u0435\u0442\u0413\u0440\u0430\u043d\u0438\u0446\u044b'):
+            lines.append(f'{indent}\t<dcscor:value xsi:type="v8ui:Color">{esc_xml(actual_val)}</dcscor:value>')
         else:
             lines.append(f'{indent}\t<dcscor:value xsi:type="xs:string">{esc_xml(actual_val)}</dcscor:value>')
     lines.append(f'{indent}</dcscor:item>')

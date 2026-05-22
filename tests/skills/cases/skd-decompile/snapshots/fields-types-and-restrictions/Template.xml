@@ -111,7 +111,7 @@
 				</dcscor:item>
 				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
 					<dcscor:parameter>МинимальнаяШирина</dcscor:parameter>
-					<dcscor:value xsi:type="xs:string">80</dcscor:value>
+					<dcscor:value xsi:type="xs:decimal">80</dcscor:value>
 				</dcscor:item>
 			</appearance>
 		</field>
