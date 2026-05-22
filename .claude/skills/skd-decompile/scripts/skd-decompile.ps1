@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.41 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.42 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1911,18 +1911,26 @@ function Build-Structure {
 		$children = Build-Structure -node $it -loc "$loc/children"
 		if ($children.Count -gt 0) { $entry['children'] = $children }
 
-		# viewMode / itemsViewMode on the group itself
-		# Read direct-child <dcsset:viewMode> (avoid grabbing item-level ones from selection/filter/order)
-		$gvm = $null; $givm = $null
+		# viewMode / itemsViewMode / userSettingID / userSettingPresentation
+		# на самой группе. Читаем direct-child <dcsset:*> (избегаем item-level
+		# vars из selection/filter/order).
+		$gvm = $null; $givm = $null; $gusid = $null; $guspNode = $null
 		foreach ($ch in $it.ChildNodes) {
 			if ($ch.NodeType -ne 'Element' -or $ch.NamespaceURI -ne 'http://v8.1c.ru/8.1/data-composition-system/settings') { continue }
 			if ($ch.LocalName -eq 'viewMode' -and $null -eq $gvm) { $gvm = $ch.InnerText }
 			elseif ($ch.LocalName -eq 'itemsViewMode' -and $null -eq $givm) { $givm = $ch.InnerText }
+			elseif ($ch.LocalName -eq 'userSettingID' -and $null -eq $gusid) { $gusid = $ch.InnerText }
+			elseif ($ch.LocalName -eq 'userSettingPresentation' -and $null -eq $guspNode) { $guspNode = $ch }
 		}
 		# Preserve explicit values (even Normal) so compile bit-perfect roundtrip works:
 		# platform emits viewMode on some StructureItemGroup shapes but not others.
 		if ($null -ne $gvm) { $entry['viewMode'] = $gvm }
 		if ($null -ne $givm) { $entry['itemsViewMode'] = $givm }
+		if ($gusid) { $entry['userSettingID'] = 'auto' }
+		if ($guspNode) {
+			$gusp = Get-MLText $guspNode
+			if ($gusp) { $entry['userSettingPresentation'] = $gusp }
+		}
 
 		$items += $entry
 		$idx++
@@ -1947,6 +1955,11 @@ function Try-StructureShorthand {
 		if ($cur.Contains('filter')) { return $null }
 		if ($cur.Contains('viewMode')) { return $null }
 		if ($cur.Contains('itemsViewMode')) { return $null }
+		if ($cur.Contains('userSettingID')) { return $null }
+		if ($cur.Contains('userSettingPresentation')) { return $null }
+		if ($cur.Contains('use')) { return $null }
+		if ($cur.Contains('conditionalAppearance')) { return $null }
+		if ($cur.Contains('outputParameters')) { return $null }
 		$gfs = $cur['groupFields']
 		if ($null -eq $gfs -or $gfs.Count -eq 0) {
 			# details level (terminal)
