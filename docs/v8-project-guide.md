@@ -4,7 +4,7 @@
 
 Размещается в корне проекта (рядом с `.git/`). Создаётся навыком `/db-list add` или вручную.
 
-> **Безопасность**: файл содержит секреты (пароли баз данных, API-ключи TTS) и добавлен в `.gitignore` — он не попадает в репозиторий. Каждый разработчик заводит свой `.v8-project.json` локально.
+> **Безопасность**: основной `.v8-project.json` можно хранить в git, если в нём нет секретов. Пароли баз данных, API-ключи TTS и локальные машинные пути лучше хранить в `.v8-project.local.json`, добавленном в `.gitignore`.
 
 ## Полная схема
 
@@ -34,7 +34,7 @@
       "server": "srv01",                    // адрес сервера 1С
       "ref": "MyApp_Test",                  // имя базы на сервере
       "user": "Admin",
-      "password": "123",
+      "password": "",
       "aliases": ["test", "тест"]
     }
   ],
@@ -48,6 +48,64 @@
     "voice": "ru-RU-DmitryNeural"
   }
 }
+```
+
+## Локальные переопределения `.v8-project.local.json`
+
+Файл `.v8-project.local.json` размещается рядом с `.v8-project.json` и
+применяется поверх него. Он нужен для значений, которые отличаются у каждого
+разработчика или не должны попадать в git: пароли, локальные пользователи,
+пути к платформе, Apache, ffmpeg, API-ключи TTS.
+
+Минимальный пример:
+
+```json
+{
+  "databases": {
+    "dev": {
+      "user": "Admin",
+      "password": "secret"
+    }
+  }
+}
+```
+
+Полный пример:
+
+```json
+{
+  "v8path": "C:\\Program Files\\1cv8\\8.3.27.2130\\bin",
+  "webPath": "C:\\tools\\apache24",
+  "ffmpegPath": "C:\\tools\\ffmpeg\\bin\\ffmpeg.exe",
+  "tts": {
+    "provider": "openai",
+    "apiKey": "secret"
+  },
+  "databases": {
+    "dev": {
+      "user": "Admin",
+      "password": "secret",
+      "webUrl": "http://localhost:8081/dev"
+    }
+  }
+}
+```
+
+Правила применения local-файла:
+
+- корневые поля local-файла переопределяют одноимённые поля
+  `.v8-project.json`;
+- `databases` может быть объектом `{ "id": { ...overrides } }` или массивом;
+- записи баз сопоставляются по `id`;
+- local-файл не должен создавать новую базу без основной записи в
+  `.v8-project.json`;
+- при выводе конфигурации пароль не показывается целиком.
+
+Рекомендуемый `.gitignore`:
+
+```gitignore
+.v8-project.local.json
+*.local.json
 ```
 
 ## Корневые поля
@@ -72,7 +130,7 @@
 | `server` | string | для server | Адрес сервера 1С | `/db-list add` |
 | `ref` | string | для server | Имя базы на сервере | `/db-list add` |
 | `user` | string | нет | Пользователь 1С | `/db-list add` или руками |
-| `password` | string | нет | Пароль | `/db-list add` или руками |
+| `password` | string | нет | Пароль; для секретов предпочитай `.v8-project.local.json` | `.v8-project.local.json` |
 | `aliases` | string[] | нет | Альтернативные имена для обращения к базе | `/db-list add` или руками |
 | `branches` | string[] | нет | Git-ветки или glob-паттерны (`release/*`, `feature/*`) | Руками |
 | `configSrc` | string | нет | Каталог XML-выгрузки конфигурации | Руками |
@@ -80,7 +138,7 @@
 
 ### Разрешение базы
 
-Все навыки `/db-*`, `/epf-build`, `/epf-dump`, `/erf-build`, `/erf-dump`, `/web-publish` используют единый алгоритм:
+Все навыки `/db-*`, `/epf-build`, `/epf-dump`, `/erf-build`, `/erf-dump`, `/web-publish` используют единый алгоритм. Сначала читается `.v8-project.json`, затем поверх него применяется `.v8-project.local.json`, если он существует:
 
 1. Если пользователь указал **параметры подключения** (путь, сервер) — используются напрямую
 2. Если указал **базу по имени** — поиск: `id` → `aliases` (с учётом морфологии) → `name` (нечёткое)
@@ -170,7 +228,7 @@ URL для открытия базы в браузере через `/web-test`.
       "server": "srv01",
       "ref": "MyApp_Prod",
       "user": "Admin",
-      "password": "secret",
+      "password": "",
       "aliases": ["prod", "рабочая", "боевая"],
       "branches": ["main", "release/*"]
     }

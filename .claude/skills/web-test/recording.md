@@ -26,7 +26,7 @@ tools/ffmpeg/
 Скачать, распаковать в любой каталог (напр. `C:\tools\ffmpeg`), добавить `bin/` в системный PATH.
 После этого ffmpeg доступен во всех проектах.
 
-### Вариант 3: через .v8-project.json (общий путь)
+### Вариант 3: через .v8-project.json / .v8-project.local.json (общий путь)
 
 Чтобы не копировать ffmpeg в каждый проект, указать путь в конфиге:
 
@@ -36,11 +36,13 @@ tools/ffmpeg/
 }
 ```
 
-Модель прочитает это поле и передаст в `startRecording({ ffmpegPath })`.
+Модель прочитает итоговую конфигурацию проекта. Если путь локальный для машины
+разработчика, его лучше указать в `.v8-project.local.json`, а не в основном
+`.v8-project.json`.
 
 ### Порядок поиска ffmpeg
 
-1. `opts.ffmpegPath` — явный путь (из `.v8-project.json` или параметра)
+1. `opts.ffmpegPath` — явный путь (из итоговой конфигурации проекта или параметра)
 2. `FFMPEG_PATH` — переменная окружения
 3. `ffmpeg` — в системном PATH
 4. `tools/ffmpeg/bin/ffmpeg.exe` — относительно корня проекта
@@ -240,7 +242,7 @@ Add voiceover to recorded videos. Captions shown via `showCaption()` are automat
 - **ffmpeg** — same as for video recording (ffprobe must be next to ffmpeg)
 - **node-edge-tts** — `npm install --prefix tools/tts node-edge-tts` (for Edge TTS provider, free, no API key). Also works if installed globally or at project level — the resolver tries multiple locations automatically
 
-### Configuration in `.v8-project.json`
+### Configuration in `.v8-project.json` / `.v8-project.local.json`
 
 ```json
 {
@@ -321,7 +323,7 @@ await openCommand('Банковские выписки');
 await hideCaption();
 const video = await stopRecording();
 
-// Add narration (reads tts config from .v8-project.json)
+// Add narration (reads tts config from merged project config)
 const narrated = await addNarration(video.file, { voice: 'ru-RU-DmitryNeural' });
 console.log(`Narrated: ${narrated.file}, ${narrated.duration}s`);
 ```

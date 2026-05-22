@@ -24,7 +24,7 @@ allowed-tools:
 
 ## Параметры подключения
 
-Прочитай `.v8-project.json` из корня проекта для `v8path` (путь к платформе).
+Прочитай `.v8-project.json` из корня проекта и применяй `.v8-project.local.json`, если он существует, чтобы получить итоговый `v8path` (путь к платформе).
 Если `v8path` не задан — автоопределение: `Get-ChildItem "C:\Program Files\1cv8\*\bin\1cv8.exe" | Sort -Desc | Select -First 1`
 После создания базы предложи зарегистрировать через `/db-list add`.
 
