@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.42 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.43 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -443,9 +443,16 @@ function Get-AppearanceDict {
 		# Value can be xs:string, v8ui:HorizontalAlign, v8:LocalStringType, etc.
 		$valType = Get-LocalXsiType $valNode
 		if ($valType -eq 'LocalStringType') {
-			$dict[$p] = Get-MLText $valNode
+			$rawVal = Get-MLText $valNode
 		} else {
-			$dict[$p] = $valNode.InnerText
+			$rawVal = $valNode.InnerText
+		}
+		# <dcscor:use>false</...> → wrapper {value, use: false}
+		$useV = Get-Text $it "dcscor:use"
+		if ($useV -eq 'false') {
+			$dict[$p] = [ordered]@{ value = $rawVal; use = $false }
+		} else {
+			$dict[$p] = $rawVal
 		}
 	}
 	return $dict
