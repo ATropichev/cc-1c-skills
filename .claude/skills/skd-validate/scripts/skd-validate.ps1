@@ -655,10 +655,8 @@ function Check-StructureItem {
 	if ($script:stopped) { return }
 
 	$xsiType = $itemNode.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance")
-	if (-not $xsiType) {
-		Report-Error "Variant '$variantName': structure item missing xsi:type"
-		return
-	}
+	# StructureItemGroup — дефолтный тип, platform эмитит <dcsset:item> без xsi:type.
+	if (-not $xsiType) { $xsiType = 'dcsset:StructureItemGroup' }
 	if ($validStructureTypes -notcontains $xsiType) {
 		Report-Warn "Variant '$variantName': unusual structure item type '$xsiType'"
 	}
