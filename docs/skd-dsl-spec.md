@@ -143,6 +143,8 @@
   "appearance": { "Формат": "ЧДЦ=2" },
   "presentationExpression": "Формат(Сумма, \"ЧДЦ=2\")",
   "orderExpression": { "expression": "ЕстьNULL(Поле.Порядок, 10000)", "orderType": "Asc", "autoOrder": false },
+  // или массив (если на поле несколько <orderExpression> для multi-sort fallback):
+  // "orderExpression": [{...}, {...}]
   "availableValues": [
     { "value": 1, "presentation": { "ru": "Доход", "en": "Income" } },
     { "value": 2, "presentation": { "ru": "Расход", "en": "Expense" } }
@@ -486,11 +488,16 @@ XML-маппинг — по `<group>` на каждый элемент:
 
 | Поле | XML |
 |------|-----|
-| `source` | `<sourceDataSet>` |
-| `dest` | `<destinationDataSet>` |
-| `sourceExpr` | `<sourceExpression>` |
-| `destExpr` | `<destinationExpression>` |
+| `source` / `sourceDataSet` | `<sourceDataSet>` |
+| `dest` / `destinationDataSet` | `<destinationDataSet>` |
+| `sourceExpr` / `sourceExpression` | `<sourceExpression>` |
+| `destExpr` / `destinationExpression` | `<destinationExpression>` |
 | `parameter` | `<parameter>` (опц.) |
+| `parameterListAllowed` | `<parameterListAllowed>true</parameterListAllowed>` (опц., bool) |
+| `startExpression` | `<startExpression>` (опц.) |
+| `linkConditionExpression` | `<linkConditionExpression>` (опц.) |
+
+decompile эмитит длинные имена (`sourceDataSet` и т.д.); compile принимает обе формы.
 
 ---
 
@@ -885,6 +892,8 @@ XML-маппинг — по `<group>` на каждый элемент:
 | `detail.presentation` | Тот же expression с подстановкой `[Имя поля]` (для UI) |
 | `total.expression` | Выражение для итоговой строки |
 | `total.presentation` | Same для UI |
+
+> **Пустые значения**: XML всегда содержит все четыре элемента (`detailExpression`, `detailExpressionPresentation`, `totalExpression`, `totalExpressionPresentation`) — даже если без значения (`<dcsset:totalExpression/>`). decompile сохраняет ключ с пустой строкой, compile эмитит self-closing тег для пустых строк. Это нужно для bit-perfect round-trip.
 
 **Case-форма** — поле принимает разные значения в зависимости от условий:
 
