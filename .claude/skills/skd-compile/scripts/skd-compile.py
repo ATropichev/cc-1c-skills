@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.66 — Compile 1C DCS from JSON
+# skd-compile v1.67 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1948,24 +1948,44 @@ def emit_output_parameters(lines, params, indent):
 
     lines.append(f'{indent}<dcsset:outputParameters>')
     for key, val in params.items():
-        # Распознаём wrapper {use: false, value: ...} — отличаем от multilang dict
-        use_wrapper = False
-        if isinstance(val, dict) and val.get('use') is False and 'value' in val:
-            use_wrapper = True
+        # wrapper {value, use?, viewMode?, userSettingID?, userSettingPresentation?}
+        use_false = False
+        wrap_vm = None
+        wrap_usid = None
+        wrap_usp = None
+        if isinstance(val, dict) and 'value' in val:
+            if val.get('use') is False: use_false = True
+            wrap_vm = val.get('viewMode')
+            wrap_usid = val.get('userSettingID')
+            wrap_usp = val.get('userSettingPresentation')
             val = val['value']
+        is_font_dict = isinstance(val, dict) and val.get('@type') == 'Font'
         ptype = OUTPUT_PARAM_TYPES.get(key, 'xs:string')
-        # Auto-promote to mltext if value is a multilang dict ({ru, en, ...})
-        if isinstance(val, dict):
+        # Auto-promote to mltext if value is a multilang dict (but not Font)
+        if not is_font_dict and isinstance(val, dict):
             ptype = 'mltext'
 
         lines.append(f'{indent}\t<dcscor:item xsi:type="dcsset:SettingsParameterValue">')
-        if use_wrapper:
+        if use_false:
             lines.append(f'{indent}\t\t<dcscor:use>false</dcscor:use>')
         lines.append(f'{indent}\t\t<dcscor:parameter>{esc_xml(key)}</dcscor:parameter>')
-        if ptype == 'mltext':
+        if is_font_dict:
+            attr_parts = []
+            for attr_name in ('ref', 'faceName', 'height', 'bold', 'italic', 'underline', 'strikeout', 'kind', 'scale'):
+                if attr_name in val:
+                    attr_parts.append(f'{attr_name}="{esc_xml(str(val[attr_name]))}"')
+            lines.append(f'{indent}\t\t<dcscor:value xsi:type="v8ui:Font" {" ".join(attr_parts)}/>')
+        elif ptype == 'mltext':
             emit_mltext(lines, f'{indent}\t\t', 'dcscor:value', val)
         else:
             lines.append(f'{indent}\t\t<dcscor:value xsi:type="{ptype}">{esc_xml(str(val))}</dcscor:value>')
+        if wrap_vm:
+            lines.append(f'{indent}\t\t<dcsset:viewMode>{esc_xml(str(wrap_vm))}</dcsset:viewMode>')
+        if wrap_usid:
+            uid = new_uuid() if str(wrap_usid) == 'auto' else str(wrap_usid)
+            lines.append(f'{indent}\t\t<dcsset:userSettingID>{esc_xml(uid)}</dcsset:userSettingID>')
+        if wrap_usp:
+            emit_mltext(lines, f'{indent}\t\t', 'dcsset:userSettingPresentation', wrap_usp)
         lines.append(f'{indent}\t</dcscor:item>')
     lines.append(f'{indent}</dcsset:outputParameters>')
 

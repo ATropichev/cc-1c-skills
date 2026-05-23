@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.50 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.51 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1672,11 +1672,21 @@ function Build-OutputParameters {
 		if (-not $pName -or -not $val) { continue }
 		$vType = Get-LocalXsiType $val
 		if ($vType -eq 'LocalStringType') { $rawVal = Get-MLText $val }
+		elseif ($vType -eq 'Font') { $rawVal = Get-FontValue $val }
 		else { $rawVal = $val.InnerText }
-		# <dcscor:use>false</...> → wrapper {value, use: false}
+		# Extras (use=false / viewMode / userSettingID / userSettingPresentation) → wrapper.
 		$useV = Get-Text $it "dcscor:use"
-		if ($useV -eq 'false') {
-			$d[$pName] = [ordered]@{ value = $rawVal; use = $false }
+		$vmN = $it.SelectSingleNode("dcsset:viewMode", $ns)
+		$usidV = Get-Text $it "dcsset:userSettingID"
+		$uspN = $it.SelectSingleNode("dcsset:userSettingPresentation", $ns)
+		$hasExtras = ($useV -eq 'false') -or $vmN -or $usidV -or $uspN
+		if ($hasExtras) {
+			$wrap = [ordered]@{ value = $rawVal }
+			if ($useV -eq 'false') { $wrap['use'] = $false }
+			if ($vmN) { $wrap['viewMode'] = $vmN.InnerText }
+			if ($usidV) { $wrap['userSettingID'] = 'auto' }
+			if ($uspN) { $wrap['userSettingPresentation'] = Get-MLText $uspN }
+			$d[$pName] = $wrap
 		} else {
 			$d[$pName] = $rawVal
 		}

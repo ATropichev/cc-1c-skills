@@ -1,4 +1,4 @@
-﻿# skd-compile v1.66 — Compile 1C DCS from JSON
+﻿# skd-compile v1.67 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -2356,29 +2356,71 @@ function Emit-OutputParameters {
 	foreach ($prop in $params.PSObject.Properties) {
 		$key = $prop.Name
 		$rawVal = $prop.Value
-		# Распознаём wrapper {use: false, value: ...} (отличаем от multilang dict)
-		$useWrapper = $false
-		if ($rawVal -is [PSCustomObject] -and $rawVal.PSObject.Properties['use'] -and $rawVal.use -eq $false -and $rawVal.PSObject.Properties['value']) {
-			$useWrapper = $true
+		# Распознаём wrapper {value, use?, viewMode?, userSettingID?, userSettingPresentation?}
+		# отличая от multilang dict ({ru, en, ...}). Wrapper всегда имеет ключ 'value'.
+		$useFalse = $false
+		$wrapVM = $null
+		$wrapUSID = $null
+		$wrapUSP = $null
+		$hasValueKey = $false
+		if ($rawVal -is [PSCustomObject] -and $rawVal.PSObject.Properties['value']) {
+			$hasValueKey = $true
+			if ($rawVal.PSObject.Properties['use'] -and $rawVal.use -eq $false) { $useFalse = $true }
+			if ($rawVal.PSObject.Properties['viewMode']) { $wrapVM = "$($rawVal.viewMode)" }
+			if ($rawVal.PSObject.Properties['userSettingID']) { $wrapUSID = "$($rawVal.userSettingID)" }
+			if ($rawVal.PSObject.Properties['userSettingPresentation']) { $wrapUSP = $rawVal.userSettingPresentation }
 			$rawVal = $rawVal.value
-		} elseif (($rawVal -is [hashtable] -or $rawVal -is [System.Collections.IDictionary]) -and $rawVal.Contains('use') -and $rawVal['use'] -eq $false -and $rawVal.Contains('value')) {
-			$useWrapper = $true
+		} elseif (($rawVal -is [hashtable] -or $rawVal -is [System.Collections.IDictionary]) -and $rawVal.Contains('value')) {
+			$hasValueKey = $true
+			if ($rawVal.Contains('use') -and $rawVal['use'] -eq $false) { $useFalse = $true }
+			if ($rawVal.Contains('viewMode')) { $wrapVM = "$($rawVal['viewMode'])" }
+			if ($rawVal.Contains('userSettingID')) { $wrapUSID = "$($rawVal['userSettingID'])" }
+			if ($rawVal.Contains('userSettingPresentation')) { $wrapUSP = $rawVal['userSettingPresentation'] }
 			$rawVal = $rawVal['value']
+		}
+		# Font dict внутри значения
+		$isFontDict = $false
+		if ($rawVal -is [PSCustomObject]) {
+			$tProp = $rawVal.PSObject.Properties['@type']
+			if ($tProp -and "$($tProp.Value)" -eq 'Font') { $isFontDict = $true }
+		} elseif ($rawVal -is [System.Collections.IDictionary]) {
+			if ($rawVal.Contains('@type') -and "$($rawVal['@type'])" -eq 'Font') { $isFontDict = $true }
 		}
 		$ptype = $script:outputParamTypes[$key]
 		if (-not $ptype) { $ptype = "xs:string" }
-		# Auto-promote to mltext if value is a multilang dict ({ru, en, ...})
-		if ($rawVal -is [System.Management.Automation.PSCustomObject] -or $rawVal -is [hashtable] -or $rawVal -is [System.Collections.IDictionary]) {
+		# Auto-promote to mltext if value is a multilang dict (но не Font/wrapper)
+		if (-not $isFontDict -and ($rawVal -is [System.Management.Automation.PSCustomObject] -or $rawVal -is [hashtable] -or $rawVal -is [System.Collections.IDictionary])) {
 			$ptype = "mltext"
 		}
 
 		X "$indent`t<dcscor:item xsi:type=`"dcsset:SettingsParameterValue`">"
-		if ($useWrapper) { X "$indent`t`t<dcscor:use>false</dcscor:use>" }
+		if ($useFalse) { X "$indent`t`t<dcscor:use>false</dcscor:use>" }
 		X "$indent`t`t<dcscor:parameter>$(Esc-Xml $key)</dcscor:parameter>"
-		if ($ptype -eq "mltext") {
+		if ($isFontDict) {
+			$attrParts = @()
+			foreach ($attrName in @('ref','faceName','height','bold','italic','underline','strikeout','kind','scale')) {
+				$av = $null
+				if ($rawVal -is [PSCustomObject]) {
+					$ap = $rawVal.PSObject.Properties[$attrName]
+					if ($ap) { $av = $ap.Value }
+				} else {
+					if ($rawVal.Contains($attrName)) { $av = $rawVal[$attrName] }
+				}
+				if ($null -ne $av) { $attrParts += "$attrName=`"$(Esc-Xml "$av")`"" }
+			}
+			X "$indent`t`t<dcscor:value xsi:type=`"v8ui:Font`" $($attrParts -join ' ')/>"
+		} elseif ($ptype -eq "mltext") {
 			Emit-MLText -tag "dcscor:value" -text $rawVal -indent "$indent`t`t"
 		} else {
 			X "$indent`t`t<dcscor:value xsi:type=`"$ptype`">$(Esc-Xml "$rawVal")</dcscor:value>"
+		}
+		if ($wrapVM) { X "$indent`t`t<dcsset:viewMode>$(Esc-Xml $wrapVM)</dcsset:viewMode>" }
+		if ($wrapUSID) {
+			$uid = if ("$wrapUSID" -eq 'auto') { New-Guid-String } else { "$wrapUSID" }
+			X "$indent`t`t<dcsset:userSettingID>$(Esc-Xml $uid)</dcsset:userSettingID>"
+		}
+		if ($wrapUSP) {
+			Emit-MLText -tag "dcsset:userSettingPresentation" -text $wrapUSP -indent "$indent`t`t"
 		}
 		X "$indent`t</dcscor:item>"
 	}
