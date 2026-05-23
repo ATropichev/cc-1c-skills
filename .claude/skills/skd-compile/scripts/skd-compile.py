@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.74 — Compile 1C DCS from JSON
+# skd-compile v1.75 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -2071,6 +2071,10 @@ def emit_data_parameters(lines, items, indent):
                 lines.append(f'{indent}\t\t\t<v8:startDate>{esc_xml(sd)}</v8:startDate>')
                 lines.append(f'{indent}\t\t\t<v8:endDate>{esc_xml(ed)}</v8:endDate>')
                 lines.append(f'{indent}\t\t</dcscor:value>')
+            elif re.match(r'^[a-zA-Z]+:', vtype):
+                # Полный xsi:type из decompile (например "xs:boolean", "dcscor:DesignTimeValue").
+                v_str = str(val).lower() if isinstance(val, bool) else str(val)
+                lines.append(f'{indent}\t\t<dcscor:value xsi:type="{vtype}">{esc_xml(v_str)}</dcscor:value>')
             elif vtype == 'boolean' or isinstance(val, bool):
                 bv = str(val).lower()
                 lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:boolean">{esc_xml(bv)}</dcscor:value>')

@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.57 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.58 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1760,6 +1760,10 @@ function Build-DataParameters {
 		# use на dataParameter item — это <dcscor:use> (не dcsset)
 		$use = Get-Text $it "dcscor:use"
 		if ($use -eq 'false') { $canAuto = $false }
+		# viewMode / userSettingPresentation на dataParameter item — это dcsset:* (после value)
+		$vmN = $it.SelectSingleNode("dcsset:viewMode", $ns)
+		$uspN = $it.SelectSingleNode("dcsset:userSettingPresentation", $ns)
+		if ($vmN -or $uspN) { $canAuto = $false }
 		$tp = $visibleTop[$pn]
 		$flags = @()
 		if ($usid) { $flags += '@user' }
@@ -1790,11 +1794,30 @@ function Build-DataParameters {
 		# Compare to top-level default
 		if ($tp -and $tp.valueDisplay -ne $vDisplay) { $canAuto = $false }
 		if (-not $tp) { $canAuto = $false }   # extra param not in top-level
-		if ($stdPeriodObj) {
-			# Object form для StandardPeriod с явными датами
-			$obj = [ordered]@{ parameter = $pn; value = $stdPeriodObj }
+		# Object form требуется если есть viewMode / userSettingPresentation / StandardPeriod-с-датами
+		if ($stdPeriodObj -or $vmN -or $uspN) {
+			$obj = [ordered]@{ parameter = $pn }
+			if ($stdPeriodObj) {
+				$obj['value'] = $stdPeriodObj
+			} elseif ($null -ne $vDisplay -and $vDisplay -ne '') {
+				# Конвертация для типизированных значений (compile различает по типу JSON)
+				if ($vt -eq 'boolean') { $obj['value'] = ($vDisplay -eq 'true') }
+				elseif ($vt -eq 'decimal') {
+					if ($vDisplay -match '^-?\d+$') { $obj['value'] = [int]$vDisplay }
+					else { $obj['value'] = [double]$vDisplay }
+				}
+				else { $obj['value'] = $vDisplay }
+				# Сохраняем полный xsi:type для bit-perfect эмиссии
+				$ta = $valNode.Attributes['xsi:type']
+				if ($ta) { $obj['valueType'] = $ta.Value }
+			}
 			if ($use -eq 'false') { $obj['use'] = $false }
 			if ($usid) { $obj['userSettingID'] = 'auto' }
+			if ($vmN) { $obj['viewMode'] = $vmN.InnerText }
+			if ($uspN) {
+				$uspV = Get-MLText $uspN
+				if ($uspV) { $obj['userSettingPresentation'] = $uspV }
+			}
 			$entries += $obj
 		} else {
 			# Build shorthand entry
