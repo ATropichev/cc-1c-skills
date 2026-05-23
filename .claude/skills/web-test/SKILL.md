@@ -42,7 +42,7 @@ Requires Node.js 18+. `npm install` downloads Playwright and Chromium.
 
 ## URL resolution
 
-Read `.v8-project.json` from project root. Each database has `id` and optional `webUrl`.
+Read `.v8-project.json` from project root, then apply `.v8-project.local.json` if it exists. Each resulting database has `id` and optional `webUrl`.
 Construct URL as `http://localhost:8081/<id>` or use `webUrl` if set.
 Use `/web-publish` first if the database is not published.
 
@@ -386,8 +386,8 @@ Clear filters. Without arguments clears all, with `{ field }` clears specific ba
 #### `getCaptions()` → caption timestamps from last recording
 
 See [recording.md](recording.md) for setup (ffmpeg), highlight mode, TTS narration, API details, and examples.
-If `.v8-project.json` has `ffmpegPath`, pass it to `startRecording({ ffmpegPath })`.
-If `.v8-project.json` has `tts` config, pass it to `addNarration()` (provider, voice, apiKey).
+If the merged project config has `ffmpegPath`, pass it to `startRecording({ ffmpegPath })`.
+If the merged project config has `tts` config, pass it to `addNarration()` (provider, voice, apiKey).
 
 ## Common patterns
 

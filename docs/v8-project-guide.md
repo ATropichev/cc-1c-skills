@@ -1,10 +1,62 @@
 # Конфигурация проекта (.v8-project.json)
 
-Файл `.v8-project.json` — единый конфиг проекта для всех навыков Claude Code. Хранит пути к платформе 1С, список баз данных и настройки инструментов (Apache, ffmpeg, TTS).
+Файл `.v8-project.json` — локальный конфиг проекта для всех навыков Claude Code. Хранит пути к платформе 1С, список баз данных, структуру исходников и настройки инструментов (Apache, ffmpeg, TTS).
 
-Размещается в корне проекта (рядом с `.git/`). Создаётся навыком `/db-list add` или вручную.
+Размещается в корне проекта (рядом с `.git/`). Создаётся навыком `/db-list init`, `/db-list add` или вручную.
 
-> **Безопасность**: файл содержит секреты (пароли баз данных, API-ключи TTS) и добавлен в `.gitignore` — он не попадает в репозиторий. Каждый разработчик заводит свой `.v8-project.json` локально.
+> **Безопасность**: `.v8-project.json` можно хранить локально и не коммитить. Если команде нужен повторяемый старт после clone, добавь в репозиторий `.v8-project.json.example` без секретов. Пароли баз данных, API-ключи TTS и локальные машинные пути лучше хранить в `.v8-project.local.json`, добавленном в `.gitignore`.
+
+## Инициализация после clone
+
+Если проект скачан из Git и `.v8-project.json` отсутствует, запусти
+`/db-list init`.
+
+Алгоритм инициализации:
+
+1. Если в корне проекта есть `.v8-project.json.example`, он используется как
+   основа локального `.v8-project.json`.
+2. Если шаблона нет, Claude определяет структуру по типовым каталогам:
+   `cfsrc`, `src`, `extensions`, `ext`, `reports`, `processing`,
+   `processors`.
+3. Claude определяет установленную платформу 1С или спрашивает путь к каталогу
+   `bin`.
+4. Claude спрашивает параметры базы: `id`, `name`, `type`, `path` или
+   `server/ref`, `user`.
+5. Пароль и машинные переопределения записываются в
+   `.v8-project.local.json`, если пользователь хочет сохранить их локально.
+6. `.v8-project.local.json` и `*.local.json` должны быть добавлены в
+   `.gitignore`.
+
+Так проект может не хранить рабочий `.v8-project.json` в репозитории, но всё
+равно иметь версионируемый шаблон структуры для новых разработчиков.
+
+## Шаблон `.v8-project.json.example`
+
+Шаблон можно хранить в Git. В него кладут только общие сведения: структуру
+исходников, пример базы, алиасы, привязки к веткам. Секреты и локальные пути
+не указываются.
+
+```json
+{
+  "configSrc": "cfsrc",
+  "extensions": "extensions",
+  "reports": "reports",
+  "processing": "processing",
+  "databases": [
+    {
+      "id": "dev",
+      "name": "Разработка",
+      "type": "server",
+      "server": "localhost",
+      "ref": "MyApp_Dev",
+      "user": "",
+      "aliases": ["dev", "разработка"],
+      "branches": ["main", "develop", "feature/*"]
+    }
+  ],
+  "default": "dev"
+}
+```
 
 ## Полная схема
 
@@ -12,6 +64,12 @@
 {
   // === Платформа ===
   "v8path": "C:\\Program Files\\1cv8\\8.3.25.1257\\bin",
+
+  // === Структура проекта ===
+  "configSrc": "cfsrc",
+  "extensions": "extensions",
+  "reports": "reports",
+  "processing": "processing",
 
   // === Базы данных ===
   "databases": [
@@ -24,7 +82,7 @@
       "password": "",                       // пароль
       "aliases": ["dev", "разработка"],     // альтернативные имена
       "branches": ["dev", "feature/*"],     // привязка к Git-веткам
-      "configSrc": "C:\\WS\\myapp\\cfsrc",  // каталог XML-выгрузки конфигурации
+      "configSrc": "cfsrc",                 // переопределение каталога конфигурации
       "webUrl": "http://localhost:8081/dev"  // URL веб-клиента (для /web-test)
     },
     {
@@ -34,7 +92,7 @@
       "server": "srv01",                    // адрес сервера 1С
       "ref": "MyApp_Test",                  // имя базы на сервере
       "user": "Admin",
-      "password": "123",
+      "password": "",
       "aliases": ["test", "тест"]
     }
   ],
@@ -50,13 +108,75 @@
 }
 ```
 
+## Локальные переопределения `.v8-project.local.json`
+
+Файл `.v8-project.local.json` размещается рядом с `.v8-project.json` и
+применяется поверх него. Он нужен для значений, которые отличаются у каждого
+разработчика или не должны попадать в git: пароли, локальные пользователи,
+пути к платформе, Apache, ffmpeg, API-ключи TTS.
+
+Минимальный пример:
+
+```json
+{
+  "databases": {
+    "dev": {
+      "user": "Admin",
+      "password": "secret"
+    }
+  }
+}
+```
+
+Полный пример:
+
+```json
+{
+  "v8path": "C:\\Program Files\\1cv8\\8.3.27.2130\\bin",
+  "webPath": "C:\\tools\\apache24",
+  "ffmpegPath": "C:\\tools\\ffmpeg\\bin\\ffmpeg.exe",
+  "tts": {
+    "provider": "openai",
+    "apiKey": "secret"
+  },
+  "databases": {
+    "dev": {
+      "user": "Admin",
+      "password": "secret",
+      "webUrl": "http://localhost:8081/dev"
+    }
+  }
+}
+```
+
+Правила применения local-файла:
+
+- корневые поля local-файла переопределяют одноимённые поля
+  `.v8-project.json`;
+- `databases` может быть объектом `{ "id": { ...overrides } }` или массивом;
+- записи баз сопоставляются по `id`;
+- local-файл не должен создавать новую базу без основной записи в
+  `.v8-project.json`;
+- при выводе конфигурации пароль не показывается целиком.
+
+Рекомендуемый `.gitignore`:
+
+```gitignore
+.v8-project.local.json
+*.local.json
+```
+
 ## Корневые поля
 
 | Поле | Тип | Обяз. | По умолчанию | Описание | Кто заполняет |
 |------|-----|:-----:|-------------|----------|---------------|
-| `v8path` | string | да | — | Путь к каталогу `bin` платформы 1С | `/db-list add` или руками |
+| `v8path` | string | нет | автоопределение | Путь к каталогу `bin` платформы 1С | `/db-list init` или руками |
 | `databases` | array | да | — | Список баз данных | `/db-list add` |
 | `default` | string | нет | — | `id` базы по умолчанию | `/db-list` |
+| `configSrc` | string | нет | — | Каталог XML-выгрузки конфигурации по умолчанию | `/db-list init` или руками |
+| `extensions` | string | нет | — | Каталог исходников расширений | `/db-list init` или руками |
+| `reports` | string | нет | — | Каталог исходников внешних отчётов | `/db-list init` или руками |
+| `processing` | string | нет | — | Каталог исходников внешних обработок | `/db-list init` или руками |
 | `webPath` | string | нет | `tools/apache24` | Каталог Apache HTTP Server | Руками |
 | `ffmpegPath` | string | нет | `tools/ffmpeg/bin/ffmpeg.exe` | Путь к ffmpeg | Руками |
 | `tts` | object | нет | Edge TTS, DmitryNeural | Настройки озвучки видео | Руками |
@@ -72,15 +192,15 @@
 | `server` | string | для server | Адрес сервера 1С | `/db-list add` |
 | `ref` | string | для server | Имя базы на сервере | `/db-list add` |
 | `user` | string | нет | Пользователь 1С | `/db-list add` или руками |
-| `password` | string | нет | Пароль | `/db-list add` или руками |
+| `password` | string | нет | Пароль; для секретов предпочитай `.v8-project.local.json` | `.v8-project.local.json` |
 | `aliases` | string[] | нет | Альтернативные имена для обращения к базе | `/db-list add` или руками |
 | `branches` | string[] | нет | Git-ветки или glob-паттерны (`release/*`, `feature/*`) | Руками |
-| `configSrc` | string | нет | Каталог XML-выгрузки конфигурации | Руками |
+| `configSrc` | string | нет | Каталог XML-выгрузки конфигурации для конкретной базы; если не задан, используется корневой `configSrc` | Руками |
 | `webUrl` | string | нет | URL веб-клиента для `/web-test` | Руками |
 
 ### Разрешение базы
 
-Все навыки `/db-*`, `/epf-build`, `/epf-dump`, `/erf-build`, `/erf-dump`, `/web-publish` используют единый алгоритм:
+Все навыки `/db-*`, `/epf-build`, `/epf-dump`, `/erf-build`, `/erf-dump`, `/web-publish` используют единый алгоритм. Сначала читается `.v8-project.json`, затем поверх него применяется `.v8-project.local.json`, если он существует:
 
 1. Если пользователь указал **параметры подключения** (путь, сервер) — используются напрямую
 2. Если указал **базу по имени** — поиск: `id` → `aliases` (с учётом морфологии) → `name` (нечёткое)
@@ -134,6 +254,7 @@ URL для открытия базы в браузере через `/web-test`.
 ```json
 {
   "v8path": "C:\\Program Files\\1cv8\\8.3.25.1257\\bin",
+  "configSrc": "cfsrc",
   "databases": [
     {
       "id": "dev",
@@ -150,6 +271,10 @@ URL для открытия базы в браузере через `/web-test`.
 ```json
 {
   "v8path": "C:\\Program Files\\1cv8\\8.3.25.1257\\bin",
+  "configSrc": "cfsrc",
+  "extensions": "extensions",
+  "reports": "reports",
+  "processing": "processing",
   "databases": [
     {
       "id": "dev",
@@ -170,7 +295,7 @@ URL для открытия базы в браузере через `/web-test`.
       "server": "srv01",
       "ref": "MyApp_Prod",
       "user": "Admin",
-      "password": "secret",
+      "password": "",
       "aliases": ["prod", "рабочая", "боевая"],
       "branches": ["main", "release/*"]
     }
