@@ -1,4 +1,4 @@
-﻿# skd-compile v1.76 — Compile 1C DCS from JSON
+﻿# skd-compile v1.77 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -1314,12 +1314,20 @@ function Emit-SingleParam {
 			if (Test-EmptyValue $av.value) {
 				Emit-EmptyValue -type $parsed.type -indent "`t`t`t" -tagPrefix "" -valueListAllowed $false
 			} else {
-				$avVal = "$($av.value)"
-				$avType = "xs:string"
-				if ($avVal -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.') {
-					$avType = "dcscor:DesignTimeValue"
+				$av_v = $av.value
+				if ($av_v -is [bool]) {
+					$bv = "$av_v".ToLower()
+					X "`t`t`t<value xsi:type=`"xs:boolean`">$bv</value>"
+				} elseif ($av_v -is [int] -or $av_v -is [long] -or $av_v -is [double]) {
+					X "`t`t`t<value xsi:type=`"xs:decimal`">$av_v</value>"
+				} else {
+					$avVal = "$av_v"
+					$avType = "xs:string"
+					if ($avVal -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.') {
+						$avType = "dcscor:DesignTimeValue"
+					}
+					X "`t`t`t<value xsi:type=`"$avType`">$(Esc-Xml $avVal)</value>"
 				}
-				X "`t`t`t<value xsi:type=`"$avType`">$(Esc-Xml $avVal)</value>"
 			}
 			# `title` accepted as synonym of `presentation` — both map to the same UI label.
 			$avPres = if ($av.presentation) { $av.presentation } elseif ($av.title) { $av.title } else { "" }

@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.59 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.61 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -764,7 +764,16 @@ function Build-Parameter {
 		$avValNode = $av.SelectSingleNode("r:value", $ns)
 		$avPresNode = $av.SelectSingleNode("r:presentation", $ns)
 		$avEntry = [ordered]@{}
-		if ($avValNode) { $avEntry['value'] = $avValNode.InnerText }
+		if ($avValNode) {
+			$avType = Get-LocalXsiType $avValNode
+			$avText = $avValNode.InnerText
+			if ($avType -eq 'boolean') { $avEntry['value'] = ($avText -eq 'true') }
+			elseif ($avType -eq 'decimal') {
+				if ($avText -match '^-?\d+$') { $avEntry['value'] = [int]$avText }
+				else { $avEntry['value'] = [double]$avText }
+			}
+			else { $avEntry['value'] = $avText }
+		}
 		if ($avPresNode) { $avEntry['presentation'] = Get-MLText $avPresNode }
 		$availableValues += $avEntry
 	}
@@ -1350,6 +1359,12 @@ function Get-FilterValueWithType {
 	}
 	$txt = $valNode.InnerText
 	if (-not $txt) { return @{ value = '_'; type = $rawType } }
+	# Конвертация по типу — compile различает [bool]/[int]/[double] для auto-detect xsi:type.
+	if ($vType -eq 'boolean') { return @{ value = ($txt -eq 'true'); type = $rawType } }
+	if ($vType -eq 'decimal') {
+		if ($txt -match '^-?\d+$') { return @{ value = [int]$txt; type = $rawType } }
+		return @{ value = [double]$txt; type = $rawType }
+	}
 	return @{ value = $txt; type = $rawType }
 }
 
@@ -1477,7 +1492,11 @@ function Build-FilterItem {
 	if ($op -in $noValueOps) {
 		$s += " $op"
 	} else {
-		$vDisplay = if ($null -ne $value -and "$value" -ne '') { "$value" } else { '_' }
+		$vDisplay = '_'
+		if ($null -ne $value) {
+			if ($value -is [bool]) { $vDisplay = if ($value) { 'true' } else { 'false' } }
+			elseif ("$value" -ne '') { $vDisplay = "$value" }
+		}
 		$s += " $op $vDisplay"
 	}
 	if ($flags) { $s += ' ' + ($flags -join ' ') }

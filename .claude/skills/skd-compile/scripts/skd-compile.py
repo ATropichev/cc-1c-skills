@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.76 — Compile 1C DCS from JSON
+# skd-compile v1.77 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1126,11 +1126,17 @@ def emit_single_param(lines, p, parsed):
             if is_empty_value(av.get('value')):
                 emit_empty_value(lines, parsed.get('type', ''), '\t\t\t', '', False)
             else:
-                av_val = str(av.get('value', ''))
-                av_type = 'xs:string'
-                if re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.', av_val):
-                    av_type = 'dcscor:DesignTimeValue'
-                lines.append(f'\t\t\t<value xsi:type="{av_type}">{esc_xml(av_val)}</value>')
+                av_v = av['value']
+                if isinstance(av_v, bool):
+                    lines.append(f'\t\t\t<value xsi:type="xs:boolean">{str(av_v).lower()}</value>')
+                elif isinstance(av_v, (int, float)):
+                    lines.append(f'\t\t\t<value xsi:type="xs:decimal">{av_v}</value>')
+                else:
+                    av_val = str(av_v)
+                    av_type = 'xs:string'
+                    if re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.', av_val):
+                        av_type = 'dcscor:DesignTimeValue'
+                    lines.append(f'\t\t\t<value xsi:type="{av_type}">{esc_xml(av_val)}</value>')
             # `title` accepted as synonym of `presentation` — both map to the same UI label.
             av_pres = av.get('presentation') or av.get('title') or ''
             if av_pres:
