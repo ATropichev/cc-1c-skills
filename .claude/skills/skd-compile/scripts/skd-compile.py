@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.83 — Compile 1C DCS from JSON
+# skd-compile v1.84 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1653,10 +1653,12 @@ def emit_selection_item(lines, item, indent):
 
 
 def emit_selection(lines, items, indent, skip_auto=False, block_view_mode=None, block_user_setting_id=None):
-    if not items or len(items) == 0:
+    has_items = items and len(items) > 0
+    has_block_meta = block_view_mode is not None or block_user_setting_id is not None
+    if not has_items and not has_block_meta:
         return
     lines.append(f'{indent}<dcsset:selection>')
-    for item in items:
+    for item in (items or []):
         if skip_auto and isinstance(item, str) and item == 'Auto':
             continue
         emit_selection_item(lines, item, f'{indent}\t')
@@ -1779,11 +1781,13 @@ def emit_filter_item(lines, item, indent):
 
 
 def emit_filter(lines, items, indent, block_view_mode=None, block_user_setting_id=None):
-    if not items or len(items) == 0:
+    has_items = items and len(items) > 0
+    has_block_meta = block_view_mode is not None or block_user_setting_id is not None
+    if not has_items and not has_block_meta:
         return
 
     lines.append(f'{indent}<dcsset:filter>')
-    for item in items:
+    for item in (items or []):
         if isinstance(item, str):
             parsed = parse_filter_shorthand(item)
             filter_obj = {
@@ -1812,11 +1816,13 @@ def emit_filter(lines, items, indent, block_view_mode=None, block_user_setting_i
 
 
 def emit_order(lines, items, indent, skip_auto=False, block_view_mode=None, block_user_setting_id=None):
-    if not items or len(items) == 0:
+    has_items = items and len(items) > 0
+    has_block_meta = block_view_mode is not None or block_user_setting_id is not None
+    if not has_items and not has_block_meta:
         return
 
     lines.append(f'{indent}<dcsset:order>')
-    for item in items:
+    for item in (items or []):
         if isinstance(item, str):
             if item == 'Auto':
                 if not skip_auto:
@@ -1913,11 +1919,13 @@ def emit_appearance_value(lines, key, val, indent):
 
 
 def emit_conditional_appearance(lines, items, indent, block_view_mode=None, block_user_setting_id=None):
-    if not items or len(items) == 0:
+    has_items = items and len(items) > 0
+    has_block_meta = block_view_mode is not None or block_user_setting_id is not None
+    if not has_items and not has_block_meta:
         return
 
     lines.append(f'{indent}<dcsset:conditionalAppearance>')
-    for ca in items:
+    for ca in (items or []):
         lines.append(f'{indent}\t<dcsset:item>')
 
         if ca.get('use') is False:
@@ -2459,21 +2467,24 @@ def emit_settings_variants(lines, defn):
         if s.get('userFields'):
             emit_user_fields(lines, s['userFields'], '\t\t\t')
 
-        # Selection
-        if s.get('selection'):
-            emit_selection(lines, s['selection'], '\t\t\t', skip_auto=True, block_view_mode=_block_vm('selection'), block_user_setting_id=_block_usid('selection'))
+        # Selection/Filter/Order/CA — эмитим даже если items пустые, но есть
+        # block-level viewMode/userSettingID (platform пишет такой блок как
+        # <dcsset:selection><dcsset:viewMode>...</dcsset:viewMode></dcsset:selection>).
+        svm, susid = _block_vm('selection'), _block_usid('selection')
+        if s.get('selection') or svm is not None or susid is not None:
+            emit_selection(lines, s.get('selection'), '\t\t\t', skip_auto=True, block_view_mode=svm, block_user_setting_id=susid)
 
-        # Filter
-        if s.get('filter'):
-            emit_filter(lines, s['filter'], '\t\t\t', block_view_mode=_block_vm('filter'), block_user_setting_id=_block_usid('filter'))
+        fvm, fusid = _block_vm('filter'), _block_usid('filter')
+        if s.get('filter') or fvm is not None or fusid is not None:
+            emit_filter(lines, s.get('filter'), '\t\t\t', block_view_mode=fvm, block_user_setting_id=fusid)
 
-        # Order
-        if s.get('order'):
-            emit_order(lines, s['order'], '\t\t\t', skip_auto=True, block_view_mode=_block_vm('order'), block_user_setting_id=_block_usid('order'))
+        ovm, ousid = _block_vm('order'), _block_usid('order')
+        if s.get('order') or ovm is not None or ousid is not None:
+            emit_order(lines, s.get('order'), '\t\t\t', skip_auto=True, block_view_mode=ovm, block_user_setting_id=ousid)
 
-        # ConditionalAppearance
-        if s.get('conditionalAppearance'):
-            emit_conditional_appearance(lines, s['conditionalAppearance'], '\t\t\t', block_view_mode=_block_vm('conditionalAppearance'), block_user_setting_id=_block_usid('conditionalAppearance'))
+        cavm, causid = _block_vm('conditionalAppearance'), _block_usid('conditionalAppearance')
+        if s.get('conditionalAppearance') or cavm is not None or causid is not None:
+            emit_conditional_appearance(lines, s.get('conditionalAppearance'), '\t\t\t', block_view_mode=cavm, block_user_setting_id=causid)
 
         # OutputParameters (platform does NOT emit <viewMode> on this block)
         if s.get('outputParameters'):

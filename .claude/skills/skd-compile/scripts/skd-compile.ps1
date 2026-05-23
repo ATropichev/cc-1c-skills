@@ -1,4 +1,4 @@
-﻿# skd-compile v1.83 — Compile 1C DCS from JSON
+﻿# skd-compile v1.84 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -2004,7 +2004,9 @@ function Emit-SelectionItem {
 function Emit-Selection {
 	param($items, [string]$indent, [switch]$skipAuto, $blockViewMode = $null, $blockUserSettingID = $null)
 
-	if (-not $items -or $items.Count -eq 0) { return }
+	$hasItems = $items -and $items.Count -gt 0
+	$hasBlockMeta = ($null -ne $blockViewMode) -or ($null -ne $blockUserSettingID)
+	if (-not $hasItems -and -not $hasBlockMeta) { return }
 
 	X "$indent<dcsset:selection>"
 	foreach ($item in $items) {
@@ -2150,7 +2152,9 @@ function Emit-FilterItem {
 function Emit-Filter {
 	param($items, [string]$indent, $blockViewMode = $null, $blockUserSettingID = $null)
 
-	if (-not $items -or $items.Count -eq 0) { return }
+	$hasItems = $items -and $items.Count -gt 0
+	$hasBlockMeta = ($null -ne $blockViewMode) -or ($null -ne $blockUserSettingID)
+	if (-not $hasItems -and -not $hasBlockMeta) { return }
 
 	X "$indent<dcsset:filter>"
 	foreach ($item in $items) {
@@ -2193,7 +2197,9 @@ function Emit-Filter {
 function Emit-Order {
 	param($items, [string]$indent, [switch]$skipAuto, $blockViewMode = $null, $blockUserSettingID = $null)
 
-	if (-not $items -or $items.Count -eq 0) { return }
+	$hasItems = $items -and $items.Count -gt 0
+	$hasBlockMeta = ($null -ne $blockViewMode) -or ($null -ne $blockUserSettingID)
+	if (-not $hasItems -and -not $hasBlockMeta) { return }
 
 	X "$indent<dcsset:order>"
 	foreach ($item in $items) {
@@ -2323,7 +2329,9 @@ function Emit-AppearanceValue {
 function Emit-ConditionalAppearance {
 	param($items, [string]$indent, $blockViewMode = $null, $blockUserSettingID = $null)
 
-	if (-not $items -or $items.Count -eq 0) { return }
+	$hasItems = $items -and $items.Count -gt 0
+	$hasBlockMeta = ($null -ne $blockViewMode) -or ($null -ne $blockUserSettingID)
+	if (-not $hasItems -and -not $hasBlockMeta) { return }
 
 	X "$indent<dcsset:conditionalAppearance>"
 	foreach ($ca in $items) {
@@ -3068,24 +3076,30 @@ function Emit-SettingsVariants {
 			Emit-UserFields -items $s.userFields -indent "`t`t`t"
 		}
 
-		# Selection (Auto items only belong at group level, not top-level settings)
-		if ($s.selection) {
-			Emit-Selection -items $s.selection -indent "`t`t`t" -skipAuto -blockViewMode (Get-BlockVM 'selection') -blockUserSettingID (Get-BlockUSID 'selection')
+		# Selection (Auto items only belong at group level, not top-level settings).
+		# Эмитим даже если items пустые, но есть block-level viewMode/userSettingID
+		# (platform пишет такой блок как <dcsset:selection><dcsset:viewMode>.../...>).
+		$svm = Get-BlockVM 'selection';  $susid = Get-BlockUSID 'selection'
+		if ($s.selection -or $null -ne $svm -or $null -ne $susid) {
+			Emit-Selection -items $s.selection -indent "`t`t`t" -skipAuto -blockViewMode $svm -blockUserSettingID $susid
 		}
 
 		# Filter
-		if ($s.filter) {
-			Emit-Filter -items $s.filter -indent "`t`t`t" -blockViewMode (Get-BlockVM 'filter') -blockUserSettingID (Get-BlockUSID 'filter')
+		$fvm = Get-BlockVM 'filter';  $fusid = Get-BlockUSID 'filter'
+		if ($s.filter -or $null -ne $fvm -or $null -ne $fusid) {
+			Emit-Filter -items $s.filter -indent "`t`t`t" -blockViewMode $fvm -blockUserSettingID $fusid
 		}
 
 		# Order (Auto items only belong at group level, not top-level settings)
-		if ($s.order) {
-			Emit-Order -items $s.order -indent "`t`t`t" -skipAuto -blockViewMode (Get-BlockVM 'order') -blockUserSettingID (Get-BlockUSID 'order')
+		$ovm = Get-BlockVM 'order';  $ousid = Get-BlockUSID 'order'
+		if ($s.order -or $null -ne $ovm -or $null -ne $ousid) {
+			Emit-Order -items $s.order -indent "`t`t`t" -skipAuto -blockViewMode $ovm -blockUserSettingID $ousid
 		}
 
 		# ConditionalAppearance
-		if ($s.conditionalAppearance) {
-			Emit-ConditionalAppearance -items $s.conditionalAppearance -indent "`t`t`t" -blockViewMode (Get-BlockVM 'conditionalAppearance') -blockUserSettingID (Get-BlockUSID 'conditionalAppearance')
+		$cavm = Get-BlockVM 'conditionalAppearance';  $causid = Get-BlockUSID 'conditionalAppearance'
+		if ($s.conditionalAppearance -or $null -ne $cavm -or $null -ne $causid) {
+			Emit-ConditionalAppearance -items $s.conditionalAppearance -indent "`t`t`t" -blockViewMode $cavm -blockUserSettingID $causid
 		}
 
 		# OutputParameters (platform does NOT emit <viewMode> on this block)
