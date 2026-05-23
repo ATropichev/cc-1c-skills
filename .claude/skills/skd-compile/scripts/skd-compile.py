@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.79 — Compile 1C DCS from JSON
+# skd-compile v1.80 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -605,7 +605,15 @@ def emit_input_parameters(lines, ip, indent):
                 lines.append(f'{indent}\t\t</dcscor:value>')
         elif 'value' in item:
             val = item['value']
-            if isinstance(val, bool):
+            # Явный кастомный type из decompile: {uri, name}
+            vt_src = item.get('valueType')
+            custom_uri = None; custom_name = None
+            if isinstance(vt_src, dict):
+                custom_uri = vt_src.get('uri')
+                custom_name = vt_src.get('name')
+            if custom_uri and custom_name:
+                lines.append(f'{indent}\t\t<dcscor:value xmlns:dN="{custom_uri}" xsi:type="dN:{custom_name}">{esc_xml(str(val))}</dcscor:value>')
+            elif isinstance(val, bool):
                 vstr = 'true' if val else 'false'
                 lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:boolean">{vstr}</dcscor:value>')
             elif isinstance(val, (int, float)):

@@ -1,4 +1,4 @@
-﻿# skd-compile v1.79 — Compile 1C DCS from JSON
+﻿# skd-compile v1.80 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -799,7 +799,23 @@ function Emit-InputParameters {
 		} elseif (Has-JsonProp $item 'value') {
 			# Simple typed value — определяем xsi:type из JSON-типа
 			$val = $item.value
-			if ($val -is [bool]) {
+			# Явный кастомный type из decompile: {uri, name} → <value xmlns:dN="uri" xsi:type="dN:name">
+			$customType = $null
+			if (Has-JsonProp $item 'valueType') {
+				$vtSrc = $item.valueType
+				$uri = $null; $tName = $null
+				if ($vtSrc -is [PSCustomObject]) {
+					if ($vtSrc.PSObject.Properties['uri']) { $uri = "$($vtSrc.uri)" }
+					if ($vtSrc.PSObject.Properties['name']) { $tName = "$($vtSrc.name)" }
+				} elseif ($vtSrc -is [System.Collections.IDictionary]) {
+					if ($vtSrc.Contains('uri')) { $uri = "$($vtSrc['uri'])" }
+					if ($vtSrc.Contains('name')) { $tName = "$($vtSrc['name'])" }
+				}
+				if ($uri -and $tName) { $customType = @{ uri = $uri; name = $tName } }
+			}
+			if ($customType) {
+				X "$indent`t`t<dcscor:value xmlns:dN=`"$($customType.uri)`" xsi:type=`"dN:$($customType.name)`">$(Esc-Xml "$val")</dcscor:value>"
+			} elseif ($val -is [bool]) {
 				$vStr = if ($val) { 'true' } else { 'false' }
 				X "$indent`t`t<dcscor:value xsi:type=`"xs:boolean`">$vStr</dcscor:value>"
 			} elseif ($val -is [int] -or $val -is [long] -or $val -is [double] -or $val -is [decimal]) {

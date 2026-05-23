@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.65 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.66 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -523,6 +523,17 @@ function Read-InputParameters {
 					else { $entry['value'] = [double]$txt }
 				} else {
 					$entry['value'] = $txt
+					# Сохраняем кастомный xsi:type (например, "d6p1:FoldersAndItemsUse" с локальным xmlns).
+					# Не сохраняем xs:* (string/dateTime/etc) — compile auto-detect.
+					$ta = $val.Attributes['xsi:type']
+					if ($ta -and $ta.Value -notmatch '^xs:') {
+						$prefix = ($ta.Value -split ':', 2)[0]
+						$localName = ($ta.Value -split ':', 2)[1]
+						$uri = $val.GetNamespaceOfPrefix($prefix)
+						if ($uri) {
+							$entry['valueType'] = [ordered]@{ uri = $uri; name = $localName }
+						}
+					}
 				}
 			}
 		}
