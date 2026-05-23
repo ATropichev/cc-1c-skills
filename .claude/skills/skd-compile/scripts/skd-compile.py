@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.68 — Compile 1C DCS from JSON
+# skd-compile v1.69 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1405,8 +1405,10 @@ def _get_cell_value(cell):
         return None
     if isinstance(cell, str):
         return cell
-    if isinstance(cell, dict) and 'value' in cell:
-        return cell['value']
+    if isinstance(cell, dict):
+        if 'value' in cell:
+            return cell['value']
+        return cell  # multilang dict without wrapper
     return None
 
 
@@ -1478,7 +1480,12 @@ def _emit_area_template_dsl(lines, t):
                 _emit_cell_appearance(lines, cell_style, w, h_merge=True)
             else:
                 cell_extra_items = []
-                if cell_val is not None and str(cell_val) != '':
+                if isinstance(cell_val, dict):
+                    # Multilang static text — эмитим напрямую
+                    lines.append('\t\t\t\t\t<dcsat:item xsi:type="dcsat:Field">')
+                    emit_mltext(lines, '\t\t\t\t\t\t', 'dcsat:value', cell_val)
+                    lines.append('\t\t\t\t\t</dcsat:item>')
+                elif cell_val is not None and str(cell_val) != '':
                     cell_str = str(cell_val)
                     # Unescape \| and \>
                     if cell_str == '\\|':

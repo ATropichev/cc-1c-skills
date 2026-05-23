@@ -1,4 +1,4 @@
-﻿# skd-compile v1.68 — Compile 1C DCS from JSON
+﻿# skd-compile v1.69 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -1698,7 +1698,13 @@ function Get-CellValue {
 	param($cell)
 	if ($null -eq $cell) { return $null }
 	if ($cell -is [string]) { return $cell }
+	if ($cell -is [hashtable] -or $cell -is [System.Collections.IDictionary]) {
+		if ($cell.Contains('value')) { return $cell['value'] }
+		return $cell  # multilang dict без обёртки
+	}
 	if ($cell.PSObject -and $cell.PSObject.Properties['value']) { return $cell.value }
+	# PSCustomObject без 'value' — это multilang dict ({ru, en, ...}), отдаём как есть
+	if ($cell -is [PSCustomObject]) { return $cell }
 	return $null
 }
 
@@ -1779,7 +1785,14 @@ function Emit-AreaTemplateDSL {
 				Emit-CellAppearance $cellStyle $w $false $true
 			} else {
 				# Cell value
-				if ($null -ne $cellVal -and $cellVal -ne '') {
+				$cellIsDict = ($cellVal -is [hashtable]) -or ($cellVal -is [System.Collections.IDictionary]) -or ($cellVal -is [PSCustomObject])
+				if ($cellIsDict) {
+					# Multilang static text — эмитим напрямую с lwsTitle-подобной структурой
+					X "`t`t`t`t`t<dcsat:item xsi:type=`"dcsat:Field`">"
+					Emit-MLText -tag "dcsat:value" -text $cellVal -indent "`t`t`t`t`t`t"
+					X "`t`t`t`t`t</dcsat:item>"
+					$cellExtraItems = @()
+				} elseif ($null -ne $cellVal -and $cellVal -ne '') {
 					$cellStr = "$cellVal"
 					# Unescape \| and \>
 					if ($cellStr -eq '\|') { $cellStr = '|' }
