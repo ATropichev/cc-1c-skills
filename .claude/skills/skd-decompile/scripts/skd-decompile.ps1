@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.87 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.88 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1921,6 +1921,25 @@ function Build-ConditionalAppearance {
 }
 
 # Build outputParameters dict
+# Зеркало $script:outputParamTypes из skd-compile — для known keys compile auto-detect-ит
+# тип по имени параметра, поэтому valueType в DSL не нужен (избыточный шум).
+$script:outputParamTypesKnown = @{
+	'Заголовок'                              = 'mltext'
+	'ВыводитьЗаголовок'                      = 'dcsset:DataCompositionTextOutputType'
+	'ВыводитьПараметрыДанных'                = 'dcsset:DataCompositionTextOutputType'
+	'ВыводитьОтбор'                          = 'dcsset:DataCompositionTextOutputType'
+	'МакетОформления'                        = 'xs:string'
+	'РасположениеПолейГруппировки'           = 'dcsset:DataCompositionGroupFieldsPlacement'
+	'РасположениеРеквизитов'                 = 'dcsset:DataCompositionAttributesPlacement'
+	'ГоризонтальноеРасположениеОбщихИтогов'  = 'dcscor:DataCompositionTotalPlacement'
+	'ВертикальноеРасположениеОбщихИтогов'    = 'dcscor:DataCompositionTotalPlacement'
+	'РасположениеОбщихИтогов'                = 'dcscor:DataCompositionTotalPlacement'
+	'РасположениеИтогов'                     = 'dcscor:DataCompositionTotalPlacement'
+	'РасположениеГруппировки'                = 'dcsset:DataCompositionFieldGroupPlacement'
+	'РасположениеРесурсов'                   = 'dcsset:DataCompositionResourcesPlacement'
+	'ТипМакета'                              = 'dcsset:DataCompositionGroupTemplateType'
+}
+
 function Build-OutputParameters {
 	param($opNode)
 	if (-not $opNode) { return $null }
@@ -1981,11 +2000,21 @@ function Build-OutputParameters {
 		$uspN = $it.SelectSingleNode("dcsset:userSettingPresentation", $ns)
 		# Если xsi:type — кастомный (dcsset:XXX, v8ui:XXX, и т.п., не xs:* и не LocalStringType/Font),
 		# нужен wrap чтобы compile сохранил тип через valueType (default — xs:string).
-		$typeIsCustom = $fullType -and ($fullType -notmatch '^xs:') -and ($vType -ne 'LocalStringType') -and ($vType -ne 'Font')
+		# typeIsCustom: тип не покрыт auto-detect (compile сам сделает default).
+		# Если ключ — known (есть в outputParamTypesKnown) И значение xsi:type совпадает с map —
+		# auto-detect compile вернёт тот же тип → valueType в DSL не нужен.
+		$typeAutoDetected = $false
+		if ($script:outputParamTypesKnown.ContainsKey($pName)) {
+			$mapType = $script:outputParamTypesKnown[$pName]
+			# mltext в map ≡ LocalStringType в XML
+			if ($mapType -eq 'mltext' -and $vType -eq 'LocalStringType') { $typeAutoDetected = $true }
+			elseif ($fullType -eq $mapType) { $typeAutoDetected = $true }
+		}
+		$typeIsCustom = $fullType -and ($fullType -notmatch '^xs:') -and ($vType -ne 'LocalStringType') -and ($vType -ne 'Font') -and -not $typeAutoDetected
 		$hasExtras = ($useV -eq 'false') -or $vmN -or $usidV -or $uspN -or ($nestedItems.Count -gt 0) -or $typeIsCustom
 		if ($hasExtras) {
 			$wrap = [ordered]@{ value = $rawVal }
-			if ($fullType -and -not (($vType -eq 'LocalStringType') -or ($vType -eq 'Font'))) {
+			if ($fullType -and -not (($vType -eq 'LocalStringType') -or ($vType -eq 'Font')) -and -not $typeAutoDetected) {
 				$wrap['valueType'] = $fullType
 			}
 			if ($useV -eq 'false') { $wrap['use'] = $false }
