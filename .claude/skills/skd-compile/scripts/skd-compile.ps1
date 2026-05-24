@@ -1,4 +1,4 @@
-﻿# skd-compile v1.97 — Compile 1C DCS from JSON
+﻿# skd-compile v1.98 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -333,6 +333,14 @@ function Emit-SingleValueType {
 	# Real DCS files use inline namespace d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config"
 	if ($typeStr -match '^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef)\.') {
 		X "$indent<v8:Type xmlns:d5p1=`"http://v8.1c.ru/8.1/data/enterprise/current-config`">d5p1:$(Esc-Xml $typeStr)</v8:Type>"
+		return
+	}
+
+	# TypeSet (композитный тип-набор): голое имя без точки, типа DocumentRef / CatalogRef /
+	# EnumRef / ChartOfAccountsRef / etc. (все ссылки указанного класса).
+	# Эмитим <v8:TypeSet xmlns:dN="..."> вместо <v8:Type>.
+	if ($typeStr -match '^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|BusinessProcessRef|TaskRef|ExchangePlanRef|InformationRegisterRef|AnyRef)$') {
+		X "$indent<v8:TypeSet xmlns:d5p1=`"http://v8.1c.ru/8.1/data/enterprise/current-config`">d5p1:$(Esc-Xml $typeStr)</v8:TypeSet>"
 		return
 	}
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.97 — Compile 1C DCS from JSON
+# skd-compile v1.98 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -212,6 +212,11 @@ def emit_single_value_type(lines, type_str, indent):
     # Reference types: CatalogRef.XXX, DocumentRef.XXX, EnumRef.XXX, etc.
     if re.match(r'^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef)\.', type_str):
         lines.append(f'{indent}<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:{esc_xml(type_str)}</v8:Type>')
+        return
+
+    # TypeSet (композитный тип-набор): голое имя без точки.
+    if re.match(r'^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|BusinessProcessRef|TaskRef|ExchangePlanRef|InformationRegisterRef|AnyRef)$', type_str):
+        lines.append(f'{indent}<v8:TypeSet xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:{esc_xml(type_str)}</v8:TypeSet>')
         return
 
     # Fallback -- assume dot-qualified types are also config references

@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.80 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.81 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -335,12 +335,19 @@ function Get-ValueTypeShorthand {
 	param($valueTypeNode)
 	if (-not $valueTypeNode) { return $null }
 	$types = $valueTypeNode.SelectNodes("v8:Type", $ns)
-	if ($types.Count -eq 0) { return $null }
+	$typeSets = $valueTypeNode.SelectNodes("v8:TypeSet", $ns)
+	if ($types.Count -eq 0 -and $typeSets.Count -eq 0) { return $null }
 	$qualN = $valueTypeNode.SelectSingleNode("v8:NumberQualifiers", $ns)
 	$qualS = $valueTypeNode.SelectSingleNode("v8:StringQualifiers", $ns)
 	$qualD = $valueTypeNode.SelectSingleNode("v8:DateQualifiers", $ns)
 	$shorts = @()
 	foreach ($t in $types) { $shorts += (Get-OneTypeShorthand -typeNode $t -qualNumber $qualN -qualString $qualS -qualDate $qualD) }
+	# TypeSet (композитный тип-набор) — извлекаем local-name из значения "<prefix>:Name".
+	foreach ($ts in $typeSets) {
+		$txt = $ts.InnerText
+		if ($txt -match ':(.+)$') { $shorts += $matches[1] }
+		else { $shorts += $txt }
+	}
 	if ($shorts.Count -eq 1) { return $shorts[0] }
 	return ,$shorts
 }

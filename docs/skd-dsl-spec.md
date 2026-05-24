@@ -176,8 +176,11 @@
 | `EnumRef.XXX` | `d5p1:EnumRef.XXX` | inline xmlns:d5p1 |
 | `ChartOfAccountsRef.XXX` | `d5p1:ChartOfAccountsRef.XXX` | inline xmlns:d5p1 |
 | `StandardPeriod` | `v8:StandardPeriod` | — |
+| `DocumentRef` (без `.XXX`) | `<v8:TypeSet xmlns:d5p1=...>d5p1:DocumentRef</v8:TypeSet>` | композитный тип-набор (все ссылки указанного класса) |
 
 > **Ссылочные типы** (`CatalogRef.XXX`, `DocumentRef.XXX` и др.) эмитируются с inline namespace declaration: `<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:CatalogRef.XXX</v8:Type>`. Использование префикса `cfg:` вместо `d5p1:` с объявлением namespace приводит к ошибке XDTO. Сборка EPF со ссылочными типами требует базу с соответствующей конфигурацией (не пустую).
+
+> **TypeSet (тип-набор)** — голое имя без точки (`CatalogRef`, `DocumentRef`, `EnumRef`, `ChartOfAccountsRef`, `ChartOfCharacteristicTypesRef`, `ChartOfCalculationTypesRef`, `BusinessProcessRef`, `TaskRef`, `ExchangePlanRef`, `InformationRegisterRef`, `AnyRef`) — указывает на **все** ссылки этого класса конфигурации (а не на конкретный объект). Эмитится как `<v8:TypeSet>` вместо `<v8:Type>`. Используется в параметрах типа «исключаемые документы» и подобных.
 
 ### Синонимы типов
 
