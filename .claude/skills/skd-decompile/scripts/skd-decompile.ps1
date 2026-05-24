@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.76 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.77 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -2241,10 +2241,11 @@ function Build-Structure {
 				foreach ($s in $snList) { $sArr += (Build-TableAxisBlock -node $s -loc "$loc/$idx/series[$si]"); $si++ }
 				$entry['series'] = $sArr
 			}
+			# Selection (chart values) — сохраняем даже [Auto] для bit-perfect presence
 			$selN = $it.SelectSingleNode("dcsset:selection", $ns)
-			$selI = Build-Selection -selNode $selN -loc "$loc/$idx/selection"
-			if ($selI.Count -gt 0 -and -not ($selI.Count -eq 1 -and $selI[0] -eq 'Auto')) {
-				$entry['selection'] = $selI
+			if ($selN) {
+				$selI = Build-Selection -selNode $selN -loc "$loc/$idx/selection"
+				if ($selI.Count -gt 0) { $entry['selection'] = $selI }
 			}
 			$opN = $it.SelectSingleNode("dcsset:outputParameters", $ns)
 			$op = Build-OutputParameters -opNode $opN
