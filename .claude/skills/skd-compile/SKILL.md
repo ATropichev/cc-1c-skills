@@ -344,8 +344,9 @@ Raw XML (`"template": "<...>"`) остаётся как fallback. Детект: 
 
 ### Расшифровка (drilldown) в параметрах шаблона
 
-Ключ `drilldown` в параметре шаблона автоматически генерирует `DetailsAreaTemplateParameter` и привязку `Расшифровка` в appearance ячеек:
+Ключ `drilldown` в параметре шаблона управляет генерацией `DetailsAreaTemplateParameter` и привязкой `Расшифровка` в appearance ячеек. Различает три формы по типу значения.
 
+**Форма B (shortcut, строка) — расшифровка через `ИмяРесурса`/`DrillDown`:**
 ```json
 "parameters": [
   { "name": "Сырье", "expression": "ПоступлениеСырья", "drilldown": "ПоступлениеСырья" }
@@ -353,6 +354,38 @@ Raw XML (`"template": "<...>"`) остаётся как fallback. Детект: 
 ```
 
 Генерирует: `ExpressionAreaTemplateParameter` (обычный) + `DetailsAreaTemplateParameter` с именем `Расшифровка_ПоступлениеСырья`, `fieldExpression` по полю `ИмяРесурса`, `mainAction=DrillDown`. Ячейки `{Сырье}` автоматически получают appearance `Расшифровка = Расшифровка_ПоступлениеСырья`.
+
+**Форма C (объект) — произвольный `DetailsAreaTemplateParameter`:**
+```json
+"parameters": [
+  { "name": "Номер", "expression": "МаршрутныйЛист.Номер" },
+  { "name": "Дата",  "expression": "МаршрутныйЛист.Дата" },
+  { "name": "МаршрутныйЛист",
+    "drilldown": { "field": "МаршрутныйЛист", "expression": "МаршрутныйЛист", "action": "OpenValue" } }
+]
+```
+
+Параметр без `expression` и с `drilldown` в виде объекта — это самостоятельный `DetailsAreaTemplateParameter` с именем `name`, `fieldExpression={field, expression}`, `mainAction=action` (по умолчанию `DrillDown`). Используется когда `mainAction=OpenValue` (открытие ссылки на data-параметр), либо когда расшифровка не привязана к `ИмяРесурса`.
+
+**Override расшифровки на уровне ячейки:**
+```json
+"rows": [
+  [ { "value": "{Номер}", "drilldown": "МаршрутныйЛист" },
+    { "value": "{Дата}",  "drilldown": "МаршрутныйЛист" } ]
+]
+```
+
+Object-форма ячейки `{ value, drilldown }`: appearance ячейки получит `Расшифровка → <drilldown>` (без префикса `Расшифровка_`). Используется когда несколько ячеек должны указывать на один и тот же параметр расшифровки, объявленный через форму C. Если в ячейке-строке `{X}` есть param X со shortcut form B — appearance подставляется автоматически, override не нужен.
+
+### Привязка макета к полю — `fieldTemplates`
+
+```json
+"fieldTemplates": [
+  { "field": "МаршрутныйЛист", "template": "Макет1" }
+]
+```
+
+Эквивалент XML-секции `<fieldTemplate><field>X</field><template>Y</template></fieldTemplate>` — при выводе значения поля `X` используется именованный area-template `Y`.
 
 ### Привязки макетов к группировкам
 

@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.74 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.75 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1132,7 +1132,9 @@ function Save-UserStyles {
 # Extract per-cell width/minHeight/merge from appearance.
 function Get-CellPerCellAttrs {
 	param($appNode)
-	$attrs = @{ width = $null; height = $null; mergeV = $false; mergeH = $false; drilldown = $null }
+	# drilldown — суффикс X из имени Расшифровка_X (только shortcut form B).
+	# drilldownTarget — полное имя target-параметра как есть (любая форма).
+	$attrs = @{ width = $null; height = $null; mergeV = $false; mergeH = $false; drilldown = $null; drilldownTarget = $null }
 	if (-not $appNode) { return $attrs }
 	foreach ($it in $appNode.SelectNodes("dcscor:item", $ns)) {
 		$pName = Get-Text $it "dcscor:parameter"
@@ -1144,9 +1146,10 @@ function Get-CellPerCellAttrs {
 			'ОбъединятьПоВертикали'    { if ($val -and $val.InnerText -eq 'true') { $attrs.mergeV = $true } }
 			'ОбъединятьПоГоризонтали'  { if ($val -and $val.InnerText -eq 'true') { $attrs.mergeH = $true } }
 			'Расшифровка'              {
-				# value xsi:type=dcscor:Parameter pointing to Расшифровка_X
+				# value xsi:type=dcscor:Parameter pointing to <X> или Расшифровка_<X>
 				if ($val) {
 					$paramRef = $val.InnerText
+					$attrs.drilldownTarget = $paramRef
 					if ($paramRef -match '^Расшифровка_(.+)$') { $attrs.drilldown = $matches[1] }
 				}
 			}
@@ -1219,9 +1222,10 @@ function Build-Template {
 	$rows = @()
 	$widths = $null
 	$minHeight = $null
-	$cellStyleMap = @{}       # "r,c" → имя стиля для конкретной ячейки (null для merge/no-style)
+	$cellStyleMap = @{}        # "r,c" → имя стиля для конкретной ячейки (null для merge/no-style)
+	$cellDrilldownMap = @{}    # "r,c" → полное имя drilldown-target (для cell wrap в object-form)
 	$hasAnyStyledCell = $false
-	$drilldownByParam = @{}   # param name → field name (X from Расшифровка_X)
+	$drilldownByParam = @{}    # param name → field name (X from Расшифровка_X) — для form B fold
 
 	$rowIdx = 0
 	foreach ($rowNode in $rowNodes) {
@@ -1248,9 +1252,15 @@ function Build-Template {
 				}
 			}
 
-			# Drilldown attachment
+			# Drilldown attachment — для shortcut form B (Расшифровка_X) кладём в drilldownByParam.
+			# Полное имя target сохраняем в cellDrilldownMap для последующего разрешения:
+			# если target = "Расшифровка_X" и X совпадает с именем параметра ячейки {X} —
+			# это shortcut и cell остаётся строкой; иначе cell wrap в {value, drilldown}.
 			if ($content -match '^\{(.+)\}$' -and $perCell.drilldown) {
 				$drilldownByParam[$matches[1]] = $perCell.drilldown
+			}
+			if ($perCell.drilldownTarget) {
+				$cellDrilldownMap["$rowIdx,$colIdx"] = $perCell.drilldownTarget
 			}
 
 			# First row collects widths from any non-merge cell
@@ -1305,16 +1315,34 @@ function Build-Template {
 	# Template parameters (and drilldown folding)
 	$paramNodes = $templateNode.SelectNodes("r:parameter", $ns)
 	$exprParams = [ordered]@{}
-	$detailParams = @{}
+	$detailsByName = [ordered]@{}      # name → @{ field, expression, action }
 	foreach ($pn in $paramNodes) {
 		$pType = Get-LocalXsiType $pn
 		$pName = Get-Text $pn "dcsat:name"
 		if ($pType -eq 'ExpressionAreaTemplateParameter') {
 			$exprParams[$pName] = Get-Text $pn "dcsat:expression"
 		} elseif ($pType -eq 'DetailsAreaTemplateParameter') {
-			# Name format: Расшифровка_<X>
-			if ($pName -match '^Расшифровка_(.+)$') {
-				$detailParams[$matches[1]] = $true
+			$feNode = $pn.SelectSingleNode("dcsat:fieldExpression", $ns)
+			$detailsByName[$pName] = @{
+				field      = if ($feNode) { Get-Text $feNode "dcsat:field" } else { '' }
+				expression = if ($feNode) { Get-Text $feNode "dcsat:expression" } else { '' }
+				action     = Get-Text $pn "dcsat:mainAction"
+			}
+		}
+	}
+
+	# Сворачиваем shortcut form B: каждый exprParam X с drilldownByParam[X]=Y проверяем —
+	# если detailsByName["Расшифровка_Y"] существует и имеет canonical shape
+	# (field=ИмяРесурса, expression="Y", action=DrillDown) → fold X.drilldown="Y" и mark detail folded.
+	$foldedDetailNames = @{}
+	foreach ($pname in @($drilldownByParam.Keys)) {
+		$yVal = $drilldownByParam[$pname]
+		$detailName = "Расшифровка_$yVal"
+		if ($detailsByName.Contains($detailName)) {
+			$d = $detailsByName[$detailName]
+			$expectedExpr = "`"$yVal`""
+			if ($d.field -eq 'ИмяРесурса' -and $d.expression -eq $expectedExpr -and $d.action -eq 'DrillDown') {
+				$foldedDetailNames[$detailName] = $true
 			}
 		}
 	}
@@ -1326,6 +1354,60 @@ function Build-Template {
 			$entry['drilldown'] = $drilldownByParam[$pname]
 		}
 		$templateParams += $entry
+	}
+	# Form C: details-параметры, не свёрнутые как shortcut → отдельная запись.
+	foreach ($dname in $detailsByName.Keys) {
+		if ($foldedDetailNames.ContainsKey($dname)) { continue }
+		$d = $detailsByName[$dname]
+		$entry = [ordered]@{ name = $dname }
+		$ddObj = [ordered]@{ field = $d.field; expression = $d.expression }
+		if ($d.action -and $d.action -ne 'DrillDown') { $ddObj['action'] = $d.action }
+		$entry['drilldown'] = $ddObj
+		$templateParams += $entry
+	}
+
+	# Cell wrapping: для ячеек, у которых drilldownTarget НЕ соответствует shortcut form B
+	# (то есть target ≠ "Расшифровка_X" с X = имя параметра ячейки), оборачиваем в {value, drilldown}.
+	# Уже обёрнутые style-ом ячейки получают drilldown как дополнительное поле.
+	if ($cellDrilldownMap.Count -gt 0) {
+		for ($r = 0; $r -lt $rows.Count; $r++) {
+			$newRow = @()
+			for ($c = 0; $c -lt $rows[$r].Count; $c++) {
+				$cellVal = $rows[$r][$c]
+				$key = "$r,$c"
+				$target = $cellDrilldownMap[$key]
+				# Распаковка inner value если cell уже обёрнута style-ом
+				$innerVal = $cellVal
+				$isWrapped = $false
+				if ($cellVal -is [System.Collections.IDictionary] -or $cellVal -is [hashtable]) {
+					if ($cellVal.Contains('value')) {
+						$innerVal = $cellVal['value']
+						$isWrapped = $true
+					}
+				}
+				$needsWrap = $false
+				if ($target -and ($innerVal -is [string]) -and ($innerVal -match '^\{(.+)\}$')) {
+					$cellParam = $matches[1]
+					# Shortcut form B: cell param имеет drilldown "Y", target == "Расшифровка_Y".
+					$expectedShortcut = $null
+					if ($drilldownByParam.ContainsKey($cellParam)) {
+						$expectedShortcut = "Расшифровка_$($drilldownByParam[$cellParam])"
+					}
+					if ($target -ne $expectedShortcut) { $needsWrap = $true }
+				}
+				if ($needsWrap) {
+					if ($isWrapped) {
+						$cellVal['drilldown'] = $target
+						$newRow += $cellVal
+					} else {
+						$newRow += [ordered]@{ value = $innerVal; drilldown = $target }
+					}
+				} else {
+					$newRow += $cellVal
+				}
+			}
+			$rows[$r] = $newRow
+		}
 	}
 
 	# Decide output form
@@ -2487,6 +2569,17 @@ foreach ($tn in $tNodes) {
 	$ti++
 }
 if ($templates.Count -gt 0) { $out['templates'] = $templates }
+
+# --- 5e2. fieldTemplates ---
+# Привязка <fieldTemplate><field/><template/></fieldTemplate> поля к именованному area-template.
+
+$fieldTemplates = @()
+foreach ($ftn in $root.SelectNodes("r:fieldTemplate", $ns)) {
+	$ftField = Get-Text $ftn "r:field"
+	$ftTempl = Get-Text $ftn "r:template"
+	$fieldTemplates += [ordered]@{ field = $ftField; template = $ftTempl }
+}
+if ($fieldTemplates.Count -gt 0) { $out['fieldTemplates'] = $fieldTemplates }
 
 # --- 5f. groupTemplates ---
 

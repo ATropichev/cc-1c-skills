@@ -1,4 +1,4 @@
-﻿# skd-compile v1.91 — Compile 1C DCS from JSON
+﻿# skd-compile v1.92 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -1800,11 +1800,14 @@ function Emit-AreaTemplateDSL {
 		}
 	}
 
-	# Build drilldown map: param_name -> drilldown_value
+	# Build drilldown map: param_name -> drilldown_value (только для shortcut-формы — drilldown:string).
+	# Форма C (drilldown:object) — DetailsAreaTemplateParameter с произвольным именем, в map не идёт.
 	$drilldownMap = @{}
 	if ($t.parameters) {
 		foreach ($tp in $t.parameters) {
-			if ($tp.drilldown) { $drilldownMap["$($tp.name)"] = "$($tp.drilldown)" }
+			if ($tp.drilldown -and ($tp.drilldown -is [string])) {
+				$drilldownMap["$($tp.name)"] = "$($tp.drilldown)"
+			}
 		}
 	}
 
@@ -1848,13 +1851,25 @@ function Emit-AreaTemplateDSL {
 						X "`t`t`t`t`t<dcsat:item xsi:type=`"dcsat:Field`">"
 						X "`t`t`t`t`t`t<dcsat:value xsi:type=`"dcscor:Parameter`">$(Esc-Xml $paramName)</dcsat:value>"
 						X "`t`t`t`t`t</dcsat:item>"
-						# Build drilldown appearance extra items
+						# Build drilldown appearance extra items.
+						# Приоритет: per-cell override (cell={value, drilldown}) → drilldownMap (shortcut form B).
 						$cellExtraItems = @()
-						if ($drilldownMap.ContainsKey($paramName)) {
-							$ddVal = $drilldownMap[$paramName]
+						$cellDrillOverride = $null
+						if ($cellRaw -is [PSCustomObject] -and $cellRaw.PSObject.Properties['drilldown']) {
+							$cellDrillOverride = "$($cellRaw.drilldown)"
+						} elseif (($cellRaw -is [hashtable] -or $cellRaw -is [System.Collections.IDictionary]) -and $cellRaw.Contains('drilldown')) {
+							$cellDrillOverride = "$($cellRaw['drilldown'])"
+						}
+						$ddTarget = $null
+						if ($cellDrillOverride) {
+							$ddTarget = $cellDrillOverride
+						} elseif ($drilldownMap.ContainsKey($paramName)) {
+							$ddTarget = "Расшифровка_$($drilldownMap[$paramName])"
+						}
+						if ($ddTarget) {
 							$cellExtraItems += "`t`t`t`t`t`t<dcscor:item>"
 							$cellExtraItems += "`t`t`t`t`t`t`t<dcscor:parameter>Расшифровка</dcscor:parameter>"
-							$cellExtraItems += "`t`t`t`t`t`t`t<dcscor:value xsi:type=`"dcscor:Parameter`">Расшифровка_$ddVal</dcscor:value>"
+							$cellExtraItems += "`t`t`t`t`t`t`t<dcscor:value xsi:type=`"dcscor:Parameter`">$(Esc-Xml $ddTarget)</dcscor:value>"
 							$cellExtraItems += "`t`t`t`t`t`t</dcscor:item>"
 						}
 					} else {
@@ -1879,25 +1894,60 @@ function Emit-AreaTemplateDSL {
 	# Parameters (reuse existing logic)
 	if ($t.parameters) {
 		foreach ($tp in $t.parameters) {
-			X "`t`t<parameter xmlns:dcsat=`"http://v8.1c.ru/8.1/data-composition-system/area-template`" xsi:type=`"dcsat:ExpressionAreaTemplateParameter`">"
-			X "`t`t`t<dcsat:name>$(Esc-Xml "$($tp.name)")</dcsat:name>"
-			X "`t`t`t<dcsat:expression>$(Esc-Xml "$($tp.expression)")</dcsat:expression>"
-			X "`t`t</parameter>"
-			# Drilldown parameter
-			if ($tp.drilldown) {
-				$ddVal = "$($tp.drilldown)"
-				X "`t`t<parameter xmlns:dcsat=`"http://v8.1c.ru/8.1/data-composition-system/area-template`" xsi:type=`"dcsat:DetailsAreaTemplateParameter`">"
-				X "`t`t`t<dcsat:name>Расшифровка_$(Esc-Xml $ddVal)</dcsat:name>"
-				X "`t`t`t<dcsat:fieldExpression>"
-				X "`t`t`t`t<dcsat:field>ИмяРесурса</dcsat:field>"
-				X "`t`t`t`t<dcsat:expression>`"$(Esc-Xml $ddVal)`"</dcsat:expression>"
-				X "`t`t`t</dcsat:fieldExpression>"
-				X "`t`t`t<dcsat:mainAction>DrillDown</dcsat:mainAction>"
-				X "`t`t</parameter>"
-			}
+			Emit-AreaTemplateParameter -tp $tp -indent "`t`t"
 		}
 	}
 	X "`t</template>"
+}
+
+# Эмиссия одного параметра шаблона. Различает три формы:
+#   A. { name, expression }                                  → ExpressionAreaTemplateParameter
+#   B. { name, expression, drilldown: "X" }                  → Expression + Details(Расшифровка_X, ИмяРесурса, DrillDown) [shortcut]
+#   C. { name, drilldown: { field, expression, action? } }   → DetailsAreaTemplateParameter с произвольным name
+function Emit-AreaTemplateParameter {
+	param($tp, [string]$indent)
+	# Определяем форму C: drilldown — объект с полем field или expression.
+	$dd = $tp.drilldown
+	$ddIsObject = $false
+	if ($null -ne $dd) {
+		if ($dd -is [hashtable] -or $dd -is [System.Collections.IDictionary]) { $ddIsObject = $true }
+		elseif ($dd -is [PSCustomObject]) { $ddIsObject = $true }
+	}
+	if ($ddIsObject) {
+		# Форма C
+		$ddField = if ($dd -is [PSCustomObject]) { "$($dd.field)" } else { "$($dd['field'])" }
+		$ddExpr  = if ($dd -is [PSCustomObject]) { "$($dd.expression)" } else { "$($dd['expression'])" }
+		$ddActV  = $null
+		if ($dd -is [PSCustomObject] -and $dd.PSObject.Properties['action']) { $ddActV = "$($dd.action)" }
+		elseif (($dd -is [hashtable] -or $dd -is [System.Collections.IDictionary]) -and $dd.Contains('action')) { $ddActV = "$($dd['action'])" }
+		$ddAct = if ($ddActV) { $ddActV } else { 'DrillDown' }
+		X "$indent<parameter xmlns:dcsat=`"http://v8.1c.ru/8.1/data-composition-system/area-template`" xsi:type=`"dcsat:DetailsAreaTemplateParameter`">"
+		X "$indent`t<dcsat:name>$(Esc-Xml "$($tp.name)")</dcsat:name>"
+		X "$indent`t<dcsat:fieldExpression>"
+		X "$indent`t`t<dcsat:field>$(Esc-Xml $ddField)</dcsat:field>"
+		X "$indent`t`t<dcsat:expression>$(Esc-Xml $ddExpr)</dcsat:expression>"
+		X "$indent`t</dcsat:fieldExpression>"
+		X "$indent`t<dcsat:mainAction>$(Esc-Xml $ddAct)</dcsat:mainAction>"
+		X "$indent</parameter>"
+		return
+	}
+	# Форма A или B
+	X "$indent<parameter xmlns:dcsat=`"http://v8.1c.ru/8.1/data-composition-system/area-template`" xsi:type=`"dcsat:ExpressionAreaTemplateParameter`">"
+	X "$indent`t<dcsat:name>$(Esc-Xml "$($tp.name)")</dcsat:name>"
+	X "$indent`t<dcsat:expression>$(Esc-Xml "$($tp.expression)")</dcsat:expression>"
+	X "$indent</parameter>"
+	if ($dd -and ($dd -is [string])) {
+		# Форма B: shortcut Расшифровка_<X> + ИмяРесурса + DrillDown
+		$ddVal = "$dd"
+		X "$indent<parameter xmlns:dcsat=`"http://v8.1c.ru/8.1/data-composition-system/area-template`" xsi:type=`"dcsat:DetailsAreaTemplateParameter`">"
+		X "$indent`t<dcsat:name>Расшифровка_$(Esc-Xml $ddVal)</dcsat:name>"
+		X "$indent`t<dcsat:fieldExpression>"
+		X "$indent`t`t<dcsat:field>ИмяРесурса</dcsat:field>"
+		X "$indent`t`t<dcsat:expression>`"$(Esc-Xml $ddVal)`"</dcsat:expression>"
+		X "$indent`t</dcsat:fieldExpression>"
+		X "$indent`t<dcsat:mainAction>DrillDown</dcsat:mainAction>"
+		X "$indent</parameter>"
+	}
 }
 
 # === Templates ===
@@ -1916,26 +1966,24 @@ function Emit-Templates {
 			}
 			if ($t.parameters) {
 				foreach ($tp in $t.parameters) {
-					X "`t`t<parameter xmlns:dcsat=`"http://v8.1c.ru/8.1/data-composition-system/area-template`" xsi:type=`"dcsat:ExpressionAreaTemplateParameter`">"
-					X "`t`t`t<dcsat:name>$(Esc-Xml "$($tp.name)")</dcsat:name>"
-					X "`t`t`t<dcsat:expression>$(Esc-Xml "$($tp.expression)")</dcsat:expression>"
-					X "`t`t</parameter>"
-					# Drilldown parameter
-					if ($tp.drilldown) {
-						$ddVal = "$($tp.drilldown)"
-						X "`t`t<parameter xmlns:dcsat=`"http://v8.1c.ru/8.1/data-composition-system/area-template`" xsi:type=`"dcsat:DetailsAreaTemplateParameter`">"
-						X "`t`t`t<dcsat:name>Расшифровка_$(Esc-Xml $ddVal)</dcsat:name>"
-						X "`t`t`t<dcsat:fieldExpression>"
-						X "`t`t`t`t<dcsat:field>ИмяРесурса</dcsat:field>"
-						X "`t`t`t`t<dcsat:expression>`"$(Esc-Xml $ddVal)`"</dcsat:expression>"
-						X "`t`t`t</dcsat:fieldExpression>"
-						X "`t`t`t<dcsat:mainAction>DrillDown</dcsat:mainAction>"
-						X "`t`t</parameter>"
-					}
+					Emit-AreaTemplateParameter -tp $tp -indent "`t`t"
 				}
 			}
 			X "`t</template>"
 		}
+	}
+}
+
+# === FieldTemplates ===
+# Привязка <fieldTemplate><field/><template/></fieldTemplate> поля к именованному area-template.
+# DSL: "fieldTemplates": [{ "field": "X", "template": "Макет1" }, ...]
+function Emit-FieldTemplates {
+	if (-not $def.fieldTemplates) { return }
+	foreach ($ft in $def.fieldTemplates) {
+		X "`t<fieldTemplate>"
+		X "`t`t<field>$(Esc-Xml "$($ft.field)")</field>"
+		X "`t`t<template>$(Esc-Xml "$($ft.template)")</template>"
+		X "`t</fieldTemplate>"
 	}
 }
 
@@ -3268,6 +3316,7 @@ Emit-CalcFields
 Emit-TotalFields
 Emit-Parameters
 Emit-Templates
+Emit-FieldTemplates
 Emit-GroupTemplates
 Emit-SettingsVariants
 

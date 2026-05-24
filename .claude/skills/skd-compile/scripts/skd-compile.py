@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.91 — Compile 1C DCS from JSON
+# skd-compile v1.92 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1484,12 +1484,14 @@ def _emit_area_template_dsl(lines, t):
             if cell_val == '>':
                 h_merge[r][c] = True
 
-    # Build drilldown map: param_name -> drilldown_value
+    # Build drilldown map: param_name -> drilldown_value (только shortcut-форма: drilldown — строка).
+    # Форма C (drilldown — объект) — DetailsAreaTemplateParameter с произвольным именем, в map не идёт.
     drilldown_map = {}
     if t.get('parameters'):
         for tp in t['parameters']:
-            if tp.get('drilldown'):
-                drilldown_map[str(tp['name'])] = str(tp['drilldown'])
+            dd = tp.get('drilldown')
+            if dd and isinstance(dd, str):
+                drilldown_map[str(tp['name'])] = dd
 
     lines.append('\t<template>')
     lines.append(f'\t\t<name>{esc_xml(str(t["name"]))}</name>')
@@ -1529,12 +1531,20 @@ def _emit_area_template_dsl(lines, t):
                         lines.append('\t\t\t\t\t<dcsat:item xsi:type="dcsat:Field">')
                         lines.append(f'\t\t\t\t\t\t<dcsat:value xsi:type="dcscor:Parameter">{esc_xml(param_name)}</dcsat:value>')
                         lines.append('\t\t\t\t\t</dcsat:item>')
-                        # Build drilldown appearance extra items
-                        if param_name in drilldown_map:
-                            dd_val = drilldown_map[param_name]
+                        # Build drilldown appearance extra items.
+                        # \u041f\u0440\u0438\u043e\u0440\u0438\u0442\u0435\u0442: per-cell override (cell={value, drilldown}) \u2192 drilldownMap (shortcut form B).
+                        cell_drill_override = None
+                        if isinstance(cell_raw, dict) and 'drilldown' in cell_raw:
+                            cell_drill_override = str(cell_raw['drilldown'])
+                        dd_target = None
+                        if cell_drill_override:
+                            dd_target = cell_drill_override
+                        elif param_name in drilldown_map:
+                            dd_target = f'\u0420\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0430_{drilldown_map[param_name]}'
+                        if dd_target:
                             cell_extra_items.append('\t\t\t\t\t\t<dcscor:item>')
                             cell_extra_items.append(f'\t\t\t\t\t\t\t<dcscor:parameter>\u0420\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0430</dcscor:parameter>')
-                            cell_extra_items.append(f'\t\t\t\t\t\t\t<dcscor:value xsi:type="dcscor:Parameter">\u0420\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0430_{dd_val}</dcscor:value>')
+                            cell_extra_items.append(f'\t\t\t\t\t\t\t<dcscor:value xsi:type="dcscor:Parameter">{esc_xml(dd_target)}</dcscor:value>')
                             cell_extra_items.append('\t\t\t\t\t\t</dcscor:item>')
                     else:
                         lines.append('\t\t\t\t\t<dcsat:item xsi:type="dcsat:Field">')
@@ -1548,22 +1558,46 @@ def _emit_area_template_dsl(lines, t):
     lines.append('\t\t</template>')
     if t.get('parameters'):
         for tp in t['parameters']:
-            lines.append('\t\t<parameter xmlns:dcsat="http://v8.1c.ru/8.1/data-composition-system/area-template" xsi:type="dcsat:ExpressionAreaTemplateParameter">')
-            lines.append(f'\t\t\t<dcsat:name>{esc_xml(str(tp["name"]))}</dcsat:name>')
-            lines.append(f'\t\t\t<dcsat:expression>{esc_xml(str(tp["expression"]))}</dcsat:expression>')
-            lines.append('\t\t</parameter>')
-            # Drilldown parameter
-            if tp.get('drilldown'):
-                dd_val = str(tp['drilldown'])
-                lines.append('\t\t<parameter xmlns:dcsat="http://v8.1c.ru/8.1/data-composition-system/area-template" xsi:type="dcsat:DetailsAreaTemplateParameter">')
-                lines.append(f'\t\t\t<dcsat:name>\u0420\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0430_{esc_xml(dd_val)}</dcsat:name>')
-                lines.append('\t\t\t<dcsat:fieldExpression>')
-                lines.append('\t\t\t\t<dcsat:field>\u0418\u043c\u044f\u0420\u0435\u0441\u0443\u0440\u0441\u0430</dcsat:field>')
-                lines.append(f'\t\t\t\t<dcsat:expression>"{esc_xml(dd_val)}"</dcsat:expression>')
-                lines.append('\t\t\t</dcsat:fieldExpression>')
-                lines.append('\t\t\t<dcsat:mainAction>DrillDown</dcsat:mainAction>')
-                lines.append('\t\t</parameter>')
+            _emit_area_template_parameter(lines, tp, '\t\t')
     lines.append('\t</template>')
+
+
+# \u042d\u043c\u0438\u0441\u0441\u0438\u044f \u043e\u0434\u043d\u043e\u0433\u043e \u043f\u0430\u0440\u0430\u043c\u0435\u0442\u0440\u0430 \u0448\u0430\u0431\u043b\u043e\u043d\u0430. \u0420\u0430\u0437\u043b\u0438\u0447\u0430\u0435\u0442 \u0442\u0440\u0438 \u0444\u043e\u0440\u043c\u044b:
+#   A. {name, expression}                                  \u2192 ExpressionAreaTemplateParameter
+#   B. {name, expression, drilldown: "X"}                  \u2192 Expression + Details(\u0420\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0430_X, \u0418\u043c\u044f\u0420\u0435\u0441\u0443\u0440\u0441\u0430, DrillDown)
+#   C. {name, drilldown: {field, expression, action?}}     \u2192 DetailsAreaTemplateParameter \u0441 \u043f\u0440\u043e\u0438\u0437\u0432\u043e\u043b\u044c\u043d\u044b\u043c \u0438\u043c\u0435\u043d\u0435\u043c
+def _emit_area_template_parameter(lines, tp, indent):
+    dd = tp.get('drilldown')
+    if isinstance(dd, dict):
+        # \u0424\u043e\u0440\u043c\u0430 C
+        dd_field = str(dd.get('field', ''))
+        dd_expr = str(dd.get('expression', ''))
+        dd_act = str(dd.get('action') or 'DrillDown')
+        lines.append(f'{indent}<parameter xmlns:dcsat="http://v8.1c.ru/8.1/data-composition-system/area-template" xsi:type="dcsat:DetailsAreaTemplateParameter">')
+        lines.append(f'{indent}\t<dcsat:name>{esc_xml(str(tp["name"]))}</dcsat:name>')
+        lines.append(f'{indent}\t<dcsat:fieldExpression>')
+        lines.append(f'{indent}\t\t<dcsat:field>{esc_xml(dd_field)}</dcsat:field>')
+        lines.append(f'{indent}\t\t<dcsat:expression>{esc_xml(dd_expr)}</dcsat:expression>')
+        lines.append(f'{indent}\t</dcsat:fieldExpression>')
+        lines.append(f'{indent}\t<dcsat:mainAction>{esc_xml(dd_act)}</dcsat:mainAction>')
+        lines.append(f'{indent}</parameter>')
+        return
+    # \u0424\u043e\u0440\u043c\u0430 A \u0438\u043b\u0438 B
+    lines.append(f'{indent}<parameter xmlns:dcsat="http://v8.1c.ru/8.1/data-composition-system/area-template" xsi:type="dcsat:ExpressionAreaTemplateParameter">')
+    lines.append(f'{indent}\t<dcsat:name>{esc_xml(str(tp["name"]))}</dcsat:name>')
+    lines.append(f'{indent}\t<dcsat:expression>{esc_xml(str(tp.get("expression", "")))}</dcsat:expression>')
+    lines.append(f'{indent}</parameter>')
+    if dd and isinstance(dd, str):
+        # \u0424\u043e\u0440\u043c\u0430 B: shortcut \u0420\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0430_<X> + \u0418\u043c\u044f\u0420\u0435\u0441\u0443\u0440\u0441\u0430 + DrillDown
+        dd_val = dd
+        lines.append(f'{indent}<parameter xmlns:dcsat="http://v8.1c.ru/8.1/data-composition-system/area-template" xsi:type="dcsat:DetailsAreaTemplateParameter">')
+        lines.append(f'{indent}\t<dcsat:name>\u0420\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0430_{esc_xml(dd_val)}</dcsat:name>')
+        lines.append(f'{indent}\t<dcsat:fieldExpression>')
+        lines.append(f'{indent}\t\t<dcsat:field>\u0418\u043c\u044f\u0420\u0435\u0441\u0443\u0440\u0441\u0430</dcsat:field>')
+        lines.append(f'{indent}\t\t<dcsat:expression>"{esc_xml(dd_val)}"</dcsat:expression>')
+        lines.append(f'{indent}\t</dcsat:fieldExpression>')
+        lines.append(f'{indent}\t<dcsat:mainAction>DrillDown</dcsat:mainAction>')
+        lines.append(f'{indent}</parameter>')
 
 
 # === Templates ===
@@ -1581,22 +1615,21 @@ def emit_templates(lines, defn):
                 lines.append(f'\t\t{t["template"]}')
             if t.get('parameters'):
                 for tp in t['parameters']:
-                    lines.append('\t\t<parameter xmlns:dcsat="http://v8.1c.ru/8.1/data-composition-system/area-template" xsi:type="dcsat:ExpressionAreaTemplateParameter">')
-                    lines.append(f'\t\t\t<dcsat:name>{esc_xml(str(tp["name"]))}</dcsat:name>')
-                    lines.append(f'\t\t\t<dcsat:expression>{esc_xml(str(tp["expression"]))}</dcsat:expression>')
-                    lines.append('\t\t</parameter>')
-                    # Drilldown parameter
-                    if tp.get('drilldown'):
-                        dd_val = str(tp['drilldown'])
-                        lines.append('\t\t<parameter xmlns:dcsat="http://v8.1c.ru/8.1/data-composition-system/area-template" xsi:type="dcsat:DetailsAreaTemplateParameter">')
-                        lines.append(f'\t\t\t<dcsat:name>\u0420\u0430\u0441\u0448\u0438\u0444\u0440\u043e\u0432\u043a\u0430_{esc_xml(dd_val)}</dcsat:name>')
-                        lines.append('\t\t\t<dcsat:fieldExpression>')
-                        lines.append('\t\t\t\t<dcsat:field>\u0418\u043c\u044f\u0420\u0435\u0441\u0443\u0440\u0441\u0430</dcsat:field>')
-                        lines.append(f'\t\t\t\t<dcsat:expression>"{esc_xml(dd_val)}"</dcsat:expression>')
-                        lines.append('\t\t\t</dcsat:fieldExpression>')
-                        lines.append('\t\t\t<dcsat:mainAction>DrillDown</dcsat:mainAction>')
-                        lines.append('\t\t</parameter>')
+                    _emit_area_template_parameter(lines, tp, '\t\t')
             lines.append('\t</template>')
+
+
+# === FieldTemplates ===
+# Привязка <fieldTemplate><field/><template/></fieldTemplate> поля к именованному area-template.
+# DSL: "fieldTemplates": [{ "field": "X", "template": "Макет1" }, ...]
+def emit_field_templates(lines, defn):
+    if not defn.get('fieldTemplates'):
+        return
+    for ft in defn['fieldTemplates']:
+        lines.append('\t<fieldTemplate>')
+        lines.append(f'\t\t<field>{esc_xml(str(ft["field"]))}</field>')
+        lines.append(f'\t\t<template>{esc_xml(str(ft["template"]))}</template>')
+        lines.append('\t</fieldTemplate>')
 
 
 # === GroupTemplates ===
@@ -2680,6 +2713,7 @@ def main():
     emit_total_fields(lines, defn)
     emit_parameters(lines, defn)
     emit_templates(lines, defn)
+    emit_field_templates(lines, defn)
     emit_group_templates(lines, defn)
     emit_settings_variants(lines, defn)
 
