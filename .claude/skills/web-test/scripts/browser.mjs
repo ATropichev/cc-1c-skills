@@ -21,53 +21,23 @@ import {
   switchTabScript, resolveGridScript
 } from './dom.mjs';
 
-// Project root: 4 levels up from .claude/skills/web-test/scripts/browser.mjs
-const __fn_browser = fileURLToPath(import.meta.url);
-const projectRoot = pathResolve(dirname(__fn_browser), '..', '..', '..', '..');
+// Module-level state, constants, normYo and resolveProjectPath live in core/state.mjs.
+// Imported as live bindings — reads stay current; writes go through setters.
+import {
+  browser, page, sessionPrefix, seanceId, recorder,
+  lastCaptions, lastRecordingDuration, highlightMode,
+  persistentUserDataDir, preserveClipboard,
+  contexts, activeContextName, activeMode,
+  setBrowser, setPage, setSessionPrefix, setSeanceId, setRecorder,
+  setLastCaptions, setLastRecordingDuration, setHighlightMode,
+  setPersistentUserDataDir, setActiveContextName, setActiveMode,
+  setClipboardWarnLogged,
+  LOAD_TIMEOUT, INIT_TIMEOUT, ACTION_WAIT, MAX_WAIT, POLL_INTERVAL, STABLE_CYCLES,
+  EXT_ID, projectRoot, resolveProjectPath, normYo,
+  isConnected, ensureConnected, getPage, setPreserveClipboard,
+} from './core/state.mjs';
 
-/** Resolve a user-provided path relative to the project root (not cwd). */
-const resolveProjectPath = (p) => pathResolve(projectRoot, p);
-
-let browser = null;
-let page = null;
-let sessionPrefix = null; // e.g. "http://localhost:8081/bpdemo/ru_RU"
-let seanceId = null;
-let recorder = null; // { cdp, ffmpeg, startTime, outputPath, ffmpegError, captions }
-let lastCaptions = []; // captions from the last completed recording (for addNarration)
-let lastRecordingDuration = null; // wall-clock duration of the last recording (seconds)
-let highlightMode = false;
-
-// Multi-context registry: name → { context, page, sessionPrefix, seanceId, recorder, lastCaptions, lastRecordingDuration, highlightMode }
-// Populated by createContext(); module-level vars above mirror the active slot.
-// connect() does NOT use this Map — it preserves legacy single-session behavior for exec/run/start.
-const contexts = new Map();
-let activeContextName = null;
-// Isolation mode for the current cmdTest session — set by the first createContext call.
-// 'tab': all contexts share one persistent context (one window, multiple tabs, extension loads reliably).
-// 'window': each context gets its own BrowserContext (separate window per context, full cookie isolation, extension may not load).
-let activeMode = null;
-
-const LOAD_TIMEOUT = 60000;
-const INIT_TIMEOUT = 60000;
-const ACTION_WAIT = 2000;   // fallback minimum wait
-
-/** Normalize ё→е and \u00a0→space for fuzzy matching. */
-const normYo = s => s.replace(/ё/gi, 'е').replace(/\u00a0/g, ' ');
-const MAX_WAIT = 10000;     // max wait for stability
-const POLL_INTERVAL = 200;  // polling interval
-const STABLE_CYCLES = 3;    // consecutive stable cycles needed
-
-// 1C browser extension ID (stable across versions, defined by key in manifest.json)
-const EXT_ID = 'pbhelknnhilelbnhfpcjlcabhmfangik';
-let persistentUserDataDir = null; // temp dir for launchPersistentContext, cleaned on disconnect
-
-// Clipboard preservation: save full clipboard contents (all MIME types) right before
-// each writeText+Ctrl+V pair, restore right after — narrow window so a user's
-// concurrent Ctrl+C isn't clobbered. Blobs are stashed on `window` (no CDP
-// serialization). Toggled via setPreserveClipboard() from run.mjs.
-let preserveClipboard = true;
-let clipboardWarnLogged = false;
-export function setPreserveClipboard(v) { preserveClipboard = !!v; }
+export { isConnected, getPage, setPreserveClipboard, ensureConnected };
 export async function saveClipboard() {
   if (!page) return;
   try {
@@ -120,7 +90,7 @@ export async function restoreClipboard() {
     return;
   }
   if (err && !clipboardWarnLogged) {
-    clipboardWarnLogged = true;
+    setClipboardWarnLogged(true);
     console.error(`[web-test] clipboard preserve skipped: ${err} (logged once per session)`);
   }
 }
@@ -187,14 +157,7 @@ function findExtension(overridePath) {
   return null;
 }
 
-/** Check if browser is connected and page is usable. */
-export function isConnected() {
-  if (!browser || !page || page.isClosed()) return false;
-  // launchPersistentContext returns BrowserContext (no isConnected), launch returns Browser
-  if (typeof browser.isConnected === 'function') return browser.isConnected();
-  // For persistent context, check via context's browser()
-  return browser.browser()?.isConnected() ?? false;
-}
+/* isConnected moved to core/state.mjs */
 
 /**
  * Open browser and navigate to 1C web client URL.
@@ -207,7 +170,7 @@ export async function connect(url, { extensionPath } = {}) {
     const extPath = findExtension(extensionPath);
     if (extPath) {
       // Launch with 1C browser extension via persistent context
-      persistentUserDataDir = pathJoin(tmpdir(), 'pw-1c-ext-' + Date.now());
+      setPersistentUserDataDir(pathJoin(tmpdir(), 'pw-1c-ext-' + Date.now()));
       mkdirSync(persistentUserDataDir, { recursive: true });
       const context = await chromium.launchPersistentContext(persistentUserDataDir, {
         headless: false,
@@ -219,28 +182,28 @@ export async function connect(url, { extensionPath } = {}) {
         viewport: null,
         permissions: ['clipboard-read', 'clipboard-write'],
       });
-      browser = context; // persistent context IS the browser
-      page = context.pages()[0] || await context.newPage();
+      setBrowser(context); // persistent context IS the browser
+      setPage(context.pages()[0] || await context.newPage());
     } else {
       // Fallback: launch without extension
-      browser = await chromium.launch({ headless: false, args: ['--start-maximized'] });
+      setBrowser(await chromium.launch({ headless: false, args: ['--start-maximized'] }));
       const context = await browser.newContext({
         viewport: null,
         permissions: ['clipboard-read', 'clipboard-write'],
       });
-      page = await context.newPage();
+      setPage(await context.newPage());
     }
 
     // Auto-accept native browser dialogs (confirm/alert from 1C scripts like vis.js)
     page.on('dialog', dialog => dialog.accept().catch(() => {}));
 
     // Capture seanceId from network requests for graceful logout
-    sessionPrefix = null;
-    seanceId = null;
+    setSessionPrefix(null);
+    setSeanceId(null);
     page.on('request', req => {
       if (seanceId) return;
       const m = req.url().match(/^(https?:\/\/[^/]+\/[^/]+\/[^/]+)\/e1cib\/.+[?&]seanceId=([^&]+)/);
-      if (m) { sessionPrefix = m[1]; seanceId = m[2]; }
+      if (m) { setSessionPrefix(m[1]); setSeanceId(m[2]); }
     });
 
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: LOAD_TIMEOUT });
@@ -293,8 +256,8 @@ export async function disconnect() {
       await _logoutSlot(slot);
     }
     contexts.clear();
-    activeContextName = null;
-    activeMode = null;
+    setActiveContextName(null);
+    setActiveMode(null);
   }
 
   // Single-session path (connect): auto-stop recording if active
@@ -306,14 +269,14 @@ export async function disconnect() {
     // Graceful logout — release the 1C license (single-session connect path)
     await _logoutSlot({ page, sessionPrefix, seanceId }, 1000);
     await browser.close().catch(() => {});
-    browser = null;
-    page = null;
-    sessionPrefix = null;
-    seanceId = null;
+    setBrowser(null);
+    setPage(null);
+    setSessionPrefix(null);
+    setSeanceId(null);
     // Clean up persistent user data dir
     if (persistentUserDataDir) {
       try { rmSync(persistentUserDataDir, { recursive: true, force: true }); } catch {}
-      persistentUserDataDir = null;
+      setPersistentUserDataDir(null);
     }
   }
 }
@@ -324,12 +287,12 @@ export async function disconnect() {
  */
 export async function attach(wsEndpoint, session = {}) {
   if (isConnected()) return;
-  browser = await chromium.connect(wsEndpoint);
+  setBrowser(await chromium.connect(wsEndpoint));
   const ctx = browser.contexts()[0];
-  page = ctx?.pages()[0];
+  setPage(ctx?.pages()[0]);
   if (!page) throw new Error('No page found in browser');
-  sessionPrefix = session.sessionPrefix || null;
-  seanceId = session.seanceId || null;
+  setSessionPrefix(session.sessionPrefix || null);
+  setSeanceId(session.seanceId || null);
 }
 
 /**
@@ -338,10 +301,10 @@ export async function attach(wsEndpoint, session = {}) {
  */
 export function detach() {
   const session = { sessionPrefix, seanceId };
-  browser = null;
-  page = null;
-  sessionPrefix = null;
-  seanceId = null;
+  setBrowser(null);
+  setPage(null);
+  setSessionPrefix(null);
+  setSeanceId(null);
   return session;
 }
 
@@ -375,11 +338,11 @@ function _saveActiveSlot() {
 function _activateSlot(name) {
   const slot = contexts.get(name);
   if (!slot) throw new Error(`Context "${name}" not found. Create it via createContext() first.`);
-  page = slot.page;
-  sessionPrefix = slot.sessionPrefix;
-  seanceId = slot.seanceId;
-  highlightMode = slot.highlightMode || false;
-  activeContextName = name;
+  setPage(slot.page);
+  setSessionPrefix(slot.sessionPrefix);
+  setSeanceId(slot.seanceId);
+  setHighlightMode(slot.highlightMode || false);
+  setActiveContextName(name);
 }
 
 /** Attach 1C session listeners to a page, writing into the given slot. */
@@ -392,8 +355,8 @@ function _attachSessionListeners(pg, slot, name) {
       slot.sessionPrefix = m[1];
       slot.seanceId = m[2];
       if (activeContextName === name) {
-        sessionPrefix = m[1];
-        seanceId = m[2];
+        setSessionPrefix(m[1]);
+        setSeanceId(m[2]);
       }
     }
   });
@@ -436,19 +399,19 @@ export async function createContext(name, url, { extensionPath, isolation = 'tab
     }
     if (isolation === 'tab') {
       // Persistent context: extension loads reliably, one window with tabs per context
-      persistentUserDataDir = pathJoin(tmpdir(), 'pw-1c-test-' + Date.now());
+      setPersistentUserDataDir(pathJoin(tmpdir(), 'pw-1c-test-' + Date.now()));
       mkdirSync(persistentUserDataDir, { recursive: true });
-      browser = await chromium.launchPersistentContext(persistentUserDataDir, {
+      setBrowser(await chromium.launchPersistentContext(persistentUserDataDir, {
         headless: false,
         args: launchArgs,
         viewport: null,
         permissions: ['clipboard-read', 'clipboard-write'],
-      });
+      }));
     } else {
       // Window mode: separate BrowserContext per slot, full cookie isolation
-      browser = await chromium.launch({ headless: false, args: launchArgs });
+      setBrowser(await chromium.launch({ headless: false, args: launchArgs }));
     }
-    activeMode = isolation;
+    setActiveMode(isolation);
   }
 
   // Save current active before switching
@@ -1000,11 +963,7 @@ async function _fetchStackViaHamburger(formNum) {
   return _parseErrorStack(firstBlock || errorText);
 }
 
-/** Get the raw Playwright page object (for advanced scripting in skill mode). */
-export function getPage() {
-  ensureConnected();
-  return page;
-}
+/* getPage moved to core/state.mjs */
 
 /**
  * Get current page state: active section, tabs.
@@ -5152,8 +5111,8 @@ export async function startRecording(outputPath, opts = {}) {
       throw new Error('Already recording. Call stopRecording() first, or use { force: true }.');
     }
   }
-  lastCaptions = [];
-  lastRecordingDuration = null;
+  setLastCaptions([]);
+  setLastRecordingDuration(null);
 
   const fps = opts.fps || 25;
   const quality = opts.quality || 80;
@@ -5240,7 +5199,7 @@ export async function startRecording(outputPath, opts = {}) {
     recorder.activePage = targetPage;
   };
 
-  recorder = {
+  setRecorder({
     cdp: null,
     activePage: null,
     ffmpeg,
@@ -5255,7 +5214,7 @@ export async function startRecording(outputPath, opts = {}) {
     _flushFrames,
     _attachPage,
     speechRate,
-  };
+  });
   ffmpeg.stderr.on('data', d => { recorder.ffmpegError += d.toString(); });
 
   await _attachPage(page);
@@ -5301,15 +5260,15 @@ export async function stopRecording() {
   const stats = statSync(outputPath);
 
   // Preserve captions for addNarration()
-  lastCaptions = recorder.captions || [];
-  lastRecordingDuration = duration;
+  setLastCaptions(recorder.captions || []);
+  setLastRecordingDuration(duration);
   if (lastCaptions.length) {
     const captionsPath = outputPath.replace(/\.[^.]+$/, '.captions.json');
     const captionsData = { recordingDuration: duration, videoTimestamps: true, captions: lastCaptions };
     writeFileSync(captionsPath, JSON.stringify(captionsData, null, 2), 'utf-8');
   }
 
-  recorder = null;
+  setRecorder(null);
 
   return {
     file: outputPath,
@@ -6107,7 +6066,7 @@ export async function unhighlight() {
  * @param {boolean} on  true to enable, false to disable
  */
 export function setHighlight(on) {
-  highlightMode = !!on;
+  setHighlightMode(!!on);
 }
 
 /** @returns {boolean} Whether auto-highlight mode is active. */
@@ -6286,8 +6245,4 @@ function generateSilence(outputPath, seconds, ffmpegPath) {
   ], { stdio: 'pipe', timeout: 10000 });
 }
 
-function ensureConnected() {
-  if (!isConnected()) {
-    throw new Error('Browser not connected. Call web_connect first.');
-  }
-}
+/* ensureConnected moved to core/state.mjs */
