@@ -83,3 +83,25 @@ export async function detectNewForm(prevFormNum, { strict = false } = {}) {
     return nums.length > 0 ? Math.max(...nums) : null;
   })()`);
 }
+
+/**
+ * Read the `#editDropDown` autocomplete popup. Returns whether it's visible
+ * and, when visible, an array of `.eddText` items with display name and
+ * center coordinates (suitable for page.mouse.click).
+ *
+ * @returns {Promise<{visible: boolean, items?: Array<{name:string, x:number, y:number}>}>}
+ */
+export async function readEdd() {
+  return await page.evaluate(`(() => {
+    const edd = document.getElementById('editDropDown');
+    if (!edd || edd.offsetWidth === 0) return { visible: false };
+    const eddTexts = [...edd.querySelectorAll('.eddText')].filter(el => el.offsetWidth > 0);
+    return {
+      visible: true,
+      items: eddTexts.map(el => {
+        const r = el.getBoundingClientRect();
+        return { name: el.innerText?.trim() || '', x: r.x + r.width / 2, y: r.y + r.height / 2 };
+      })
+    };
+  })()`);
+}

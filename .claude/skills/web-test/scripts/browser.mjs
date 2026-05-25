@@ -143,7 +143,7 @@ import {
   _detectPlatformDialogs, _closePlatformDialogs,
 } from './core/errors.mjs';
 import {
-  safeClick, findFieldInputId,
+  safeClick, findFieldInputId, readEdd,
   detectNewForm as helperDetectNewForm,
 } from './core/helpers.mjs';
 // Re-export only what was publicly exported before the refactor.
@@ -1456,18 +1456,7 @@ async function fillReferenceField(selector, fieldName, value, formNum) {
     if (dlbVisible) {
       await page.click(dlbSelector);
       await page.waitForTimeout(1000);
-      const eddState = await page.evaluate(`(() => {
-        const edd = document.getElementById('editDropDown');
-        if (!edd || edd.offsetWidth === 0) return { visible: false };
-        const eddTexts = [...edd.querySelectorAll('.eddText')].filter(el => el.offsetWidth > 0);
-        return {
-          visible: true,
-          items: eddTexts.map(el => {
-            const r = el.getBoundingClientRect();
-            return { name: el.innerText?.trim() || '', x: r.x + r.width / 2, y: r.y + r.height / 2 };
-          })
-        };
-      })()`);
+      const eddState = await readEdd();
       if (eddState.visible && eddState.items?.length > 0) {
         const target = normYo(text.toLowerCase());
         const candidates = eddState.items.filter(i => !i.name.startsWith('Создать'));
@@ -1515,18 +1504,7 @@ async function fillReferenceField(selector, fieldName, value, formNum) {
   await page.waitForTimeout(2000);
 
   // 4. Check editDropDown for autocomplete suggestions
-  const eddState = await page.evaluate(`(() => {
-    const edd = document.getElementById('editDropDown');
-    if (!edd || edd.offsetWidth === 0) return { visible: false };
-    const eddTexts = [...edd.querySelectorAll('.eddText')].filter(el => el.offsetWidth > 0);
-    return {
-      visible: true,
-      items: eddTexts.map(el => {
-        const r = el.getBoundingClientRect();
-        return { name: el.innerText?.trim() || '', x: r.x + r.width / 2, y: r.y + r.height / 2 };
-      })
-    };
-  })()`);
+  const eddState = await readEdd();
 
   if (eddState.visible && eddState.items?.length > 0) {
     const target = normYo(text.toLowerCase());
