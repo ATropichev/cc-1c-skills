@@ -69,6 +69,12 @@ SCRIPT
 # 2b. Execute without video recording (for debugging/testing)
 cat script.js | node $RUN exec - --no-record
 
+# 2c. Override exec HTTP timeout (default 30 min). Use for long scripts
+#     such as multi-block recordings + addNarration.
+cat script.js | node $RUN exec - --timeout-min=120
+cat script.js | node $RUN exec - --timeout=7200000
+WEB_TEST_EXEC_TIMEOUT_MS=7200000 node $RUN exec script.js
+
 # 3. Screenshot
 node $RUN shot result.png
 

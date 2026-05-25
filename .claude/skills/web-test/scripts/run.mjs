@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// web-test run v1.13 — CLI runner for 1C web client automation
+// web-test run v1.14 — CLI runner for 1C web client automation
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * CLI runner for 1C web client automation.
@@ -33,8 +33,22 @@ const SEVERITY_RANK = { blocker: 5, critical: 4, normal: 3, minor: 2, trivial: 1
 const SEVERITY_LEVELS = Object.keys(SEVERITY_RANK);
 
 const [,, cmd, ...rawArgs] = process.argv;
-const flags = { noRecord: rawArgs.includes('--no-record') };
+const flags = {
+  noRecord: rawArgs.includes('--no-record'),
+  execTimeoutMs: parseExecTimeoutMs(rawArgs),
+};
 const args = rawArgs.filter(a => !a.startsWith('--'));
+
+function parseExecTimeoutMs(argv) {
+  const DEFAULT_MS = 30 * 60 * 1000;
+  const flagMs = argv.find(a => a.startsWith('--timeout='));
+  if (flagMs) return Math.max(1, Number(flagMs.slice('--timeout='.length))) || DEFAULT_MS;
+  const flagMin = argv.find(a => a.startsWith('--timeout-min='));
+  if (flagMin) return Math.max(1, Number(flagMin.slice('--timeout-min='.length))) * 60 * 1000 || DEFAULT_MS;
+  const env = process.env.WEB_TEST_EXEC_TIMEOUT_MS;
+  if (env) return Math.max(1, Number(env)) || DEFAULT_MS;
+  return DEFAULT_MS;
+}
 
 switch (cmd) {
   case 'start':  await cmdStart(args[0]); break;
@@ -288,17 +302,18 @@ async function cmdExec(fileOrDash, flags = {}) {
   const sess = loadSession();
   const headers = {};
   if (flags.noRecord) headers['x-no-record'] = '1';
+  const timeoutMs = flags.execTimeoutMs ?? 30 * 60 * 1000;
   const result = await new Promise((resolve, reject) => {
     const req = http.request({
       hostname: '127.0.0.1', port: sess.port, path: '/exec',
-      method: 'POST', timeout: 30 * 60 * 1000, headers,
+      method: 'POST', timeout: timeoutMs, headers,
     }, res => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => { try { resolve(JSON.parse(data)); } catch { reject(new Error(data)); } });
     });
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(new Error('Exec timeout (10 min)')); });
+    req.on('timeout', () => { req.destroy(new Error(`Exec timeout (${Math.round(timeoutMs / 60000)} min)`)); });
     req.write(code);
     req.end();
   });
