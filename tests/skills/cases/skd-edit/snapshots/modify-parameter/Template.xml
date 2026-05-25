@@ -38,6 +38,7 @@
 			</v8:StringQualifiers>
 		</valueType>
 		<value xsi:type="xs:string">Окр1_00</value>
+		<useRestriction>false</useRestriction>
 		<availableValue>
 			<value xsi:type="dcscor:DesignTimeValue">Перечисление.Округления.Окр1_00</value>
 			<presentation xsi:type="v8:LocalStringType">
@@ -69,6 +70,7 @@
 		</dcsset:presentation>
 		<dcsset:settings xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows">
 			<dcsset:selection>
+				<dcsset:item xsi:type="dcsset:SelectedItemAuto"/>
 			</dcsset:selection>
 			<dcsset:item xsi:type="dcsset:StructureItemGroup">
 				<dcsset:order>
