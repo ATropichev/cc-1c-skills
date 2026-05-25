@@ -140,6 +140,7 @@ import {
 } from './core/wait.mjs';
 import {
   closeModals, checkForErrors, dismissPendingErrors, fetchErrorStack,
+  _detectPlatformDialogs, _closePlatformDialogs,
 } from './core/errors.mjs';
 // Re-export only what was publicly exported before the refactor.
 // waitForStable/waitForCondition/startNetworkMonitor/closeModals/checkForErrors/

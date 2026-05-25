@@ -84,7 +84,7 @@ export async function dismissPendingErrors() {
  * Detect open platform-level dialogs (About, Support Info, Error Report).
  * Returns array of { type, title? } for each detected dialog, or empty array.
  */
-async function _detectPlatformDialogs() {
+export async function _detectPlatformDialogs() {
   return await page.evaluate(() => {
     const result = [];
     // "О программе" dialog
@@ -114,7 +114,7 @@ async function _detectPlatformDialogs() {
  * These are NOT 1C forms — they are platform UI overlays invisible to getFormState().
  * Each close is wrapped in try/catch to avoid cascading failures.
  */
-async function _closePlatformDialogs() {
+export async function _closePlatformDialogs() {
   await page.evaluate(() => {
     // "Подробный текст ошибки" OK button (inside error report detail view)
     // It's a cloud window with its own OK button — look for visible pressDefault in small ps*win
