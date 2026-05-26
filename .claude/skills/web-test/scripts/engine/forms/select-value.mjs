@@ -14,8 +14,7 @@ import { highlight, unhighlight } from '../recording/highlight.mjs';
 import {
   safeClick, findFieldInputId, readEdd,
   detectNewForm as helperDetectNewForm,
-} from '../core/helpers.mjs';
-// pasteText + getFormState live in browser.mjs.
+} from '../core/helpers.mjs';
 import { pasteText } from '../core/clipboard.mjs';
 import { getFormState } from '../core/form-state.mjs';
 

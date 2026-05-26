@@ -18,8 +18,7 @@ import { clickElement } from '../core/click.mjs';
 import {
   pickFromSelectionForm, isTypeDialog, pickFromTypeDialog,
   fillReferenceField, selectValue,
-} from '../forms/select-value.mjs';
-// pasteText + getFormState still in browser.mjs (cycle).
+} from '../forms/select-value.mjs';
 import { pasteText } from '../core/clipboard.mjs';
 import { getFormState } from '../core/form-state.mjs';
 

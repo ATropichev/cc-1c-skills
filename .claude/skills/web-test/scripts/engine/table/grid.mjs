@@ -9,8 +9,7 @@ import { page, ensureConnected } from '../core/state.mjs';
 import { detectFormScript, readTableScript, resolveGridScript } from '../../dom.mjs';
 import { dismissPendingErrors } from '../core/errors.mjs';
 import { waitForStable } from '../core/wait.mjs';
-import { clickElement } from '../core/click.mjs';
-// getFormState lives in browser.mjs.
+import { clickElement } from '../core/click.mjs';
 import { getFormState } from '../core/form-state.mjs';
 
 /** Read structured table data with pagination. Returns columns, rows, total count. */

@@ -13,8 +13,7 @@ import { highlight, unhighlight } from '../recording/highlight.mjs';
 import {
   fillReferenceField, selectValue, pickFromSelectionForm,
   isTypeDialog, pickFromTypeDialog,
-} from './select-value.mjs';
-// pasteText + getFormState live in browser.mjs.
+} from './select-value.mjs';
 import { pasteText } from '../core/clipboard.mjs';
 import { getFormState } from '../core/form-state.mjs';
 

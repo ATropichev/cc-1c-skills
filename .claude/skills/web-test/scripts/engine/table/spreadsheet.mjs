@@ -1,13 +1,10 @@
-// web-test table/spreadsheet v1.17 — readTable, readSpreadsheet, scanSpreadsheetCells, scroll/click helpers for SpreadsheetDocument.
+// web-test table/spreadsheet v1.17 — readSpreadsheet + helpers for SpreadsheetDocument (отчёты, печатные формы).
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
-import { page, ensureConnected, normYo } from '../core/state.mjs';
-import { detectFormScript, readTableScript, resolveGridScript } from '../../dom.mjs';
-import { waitForStable } from '../core/wait.mjs';
-// getFormState still in browser.mjs (cycle resolves at call time).
-import { getFormState } from '../core/form-state.mjs';
-
-// readTable moved to table/grid.mjs (form-grid операции отделены от SpreadsheetDocument).
+import { page, ensureConnected } from '../core/state.mjs';
+import { detectFormScript } from '../../dom.mjs';
+import { waitForStable } from '../core/wait.mjs';
+import { getFormState } from '../core/form-state.mjs';
 
 // --- Spreadsheet helpers (shared by readSpreadsheet and clickElement) ---
 

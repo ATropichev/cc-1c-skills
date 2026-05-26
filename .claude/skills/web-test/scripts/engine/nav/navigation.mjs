@@ -12,8 +12,7 @@ import {
 import { dismissPendingErrors, checkForErrors } from '../core/errors.mjs';
 import { waitForStable, waitForCondition } from '../core/wait.mjs';
 import { highlight, unhighlight } from '../recording/highlight.mjs';
-import { returnFormState } from '../core/helpers.mjs';
-// pasteText + getFormState live in browser.mjs (move to forms/ in a later stage).
+import { returnFormState } from '../core/helpers.mjs';
 // Static import — ESM cycle that resolves at call time.
 import { pasteText } from '../core/clipboard.mjs';
 import { getFormState } from '../core/form-state.mjs';
