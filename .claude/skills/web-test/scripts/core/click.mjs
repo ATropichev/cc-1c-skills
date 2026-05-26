@@ -12,10 +12,11 @@ import { waitForStable, startNetworkMonitor } from './wait.mjs';
 import { highlight, unhighlight } from '../recording/highlight.mjs';
 import { safeClick } from './helpers.mjs';
 import { getGridToggleIcon, shouldClickToggle } from '../table/grid-toggle.mjs';
-// Spreadsheet cell handlers and getFormState live in browser.mjs.
 import {
-  clickSpreadsheetCell, findSpreadsheetCellByText, getFormState,
-} from '../browser.mjs';
+  clickSpreadsheetCell, findSpreadsheetCellByText,
+} from '../table/spreadsheet.mjs';
+// getFormState still in browser.mjs.
+import { getFormState } from '../browser.mjs';
 
 /** Click a button/hyperlink/tab on the current form. Use {dblclick: true} to double-click (open items from lists).
  *  First argument can also be an object { row, column } to click a SpreadsheetDocument cell. */
