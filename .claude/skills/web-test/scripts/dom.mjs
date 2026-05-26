@@ -1,4 +1,4 @@
-// web-test dom v1.8 — facade re-exporting injectable DOM scripts from dom/
+// web-test dom v1.9 — facade re-exporting injectable DOM scripts from dom/
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * Facade: re-exports DOM selector & semantic mapping script generators.
@@ -15,7 +15,14 @@ export {
   findClickTargetScript,
   findFieldButtonScript,
   resolveFieldsScript,
+  detectNewFormScript,
 } from './dom/forms.mjs';
+
+export {
+  isInputFocusedScript,
+  isInputFocusedInGridScript,
+  findOpenPopupScript,
+} from './dom/edit-state.mjs';
 
 export { getFormStateScript } from './dom/form-state.mjs';
 

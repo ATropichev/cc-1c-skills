@@ -13,12 +13,13 @@ import { highlight, unhighlight } from '../recording/highlight.mjs';
 import {
   safeClick, findFieldInputId,
   detectNewForm as helperDetectNewForm,
+  isInputFocused, isInputFocusedInGrid, findOpenPopup,
 } from '../core/helpers.mjs';
 import { clickElement } from '../core/click.mjs';
 import {
   pickFromSelectionForm, isTypeDialog, pickFromTypeDialog,
   fillReferenceField, selectValue,
-} from '../forms/select-value.mjs';
+} from '../forms/select-value.mjs';
 import { pasteText } from '../core/clipboard.mjs';
 import { getFormState } from '../forms/state.mjs';
 
@@ -199,16 +200,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
     if (firstVal0 === '') {
       await page.waitForTimeout(500);
       // Check if click opened a selection form — close it first
-      let openedForm = await page.evaluate(`(() => {
-        const forms = {};
-        document.querySelectorAll('[id]').forEach(el => {
-          if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-          const m = el.id.match(/^form(\\d+)_/);
-          if (m) forms[m[1]] = true;
-        });
-        const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-        return nums.length > 0 ? Math.max(...nums) : null;
-      })()`);
+      let openedForm = await helperDetectNewForm(formNum);
       if (openedForm !== null) {
         await page.keyboard.press('Escape');
         await page.waitForTimeout(500);
@@ -216,16 +208,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
         // No form opened — need to enter edit mode first (dblclick), then close any form that opens
         await page.mouse.dblclick(cellCoords.x, cellCoords.y);
         await page.waitForTimeout(500);
-        openedForm = await page.evaluate(`(() => {
-          const forms = {};
-          document.querySelectorAll('[id]').forEach(el => {
-            if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-            const m = el.id.match(/^form(\\d+)_/);
-            if (m) forms[m[1]] = true;
-          });
-          const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-          return nums.length > 0 ? Math.max(...nums) : null;
-        })()`);
+        openedForm = await helperDetectNewForm(formNum);
         if (openedForm !== null) {
           await page.keyboard.press('Escape');
           await page.waitForTimeout(500);
@@ -279,21 +262,9 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
     let directEditForm = null;
     for (let dw = 0; dw < 4; dw++) {
       await page.waitForTimeout(150);
-      inEdit = await page.evaluate(`(() => {
-        const f = document.activeElement;
-        return f && f.tagName === 'INPUT';
-      })()`);
+      inEdit = await isInputFocused();
       if (inEdit) break;
-      directEditForm = await page.evaluate(`(() => {
-        const forms = {};
-        document.querySelectorAll('[id]').forEach(el => {
-          if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-          const m = el.id.match(/^form(\\d+)_/);
-          if (m) forms[m[1]] = true;
-        });
-        const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-        return nums.length > 0 ? Math.max(...nums) : null;
-      })()`);
+      directEditForm = await helperDetectNewForm(formNum);
       if (directEditForm !== null) break;
     }
     // Click didn't enter edit — try dblclick (works for flat grids)
@@ -301,21 +272,9 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
       await page.mouse.dblclick(cellCoords.x, cellCoords.y);
       for (let dw = 0; dw < 4; dw++) {
         await page.waitForTimeout(150);
-        inEdit = await page.evaluate(`(() => {
-          const f = document.activeElement;
-          return f && f.tagName === 'INPUT';
-        })()`);
+        inEdit = await isInputFocused();
         if (inEdit) break;
-        directEditForm = await page.evaluate(`(() => {
-          const forms = {};
-          document.querySelectorAll('[id]').forEach(el => {
-            if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-            const m = el.id.match(/^form(\\d+)_/);
-            if (m) forms[m[1]] = true;
-          });
-          const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-          return nums.length > 0 ? Math.max(...nums) : null;
-        })()`);
+        directEditForm = await helperDetectNewForm(formNum);
         if (directEditForm !== null) break;
       }
     }
@@ -324,21 +283,9 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
       await page.keyboard.press('F4');
       for (let fw = 0; fw < 8; fw++) {
         await page.waitForTimeout(200);
-        inEdit = await page.evaluate(`(() => {
-          const f = document.activeElement;
-          return f && f.tagName === 'INPUT';
-        })()`);
+        inEdit = await isInputFocused();
         if (inEdit) break;
-        directEditForm = await page.evaluate(`(() => {
-          const forms = {};
-          document.querySelectorAll('[id]').forEach(el => {
-            if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-            const m = el.id.match(/^form(\\d+)_/);
-            if (m) forms[m[1]] = true;
-          });
-          const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-          return nums.length > 0 ? Math.max(...nums) : null;
-        })()`);
+        directEditForm = await helperDetectNewForm(formNum);
         if (directEditForm !== null) break;
       }
     }
@@ -356,16 +303,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
         await page.keyboard.press('F4');
         for (let fw = 0; fw < 8; fw++) {
           await page.waitForTimeout(200);
-          directEditForm = await page.evaluate(`(() => {
-            const forms = {};
-            document.querySelectorAll('[id]').forEach(el => {
-              if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-              const m = el.id.match(/^form(\\d+)_/);
-              if (m) forms[m[1]] = true;
-            });
-            const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-            return nums.length > 0 ? Math.max(...nums) : null;
-          })()`);
+          directEditForm = await helperDetectNewForm(formNum);
           if (directEditForm !== null) break;
         }
         // If F4 didn't open a selection form, fall through to Tab loop
@@ -394,16 +332,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
             await pickFromTypeDialog(selForm, info.type);
             await waitForStable(selForm);
             // After type selection, detect the actual selection form
-            selForm = await page.evaluate(`(() => {
-              const forms = {};
-              document.querySelectorAll('[id]').forEach(el => {
-                if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-                const m = el.id.match(/^form(\\d+)_/);
-                if (m) forms[m[1]] = true;
-              });
-              const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-              return nums.length > 0 ? Math.max(...nums) : null;
-            })()`);
+            selForm = await helperDetectNewForm(formNum);
             if (selForm === null) {
               return { field: key, error: 'no_selection_after_type', message: `Type selected but no selection form opened for "${key}"` };
             }
@@ -490,23 +419,9 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
         await page.mouse.dblclick(nextCoords.x, nextCoords.y);
         await page.waitForTimeout(300);
         // Check if dblclick entered INPUT mode (plain text/numeric field) — before F4 which may open calculator
-        const inInputAfterDblclick = await page.evaluate(`(() => {
-          const f = document.activeElement;
-          if (!f || (f.tagName !== 'INPUT' && f.tagName !== 'TEXTAREA')) return false;
-          let n = f; while (n) { if (n.classList?.contains('grid')) return true; n = n.parentElement; }
-          return false;
-        })()`);
+        const inInputAfterDblclick = await isInputFocusedInGrid();
         // Also check if a selection form already appeared
-        let selForm = await page.evaluate(`(() => {
-          const forms = {};
-          document.querySelectorAll('[id]').forEach(el => {
-            if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-            const m = el.id.match(/^form(\\d+)_/);
-            if (m) forms[m[1]] = true;
-          });
-          const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-          return nums.length > 0 ? Math.max(...nums) : null;
-        })()`);
+        let selForm = await helperDetectNewForm(formNum);
         if (selForm === null && inInputAfterDblclick) {
           // Plain text/numeric field — fill via clipboard paste
           await pasteText(info.value, { confirm: ['Control+a', 'Control+v'] });
@@ -530,16 +445,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
             if (attempt === 1) await page.keyboard.press('F4'); // F4 fallback
             for (let sw = 0; sw < 6; sw++) {
               await page.waitForTimeout(200);
-              selForm = await page.evaluate(`(() => {
-                const forms = {};
-                document.querySelectorAll('[id]').forEach(el => {
-                  if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-                  const m = el.id.match(/^form(\\d+)_/);
-                  if (m) forms[m[1]] = true;
-                });
-                const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-                return nums.length > 0 ? Math.max(...nums) : null;
-              })()`);
+              selForm = await helperDetectNewForm(formNum);
               if (selForm !== null) break;
             }
           }
@@ -744,44 +650,20 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
       let typeForm = null;
       for (let tw = 0; tw < 6; tw++) {
         await page.waitForTimeout(200);
-        typeForm = await page.evaluate(`(() => {
-          const forms = {};
-          document.querySelectorAll('[id]').forEach(el => {
-            if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-            const m = el.id.match(/^form(\\d+)_/);
-            if (m) forms[m[1]] = true;
-          });
-          const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-          return nums.length > 0 ? Math.max(...nums) : null;
-        })()`);
+        typeForm = await helperDetectNewForm(formNum);
         if (typeForm !== null) break;
       }
       if (typeForm !== null && await isTypeDialog(typeForm)) {
         await pickFromTypeDialog(typeForm, info.type);
         await waitForStable(typeForm);
         // After type selection, check if a selection form opened (ref types)
-        const selForm = await page.evaluate(`(() => {
-          const forms = {};
-          document.querySelectorAll('[id]').forEach(el => {
-            if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-            const m = el.id.match(/^form(\\d+)_/);
-            if (m) forms[m[1]] = true;
-          });
-          const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-          return nums.length > 0 ? Math.max(...nums) : null;
-        })()`);
+        const selForm = await helperDetectNewForm(formNum);
         if (selForm === null) {
           // Primitive type — poll for calculator/calendar popup or settle on INPUT
           let hasPopup = null;
           for (let pw = 0; pw < 5; pw++) {
             await page.waitForTimeout(200);
-            hasPopup = await page.evaluate(`(() => {
-              const calc = document.querySelector('.calculate');
-              if (calc && calc.offsetWidth > 0) return 'calculator';
-              const cal = document.querySelector('.frameCalendar');
-              if (cal && cal.offsetWidth > 0) return 'calendar';
-              return null;
-            })()`);
+            hasPopup = await findOpenPopup();
             if (hasPopup) break;
           }
           if (hasPopup) {
@@ -789,21 +671,11 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
             // Poll for popup to disappear
             for (let dw = 0; dw < 4; dw++) {
               await page.waitForTimeout(150);
-              const gone = await page.evaluate(`(() => {
-                const calc = document.querySelector('.calculate');
-                if (calc && calc.offsetWidth > 0) return false;
-                const cal = document.querySelector('.frameCalendar');
-                if (cal && cal.offsetWidth > 0) return false;
-                return true;
-              })()`);
-              if (gone) break;
+              if (!(await findOpenPopup())) break;
             }
           }
           // Ensure we are in an editable INPUT for this cell
-          const inInput = await page.evaluate(`(() => {
-            const f = document.activeElement;
-            return f && (f.tagName === 'INPUT' || f.tagName === 'TEXTAREA');
-          })()`);
+          const inInput = await isInputFocused({ allowTextarea: true });
           if (!inInput) {
             const cellRect = await page.evaluate(`(() => {
               const el = document.getElementById(${JSON.stringify(cell.id)});
@@ -816,11 +688,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
               // Poll for INPUT focus
               for (let fw = 0; fw < 4; fw++) {
                 await page.waitForTimeout(150);
-                const ok = await page.evaluate(`(() => {
-                  const f = document.activeElement;
-                  return f && (f.tagName === 'INPUT' || f.tagName === 'TEXTAREA');
-                })()`);
-                if (ok) break;
+                if (await isInputFocused({ allowTextarea: true })) break;
               }
             }
           }
@@ -982,16 +850,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
       if (clickedShowAll) {
         await waitForStable(formNum);
         // Check if selection form opened
-        const selForm = await page.evaluate(`(() => {
-          const forms = {};
-          document.querySelectorAll('input.editInput[id], a.press[id]').forEach(el => {
-            if (el.offsetWidth === 0) return;
-            const m = el.id.match(/^form(\\d+)_/);
-            if (m) forms[m[1]] = true;
-          });
-          const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-          return nums.length > 0 ? Math.max(...nums) : null;
-        })()`);
+        const selForm = await helperDetectNewForm(formNum, { strict: true });
 
         if (selForm !== null) {
           const pickResult = await pickFromSelectionForm(selForm, matchedKey, text, formNum);
@@ -1037,48 +896,23 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
           await pickFromTypeDialog(newForm, info.type);
           await waitForStable(newForm);
           // After type selection, the actual selection form should open
-          const selForm = await page.evaluate(`(() => {
-            const forms = {};
-            document.querySelectorAll('[id]').forEach(el => {
-              if (el.offsetWidth === 0 && el.offsetHeight === 0) return;
-              const m = el.id.match(/^form(\\d+)_/);
-              if (m) forms[m[1]] = true;
-            });
-            const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-            return nums.length > 0 ? Math.max(...nums) : null;
-          })()`);
+          const selForm = await helperDetectNewForm(formNum);
           if (selForm === null) {
             // Primitive type — poll for calculator/calendar popup or settle on INPUT
             let hasPopup = null;
             for (let pw = 0; pw < 5; pw++) {
               await page.waitForTimeout(200);
-              hasPopup = await page.evaluate(`(() => {
-                const calc = document.querySelector('.calculate');
-                if (calc && calc.offsetWidth > 0) return 'calculator';
-                const cal = document.querySelector('.frameCalendar');
-                if (cal && cal.offsetWidth > 0) return 'calendar';
-                return null;
-              })()`);
+              hasPopup = await findOpenPopup();
               if (hasPopup) break;
             }
             if (hasPopup) {
               await page.keyboard.press('Escape');
               for (let dw = 0; dw < 4; dw++) {
                 await page.waitForTimeout(150);
-                const gone = await page.evaluate(`(() => {
-                  const calc = document.querySelector('.calculate');
-                  if (calc && calc.offsetWidth > 0) return false;
-                  const cal = document.querySelector('.frameCalendar');
-                  if (cal && cal.offsetWidth > 0) return false;
-                  return true;
-                })()`);
-                if (gone) break;
+                if (!(await findOpenPopup())) break;
               }
             }
-            const inInput = await page.evaluate(`(() => {
-              const f = document.activeElement;
-              return f && (f.tagName === 'INPUT' || f.tagName === 'TEXTAREA');
-            })()`);
+            const inInput = await isInputFocused({ allowTextarea: true });
             if (!inInput) {
               const cellRect = await page.evaluate(`(() => {
                 const el = document.getElementById(${JSON.stringify(cell.id)});
@@ -1090,11 +924,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
                 await page.mouse.dblclick(cellRect.x, cellRect.y);
                 for (let fw = 0; fw < 4; fw++) {
                   await page.waitForTimeout(150);
-                  const ok = await page.evaluate(`(() => {
-                    const f = document.activeElement;
-                    return f && (f.tagName === 'INPUT' || f.tagName === 'TEXTAREA');
-                  })()`);
-                  if (ok) break;
+                  if (await isInputFocused({ allowTextarea: true })) break;
                 }
               }
             }

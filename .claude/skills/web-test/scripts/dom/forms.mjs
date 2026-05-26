@@ -1,4 +1,4 @@
-// web-test dom/forms v1.0 — form detection, content read, click-target/field-button resolution
+// web-test dom/forms v1.1 — form detection, content read, click-target/field-button resolution
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import { DETECT_FORM_FN, READ_FORM_FN } from './_shared.mjs';
 
@@ -394,5 +394,31 @@ export function resolveFieldsScript(formNum, fields) {
       }
     }
     return results;
+  })()`;
+}
+
+/**
+ * Detect a new form opened above `prevFormNum`. Two modes:
+ *   default (broad) — counts any visible `[id]` element; finds dialogs whose
+ *     `a.press` buttons have empty IDs. Used by selectValue / fillTableRow.
+ *   `{ strict: true }` — only counts visible interactive elements
+ *     (`input.editInput[id], a.press[id]`); used by fillReferenceField.
+ *
+ * Returns the highest new form number or `null`.
+ */
+export function detectNewFormScript(prevFormNum, { strict = false } = {}) {
+  const selector = strict ? 'input.editInput[id], a.press[id]' : '[id]';
+  const visibleCheck = strict
+    ? 'el.offsetWidth === 0'
+    : 'el.offsetWidth === 0 && el.offsetHeight === 0';
+  return `(() => {
+    const forms = {};
+    document.querySelectorAll(${JSON.stringify(selector)}).forEach(el => {
+      if (${visibleCheck}) return;
+      const m = el.id.match(/^form(\\d+)_/);
+      if (m) forms[m[1]] = true;
+    });
+    const nums = Object.keys(forms).map(Number).filter(n => n > ${prevFormNum});
+    return nums.length > 0 ? Math.max(...nums) : null;
   })()`;
 }

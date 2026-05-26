@@ -1,10 +1,16 @@
-// web-test core/helpers v1.17 — private, cross-cutting helpers used by the
+// web-test core/helpers v1.18 — private, cross-cutting helpers used by the
 // public action functions (clickElement/fillFields/selectValue/etc).
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { page } from './state.mjs';
 import { dismissPendingErrors, checkForErrors } from './errors.mjs';
 import { getFormState } from '../forms/state.mjs';
+import {
+  detectNewFormScript,
+  isInputFocusedScript,
+  isInputFocusedInGridScript,
+  findOpenPopupScript,
+} from '../../dom.mjs';
 
 /**
  * page.click with the standard "intercepts pointer events" retry ladder:
@@ -69,20 +75,33 @@ export async function findFieldInputId(formNum, fieldName) {
  * @returns {Promise<number|null>} new form number or null
  */
 export async function detectNewForm(prevFormNum, { strict = false } = {}) {
-  const selector = strict ? 'input.editInput[id], a.press[id]' : '[id]';
-  const visibleCheck = strict
-    ? 'el.offsetWidth === 0'
-    : 'el.offsetWidth === 0 && el.offsetHeight === 0';
-  return page.evaluate(`(() => {
-    const forms = {};
-    document.querySelectorAll(${JSON.stringify(selector)}).forEach(el => {
-      if (${visibleCheck}) return;
-      const m = el.id.match(/^form(\\d+)_/);
-      if (m) forms[m[1]] = true;
-    });
-    const nums = Object.keys(forms).map(Number).filter(n => n > ${prevFormNum});
-    return nums.length > 0 ? Math.max(...nums) : null;
-  })()`);
+  return page.evaluate(detectNewFormScript(prevFormNum, { strict }));
+}
+
+/**
+ * Thin wrapper: is the currently focused element an INPUT (or TEXTAREA)?
+ *
+ * @param {object} [opts]
+ * @param {boolean} [opts.allowTextarea=false]
+ */
+export async function isInputFocused({ allowTextarea = false } = {}) {
+  return page.evaluate(isInputFocusedScript({ allowTextarea }));
+}
+
+/**
+ * Thin wrapper: is the currently focused INPUT/TEXTAREA inside a `.grid`?
+ * Used to verify grid edit-mode.
+ */
+export async function isInputFocusedInGrid() {
+  return page.evaluate(isInputFocusedInGridScript());
+}
+
+/**
+ * Thin wrapper: is calculator (`.calculate`) or calendar (`.frameCalendar`)
+ * popup visible? Returns `'calculator' | 'calendar' | null`.
+ */
+export async function findOpenPopup() {
+  return page.evaluate(findOpenPopupScript());
 }
 
 /**

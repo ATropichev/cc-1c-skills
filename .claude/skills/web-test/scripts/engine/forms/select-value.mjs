@@ -14,7 +14,7 @@ import { highlight, unhighlight } from '../recording/highlight.mjs';
 import {
   safeClick, findFieldInputId, readEdd,
   detectNewForm as helperDetectNewForm,
-} from '../core/helpers.mjs';
+} from '../core/helpers.mjs';
 import { pasteText } from '../core/clipboard.mjs';
 import { getFormState } from './state.mjs';
 
@@ -757,18 +757,9 @@ export async function selectValue(fieldName, searchText, { type } = {}) {
     if (!isChecked) { await page.click(cbSel); await waitForStable(); }
   }
 
-  // Helper: detect selection form (form number > formNum)
+  // Helper: detect selection form (form number > formNum, strict mode)
   async function detectSelectionForm() {
-    return page.evaluate(`(() => {
-      const forms = {};
-      document.querySelectorAll('input.editInput[id], a.press[id]').forEach(el => {
-        if (el.offsetWidth === 0) return;
-        const m = el.id.match(/^form(\\d+)_/);
-        if (m) forms[m[1]] = true;
-      });
-      const nums = Object.keys(forms).map(Number).filter(n => n > ${formNum});
-      return nums.length > 0 ? Math.max(...nums) : null;
-    })()`);
+    return helperDetectNewForm(formNum, { strict: true });
   }
 
   // detectNewForm is hoisted at the top of selectValue (see above).
