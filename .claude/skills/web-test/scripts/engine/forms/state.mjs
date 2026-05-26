@@ -1,4 +1,4 @@
-// web-test engine/core/form-state v1.17 — central form-state reader.
+// web-test engine/forms/state v1.17 — central form-state reader.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 //
 // getFormState — the canonical "what's on the screen right now" call. Combines:
@@ -8,9 +8,9 @@
 //
 // Returned by virtually every action-function as the "after" snapshot.
 
-import { page, ensureConnected } from './state.mjs';
+import { page, ensureConnected } from '../core/state.mjs';
 import { getFormStateScript } from '../../dom.mjs';
-import { checkForErrors, detectPlatformDialogs } from './errors.mjs';
+import { checkForErrors, detectPlatformDialogs } from '../core/errors.mjs';
 
 /** Read current form state. Single evaluate call via combined script. */
 export async function getFormState() {

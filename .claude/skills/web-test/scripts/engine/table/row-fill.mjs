@@ -20,7 +20,7 @@ import {
   fillReferenceField, selectValue,
 } from '../forms/select-value.mjs';
 import { pasteText } from '../core/clipboard.mjs';
-import { getFormState } from '../core/form-state.mjs';
+import { getFormState } from '../forms/state.mjs';
 
 /**
  * Fill cells in the current table row via Tab navigation.

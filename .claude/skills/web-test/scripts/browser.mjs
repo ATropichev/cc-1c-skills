@@ -13,7 +13,7 @@ export {
 export {
   pasteText, saveClipboard, restoreClipboard,
 } from './engine/core/clipboard.mjs';
-export { getFormState } from './engine/core/form-state.mjs';
+export { getFormState } from './engine/forms/state.mjs';
 export { fetchErrorStack } from './engine/core/errors.mjs';
 export { clickElement } from './engine/core/click.mjs';
 

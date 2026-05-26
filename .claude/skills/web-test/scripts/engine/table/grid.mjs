@@ -10,7 +10,7 @@ import { detectFormScript, readTableScript, resolveGridScript } from '../../dom.
 import { dismissPendingErrors } from '../core/errors.mjs';
 import { waitForStable } from '../core/wait.mjs';
 import { clickElement } from '../core/click.mjs';
-import { getFormState } from '../core/form-state.mjs';
+import { getFormState } from '../forms/state.mjs';
 
 /** Read structured table data with pagination. Returns columns, rows, total count. */
 export async function readTable({ maxRows = 20, offset = 0, table } = {}) {

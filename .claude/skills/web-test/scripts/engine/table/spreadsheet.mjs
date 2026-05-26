@@ -4,7 +4,7 @@
 import { page, ensureConnected } from '../core/state.mjs';
 import { detectFormScript } from '../../dom.mjs';
 import { waitForStable } from '../core/wait.mjs';
-import { getFormState } from '../core/form-state.mjs';
+import { getFormState } from '../forms/state.mjs';
 
 // --- Spreadsheet helpers (shared by readSpreadsheet and clickElement) ---
 

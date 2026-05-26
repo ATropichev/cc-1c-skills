@@ -15,7 +15,7 @@ import {
   isTypeDialog, pickFromTypeDialog,
 } from './select-value.mjs';
 import { pasteText } from '../core/clipboard.mjs';
-import { getFormState } from '../core/form-state.mjs';
+import { getFormState } from './state.mjs';
 
 /** Fill fields on the current form via Playwright page.fill(). Returns fill results + updated form. */
 export async function fillFields(fields) {

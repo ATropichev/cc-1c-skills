@@ -15,7 +15,7 @@ import { highlight, unhighlight } from '../recording/highlight.mjs';
 import { returnFormState } from '../core/helpers.mjs';
 // Static import — ESM cycle that resolves at call time.
 import { pasteText } from '../core/clipboard.mjs';
-import { getFormState } from '../core/form-state.mjs';
+import { getFormState } from '../forms/state.mjs';
 
 /**
  * Get current page state: active section, tabs.

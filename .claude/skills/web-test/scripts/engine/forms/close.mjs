@@ -5,7 +5,7 @@ import { page, recorder, ensureConnected } from '../core/state.mjs';
 import { detectFormScript } from '../../dom.mjs';
 import { dismissPendingErrors, checkForErrors, detectPlatformDialogs, closePlatformDialogs } from '../core/errors.mjs';
 import { waitForStable } from '../core/wait.mjs';
-import { getFormState } from '../core/form-state.mjs';
+import { getFormState } from './state.mjs';
 
 /**
  * Close the current form/dialog via Escape.

@@ -9,7 +9,7 @@ import { highlight, unhighlight } from '../recording/highlight.mjs';
 import { safeClick } from '../core/helpers.mjs';
 import { selectValue, fillReferenceField } from '../forms/select-value.mjs';
 import { pasteText } from '../core/clipboard.mjs';
-import { getFormState } from '../core/form-state.mjs';
+import { getFormState } from '../forms/state.mjs';
 import { clickElement } from '../core/click.mjs';
 
 /**

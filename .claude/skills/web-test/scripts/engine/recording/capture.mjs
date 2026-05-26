@@ -44,7 +44,7 @@ export async function wait(seconds) {
       await page.waitForTimeout(ms);
     }
   }
-  const { getFormState } = await import('../core/form-state.mjs');
+  const { getFormState } = await import('../forms/state.mjs');
   return await getFormState();
 }
 
