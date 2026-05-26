@@ -1,10 +1,10 @@
-// web-test table/spreadsheet v1.17 — readSpreadsheet + helpers for SpreadsheetDocument (отчёты, печатные формы).
+// web-test spreadsheet v1.17 — readSpreadsheet + helpers for SpreadsheetDocument (отчёты, печатные формы).
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { page, ensureConnected } from '../core/state.mjs';
 import { detectFormScript } from '../../dom.mjs';
-import { waitForStable } from '../core/wait.mjs';
-import { getFormState } from '../forms/state.mjs';
+import { waitForStable } from '../core/wait.mjs';
+import { getFormState } from '../forms/state.mjs';
 
 // --- Spreadsheet helpers (shared by readSpreadsheet and clickElement) ---
 

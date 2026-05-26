@@ -3,13 +3,13 @@
 //
 // "Grid" в терминах 1С — таблица на форме (.gridLine/.gridBody/.grid в DOM):
 // табличные части документов, формы списков, ТЧ настроек и т.п.
-// Отдельно от SpreadsheetDocument (table/spreadsheet.mjs).
+// Отдельно от SpreadsheetDocument (engine/spreadsheet/spreadsheet.mjs).
 
 import { page, ensureConnected } from '../core/state.mjs';
 import { detectFormScript, readTableScript, resolveGridScript } from '../../dom.mjs';
 import { dismissPendingErrors } from '../core/errors.mjs';
 import { waitForStable } from '../core/wait.mjs';
-import { clickElement } from '../core/click.mjs';
+import { clickElement } from '../core/click.mjs';
 import { getFormState } from '../forms/state.mjs';
 
 /** Read structured table data with pagination. Returns columns, rows, total count. */

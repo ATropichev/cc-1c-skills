@@ -37,7 +37,7 @@ export { closeForm } from './engine/forms/close.mjs';
 
 // ── tables ────────────────────────────────────────────────────────────────
 export { readTable, deleteTableRow } from './engine/table/grid.mjs';
-export { readSpreadsheet } from './engine/table/spreadsheet.mjs';
+export { readSpreadsheet } from './engine/spreadsheet/spreadsheet.mjs';
 export { fillTableRow } from './engine/table/row-fill.mjs';
 export { filterList, unfilterList } from './engine/table/filter.mjs';
 

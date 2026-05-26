@@ -14,7 +14,7 @@ import { safeClick } from './helpers.mjs';
 import { getGridToggleIcon, shouldClickToggle } from '../table/grid-toggle.mjs';
 import {
   clickSpreadsheetCell, findSpreadsheetCellByText,
-} from '../table/spreadsheet.mjs';
+} from '../spreadsheet/spreadsheet.mjs';
 import { getFormState } from '../forms/state.mjs';
 
 /** Click a button/hyperlink/tab on the current form. Use {dblclick: true} to double-click (open items from lists).
