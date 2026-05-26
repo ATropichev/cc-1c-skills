@@ -1,4 +1,4 @@
-// web-test dom v1.13 — facade re-exporting injectable DOM scripts from dom/
+// web-test dom v1.14 — facade re-exporting injectable DOM scripts from dom/
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * Facade: re-exports DOM selector & semantic mapping script generators.
@@ -61,6 +61,17 @@ export {
   findGridHeadCenterCoordsScript,
   getSelectedOrLastRowIndexScript,
 } from './dom/grid.mjs';
+
+export {
+  sortFieldKeysByColindexScript,
+  findCellCoordsByFieldsScript,
+  findNextCellCoordsByKeyScript,
+  findCheckboxAtPointScript,
+  findRowCommitClickCoordsScript,
+  getGridEditCheckScript,
+  readActiveGridCellScript,
+  getElementCenterCoordsByIdScript,
+} from './dom/grid-edit.mjs';
 
 export {
   readSectionsScript,

@@ -9,6 +9,10 @@ import {
   countGridRowsScript, isTreeGridScript, findGridHeadCenterCoordsScript,
   getSelectedOrLastRowIndexScript,
   isNotInListCloudVisibleScript, clickShowAllInNotInListCloudScript,
+  sortFieldKeysByColindexScript, findCellCoordsByFieldsScript,
+  findNextCellCoordsByKeyScript, findCheckboxAtPointScript,
+  findRowCommitClickCoordsScript, getGridEditCheckScript,
+  readActiveGridCellScript, getElementCenterCoordsByIdScript,
 } from '../../dom.mjs';
 import { dismissPendingErrors, checkForErrors } from '../core/errors.mjs';
 import { waitForStable, waitForCondition, startNetworkMonitor } from '../core/wait.mjs';
@@ -77,31 +81,8 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
   // 2b. Enter edit mode on existing row by dblclick
   if (row != null) {
     // Sort fields by colindex (leftmost first) so Tab traversal covers all fields left-to-right
-    const sortedKeys = await page.evaluate(`(() => {
-      const grid = ${gridSelector
-        ? `document.querySelector(${JSON.stringify(gridSelector)})`
-        : `(() => { const grids = [...document.querySelectorAll('.grid')].filter(el => el.offsetWidth > 0); return grids[grids.length - 1]; })()`};
-      if (!grid) return null;
-      const head = grid.querySelector('.gridHead');
-      if (!head) return null;
-      const headLine = head.querySelector('.gridLine') || head;
-      const cols = [];
-      [...headLine.children].forEach(box => {
-        if (box.offsetWidth === 0) return;
-        const t = ((box.querySelector('.gridBoxText') || box).innerText?.trim() || '').toLowerCase();
-        const ci = parseInt(box.getAttribute('colindex') || '-1');
-        if (t) cols.push({ text: t, colindex: ci });
-      });
-      const keys = ${JSON.stringify(Object.keys(fields).map(k => k.toLowerCase()))};
-      const mapped = keys.map(k => {
-        const exact = cols.find(c => c.text === k);
-        if (exact) return { key: k, colindex: exact.colindex };
-        const inc = cols.find(c => c.text.includes(k) || k.includes(c.text));
-        return { key: k, colindex: inc ? inc.colindex : 999 };
-      });
-      mapped.sort((a, b) => a.colindex - b.colindex);
-      return mapped.map(m => m.key);
-    })()`);
+    const sortedKeys = await page.evaluate(
+      sortFieldKeysByColindexScript(gridSelector, Object.keys(fields).map(k => k.toLowerCase())));
     if (sortedKeys) {
       // Rebuild fields in sorted order
       const sortedFields = {};
@@ -116,57 +97,8 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
       fields = sortedFields;
     }
 
-    const fieldKeys = JSON.stringify(Object.keys(fields).map(k => k.toLowerCase()));
-    const cellCoords = await page.evaluate(`(() => {
-      const grid = ${gridSelector
-        ? `document.querySelector(${JSON.stringify(gridSelector)})`
-        : `(() => { const grids = [...document.querySelectorAll('.grid')].filter(el => el.offsetWidth > 0); return grids[grids.length - 1]; })()`};
-      if (!grid) return { error: 'no_grid' };
-      const head = grid.querySelector('.gridHead');
-      const body = grid.querySelector('.gridBody');
-      if (!head || !body) return { error: 'no_grid_body' };
-
-      // Read column headers to find target colindex
-      const headLine = head.querySelector('.gridLine') || head;
-      const cols = [];
-      [...headLine.children].forEach(box => {
-        if (box.offsetWidth === 0) return;
-        const t = box.querySelector('.gridBoxText');
-        const ci = box.getAttribute('colindex');
-        cols.push({ colindex: ci, text: ((t || box).innerText?.trim() || '').toLowerCase() });
-      });
-
-      const keys = ${fieldKeys};
-      let targetColindex = null;
-      for (const key of keys) {
-        const exact = cols.find(c => c.text === key);
-        if (exact) { targetColindex = exact.colindex; break; }
-        const inc = cols.find(c => c.text.includes(key) || key.includes(c.text));
-        if (inc) { targetColindex = inc.colindex; break; }
-      }
-
-      const rows = [...body.querySelectorAll('.gridLine')];
-      if (${row} >= rows.length) return { error: 'row_out_of_range', total: rows.length };
-      const line = rows[${row}];
-
-      // Find body cell by colindex (reliable across merged headers)
-      let box = null;
-      if (targetColindex != null) {
-        box = [...line.children].find(b => b.offsetWidth > 0 && b.getAttribute('colindex') === targetColindex);
-      }
-      // Fallback: second visible box (skip checkbox/N column)
-      if (!box) {
-        const boxes = [...line.children].filter(b => b.offsetWidth > 0 && !b.classList.contains('gridBoxComp'));
-        box = boxes.length > 1 ? boxes[1] : boxes[0];
-      }
-      if (!box) return { error: 'no_cell' };
-      // Scroll into view if off-screen
-      box.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-      const cell = box.querySelector('.gridBoxText') || box;
-      const r = cell.getBoundingClientRect();
-      const currentText = (cell.innerText?.trim() || '').replace(/\\u00a0/g, ' ');
-      return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), currentText };
-    })()`);
+    const cellCoords = await page.evaluate(
+      findCellCoordsByFieldsScript(gridSelector, row, Object.keys(fields).map(k => k.toLowerCase())));
 
     if (cellCoords.error) throw new Error(`fillTableRow: ${cellCoords.error}${cellCoords.total ? ' (total rows: ' + cellCoords.total + ')' : ''}`);
 
@@ -222,15 +154,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
     }
 
     // Check if clicked cell is a checkbox (toggle-on-click, no edit mode)
-    const checkboxInfo = await page.evaluate(`(() => {
-      const el = document.elementFromPoint(${cellCoords.x}, ${cellCoords.y});
-      const cell = el?.closest('.gridBox');
-      if (!cell) return null;
-      const chk = cell.querySelector('.checkbox');
-      if (!chk) return null;
-      const r = chk.getBoundingClientRect();
-      return { checked: chk.classList.contains('select'), x: Math.round(r.x + r.width/2), y: Math.round(r.y + r.height/2) };
-    })()`);
+    const checkboxInfo = await page.evaluate(findCheckboxAtPointScript(cellCoords.x, cellCoords.y));
     if (checkboxInfo !== null) {
       // Checkbox cell found — click directly on the checkbox icon (not cell center)
       const desired = ['true', 'да', '1', 'yes'].includes(String(firstVal0).toLowerCase().trim());
@@ -353,44 +277,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
       for (const [key, info] of pending) {
         if (info.filled) continue;
         // Find column for this key and dblclick on it
-        const nextCoords = await page.evaluate(`(() => {
-          const grid = ${gridSelector
-            ? `document.querySelector(${JSON.stringify(gridSelector)})`
-            : `(() => { const grids = [...document.querySelectorAll('.grid')].filter(el => el.offsetWidth > 0); return grids[grids.length - 1]; })()`};
-          if (!grid) return null;
-          const head = grid.querySelector('.gridHead');
-          const body = grid.querySelector('.gridBody');
-          if (!head || !body) return null;
-          const headLine = head.querySelector('.gridLine') || head;
-          const cols = [];
-          [...headLine.children].forEach(box => {
-            if (box.offsetWidth === 0) return;
-            const t = box.querySelector('.gridBoxText');
-            const ci = box.getAttribute('colindex');
-            cols.push({ colindex: ci, text: ((t || box).innerText?.trim() || '').toLowerCase() });
-          });
-          const kl = ${JSON.stringify(key.toLowerCase())};
-          const klNoSpace = kl.replace(/[\\s\\-]+/g, '');
-          let targetColindex = null;
-          const exact = cols.find(c => c.text === kl);
-          if (exact) targetColindex = exact.colindex;
-          else {
-            const inc = cols.find(c => c.text.includes(kl) || kl.includes(c.text)
-              || c.text.includes(klNoSpace) || klNoSpace.includes(c.text));
-            if (inc) targetColindex = inc.colindex;
-          }
-          if (targetColindex == null) return null;
-          const rows = [...body.querySelectorAll('.gridLine')];
-          if (${row} >= rows.length) return null;
-          const line = rows[${row}];
-          const box = [...line.children].find(b => b.offsetWidth > 0 && b.getAttribute('colindex') === targetColindex);
-          if (!box) return null;
-          box.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-          const cell = box.querySelector('.gridBoxText') || box;
-          const r = cell.getBoundingClientRect();
-          const currentText = (cell.innerText?.trim() || '').replace(/\\u00a0/g, ' ');
-          return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), currentText };
-        })()`);
+        const nextCoords = await page.evaluate(findNextCellCoordsByKeyScript(gridSelector, row, key));
         if (!nextCoords) {
           info.filled = true;
           results.push({ field: key, error: 'column_not_found', message: `Column for "${key}" not found` });
@@ -444,23 +331,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
       }
       // Commit the edit: click on a different row (Escape cancels in tree grids).
       // Find the first visible row that is NOT the edited row and click it.
-      const commitCoords = await page.evaluate(`(() => {
-        const grid = ${gridSelector
-          ? `document.querySelector(${JSON.stringify(gridSelector)})`
-          : `(() => { const grids = [...document.querySelectorAll('.grid')].filter(el => el.offsetWidth > 0); return grids[grids.length - 1]; })()`};
-        if (!grid) return null;
-        const body = grid.querySelector('.gridBody');
-        if (!body) return null;
-        const rows = [...body.querySelectorAll('.gridLine')];
-        const otherIdx = ${row} === 0 ? 1 : 0;
-        const other = rows[otherIdx];
-        if (!other) return null;
-        const visBoxes = [...other.children].filter(b => b.offsetWidth > 0 && !b.classList.contains('gridBoxComp'));
-        const box = visBoxes.length > 1 ? visBoxes[1] : visBoxes[0];
-        if (!box) return null;
-        const r = box.getBoundingClientRect();
-        return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
-      })()`);
+      const commitCoords = await page.evaluate(findRowCommitClickCoordsScript(gridSelector, row));
       if (commitCoords) {
         await page.mouse.click(commitCoords.x, commitCoords.y);
       } else {
@@ -473,16 +344,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
     if (!inEdit) throw new Error(`fillTableRow: click on row ${row} did not enter edit mode`);
   } else {
     // No row specified — verify we're in grid edit mode (active INPUT inside a .grid or .gridContent)
-    const editCheck = await page.evaluate(`(() => {
-      const f = document.activeElement;
-      if (!f || f.tagName !== 'INPUT') return { inEdit: false, tag: f?.tagName };
-      let node = f;
-      while (node) {
-        if (node.classList?.contains('grid') || node.classList?.contains('gridContent')) return { inEdit: true };
-        node = node.parentElement;
-      }
-      return { inEdit: false, hint: 'input not inside grid' };
-    })()`);
+    const editCheck = await page.evaluate(getGridEditCheckScript());
 
     if (!editCheck.inEdit) {
       throw new Error('fillTableRow: not in grid edit mode. Use add:true or click a cell first.');
@@ -513,37 +375,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
 
   for (let iter = 0; iter < MAX_ITER; iter++) {
     // Read focused element (INPUT or TEXTAREA inside grid = editable cell)
-    const cell = await page.evaluate(`(() => {
-      const f = document.activeElement;
-      if (!f) return { tag: 'none' };
-      if (f.tagName === 'INPUT' || f.tagName === 'TEXTAREA') {
-        const inGrid = (() => { let n = f; while (n) { if (n.classList?.contains('grid') || n.classList?.contains('gridContent')) return true; n = n.parentElement; } return false; })();
-        if (inGrid) {
-          let headerText = '';
-          let grid = f; while (grid && !grid.classList?.contains('grid')) grid = grid.parentElement;
-          if (grid) {
-            const fr = f.getBoundingClientRect();
-            const head = grid.querySelector('.gridHead');
-            const hl = head?.querySelector('.gridLine') || head;
-            if (hl) for (const h of hl.children) {
-              if (h.offsetWidth === 0) continue;
-              const hr = h.getBoundingClientRect();
-              if (fr.x >= hr.x && fr.x < hr.x + hr.width) {
-                const t = h.querySelector('.gridBoxText');
-                headerText = (t || h).innerText?.trim() || '';
-                break;
-              }
-            }
-          }
-          return {
-            tag: 'INPUT', id: f.id,
-            fullName: f.id.replace(/^form\\d+_/, '').replace(/_i\\d+$/, ''),
-            headerText
-          };
-        }
-      }
-      return { tag: f.tagName || 'none' };
-    })()`);
+    const cell = await page.evaluate(readActiveGridCellScript());
 
     if (cell.tag !== 'INPUT' || !cell.fullName) {
       // Not in an editable grid cell — Tab past (ERP has DIV focus between cells)
@@ -660,12 +492,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
           // Ensure we are in an editable INPUT for this cell
           const inInput = await isInputFocused({ allowTextarea: true });
           if (!inInput) {
-            const cellRect = await page.evaluate(`(() => {
-              const el = document.getElementById(${JSON.stringify(cell.id)});
-              if (!el) return null;
-              const r = el.getBoundingClientRect();
-              return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-            })()`);
+            const cellRect = await page.evaluate(getElementCenterCoordsByIdScript(cell.id));
             if (cellRect) {
               await page.mouse.dblclick(cellRect.x, cellRect.y);
               // Poll for INPUT focus
@@ -841,12 +668,7 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
             }
             const inInput = await isInputFocused({ allowTextarea: true });
             if (!inInput) {
-              const cellRect = await page.evaluate(`(() => {
-                const el = document.getElementById(${JSON.stringify(cell.id)});
-                if (!el) return null;
-                const r = el.getBoundingClientRect();
-                return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-              })()`);
+              const cellRect = await page.evaluate(getElementCenterCoordsByIdScript(cell.id));
               if (cellRect) {
                 await page.mouse.dblclick(cellRect.x, cellRect.y);
                 for (let fw = 0; fw < 4; fw++) {
