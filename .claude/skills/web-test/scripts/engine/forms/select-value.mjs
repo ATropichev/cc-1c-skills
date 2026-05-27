@@ -1,4 +1,4 @@
-// web-test forms/select-value v1.18 — Reference & composite-type value selection: selectValue, fillReferenceField, selection/type-dialog pickers.
+// web-test forms/select-value v1.19 — Reference & composite-type value selection: selectValue, fillReferenceField, selection/type-dialog pickers.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import {
@@ -11,6 +11,7 @@ import {
   findPatternInputIdScript, isTypeDialogScript, isNotInListCloudVisibleScript,
   findChildFormByButtonScript, readTypeDialogVisibleRowsScript,
 } from '../../dom.mjs';
+import { scanGridRowsScript } from '../../dom/grid.mjs';
 import { dismissPendingErrors, checkForErrors } from '../core/errors.mjs';
 import { waitForStable, waitForCondition } from '../core/wait.mjs';
 import { highlight, unhighlight } from '../recording/highlight.mjs';
@@ -28,31 +29,7 @@ import { getFormState } from './state.mjs';
  * When searchLower is empty, returns coords of the first row (fallback).
  */
 async function scanGridRows(formNum, searchLower) {
-  return page.evaluate(`(() => {
-    const p = 'form${formNum}_';
-    const grid = document.querySelector('[id^="' + p + '"].grid, [id^="' + p + '"] .grid');
-    if (!grid) return null;
-    const body = grid.querySelector('.gridBody');
-    if (!body) return null;
-    const lines = [...body.querySelectorAll('.gridLine')];
-    if (!lines.length) return { rowCount: 0 };
-    const searchLower = ${JSON.stringify(searchLower || '')};
-    let sel = null;
-    if (searchLower) {
-      const norm = s => (s || '').replace(/\\u00a0/g, ' ').trim().toLowerCase().replace(/ё/gi, 'е');
-      const rowData = lines.map(l => ({ el: l, text: norm(l.innerText) }));
-      sel = rowData.find(r => r.text === searchLower)?.el
-        || rowData.find(r => r.text.startsWith(searchLower))?.el
-        || rowData.find(r => r.text.includes(searchLower))?.el;
-    } else {
-      sel = lines[0]; // empty search → first row
-    }
-    if (!sel) return null;
-    const imgBox = sel.querySelector('.gridBoxImg');
-    const isGroup = imgBox ? !!imgBox.querySelector('.gridListH') : false;
-    const r = sel.getBoundingClientRect();
-    return { rowCount: lines.length, x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), isGroup };
-  })()`);
+  return page.evaluate(scanGridRowsScript(formNum, searchLower));
 }
 
 /**

@@ -1,4 +1,4 @@
-// web-test dom/grid v1.1 — grid resolution + table reading + edit-time helpers
+// web-test dom/grid v1.2 — grid resolution + table reading + edit-time helpers
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 /**
@@ -317,5 +317,41 @@ export function getSelectedOrLastRowIndexScript(gridSelector) {
     const lines = [...body.querySelectorAll('.gridLine')];
     const sel = lines.findIndex(l => l.classList.contains('selected'));
     return sel >= 0 ? sel : lines.length - 1;
+  })()`;
+}
+
+/**
+ * Scan a form's grid for a row matching `searchLower` (case- and ё-insensitive,
+ * NBSP-normalised). Match order: exact → startsWith → includes.
+ *
+ * When `searchLower` is empty, returns coords of the first row (fallback).
+ *
+ * Returns `{ rowCount, x, y, isGroup } | { rowCount: 0 } | null`.
+ */
+export function scanGridRowsScript(formNum, searchLower) {
+  return `(() => {
+    const p = 'form${formNum}_';
+    const grid = document.querySelector('[id^="' + p + '"].grid, [id^="' + p + '"] .grid');
+    if (!grid) return null;
+    const body = grid.querySelector('.gridBody');
+    if (!body) return null;
+    const lines = [...body.querySelectorAll('.gridLine')];
+    if (!lines.length) return { rowCount: 0 };
+    const searchLower = ${JSON.stringify(searchLower || '')};
+    let sel = null;
+    if (searchLower) {
+      const norm = s => (s || '').replace(/\\u00a0/g, ' ').trim().toLowerCase().replace(/ё/gi, 'е');
+      const rowData = lines.map(l => ({ el: l, text: norm(l.innerText) }));
+      sel = rowData.find(r => r.text === searchLower)?.el
+        || rowData.find(r => r.text.startsWith(searchLower))?.el
+        || rowData.find(r => r.text.includes(searchLower))?.el;
+    } else {
+      sel = lines[0]; // empty search → first row
+    }
+    if (!sel) return null;
+    const imgBox = sel.querySelector('.gridBoxImg');
+    const isGroup = imgBox ? !!imgBox.querySelector('.gridListH') : false;
+    const r = sel.getBoundingClientRect();
+    return { rowCount: lines.length, x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), isGroup };
   })()`;
 }
