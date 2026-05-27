@@ -1,4 +1,4 @@
-// web-test core/click v1.17 — clickElement dispatcher: spreadsheet cells, submenus, grid groups/trees, buttons/links, tabs.
+// web-test core/click v1.18 — clickElement dispatcher: spreadsheet cells, submenus, grid groups/trees, buttons/links, tabs.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import {
@@ -10,11 +10,11 @@ import {
 import { dismissPendingErrors, checkForErrors, fetchErrorStack } from './errors.mjs';
 import { waitForStable, startNetworkMonitor } from './wait.mjs';
 import { highlight, unhighlight } from '../recording/highlight.mjs';
-import { safeClick } from './helpers.mjs';
+import { safeClick, returnFormState } from './helpers.mjs';
 import { getGridToggleIcon, shouldClickToggle } from '../table/grid-toggle.mjs';
 import {
   clickSpreadsheetCell, findSpreadsheetCellByText,
-} from '../spreadsheet/spreadsheet.mjs';
+} from '../spreadsheet/spreadsheet.mjs';
 import { getFormState } from '../forms/state.mjs';
 
 /** Click a button/hyperlink/tab on the current form. Use {dblclick: true} to double-click (open items from lists).
@@ -50,9 +50,7 @@ export async function clickElement(text, { dblclick, table, toggle, expand, modi
     if (btnResult?.error) throw new Error(`clickElement: "${text}" not found among confirmation buttons. Available: ${btnResult.available?.join(', ') || 'none'}`);
     await page.mouse.click(btnResult.x, btnResult.y);
     await waitForStable();
-    const state = await getFormState();
-    state.clicked = { kind: 'confirmation', name: btnResult.name };
-    return state;
+    return returnFormState({ clicked: { kind: 'confirmation', name: btnResult.name } });
   }
 
   // Check if there's an open popup — if so, try to click inside it
@@ -73,13 +71,12 @@ export async function clickElement(text, { dblclick, table, toggle, expand, modi
         }
         await page.waitForTimeout(ACTION_WAIT);
         const nestedItems = await page.evaluate(readSubmenuScript());
-        const state = await getFormState();
-        state.clicked = { kind: 'submenuArrow', name: found.name };
+        const extras = { clicked: { kind: 'submenuArrow', name: found.name } };
         if (Array.isArray(nestedItems)) {
-          state.submenu = nestedItems.map(i => i.name);
-          state.hint = 'Call web_click again with a submenu item name to select it';
+          extras.submenu = nestedItems.map(i => i.name);
+          extras.hint = 'Call web_click again with a submenu item name to select it';
         }
-        return state;
+        return returnFormState(extras);
       }
       // Regular submenu/dropdown items — trusted events required.
       // Use mouse.click(x,y) when in viewport; use :visible selector for clipped items
@@ -180,17 +177,15 @@ export async function clickElement(text, { dblclick, table, toggle, expand, modi
         }
       }
       await waitForStable(formNum);
-      const state = await getFormState();
-      state.clicked = { kind: target.kind, name: target.name, toggled: shouldClick, ...(modifier ? { modifier } : {}) };
-      state.hint = shouldClick ? 'Group toggled. Use readTable to see updated list.' : 'Group already in desired state.';
-      return state;
+      return returnFormState({
+        clicked: { kind: target.kind, name: target.name, toggled: shouldClick, ...(modifier ? { modifier } : {}) },
+        hint: shouldClick ? 'Group toggled. Use readTable to see updated list.' : 'Group already in desired state.',
+      });
     }
     // Default: dblclick to enter group / go up to parent
     await modDblClick(target.x, target.y);
     await waitForStable(formNum);
-    const state = await getFormState();
-    state.clicked = { kind: target.kind, name: target.name, ...(modifier ? { modifier } : {}) };
-    return state;
+    return returnFormState({ clicked: { kind: target.kind, name: target.name, ...(modifier ? { modifier } : {}) } });
   }
   if (target.kind === 'gridTreeNode') {
     if (expand != null || toggle) {
@@ -210,32 +205,28 @@ export async function clickElement(text, { dblclick, table, toggle, expand, modi
         }
       }
       await waitForStable(formNum);
-      const state = await getFormState();
-      state.clicked = { kind: 'gridTreeNode', name: target.name, toggled: shouldClick, ...(modifier ? { modifier } : {}) };
-      state.hint = shouldClick ? 'Tree node toggled. Use readTable to see updated tree.' : 'Tree node already in desired state.';
-      return state;
+      return returnFormState({
+        clicked: { kind: 'gridTreeNode', name: target.name, toggled: shouldClick, ...(modifier ? { modifier } : {}) },
+        hint: shouldClick ? 'Tree node toggled. Use readTable to see updated tree.' : 'Tree node already in desired state.',
+      });
     }
     // Default: select row (click text, no expand/collapse)
     await modClick(target.x, target.y);
     await waitForStable(formNum);
-    const state = await getFormState();
-    state.clicked = { kind: 'gridTreeNode', name: target.name, ...(modifier ? { modifier } : {}) };
-    state.hint = 'Row selected. Use { expand: true } to expand/collapse.';
-    return state;
+    return returnFormState({
+      clicked: { kind: 'gridTreeNode', name: target.name, ...(modifier ? { modifier } : {}) },
+      hint: 'Row selected. Use { expand: true } to expand/collapse.',
+    });
   }
   if (target.kind === 'gridRow') {
     if (dblclick) {
       await modDblClick(target.x, target.y);
       await waitForStable();
-      const state = await getFormState();
-      state.clicked = { kind: 'gridRow', name: target.name, dblclick: true, ...(modifier ? { modifier } : {}) };
-      return state;
+      return returnFormState({ clicked: { kind: 'gridRow', name: target.name, dblclick: true, ...(modifier ? { modifier } : {}) } });
     }
     await modClick(target.x, target.y);
     await waitForStable();
-    const state = await getFormState();
-    state.clicked = { kind: 'gridRow', name: target.name, ...(modifier ? { modifier } : {}) };
-    return state;
+    return returnFormState({ clicked: { kind: 'gridRow', name: target.name, ...(modifier ? { modifier } : {}) } });
   }
 
   // Start CDP network monitor BEFORE the click for buttons —
@@ -257,13 +248,12 @@ export async function clickElement(text, { dblclick, table, toggle, expand, modi
   if (target.kind === 'submenu') {
     await page.waitForTimeout(ACTION_WAIT);
     const submenuItems = await page.evaluate(readSubmenuScript());
-    const state = await getFormState();
-    state.clicked = { kind: 'submenu', name: target.name };
+    const extras = { clicked: { kind: 'submenu', name: target.name } };
     if (Array.isArray(submenuItems)) {
-      state.submenu = submenuItems.map(i => i.name);
-      state.hint = 'Call web_click again with a submenu item name to select it';
+      extras.submenu = submenuItems.map(i => i.name);
+      extras.hint = 'Call web_click again with a submenu item name to select it';
     }
-    return state;
+    return returnFormState(extras);
   }
 
   await waitForStable(formNum);
@@ -271,11 +261,11 @@ export async function clickElement(text, { dblclick, table, toggle, expand, modi
   // Check if the click opened a popup/submenu (split buttons like "Создать на основании")
   const openedPopup = await page.evaluate(readSubmenuScript());
   if (Array.isArray(openedPopup) && openedPopup.length > 0) {
-    const state = await getFormState();
-    state.clicked = { kind: 'submenu', name: target.name };
-    state.submenu = openedPopup.map(i => i.name);
-    state.hint = 'Call web_click again with a submenu item name to select it';
-    return state;
+    return returnFormState({
+      clicked: { kind: 'submenu', name: target.name },
+      submenu: openedPopup.map(i => i.name),
+      hint: 'Call web_click again with a submenu item name to select it',
+    });
   }
 
   // For buttons that trigger server-side operations (post, write, etc.),
