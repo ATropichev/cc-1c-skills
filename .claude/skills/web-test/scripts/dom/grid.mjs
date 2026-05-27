@@ -1,4 +1,4 @@
-// web-test dom/grid v1.2 — grid resolution + table reading + edit-time helpers
+// web-test dom/grid v1.3 — grid resolution + table reading + edit-time helpers
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 /**
@@ -259,6 +259,32 @@ function gridResolver(gridSelector) {
   return gridSelector
     ? `document.querySelector(${JSON.stringify(gridSelector)})`
     : `(() => { const grids = [...document.querySelectorAll('.grid')].filter(el => el.offsetWidth > 0); return grids[grids.length - 1]; })()`;
+}
+
+/**
+ * Find center coords of a target row for click-select (used by deleteTableRow).
+ * Picks the second visible gridBox container in the row (skips row-number/checkbox col).
+ *
+ * Returns `{ x, y, total } | { error: 'no_grid'|'no_grid_body'|'row_out_of_range'|'no_cell', total? }`.
+ */
+export function findDeleteRowCoordsScript(gridSelector, row) {
+  return `(() => {
+    const grid = ${gridResolver(gridSelector)};
+    if (!grid) return { error: 'no_grid' };
+    const body = grid.querySelector('.gridBody');
+    if (!body) return { error: 'no_grid_body' };
+    const rows = [...body.querySelectorAll('.gridLine')];
+    if (${row} >= rows.length) return { error: 'row_out_of_range', total: rows.length };
+    const line = rows[${row}];
+    // Use visible gridBox containers (not gridBoxText) to avoid clicking checkboxes
+    const boxes = [...line.children].filter(b => b.offsetWidth > 0 && !b.classList.contains('gridBoxComp'));
+    // Skip first column (row number / checkbox) — pick second visible box
+    const box = boxes.length > 1 ? boxes[1] : boxes[0];
+    if (!box) return { error: 'no_cell' };
+    const cell = box.querySelector('.gridBoxText') || box;
+    const r = cell.getBoundingClientRect();
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), total: rows.length };
+  })()`;
 }
 
 /**

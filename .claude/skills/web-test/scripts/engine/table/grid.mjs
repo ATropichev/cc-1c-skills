@@ -1,4 +1,4 @@
-// web-test table/grid v1.18 — Form-grid operations: read table rows, fill rows, delete rows.
+// web-test table/grid v1.19 — Form-grid operations: read table rows, fill rows, delete rows.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 //
 // "Grid" в терминах 1С — таблица на форме (.gridLine/.gridBody/.grid в DOM):
@@ -7,6 +7,7 @@
 
 import { page, ensureConnected } from '../core/state.mjs';
 import { detectFormScript, readTableScript, resolveGridScript } from '../../dom.mjs';
+import { findDeleteRowCoordsScript, countGridRowsScript } from '../../dom/grid.mjs';
 import { dismissPendingErrors } from '../core/errors.mjs';
 import { waitForStable } from '../core/wait.mjs';
 import { clickElement } from '../core/click.mjs';
@@ -56,25 +57,7 @@ export async function deleteTableRow(row, { tab, table } = {}) {
   }
 
   // 2. Find the target row and click to select it
-  const cellCoords = await page.evaluate(`(() => {
-    const grid = ${gridSelector
-      ? `document.querySelector(${JSON.stringify(gridSelector)})`
-      : `(() => { const grids = [...document.querySelectorAll('.grid')].filter(el => el.offsetWidth > 0); return grids[grids.length - 1]; })()`};
-    if (!grid) return { error: 'no_grid' };
-    const body = grid.querySelector('.gridBody');
-    if (!body) return { error: 'no_grid_body' };
-    const rows = [...body.querySelectorAll('.gridLine')];
-    if (${row} >= rows.length) return { error: 'row_out_of_range', total: rows.length };
-    const line = rows[${row}];
-    // Use visible gridBox containers (not gridBoxText) to avoid clicking checkboxes
-    const boxes = [...line.children].filter(b => b.offsetWidth > 0 && !b.classList.contains('gridBoxComp'));
-    // Skip first column (row number / checkbox) — pick second visible box
-    const box = boxes.length > 1 ? boxes[1] : boxes[0];
-    if (!box) return { error: 'no_cell' };
-    const cell = box.querySelector('.gridBoxText') || box;
-    const r = cell.getBoundingClientRect();
-    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), total: rows.length };
-  })()`);
+  const cellCoords = await page.evaluate(findDeleteRowCoordsScript(gridSelector, row));
 
   if (cellCoords.error) throw new Error(`deleteTableRow: ${cellCoords.error}${cellCoords.total ? ' (total rows: ' + cellCoords.total + ')' : ''}`);
 
@@ -89,14 +72,7 @@ export async function deleteTableRow(row, { tab, table } = {}) {
   await waitForStable();
 
   // 4. Count rows after deletion
-  const rowsAfter = await page.evaluate(`(() => {
-    const grid = ${gridSelector
-      ? `document.querySelector(${JSON.stringify(gridSelector)})`
-      : `(() => { const grids = [...document.querySelectorAll('.grid')].filter(el => el.offsetWidth > 0); return grids[grids.length - 1]; })()`};
-    if (!grid) return 0;
-    const body = grid.querySelector('.gridBody');
-    return body ? body.querySelectorAll('.gridLine').length : 0;
-  })()`);
+  const rowsAfter = await page.evaluate(countGridRowsScript(gridSelector));
 
   return returnFormState({ deleted: row, rowsBefore, rowsAfter });
 }
