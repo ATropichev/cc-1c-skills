@@ -1,10 +1,11 @@
-// web-test forms/close v1.17 — Close current form via Escape, handle save-changes confirmation.
+// web-test forms/close v1.18 — Close current form via Escape, handle save-changes confirmation.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { page, recorder, ensureConnected } from '../core/state.mjs';
 import { detectFormScript } from '../../dom.mjs';
 import { dismissPendingErrors, checkForErrors, detectPlatformDialogs, closePlatformDialogs } from '../core/errors.mjs';
 import { waitForStable } from '../core/wait.mjs';
+import { returnFormState } from '../core/helpers.mjs';
 import { getFormState } from './state.mjs';
 
 /**
@@ -23,10 +24,7 @@ export async function closeForm({ save } = {}) {
   if (pd.length) {
     await closePlatformDialogs();
     await page.waitForTimeout(300);
-    const state = await getFormState();
-    state.closed = true;
-    state.closedPlatformDialogs = pd;
-    return state;
+    return returnFormState({ closed: true, closedPlatformDialogs: pd });
   }
   const beforeForm = await page.evaluate(detectFormScript());
   await page.keyboard.press('Escape');
@@ -47,14 +45,12 @@ export async function closeForm({ save } = {}) {
           break;
         }
       }
-      const afterState = await getFormState();
-      afterState.closed = afterState.form !== beforeForm;
-      return afterState;
+      const afterForm = await page.evaluate(detectFormScript());
+      return returnFormState({ closed: afterForm !== beforeForm });
     }
     state.confirmation = err.confirmation;
     state.hint = 'Confirmation dialog shown. Click "Да" to confirm or "Нет" to cancel';
     return state;
   }
-  state.closed = state.form !== beforeForm;
-  return state;
+  return returnFormState({ closed: state.form !== beforeForm });
 }

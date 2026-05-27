@@ -1,4 +1,4 @@
-// web-test table/filter v1.18 — filterList / unfilterList — simple search + advanced-column filter badges.
+// web-test table/filter v1.19 — filterList / unfilterList — simple search + advanced-column filter badges.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { page, ensureConnected, normYo, highlightMode, ACTION_WAIT } from '../core/state.mjs';
@@ -12,7 +12,7 @@ import {
 import { dismissPendingErrors, checkForErrors } from '../core/errors.mjs';
 import { waitForStable, waitForCondition } from '../core/wait.mjs';
 import { highlight, unhighlight } from '../recording/highlight.mjs';
-import { safeClick } from '../core/helpers.mjs';
+import { safeClick, returnFormState } from '../core/helpers.mjs';
 import { selectValue, fillReferenceField } from '../forms/select-value.mjs';
 import { pasteText } from '../core/clipboard.mjs';
 import { getFormState } from '../forms/state.mjs';
@@ -51,9 +51,7 @@ export async function filterList(text, { field, exact } = {}) {
       await page.keyboard.press('Enter');
       await waitForStable(formNum);
 
-      const state = await getFormState();
-      state.filtered = { type: 'search', text };
-      return state;
+      return returnFormState({ filtered: { type: 'search', text } });
     }
 
     // No search input — Ctrl+F opens advanced search on such forms.
@@ -191,9 +189,7 @@ export async function filterList(text, { field, exact } = {}) {
   }
   await waitForStable(formNum);
 
-  const state = await getFormState();
-  state.filtered = { type: 'advanced', field, text, exact: !!exact };
-  return state;
+  return returnFormState({ filtered: { type: 'advanced', field, text, exact: !!exact } });
 }
 
 /**
@@ -219,9 +215,7 @@ export async function unfilterList({ field } = {}) {
     await page.mouse.click(closeBtn.x, closeBtn.y);
     await waitForStable(formNum);
 
-    const state = await getFormState();
-    state.unfiltered = { field: closeBtn.field };
-    return state;
+    return returnFormState({ unfiltered: { field: closeBtn.field } });
   }
 
   // --- Clear ALL filters ---
@@ -250,7 +244,5 @@ export async function unfilterList({ field } = {}) {
     await waitForStable(formNum);
   }
 
-  const state = await getFormState();
-  state.unfiltered = true;
-  return state;
+  return returnFormState({ unfiltered: true });
 }
