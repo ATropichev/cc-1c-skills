@@ -1,4 +1,4 @@
-// web-test core/helpers v1.20 — private, cross-cutting helpers used by the
+// web-test core/helpers v1.21 — private, cross-cutting helpers used by the
 // public action functions (clickElement/fillFields/selectValue/etc).
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
@@ -94,10 +94,11 @@ export async function isInputFocused({ allowTextarea = false } = {}) {
 
 /**
  * Thin wrapper: is the currently focused INPUT/TEXTAREA inside a `.grid`?
- * Used to verify grid edit-mode.
+ * Used to verify grid edit-mode. Pass `{ gridSelector }` to scope the check
+ * to a specific grid (when a form has multiple grids).
  */
-export async function isInputFocusedInGrid() {
-  return page.evaluate(isInputFocusedInGridScript());
+export async function isInputFocusedInGrid({ gridSelector } = {}) {
+  return page.evaluate(isInputFocusedInGridScript(gridSelector));
 }
 
 /**

@@ -1,4 +1,4 @@
-// web-test table/grid v1.19 — Form-grid operations: read table rows, fill rows, delete rows.
+// web-test table/grid v1.20 — Form-grid operations: read table rows, fill rows, delete rows.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 //
 // "Grid" в терминах 1С — таблица на форме (.gridLine/.gridBody/.grid в DOM):
@@ -8,6 +8,7 @@
 import { page, ensureConnected } from '../core/state.mjs';
 import { detectFormScript, readTableScript, resolveGridScript } from '../../dom.mjs';
 import { findDeleteRowCoordsScript, countGridRowsScript } from '../../dom/grid.mjs';
+import { isInputFocusedInGrid } from '../core/helpers.mjs';
 import { dismissPendingErrors } from '../core/errors.mjs';
 import { waitForStable } from '../core/wait.mjs';
 import { clickElement } from '../core/click.mjs';
@@ -63,9 +64,25 @@ export async function deleteTableRow(row, { tab, table } = {}) {
 
   const rowsBefore = cellCoords.total;
 
+  // Pre-click Escape: leftover edit-mode from a prior fillTableRow Tab-navigation.
+  // Without it the next mouse click may not select the row reliably (the active
+  // edit input intercepts the event timing).
+  if (await isInputFocusedInGrid({ gridSelector })) {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+  }
+
   // Single click to select the row
   await page.mouse.click(cellCoords.x, cellCoords.y);
   await page.waitForTimeout(300);
+
+  // Post-click Escape: clicking a Number/Date cell auto-enters edit mode in 1С.
+  // Delete in edit mode clears the cell buffer instead of deleting the row, so
+  // we exit edit first. The row remains selected after Escape — Delete acts on it.
+  if (await isInputFocusedInGrid({ gridSelector })) {
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(150);
+  }
 
   // 3. Press Delete to remove the row
   await page.keyboard.press('Delete');

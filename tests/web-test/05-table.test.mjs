@@ -90,6 +90,20 @@ export default async function({ navigateSection, openCommand, clickElement, fill
     log(`rows after delete: ${t.rows?.length}, [0]=${t.rows[0]?.['Номенклатура']}`);
     assert.equal(t.rows?.length, 1, 'Должна остаться 1 строка');
     assert.equal(t.rows[0]['Номенклатура'], 'Товар 02', 'Осталась строка Товар 02');
+  });
+
+  await step('delete: фокус вне грида (Комментарий) — delete всё равно должен работать', async () => {
+    // Воспроизводит сценарий, когда последнее действие было НЕ в табчасти.
+    // deleteTableRow должен корректно перехватить фокус и удалить строку
+    // несмотря на то, что click на Number-ячейку входит в edit-mode (post-click Escape).
+    await fillTableRow({ 'Номенклатура': 'Товар 03', 'Количество': '8' }, { table: 'Товары', add: true });
+    // Перевести фокус на Комментарий (вне грида).
+    await fillFields({ 'Комментарий': 'focus-outside-grid' });
+    await deleteTableRow(0, { table: 'Товары' });
+    const t = await readTable({ table: 'Товары' });
+    log(`rows after delete: ${t.rows?.length}, names=${t.rows.map(r => r['Номенклатура']).join(',')}`);
+    assert.equal(t.rows?.length, 1, 'Должна остаться 1 строка');
+    assert.equal(t.rows[0]['Номенклатура'], 'Товар 03', 'Удалена первая (Товар 02), осталась Товар 03');
     await closeForm({ save: false });
   });
 }
