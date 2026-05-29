@@ -1,4 +1,4 @@
-﻿# form-compile v1.21 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.22 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -1929,7 +1929,7 @@ function Emit-Element {
 		# button-specific
 		"type"=1;"command"=1;"stdCommand"=1;"defaultButton"=1;"locationInCommandBar"=1
 		# picture/decoration
-		"src"=1
+		"src"=1;"valuesPicture"=1;"loadTransparent"=1
 		# cmdBar-specific
 		"autofill"=1
 	}
@@ -2721,6 +2721,16 @@ function Emit-PictureField {
 
 	Emit-Title -el $el -name $name -indent $inner
 	Emit-CommonFlags -el $el -indent $inner
+
+	# ValuesPicture — picture (collection) used to render the field's value.
+	# Required for a Boolean-bound PictureField to actually show an icon.
+	# loadTransparent emitted only when true (1С default is false).
+	if ($el.valuesPicture) {
+		X "$inner<ValuesPicture>"
+		X "$inner`t<xr:Ref>$($el.valuesPicture)</xr:Ref>"
+		if ($el.loadTransparent) { X "$inner`t<xr:LoadTransparent>true</xr:LoadTransparent>" }
+		X "$inner</ValuesPicture>"
+	}
 
 	if ($el.width) { X "$inner<Width>$($el.width)</Width>" }
 	if ($el.height) { X "$inner<Height>$($el.height)</Height>" }

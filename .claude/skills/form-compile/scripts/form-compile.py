@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.21 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.22 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1358,7 +1358,7 @@ KNOWN_KEYS = {
     "commandBarLocation", "searchStringLocation",
     "pagesRepresentation",
     "type", "command", "stdCommand", "defaultButton", "locationInCommandBar",
-    "src",
+    "src", "valuesPicture", "loadTransparent",
     "autofill",
     "choiceMode", "initialTreeView", "enableDrag", "enableStartDrag",
     "rowPictureDataPath", "tableAutofill",
@@ -2361,6 +2361,16 @@ def emit_picture_field(lines, el, name, eid, indent):
 
     emit_title(lines, el, name, inner)
     emit_common_flags(lines, el, inner)
+
+    # ValuesPicture \u2014 picture (collection) used to render the field's value.
+    # Required for a Boolean-bound PictureField to actually show an icon.
+    # loadTransparent emitted only when true (1\u0421 default is false).
+    if el.get('valuesPicture'):
+        lines.append(f'{inner}<ValuesPicture>')
+        lines.append(f'{inner}\t<xr:Ref>{el["valuesPicture"]}</xr:Ref>')
+        if el.get('loadTransparent'):
+            lines.append(f'{inner}\t<xr:LoadTransparent>true</xr:LoadTransparent>')
+        lines.append(f'{inner}</ValuesPicture>')
 
     if el.get('width'):
         lines.append(f'{inner}<Width>{el["width"]}</Width>')

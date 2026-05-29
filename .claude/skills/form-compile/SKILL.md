@@ -240,6 +240,15 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/form-compile.ps1" -
 ]}
 ```
 
+### Картинка-поле (picField)
+
+PictureField, привязанный к булеву/числу, рисует иконку только при заданном `valuesPicture`:
+
+| Ключ | Описание |
+|------|----------|
+| `valuesPicture` | Ref картинки значения: `"StdPicture.Favorites"`, `"CommonPicture.X"` |
+| `loadTransparent: true` | Скрыть кадр «нет значения» |
+
 ### Страницы (pages + page)
 
 | Ключ (pages) | Описание |
