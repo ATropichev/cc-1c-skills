@@ -255,10 +255,22 @@ export function readActiveGridCellScript() {
             }
           }
         }
+        // Classify the cell's choice button (if any): ref (_DLB), calc/date (_CB iCalcB/iCalendB),
+        // or bare 'choice' (_CB iCB — value picked from a programmatic list, e.g. НачалоВыбора).
+        let buttonKind = null;
+        const base = f.id.replace(/_i\\d+$/, '');
+        const dlb = document.getElementById(base + '_DLB');
+        const cb = document.getElementById(base + '_CB');
+        if (dlb && dlb.offsetWidth > 0) buttonKind = 'ref';
+        else if (cb && cb.offsetWidth > 0) {
+          if (cb.classList.contains('iCalcB')) buttonKind = 'calc';
+          else if (cb.classList.contains('iCalendB')) buttonKind = 'date';
+          else buttonKind = 'choice';
+        }
         return {
           tag: 'INPUT', id: f.id,
           fullName: f.id.replace(/^form\\d+_/, '').replace(/_i\\d+$/, ''),
-          headerText
+          headerText, buttonKind
         };
       }
     }

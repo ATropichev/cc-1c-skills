@@ -1,4 +1,4 @@
-// web-test forms/select-value v1.20 — Reference & composite-type value selection: selectValue, fillReferenceField, selection/type-dialog pickers.
+// web-test forms/select-value v1.21 — Reference & composite-type value selection: selectValue, fillReferenceField, selection/type-dialog pickers.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import {
@@ -265,6 +265,20 @@ export async function pickFromTypeDialog(formNum, typeName) {
     return page.evaluate(readTypeDialogVisibleRowsScript(formNum, typeNorm));
   }
 
+  // Helper: dismiss the type-selection dialog (and any child "Найти") on error.
+  // Escape closes the dialog chain, but a blind Escape×3 cascades into the underlying
+  // form. So press Escape only while THIS type dialog is still present, then stop —
+  // leaving the source form (and cell edit mode) for the caller to handle.
+  async function dismissTypeDialog() {
+    for (let i = 0; i < 4; i++) {
+      const stillOpen = await page.evaluate(
+        `!!document.getElementById('form${formNum}_OK') || !!document.getElementById('form${formNum}_ValueList')`);
+      if (!stillOpen) break;
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(300);
+    }
+  }
+
   // Step 1: Scan visible rows (fast path — no Ctrl+F needed for small lists)
   const scan = await readVisibleRows();
 
@@ -278,7 +292,7 @@ export async function pickFromTypeDialog(formNum, typeName) {
   }
 
   if (scan.matches.length > 1) {
-    for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(300); }
+    await dismissTypeDialog();
     await waitForStable();
     throw new Error(`selectValue: multiple types match "${typeName}": ${scan.matches.map(m => '"' + m.text + '"').join(', ')}. Specify a more precise type name`);
   }
@@ -307,7 +321,7 @@ export async function pickFromTypeDialog(formNum, typeName) {
   const findFormNum = await page.evaluate(findChildFormByButtonScript(formNum, 'Find'));
 
   if (findFormNum === null) {
-    await page.keyboard.press('Escape');
+    await dismissTypeDialog();
     await waitForStable();
     throw new Error('selectValue: Ctrl+F did not open "Найти" dialog in type selection');
   }
@@ -320,14 +334,14 @@ export async function pickFromTypeDialog(formNum, typeName) {
   const afterSearch = await readVisibleRows();
 
   if (afterSearch.matches.length === 0) {
-    for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(300); }
+    await dismissTypeDialog();
     await waitForStable();
     throw new Error(`selectValue: type "${typeName}" not found in type selection dialog` +
       `. Visible: ${(scan.visible || []).join(', ')}`);
   }
 
   if (afterSearch.matches.length > 1) {
-    for (let i = 0; i < 3; i++) { await page.keyboard.press('Escape'); await page.waitForTimeout(300); }
+    await dismissTypeDialog();
     await waitForStable();
     throw new Error(`selectValue: multiple types match "${typeName}": ${afterSearch.matches.map(m => '"' + m.text + '"').join(', ')}. Specify a more precise type name`);
   }

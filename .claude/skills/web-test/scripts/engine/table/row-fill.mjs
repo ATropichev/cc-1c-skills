@@ -1,4 +1,4 @@
-// web-test table/row-fill v1.19 — fillTableRow — заполнение строки табличной части/списка через Tab-навигацию и попутный выбор значений.
+// web-test table/row-fill v1.20 — fillTableRow — заполнение строки табличной части/списка через Tab-навигацию и попутный выбор значений.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import {
@@ -245,10 +245,22 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
               return { field: key, ok: false, error: 'no_selection_after_type', message: `Type selected but no selection form opened for "${key}"` };
             }
           } else {
-            // No type specified — close type dialog and report error
-            await page.keyboard.press('Escape');
-            await page.waitForTimeout(300);
-            return { field: key, ok: false, error: 'composite_type', message: `Composite type field "${key}" requires {value, type}` };
+            // No type given — treat as a choice cell: the value IS the list item
+            // ("Выбрать тип"). Pick it; if a value form follows, it was genuinely a
+            // composite-value cell that needs {value, type}.
+            try {
+              await pickFromTypeDialog(selForm, info.value);
+            } catch (e) {
+              return { field: key, ok: false, error: 'not_found', message: e.message };
+            }
+            await waitForStable(formNum);
+            const after = await helperDetectNewForm(formNum);
+            if (after !== null) {
+              await page.keyboard.press('Escape');
+              await page.waitForTimeout(300);
+              return { field: key, ok: false, error: 'type_required', message: `Cell "${key}" expects { value, type }` };
+            }
+            return { field: key, ok: true, method: 'choice' };
           }
         }
         const pr = await pickFromSelectionForm(selForm, key, info.value, formNum);
@@ -294,6 +306,24 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
         // Also check if a selection form already appeared
         let selForm = await helperDetectNewForm(formNum);
         if (selForm === null && inInputAfterDblclick) {
+          // Choice cell (bare _CB list-pick) — paste would revert silently; open via F4.
+          const activeCell = await page.evaluate(readActiveGridCellScript());
+          if (activeCell.buttonKind === 'choice') {
+            await page.keyboard.press('F4');
+            let cForm = null;
+            for (let cw = 0; cw < 8; cw++) {
+              await page.waitForTimeout(200);
+              cForm = await helperDetectNewForm(formNum);
+              if (cForm !== null) break;
+            }
+            if (cForm !== null) {
+              const pr = await directEditPick(cForm, key, info);
+              info.filled = true;
+              results.push(pr);
+              continue;
+            }
+            // F4 opened nothing — fall through to paste (best effort)
+          }
           // Plain text/numeric field — fill via clipboard paste
           await pasteText(info.value, { confirm: ['Control+a', 'Control+v'] });
           await page.waitForTimeout(400);
@@ -526,6 +556,62 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
         message: `Cell "${matchedKey}": F4 did not open type dialog for type "${info.type}"` });
       await page.keyboard.press('Tab');
       await page.waitForTimeout(500);
+      continue;
+    }
+
+    // Choice cell: value is picked from a programmatic list (field with НачалоВыбора →
+    // ПоказатьВыборЭлемента, e.g. a "Выбрать тип" list). Plain paste reverts silently,
+    // so open the choice form via F4 and pick from it.
+    if (cell.buttonKind === 'choice') {
+      await page.keyboard.press('F4');
+      let choiceForm = null;
+      for (let cw = 0; cw < 8; cw++) {
+        await page.waitForTimeout(200);
+        choiceForm = await helperDetectNewForm(formNum);
+        if (choiceForm !== null) break;
+      }
+      if (choiceForm === null) {
+        info.filled = true;
+        results.push({ field: matchedKey, cell: cell.fullName, ok: false,
+          error: 'no_selection_form', message: `Cell "${matchedKey}": F4 did not open a choice form` });
+        await page.keyboard.press('Tab'); await page.waitForTimeout(500);
+        continue;
+      }
+      if (await isTypeDialog(choiceForm)) {
+        try {
+          await pickFromTypeDialog(choiceForm, text);
+        } catch (e) {
+          info.filled = true;
+          results.push({ field: matchedKey, cell: cell.fullName, ok: false,
+            error: 'not_found', message: e.message });
+          await page.keyboard.press('Tab'); await page.waitForTimeout(500);
+          continue;
+        }
+        await waitForStable(formNum);
+        // If a value form opened after the pick, this was a composite-value cell → needs {value, type}
+        const valForm = await helperDetectNewForm(formNum);
+        if (valForm !== null) {
+          await page.keyboard.press('Escape'); await page.waitForTimeout(300);
+          info.filled = true;
+          results.push({ field: matchedKey, cell: cell.fullName, ok: false,
+            error: 'type_required', message: `Cell "${matchedKey}" expects { value, type }` });
+          await page.keyboard.press('Tab'); await page.waitForTimeout(500);
+          continue;
+        }
+        info.filled = true;
+        results.push({ field: matchedKey, cell: cell.fullName, ok: true, method: 'choice', value: text });
+        if ([...pending.values()].every(p => p.filled)) break;
+        await page.keyboard.press('Tab'); await page.waitForTimeout(500);
+        continue;
+      }
+      // F4 opened a regular selection form (reference via CB) — pick from it
+      const pr = await pickFromSelectionForm(choiceForm, matchedKey, text, formNum);
+      info.filled = true;
+      results.push(pr.ok
+        ? { field: matchedKey, cell: cell.fullName, ok: true, method: 'form' }
+        : { field: matchedKey, cell: cell.fullName, ok: false, error: pr.error, message: pr.message });
+      if ([...pending.values()].every(p => p.filled)) break;
+      await page.keyboard.press('Tab'); await page.waitForTimeout(500);
       continue;
     }
 

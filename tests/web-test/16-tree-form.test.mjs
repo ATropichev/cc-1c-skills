@@ -24,7 +24,7 @@ export default async function({ navigateLink, clickElement, closeForm, readTable
   await step('read-roots: на верхнем уровне видны группы (Товары, Услуги, БольшойСписок)', async () => {
     const t = await readTable('Дерево');
     log(`columns=${t.columns?.join(',')} rows=${t.rows?.length}`);
-    assert.deepEqual(t.columns, ['Номенклатура', 'Цена', 'Картинка', 'Флаг'], 'колонки: Номенклатура + Цена + Картинка + Флаг');
+    assert.deepEqual(t.columns, ['Номенклатура', 'Цена', 'Картинка', 'Флаг', 'Тип значения'], 'колонки: Номенклатура + Цена + Картинка + Флаг + Тип значения');
     assert.equal(t.rows.length, 3, '3 корневые строки');
     const names = t.rows.map(r => r['Номенклатура']);
     assert.includes(names, 'Товары', 'есть Товары');
@@ -59,6 +59,30 @@ export default async function({ navigateLink, clickElement, closeForm, readTable
     assert.ok(tovar01, 'Товар 01 виден');
     // 1С web использует non-breaking space ( ) как разделитель разрядов
     assert.equal(tovar01['Цена'], '1 500,00', 'Цена обновилась до 1 500,00');
+  });
+
+  await step('choice-cell: fillTableRow задаёт ТипЗначения через форму выбора (НачалоВыбора)', async () => {
+    // Колонка-строка с кнопкой выбора + обработчиком НачалоВыбора → СписокТипов.ПоказатьВыборЭлемента
+    // («Выбрать тип»). Plain-paste тут не годится — движок открывает форму выбора и выбирает из списка.
+    const r = await fillTableRow({ ТипЗначения: 'Число' }, { row: 1 });
+    log(`filled: ${JSON.stringify(r.filled)}`);
+    const cell = r.filled?.find(f => f.field === 'ТипЗначения');
+    assert.ok(cell, 'поле ТипЗначения в результате');
+    assert.equal(cell.ok, true, 'ok=true');
+    assert.equal(cell.method, 'choice', 'method=choice (выбор из списка, не direct)');
+    const t = await readTable('Дерево');
+    const tovar01 = t.rows.find(row => row['Номенклатура'] === 'Товар 01');
+    assert.equal(tovar01['Тип значения'], 'Число', 'ТипЗначения = Число');
+  });
+
+  await step('choice-cell-negative: несуществующий тип → ok:false/not_found (форма не закрывается)', async () => {
+    // not_found гасит только диалог выбора типа (умный dismiss), исходная форма остаётся —
+    // следующие шаги (picture) это подтверждают.
+    const r = await fillTableRow({ ТипЗначения: 'Нетакоготипа' }, { row: 1 });
+    const cell = r.filled?.find(f => f.field === 'ТипЗначения');
+    assert.ok(cell, 'поле ТипЗначения в результате');
+    assert.equal(cell.ok, false, 'ok=false для несуществующего типа');
+    assert.equal(cell.error, 'not_found', 'error=not_found');
   });
 
   await step('picture: колонка-картинка (pic:0/\'\') + кросс-проверка чекбоксом', async () => {
