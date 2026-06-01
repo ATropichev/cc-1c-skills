@@ -351,7 +351,8 @@ Returns form state with `filled: [{ field, ok, ...}]`. Items are `{ field, ok: t
 |--------|-------------|
 | `tab` | Switch to tab before filling |
 | `add` | Add new row before filling |
-| `row` | Edit existing row by 0-based index |
+| `row` | Edit existing row: 0-based index, **or** a `{ col: value }` filter (one or more columns) to locate the row by its cell values |
+| `scroll` | With a `row` filter — scan beyond the current DOM window (`true` = up to 50 PageDowns, number = limit) |
 | `table` | Grid name from `tables[]` (for multi-grid forms) |
 
 ```js
@@ -360,11 +361,14 @@ await fillTableRow(
   { 'Номенклатура': 'Бумага', 'Количество': '10', 'Цена': '100' },
   { tab: 'Товары', add: true }
 );
-// Edit existing row:
+// Edit existing row by index:
 await fillTableRow(
   { 'Количество': '20' },
   { tab: 'Товары', row: 0 }
 );
+// Edit existing row located by cell values (одна или несколько колонок):
+await fillTableRow({ 'Цена': '120' }, { table: 'Товары', row: { 'Номенклатура': 'Бумага' } });
+await fillTableRow({ 'Сумма': '500' }, { row: { 'Номер': '0000-000601', 'Дата': '29.12.2016' }, scroll: true });
 // Multi-grid form — add row to specific table:
 await fillTableRow(
   { 'Объект': 'БДДС' },

@@ -1,4 +1,4 @@
-// web-test table/row-fill v1.21 — fillTableRow — заполнение строки табличной части/списка через Tab-навигацию и попутный выбор значений.
+// web-test table/row-fill v1.22 — fillTableRow — заполнение строки табличной части/списка через Tab-навигацию и попутный выбор значений.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import {
@@ -24,6 +24,7 @@ import {
   readEdd, isEddVisible, clickEddItemViaDispatch,
 } from '../core/helpers.mjs';
 import { clickElement } from '../core/click.mjs';
+import { resolveRowIndexByFilter } from './click-cell.mjs';
 import {
   pickFromSelectionForm, isTypeDialog, pickFromTypeDialog,
   fillReferenceField, selectValue,
@@ -111,9 +112,13 @@ async function fillChoiceCell(formNum, text, { type = null, fieldLabel = '' } = 
  * @param {Object} [options]
  * @param {string} [options.tab] - Switch to this form tab before operating
  * @param {boolean} [options.add] - Click "Добавить" to create a new row first
+ * @param {number|Object} [options.row] - Edit existing row: 0-based DOM-window index, or
+ *   a `{ col: value }` filter (one or more columns, AND-matched) to locate the row by cell values
+ * @param {boolean|number} [options.scroll] - When `row` is a filter, scan beyond the current
+ *   DOM window via PageDown (true = up to 50 presses, number = exact limit)
  * @returns {{ filled[], notFilled[]?, form }}
  */
-export async function fillTableRow(fields, { tab, add, row, table } = {}) {
+export async function fillTableRow(fields, { tab, add, row, table, scroll } = {}) {
   ensureConnected();
   await dismissPendingErrors();
   const formNum = await page.evaluate(detectFormScript());
@@ -131,6 +136,13 @@ export async function fillTableRow(fields, { tab, add, row, table } = {}) {
   // 1. Switch tab if requested
   if (tab) {
     await clickElement(tab);
+  }
+
+  // 1b. Resolve a { col: value } row filter to a numeric DOM-window index (mirrors
+  // clickElement). After this, `row` is a number and all downstream code/recursion
+  // works unchanged. Filter targets an EXISTING row — incompatible with `add`.
+  if (row != null && typeof row === 'object') {
+    row = await resolveRowIndexByFilter({ formNum, gridSelector, filter: row, gridName: table, scroll });
   }
 
   // 2. Add new row if requested

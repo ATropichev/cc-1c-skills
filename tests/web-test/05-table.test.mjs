@@ -43,6 +43,20 @@ export default async function({ navigateSection, openCommand, clickElement, fill
     assert.equal(t.rows[0]['Количество'], '10,000', 'Количество строки 0 = 10');
   });
 
+  await step('edit by filter: найти строку по значению ячейки { Номенклатура: Товар 02 } и изменить Цену', async () => {
+    const r = await fillTableRow(
+      { 'Цена': '250' },
+      { table: 'Товары', row: { 'Номенклатура': 'Товар 02' } }
+    );
+    log(`filter-edit result: ${JSON.stringify(r.filled)}`);
+    const t = await readTable({ table: 'Товары' });
+    log(`rows after filter-edit: ${JSON.stringify(t.rows)}`);
+    // Должна измениться именно строка Товар 02 (индекс 1), а не Товар 01 (индекс 0).
+    assert.equal(t.rows[1]['Номенклатура'], 'Товар 02', 'Фильтр нашёл строку Товар 02');
+    assert.equal(t.rows[1]['Цена'], '250,00', 'Цена строки Товар 02 = 250');
+    assert.equal(t.rows[0]['Номенклатура'], 'Товар 01', 'Строка Товар 01 не тронута');
+  });
+
   await step('tab-loop: изменить два числовых поля в строке 1 одним вызовом', async () => {
     const r = await fillTableRow(
       { 'Количество': '7', 'Цена': '150' },

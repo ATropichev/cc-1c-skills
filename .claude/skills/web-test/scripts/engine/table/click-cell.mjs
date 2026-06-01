@@ -1,4 +1,4 @@
-// web-test table/click-cell v1.3 — click a cell in a form grid by (row, column).
+// web-test table/click-cell v1.4 — click a cell in a form grid by (row, column).
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 //
 // Routed from core/click.mjs when the user calls clickElement({row, column}) and
@@ -33,6 +33,48 @@ const PD_WAIT_MS = 300;
 const FOCUS_WAIT_MS = 150;
 
 /**
+ * Guard: a 'pic:N' filter value is a readTable picture token, not real cell text.
+ * Picture cells render an icon (no text), so they can't select a row — fail fast
+ * with guidance instead of a confusing 'row_not_found'.
+ */
+function assertNotPictureFilter(filter) {
+  for (const [k, v] of Object.entries(filter)) {
+    if (typeof v === 'string' && /^pic:\d+$/.test(v.trim())) {
+      throw new Error(`clickElement: "${v}" is a readTable picture value (column "${k}"), not selectable text — it can't be used as a row filter. Filter by a text column (e.g. name/number) instead.`);
+    }
+  }
+}
+
+/**
+ * Resolve a `{ col: value }` row filter to a numeric index into the grid's current
+ * DOM window (`body.querySelectorAll('.gridLine')`). Reused by fillTableRow so it
+ * can target an existing row by cell values, mirroring clickElement.
+ *
+ * The filter matches across ALL columns (AND). `findGridCellScript` requires a
+ * `column`, so we pass the first filter key as a placeholder — it only affects the
+ * returned coordinates (which we ignore), not row selection. The matched row
+ * guarantees that key's cell is in the DOM, so no `cell_not_in_dom` for it.
+ *
+ * @param {object} args
+ * @param {number} args.formNum
+ * @param {string} [args.gridSelector] - CSS selector for the target grid (same grid the caller edits)
+ * @param {object} args.filter - `{ col: value }` (one or more columns)
+ * @param {string} [args.gridName] - for diagnostics in error messages
+ * @param {boolean|number} [args.scroll] - reveal-loop beyond the DOM window (true = 50 PageDowns, number = limit)
+ * @returns {Promise<number>} resolved row index
+ */
+export async function resolveRowIndexByFilter({ formNum, gridSelector, filter, gridName, scroll }) {
+  assertNotPictureFilter(filter);
+  const target = { row: filter, column: Object.keys(filter)[0] };
+  let cell = await page.evaluate(findGridCellScript(formNum, gridSelector, target));
+  if (cell?.error === 'row_not_found' && scroll) {
+    cell = await revealAndFindCell({ formNum, gridSelector, target, scroll });
+  }
+  if (cell?.error) throw cellError(cell, target, gridName, scroll, 'fillTableRow');
+  return cell.rowIdx;
+}
+
+/**
  * Click a cell in a form grid by (row, column). Called from core/click.mjs.
  *
  * @param {object} target - { row: number|{col:value}, column: string }
@@ -47,16 +89,7 @@ const FOCUS_WAIT_MS = 150;
 export async function clickGridCell(target, ctx) {
   const { formNum, gridSelector, gridName, modifier, dblclick, scroll } = ctx;
 
-  // Guard: a 'pic:N' filter value is a readTable picture token, not real cell text.
-  // Picture cells render an icon (no text), so they can't select a row — fail fast
-  // with guidance instead of a confusing 'row_not_found'.
-  if (target?.row && typeof target.row === 'object') {
-    for (const [k, v] of Object.entries(target.row)) {
-      if (typeof v === 'string' && /^pic:\d+$/.test(v.trim())) {
-        throw new Error(`clickElement: "${v}" is a readTable picture value (column "${k}"), not selectable text — it can't be used as a row filter. Filter by a text column (e.g. name/number) instead.`);
-      }
-    }
-  }
+  if (target?.row && typeof target.row === 'object') assertNotPictureFilter(target.row);
 
   // 1. Try to find the cell in current DOM window.
   let cell = await page.evaluate(findGridCellScript(formNum, gridSelector, target));
@@ -97,21 +130,21 @@ export async function clickGridCell(target, ctx) {
   });
 }
 
-function cellError(cell, target, gridName, scroll) {
+function cellError(cell, target, gridName, scroll, who = 'clickElement') {
   const ctxMsg = gridName ? ` in table "${gridName}"` : '';
   if (cell.error === 'row_not_found') {
     const hint = scroll
       ? ' (reveal-loop exhausted)'
       : ' — pass { scroll: true } to scan beyond the current DOM window';
-    return new Error(`clickElement: row matching ${JSON.stringify(target.row)} not found${ctxMsg}${hint}.`);
+    return new Error(`${who}: row matching ${JSON.stringify(target.row)} not found${ctxMsg}${hint}.`);
   }
   if (cell.error === 'column_not_found' || cell.error === 'filter_column_not_found') {
-    return new Error(`clickElement: column "${cell.column}" not found${ctxMsg}. Available: ${(cell.available || []).join(', ')}`);
+    return new Error(`${who}: column "${cell.column}" not found${ctxMsg}. Available: ${(cell.available || []).join(', ')}`);
   }
   if (cell.error === 'row_out_of_range') {
-    return new Error(`clickElement: row index ${cell.row} out of range${ctxMsg} (loaded: ${cell.loaded}). Note: row index is into current DOM window, not absolute — long lists are virtualized.`);
+    return new Error(`${who}: row index ${cell.row} out of range${ctxMsg} (loaded: ${cell.loaded}). Note: row index is into current DOM window, not absolute — long lists are virtualized.`);
   }
-  return new Error(`clickElement: cannot resolve cell ${JSON.stringify(target)}${ctxMsg}: ${cell.error}`);
+  return new Error(`${who}: cannot resolve cell ${JSON.stringify(target)}${ctxMsg}: ${cell.error}`);
 }
 
 /**
@@ -142,12 +175,20 @@ async function revealAndFindCell({ formNum, gridSelector, target, scroll }) {
     if (!cell?.error) return cell;
 
     const snap = await page.evaluate(snapshotGridScript(gridSelector));
-    const stable = snap
-      && snap.firstText === prevSnap?.firstText
-      && snap.lastText === prevSnap?.lastText
-      && snap.selIdx === prevSnap?.selIdx
-      && snap.lineCount === prevSnap?.lineCount;
-    if (stable) return { error: 'row_not_found', filter: target.row };
+    // Reached the end of the list. Primary signal: nothing remains below
+    // (`hasBelow === false`) — the reliable cross-grid-type signal. Content
+    // stability is only a fallback when hasBelow is unknown: it compares the
+    // full-row text (snapshotGridScript joins every cell), so a low-cardinality
+    // first column (e.g. all "Товар 0X") can't look "stable" mid-scroll.
+    const reachedEnd = snap && (
+      snap.hasBelow === false
+      || (snap.hasBelow == null
+        && snap.firstText === prevSnap?.firstText
+        && snap.lastText === prevSnap?.lastText
+        && snap.selIdx === prevSnap?.selIdx
+        && snap.lineCount === prevSnap?.lineCount)
+    );
+    if (reachedEnd) return { error: 'row_not_found', filter: target.row };
     prevSnap = snap;
   }
   return { error: 'row_not_found', filter: target.row };

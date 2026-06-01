@@ -1,4 +1,4 @@
-// web-test dom/grid v1.8 — grid resolution + table reading + edit-time helpers
+// web-test dom/grid v1.9 — grid resolution + table reading + edit-time helpers
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 /**
@@ -677,7 +677,10 @@ export function snapshotGridScript(gridSelector) {
     const body = grid.querySelector('.gridBody');
     if (!body) return null;
     const lines = body.querySelectorAll('.gridLine');
-    const txt = ln => ln?.querySelector('.gridBoxText')?.innerText?.trim() || '';
+    // Full-row signature: join EVERY cell's text, not just the first column.
+    // A low-cardinality first column (e.g. all "Товар 0X") would otherwise make
+    // two different windows look identical and abort the reveal-loop early.
+    const txt = ln => ln ? [...ln.querySelectorAll('.gridBoxText')].map(b => (b.innerText || '').trim()).join('|') : '';
     const selIdx = [...lines].findIndex(l => l.classList.contains('selRow') || l.classList.contains('select'));
     // hasBelow priority: (1) dynamic-list turn buttons, (2) tabular scrollbar tracks, (3) scrollHeight.
     let hasBelow;

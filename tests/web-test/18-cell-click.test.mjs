@@ -154,6 +154,21 @@ export default async function({
     assert.equal(res.clicked?.column, 'Сумма', 'column сохранён');
   });
 
+  // ── fillTableRow by filter + scroll: тот же reveal-путь, что у clickElement ──
+  await step('fillTableRow: row-фильтр + scroll:true редактирует глубокую строку LongDoc', async () => {
+    // Количество=28 заведомо за пределами стартового DOM-окна (LongDoc 1..30).
+    const r = await fillTableRow(
+      { 'Цена': '888' },
+      { table: 'Товары', row: { 'Количество': '28' }, scroll: true }
+    );
+    log(`filled: ${JSON.stringify(r.filled)}`);
+    assert.ok(r.filled?.every(f => f.ok), 'все ячейки заполнены без ошибок');
+    const t = await readTable({ table: 'Товары', maxRows: 50 });
+    const row28 = t.rows.find(x => x['Количество'] === '28,000');
+    assert.ok(row28, 'строка Количество=28 в текущем окне после reveal');
+    assert.equal(row28['Цена'], '888,00', 'Цена строки 28 изменена через фильтр+scroll');
+  });
+
   // ── Horizontal scroll: вправо до последней колонки, потом обратно влево ────
   await step('horizontal scroll: вправо до Признак контроля, потом влево к Количество', async () => {
     const right = await clickElement(
