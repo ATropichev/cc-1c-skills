@@ -14,6 +14,9 @@ export const timeout = 90000;
 // + дискриминатор choice-ячейки (fillChoiceCell): ДеревоРедактируемаяСтрока (кнопка iCB,
 //   пустой НачалоВыбора, текст редактируется → method:'direct') vs ДеревоТипЗначения
 //   (РедактированиеТекста=Ложь, текст отвергается → форма выбора, method:'choice').
+// + редактируемые choice-ячейки Число/Дата (РедактируемоеЧисло/РедактируемаяДата): маск-инпут
+//   переформатирует значение (1234.56 → «1 234,56») — регресс на баг с ложным F4→калькулятор.
+// + булево как поле ввода (Булево, InputField, не флажок): выбор Да/Нет через dropdown-путь.
 
 export default async function({ navigateLink, clickElement, closeForm, readTable, fillTableRow, assert, step, log }) {
 
@@ -27,7 +30,7 @@ export default async function({ navigateLink, clickElement, closeForm, readTable
   await step('read-roots: на верхнем уровне видны группы (Товары, Услуги, БольшойСписок)', async () => {
     const t = await readTable('Дерево');
     log(`columns=${t.columns?.join(',')} rows=${t.rows?.length}`);
-    assert.deepEqual(t.columns, ['Номенклатура', 'Цена', 'Картинка', 'Флаг', 'Тип значения', 'Редактируемая строка'], 'колонки: Номенклатура + Цена + Картинка + Флаг + Тип значения + Редактируемая строка');
+    assert.deepEqual(t.columns, ['Номенклатура', 'Цена', 'Картинка', 'Флаг', 'Тип значения', 'Редактируемая строка', 'Редактируемое число', 'Редактируемая дата', 'Булево'], 'колонки: Номенклатура + Цена + Картинка + Флаг + Тип значения + Редактируемая строка + Редактируемое число + Редактируемая дата + Булево');
     assert.equal(t.rows.length, 3, '3 корневые строки');
     const names = t.rows.map(r => r['Номенклатура']);
     assert.includes(names, 'Товары', 'есть Товары');
@@ -117,6 +120,50 @@ export default async function({ navigateLink, clickElement, closeForm, readTable
     assert.ok(cell, 'поле ТипЗначения в результате');
     assert.equal(cell.ok, false, 'ok=false для несуществующего типа');
     assert.equal(cell.error, 'not_found', 'error=not_found');
+  });
+
+  await step('choice-number: редактируемая choice-ячейка Число — paste переформатируется, method:direct', async () => {
+    // РедактируемоеЧисло — Number-колонка с кнопкой выбора (iCB) и пустым НачалоВыбора (модель
+    // «Значение» КЗ). Маск-инпут ПЕРЕФОРМАТИРУЕТ «1234.56» → «1 234,56» (nbsp-разделитель, запятая).
+    // Регресс на баг, где includes-проверка рвалась о переформатирование → ложное F4 → калькулятор.
+    // Теперь дискриминатор поведенческий (инпут изменился + нет EDD → direct), формат не важен.
+    const r = await fillTableRow({ 'Редактируемое число': '1234.56' }, { row: 1 });
+    log(`filled: ${JSON.stringify(r.filled)}`);
+    const cell = r.filled?.find(f => /Редактируемое число/i.test(f.field));
+    assert.ok(cell, 'поле Редактируемое число в результате');
+    assert.equal(cell.ok, true, 'ok=true');
+    assert.equal(cell.method, 'direct', 'method=direct (числовой маск-инпут, без F4/калькулятора)');
+    const t = await readTable('Дерево');
+    const tovar01 = t.rows.find(row => row['Номенклатура'] === 'Товар 01');
+    // 1С web использует неразрывный пробел как разделитель разрядов — убираем все пробелы перед сравнением.
+    assert.equal((tovar01['Редактируемое число'] || '').replace(/[\s\u00A0]/g, ''), '1234,56', 'число переформатировано в 1234,56');
+  });
+
+  await step('choice-date: редактируемая choice-ячейка Дата — method:direct', async () => {
+    // РедактируемаяДата — Date-колонка с кнопкой выбора и пустым НачалоВыбора. Та же модель «Значение».
+    const r = await fillTableRow({ 'Редактируемая дата': '15.06.2025' }, { row: 1 });
+    log(`filled: ${JSON.stringify(r.filled)}`);
+    const cell = r.filled?.find(f => /Редактируемая дата/i.test(f.field));
+    assert.ok(cell, 'поле Редактируемая дата в результате');
+    assert.equal(cell.ok, true, 'ok=true');
+    assert.equal(cell.method, 'direct', 'method=direct');
+    const t = await readTable('Дерево');
+    const tovar01 = t.rows.find(row => row['Номенклатура'] === 'Товар 01');
+    assert.equal(tovar01['Редактируемая дата'], '15.06.2025', 'дата записана');
+  });
+
+  await step('bool-input: булева ячейка-поле-ввода (не флажок) заполняется выбором Да', async () => {
+    // ДеревоБулево — InputField на булевом пути (НЕ CheckBoxField) с кнопкой выбора (iCB) и
+    // пустым НачалоВыбора: в ячейке выбор Да/Нет, fillTableRow идёт через dropdown-путь, а не
+    // toggle. Покрывает булево как поле ввода (модель «Значение» типа Булево в Консоли запросов).
+    const r = await fillTableRow({ 'Булево': 'Да' }, { row: 1 });
+    log(`filled: ${JSON.stringify(r.filled)}`);
+    const cell = r.filled?.find(f => /Булево/i.test(f.field));
+    assert.ok(cell, 'поле Булево в результате');
+    assert.equal(cell.ok, true, 'ok=true');
+    const t = await readTable('Дерево');
+    const tovar01 = t.rows.find(row => row['Номенклатура'] === 'Товар 01');
+    assert.equal(tovar01['Булево'], 'Да', 'Булево = Да');
   });
 
   await step('picture: колонка-картинка (pic:0/\'\') + кросс-проверка чекбоксом', async () => {

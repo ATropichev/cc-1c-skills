@@ -1,4 +1,4 @@
-// web-test table/row-fill v1.22 — fillTableRow — заполнение строки табличной части/списка через Tab-навигацию и попутный выбор значений.
+// web-test table/row-fill v1.23 — fillTableRow — заполнение строки табличной части/списка через Tab-навигацию и попутный выбор значений.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import {
@@ -58,15 +58,46 @@ async function fillChoiceCell(formNum, text, { type = null, fieldLabel = '' } = 
   if (before && norm(before).includes(norm(text))) {
     return { ok: true, method: 'skip', value: before };
   }
-  // Try direct input; poll for the input value to settle on the pasted text (editable cell).
+  // Paste, then poll. Three outcomes, distinguished BEHAVIORALLY (not by value equality):
+  //   (1) EDD autocomplete appears   → reference/list cell → pick from the dropdown;
+  //   (2) input changes to non-empty, no EDD → editable cell → leave value, method 'direct';
+  //   (3) input unchanged (rejected) → НачалоВыбора pick-from-list → F4 selection form.
+  // A value-equality check on `after` is UNRELIABLE: numeric/date masks reformat the pasted
+  // text (grouping nbsp, decimal comma, padding) — e.g. "1234.56" → "1 234,56", "0,000"
+  // baseline. So we test "did the input change to non-empty" + "no autocomplete", never
+  // "does after contain text" (that false-negatives on reformatting → F4 → stray calculator).
   await pasteText(text, { confirm: ['Control+a', 'Control+v'] });
-  let after = before, stuck = false;
+  let after = before, changed = false, eddSeen = false;
   for (let i = 0; i < 6; i++) {
     await page.waitForTimeout(100);
+    if (await isEddVisible()) { eddSeen = true; break; }
     after = await page.evaluate(`document.activeElement?.value || ''`);
-    if (after !== before && norm(after).includes(norm(text))) { stuck = true; break; }
+    if (after !== before && after !== '') changed = true;
   }
-  if (stuck) return { ok: true, method: 'direct', value: text };
+
+  if (eddSeen) {
+    // Reference/list cell — pick a MATCHING item from the autocomplete. Only accept an
+    // exact (parenthetical-stripped) or substring match; never blind-pick items[0] — for a
+    // non-existent value 1C still lists unrelated entries, and picking the first silently
+    // writes the wrong reference. No match → fall through to the F4 selection form, which
+    // searches the full list and returns not_found if the value is truly absent.
+    const edd = await readEdd();
+    const items = (edd.items || []).map(i => i.name)
+      .filter(i => !/^Создать[\s:]/.test(i) && !/не найдено/i.test(i) && !/показать все/i.test(i));
+    const tgt = norm(text);
+    const pick = items.find(i => norm(i.replace(/\s*\([^)]*\)\s*$/, '')) === tgt)
+              || items.find(i => norm(i).includes(tgt));
+    if (pick) {
+      await clickEddItemViaDispatch(pick);
+      await waitForStable();
+      return { ok: true, method: 'dropdown', value: pick.replace(/\s*\([^)]*\)\s*$/, '') };
+    }
+    // No matching item — dismiss the autocomplete and fall through to the F4 selection form.
+    await page.keyboard.press('Escape'); await page.waitForTimeout(200);
+  } else if (changed) {
+    // Editable cell — value lives in the INPUT; caller's Tab / end-of-row commit persists it.
+    return { ok: true, method: 'direct', value: after };
+  }
 
   // Text rejected (pick-from-list cell) — nothing typed to clear (field is not text-editable).
   // Dismiss any autocomplete hint, then open the choice form via F4.
@@ -79,6 +110,15 @@ async function fillChoiceCell(formNum, text, { type = null, fieldLabel = '' } = 
     if (choiceForm !== null) break;
   }
   if (choiceForm === null) {
+    // F4 safety net: on an editable numeric/date cell mis-routed here, F4 opens a
+    // calculator/calendar (NOT a selection form). Close it — never leave the popup open
+    // (it blocks the UI) — and salvage: if the cell now holds a value, count it as 'direct'.
+    if (await findOpenPopup()) {
+      await page.keyboard.press('Escape');
+      for (let dw = 0; dw < 4; dw++) { await page.waitForTimeout(150); if (!(await findOpenPopup())) break; }
+      const nowVal = await page.evaluate(`document.activeElement?.value || ''`);
+      if (nowVal && nowVal !== before) return { ok: true, method: 'direct', value: nowVal };
+    }
     return { ok: false, error: 'no_selection_form', message: `Cell "${fieldLabel || text}": F4 did not open a choice form` };
   }
   if (await isTypeDialog(choiceForm)) {
@@ -681,14 +721,28 @@ export async function fillTableRow(fields, { tab, add, row, table, scroll } = {}
         let pick = realItems.find(i =>
           normYo(i.replace(/\s*\([^)]*\)\s*$/, '').toLowerCase()) === tgt);
         if (!pick) pick = realItems.find(i => normYo(i.toLowerCase()).includes(tgt));
-        if (!pick) pick = realItems[0];
 
-        // Click EDD item via dispatchEvent (bypasses div.surface overlay)
-        await clickEddItemViaDispatch(pick);
-        await waitForStable();
-        info.filled = true;
-        results.push({ field: matchedKey, cell: cell.fullName, ok: true,
-          method: 'dropdown', value: pick.replace(/\s*\([^)]*\)\s*$/, '') });
+        if (pick) {
+          // Click EDD item via dispatchEvent (bypasses div.surface overlay)
+          await clickEddItemViaDispatch(pick);
+          await waitForStable();
+          info.filled = true;
+          results.push({ field: matchedKey, cell: cell.fullName, ok: true,
+            method: 'dropdown', value: pick.replace(/\s*\([^)]*\)\s*$/, '') });
+        } else {
+          // EDD listed items but NONE matches the requested value. Do NOT blind-pick the
+          // first item — when the typed text has no hit, 1C still shows unrelated entries
+          // (recent/full list), so items[0] would silently write the wrong reference.
+          // Dismiss, clear the typed text, report not_found.
+          await page.keyboard.press('Escape');
+          await page.waitForTimeout(300);
+          await page.keyboard.press('Control+A');
+          await page.keyboard.press('Delete');
+          await page.waitForTimeout(200);
+          info.filled = true;
+          results.push({ field: matchedKey, cell: cell.fullName, ok: false,
+            error: 'not_found', message: `No match for "${text}" in autocomplete` });
+        }
       } else {
         // Only "Создать:" items — value not found in autocomplete
         await page.keyboard.press('Escape');
