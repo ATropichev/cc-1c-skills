@@ -1,4 +1,4 @@
-// web-test cli/util v1.1 — generic helpers for CLI commands
+// web-test cli/util v1.2 — generic helpers for CLI commands
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 export function out(obj) {
@@ -85,7 +85,7 @@ Commands:
   shot [file]              Take screenshot (default: shot.png)
   stop                     Logout and close browser
   status                   Check session status
-  test [url] <dir|file>    Run regression tests (*.test.mjs)
+  test <dir|file>...       Run regression tests (*.test.mjs); accepts multiple paths
 
 Options for exec:
   --no-record              Skip video recording (record() becomes no-op)
@@ -95,6 +95,7 @@ Global options (any command):
                            Default: on (env: WEB_TEST_PRESERVE_CLIPBOARD=0 to disable globally).
 
 Options for test:
+  --url=URL                Override the base URL (default: from webtest.config.mjs)
   --tags=smoke,crud        Filter tests by tags
   --grep=pattern           Filter tests by name (regex)
   --bail                   Stop on first failure

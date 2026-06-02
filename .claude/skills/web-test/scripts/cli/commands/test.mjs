@@ -1,4 +1,4 @@
-// web-test cli/commands/test v1.2 — regression test runner
+// web-test cli/commands/test v1.3 — regression test runner
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import { existsSync, writeFileSync, mkdirSync } from 'fs';
 import { resolve, dirname, basename, relative } from 'path';
@@ -20,11 +20,12 @@ export async function cmdTest(rawArgs) {
 
   // Parse flags
   const opts = { bail: false, retry: 0, timeout: 30000, report: null, format: 'json', screenshot: null, reportDir: null, record: false };
-  let tags = null, grep = null;
+  let tags = null, grep = null, urlFlag = null;
   const positional = [];
   for (const a of ownArgs) {
     if (a.startsWith('--tags='))       tags = a.slice(7).split(',');
     else if (a.startsWith('--grep='))  grep = new RegExp(a.slice(7), 'i');
+    else if (a.startsWith('--url='))   urlFlag = a.slice(6);
     else if (a === '--bail')           opts.bail = true;
     else if (a.startsWith('--retry=')) opts.retry = parseInt(a.slice(8)) || 0;
     else if (a.startsWith('--timeout=')) opts.timeout = parseInt(a.slice(10)) || 30000;
@@ -36,20 +37,28 @@ export async function cmdTest(rawArgs) {
     else if (!a.startsWith('--'))      positional.push(a);
   }
 
-  // Determine URL and test path
-  let url, testPath;
-  if (positional.length === 2) {
-    url = positional[0];
-    testPath = resolve(positional[1]);
-  } else if (positional.length === 1) {
-    testPath = resolve(positional[0]);
-  } else {
-    die('Usage: node run.mjs test [url] <dir|file> [--tags=...] [--bail] [--retry=N] [--timeout=ms] [--report=path]');
+  // Positional args are ALWAYS test paths (one or many). URL comes from --url= or config
+  // (see webtest.config.mjs). This matches pytest/jest/playwright; a positional that looks
+  // like a URL is a mistake → fail fast with a hint instead of feeding it to page.goto().
+  const isUrl = (s) => /^https?:\/\//i.test(s);
+  let url = urlFlag || null;
+  const testPaths = [...positional];
+  if (testPaths.length === 0) {
+    die('Usage: node run.mjs test <dir|file>... [--url=URL] [--tags=...] [--grep=...] [--bail] [--retry=N] [--timeout=ms] [--report=path]');
+  }
+  for (const p of testPaths) {
+    if (existsSync(resolve(p))) continue;
+    if (isUrl(p)) {
+      die(`"${p}" looks like a URL — use --url=<url>; positional args are test paths.`);
+    }
+    die(`Test path not found: "${p}". To run a subset use --grep= / --tags=, or pass an existing dir/file.`);
   }
 
-  // Load config if exists
-  const isFile = testPath.endsWith('.test.mjs');
-  const testDir = isFile ? dirname(testPath) : testPath;
+  // Load config if exists. config (webtest.config.mjs) and hooks (_hooks.mjs) resolve from
+  // the FIRST path's directory — list paths from the same suite folder.
+  const firstPath = resolve(testPaths[0]);
+  const isFile = firstPath.endsWith('.test.mjs');
+  const testDir = isFile ? dirname(firstPath) : firstPath;
   const configPath = resolve(testDir, 'webtest.config.mjs');
   let config = {};
   if (existsSync(configPath)) {
@@ -110,8 +119,8 @@ export async function cmdTest(rawArgs) {
   }
 
   // Discover test files
-  const testFiles = discoverTests(testPath);
-  if (!testFiles.length) die(`No *.test.mjs files found in ${testPath}`);
+  const testFiles = discoverTests(testPaths);
+  if (!testFiles.length) die(`No *.test.mjs files found in ${testPaths.join(', ')}`);
 
   // Import and filter tests
   const tests = [];

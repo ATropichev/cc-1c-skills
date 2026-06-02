@@ -1,10 +1,14 @@
-// web-test cli/test-runner/discover v1.0 — test file discovery + state reset between tests
+// web-test cli/test-runner/discover v1.1 — test file discovery + state reset between tests
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import { existsSync, readdirSync } from 'fs';
 import { resolve } from 'path';
 
-export function discoverTests(testPath) {
-  if (testPath.endsWith('.test.mjs')) return existsSync(testPath) ? [testPath] : [];
+// Accepts a single path or an array of paths (files and/or dirs). Each .test.mjs file is
+// taken directly; each directory is walked recursively (skipping _ / . prefixes). Results
+// are deduped and sorted — sorting preserves the numeric-prefix order the suite relies on
+// (00-, 01-, …) even when paths are listed out of order.
+export function discoverTests(testPaths) {
+  const paths = Array.isArray(testPaths) ? testPaths : [testPaths];
   const files = [];
   function walk(dir) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -14,8 +18,15 @@ export function discoverTests(testPath) {
       else if (entry.name.endsWith('.test.mjs')) files.push(full);
     }
   }
-  walk(testPath);
-  return files.sort();
+  for (const p of paths) {
+    const full = resolve(p);
+    if (full.endsWith('.test.mjs')) {
+      if (existsSync(full)) files.push(full);
+    } else if (existsSync(full)) {
+      walk(full);
+    }
+  }
+  return [...new Set(files)].sort();
 }
 
 export async function resetState(ctx) {

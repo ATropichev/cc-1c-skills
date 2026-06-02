@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// web-test run v1.17 — CLI entry-point (распилено по cli/)
+// web-test run v1.18 — CLI entry-point (распилено по cli/)
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * CLI runner for 1C web client automation.
@@ -14,7 +14,7 @@
  *   node src/run.mjs shot [file]            — take screenshot
  *   node src/run.mjs stop                   — logout + close browser
  *   node src/run.mjs status                 — check session
- *   node src/run.mjs test [url] <dir|file>  — run regression tests
+ *   node src/run.mjs test <dir|file>... [--url]  — run regression tests
  *
  * Внутренности живут в cli/: util, session, exec-context, server,
  * commands/{start,run,exec,shot,stop,status,test}, test-runner/*.
