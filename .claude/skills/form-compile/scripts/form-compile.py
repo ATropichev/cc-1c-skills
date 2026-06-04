@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.29 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.30 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1341,7 +1341,7 @@ KNOWN_KEYS = {
     "group", "columnGroup", "buttonGroup", "input", "check", "radio", "label", "labelField", "table", "pages", "page",
     "button", "picture", "picField", "calendar", "cmdBar", "popup",
     "showInHeader",
-    "radioButtonType", "choiceList", "columnsCount",
+    "radioButtonType", "choiceList", "columnsCount", "checkBoxType", "editMode",
     "name", "path", "title",
     "visible", "hidden", "enabled", "disabled", "readOnly", "userVisible",
     "on", "handlers",
@@ -2013,6 +2013,8 @@ def emit_input(lines, el, name, eid, indent):
         lines.append(f'{inner}<DropListButton>true</DropListButton>')
     if el.get('markIncomplete') is True:
         lines.append(f'{inner}<AutoMarkIncomplete>true</AutoMarkIncomplete>')
+    if el.get('editMode'):
+        lines.append(f'{inner}<EditMode>{el["editMode"]}</EditMode>')
     if el.get('textEdit') is False:
         lines.append(f'{inner}<TextEdit>false</TextEdit>')
     emit_layout(lines, el, inner, multi_line_default=(el.get('multiLine') is True))
@@ -2038,6 +2040,16 @@ def emit_check(lines, el, name, eid, indent):
 
     emit_title(lines, el, name, inner, auto=not el.get('path'))
     emit_common_flags(lines, el, inner)
+
+    if el.get('editMode'):
+        lines.append(f'{inner}<EditMode>{el["editMode"]}</EditMode>')
+    # CheckBoxType: нет ключа → умный дефолт Auto; "" → подавить; значение → маппинг
+    _cbt_map = {'auto': 'Auto', 'checkbox': 'CheckBox', 'switcher': 'Switcher', 'tumbler': 'Tumbler'}
+    if 'checkBoxType' in el:
+        if el.get('checkBoxType'):
+            lines.append(f'{inner}<CheckBoxType>{_cbt_map.get(str(el["checkBoxType"]).lower(), el["checkBoxType"])}</CheckBoxType>')
+    else:
+        lines.append(f'{inner}<CheckBoxType>Auto</CheckBoxType>')
 
     emit_title_location(lines, el, inner, 'Right')
 
@@ -2150,8 +2162,11 @@ def emit_label_field(lines, el, name, eid, indent):
     emit_title(lines, el, name, inner, auto=not el.get('path'))
     emit_common_flags(lines, el, inner)
 
+    if el.get('editMode'):
+        lines.append(f'{inner}<EditMode>{el["editMode"]}</EditMode>')
+    # ВНИМАНИЕ: у LabelField платформенный тег <Hiperlink> (опечатка 1С), не <Hyperlink>.
     if el.get('hyperlink') is True:
-        lines.append(f'{inner}<Hyperlink>true</Hyperlink>')
+        lines.append(f'{inner}<Hiperlink>true</Hiperlink>')
     emit_layout(lines, el, inner)
 
     # Companions

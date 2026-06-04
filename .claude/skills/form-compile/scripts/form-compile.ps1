@@ -1,4 +1,4 @@
-﻿# form-compile v1.29 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.30 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -1914,7 +1914,7 @@ function Emit-Element {
 		# columnGroup-specific
 		"showInHeader"=1
 		# radio-specific
-		"radioButtonType"=1;"choiceList"=1;"columnsCount"=1
+		"radioButtonType"=1;"choiceList"=1;"columnsCount"=1;"checkBoxType"=1;"editMode"=1
 		# naming & binding
 		"name"=1;"path"=1;"title"=1
 		# visibility & state
@@ -2210,6 +2210,7 @@ function Emit-Input {
 	if ($el.spinButton -eq $true) { X "$inner<SpinButton>true</SpinButton>" }
 	if ($el.dropListButton -eq $true) { X "$inner<DropListButton>true</DropListButton>" }
 	if ($el.markIncomplete -eq $true) { X "$inner<AutoMarkIncomplete>true</AutoMarkIncomplete>" }
+	if ($el.editMode) { X "$inner<EditMode>$($el.editMode)</EditMode>" }
 	if ($el.textEdit -eq $false) { X "$inner<TextEdit>false</TextEdit>" }
 	Emit-Layout -el $el -indent $inner -multiLineDefault ([bool]($el.multiLine -eq $true))
 
@@ -2236,6 +2237,15 @@ function Emit-Check {
 
 	Emit-Title -el $el -name $name -indent $inner -auto:(-not $el.path)
 	Emit-CommonFlags -el $el -indent $inner
+
+	if ($el.editMode) { X "$inner<EditMode>$($el.editMode)</EditMode>" }
+	# CheckBoxType: нет ключа → умный дефолт Auto; "" → подавить; значение → маппинг
+	if ($null -ne $el.PSObject.Properties['checkBoxType']) {
+		if ($el.checkBoxType) {
+			$cbt = switch ("$($el.checkBoxType)".ToLower()) { 'auto' {'Auto'} 'checkbox' {'CheckBox'} 'switcher' {'Switcher'} 'tumbler' {'Tumbler'} default {"$($el.checkBoxType)"} }
+			X "$inner<CheckBoxType>$cbt</CheckBoxType>"
+		}
+	} else { X "$inner<CheckBoxType>Auto</CheckBoxType>" }
 
 	Emit-TitleLocation -el $el -indent $inner -smartDefault "Right"
 
@@ -2502,7 +2512,9 @@ function Emit-LabelField {
 	Emit-Title -el $el -name $name -indent $inner -auto:(-not $el.path)
 	Emit-CommonFlags -el $el -indent $inner
 
-	if ($el.hyperlink -eq $true) { X "$inner<Hyperlink>true</Hyperlink>" }
+	if ($el.editMode) { X "$inner<EditMode>$($el.editMode)</EditMode>" }
+	# ВНИМАНИЕ: у LabelField платформенный тег именно <Hiperlink> (опечатка 1С), не <Hyperlink>.
+	if ($el.hyperlink -eq $true) { X "$inner<Hiperlink>true</Hiperlink>" }
 	Emit-Layout -el $el -indent $inner
 
 	# Companions

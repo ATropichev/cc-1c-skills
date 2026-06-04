@@ -60,6 +60,7 @@
 							<v8:content>Флаг</v8:content>
 						</v8:item>
 					</Title>
+					<CheckBoxType>Auto</CheckBoxType>
 					<TitleLocation>Right</TitleLocation>
 					<ContextMenu name="ТаблицаДанныхКартинкаФлагКонтекстноеМеню" id="20"/>
 					<ExtendedTooltip name="ТаблицаДанныхКартинкаФлагРасширеннаяПодсказка" id="21"/>

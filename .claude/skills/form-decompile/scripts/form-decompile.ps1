@@ -1,4 +1,4 @@
-﻿# form-decompile v0.7 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.8 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -374,6 +374,8 @@ function Decompile-Element {
 			Add-CommonProps $obj $node $name
 			if ((Get-Child $node 'MultiLine') -eq 'true') { $obj['multiLine'] = $true }
 			if ((Get-Child $node 'PasswordMode') -eq 'true') { $obj['passwordMode'] = $true }
+			if ((Get-Child $node 'AutoMarkIncomplete') -eq 'true') { $obj['markIncomplete'] = $true }
+			$em = Get-Child $node 'EditMode'; if ($em) { $obj['editMode'] = $em }
 			$tl = Get-Child $node 'TitleLocation'; if ($tl) { $obj['titleLocation'] = $tl.ToLower() }
 			$ih = $node.SelectSingleNode("lf:InputHint", $ns); if ($ih) { $t = Get-LangText $ih; if ($t) { $obj['inputHint'] = $t } }
 			foreach ($p in @('ChoiceButton','ClearButton','SpinButton','DropListButton')) {
@@ -384,6 +386,11 @@ function Decompile-Element {
 			$obj[$key] = $name
 			$dp = Get-Child $node 'DataPath'; if ($dp) { $obj['path'] = $dp }
 			Add-CommonProps $obj $node $name
+			$em = Get-Child $node 'EditMode'; if ($em) { $obj['editMode'] = $em }
+			# CheckBoxType: Auto = умный дефолт → опустить; нет тега → ""; иначе значение
+			$cbt = Get-Child $node 'CheckBoxType'
+			if ($null -eq $cbt) { $obj['checkBoxType'] = '' }
+			elseif ($cbt -ne 'Auto') { $obj['checkBoxType'] = $cbt.Substring(0,1).ToLower() + $cbt.Substring(1) }
 			Add-TitleLocation $obj $node 'Right'
 		}
 		'RadioButtonField' {
@@ -419,7 +426,9 @@ function Decompile-Element {
 			$obj[$key] = $name
 			$dp = Get-Child $node 'DataPath'; if ($dp) { $obj['path'] = $dp }
 			Add-CommonProps $obj $node $name
-			if ((Get-Child $node 'Hyperlink') -eq 'true') { $obj['hyperlink'] = $true }
+			$em = Get-Child $node 'EditMode'; if ($em) { $obj['editMode'] = $em }
+			# LabelField: тег <Hiperlink> (опечатка платформы), не <Hyperlink>
+			if ((Get-Child $node 'Hiperlink') -eq 'true') { $obj['hyperlink'] = $true }
 		}
 		'PictureDecoration' {
 			$obj[$key] = $name

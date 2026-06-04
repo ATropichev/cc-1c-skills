@@ -16,14 +16,16 @@
   "input": {
     "title": "Поля ввода",
     "elements": [
-      { "input": "ОбычноеПоле", "path": "ОбычноеПоле", "title": "Обычное поле" },
+      { "input": "ОбычноеПоле", "path": "ОбычноеПоле", "title": "Обычное поле", "editMode": "EnterOnInput" },
+      { "labelField": "Ссылка", "path": "ОбычноеПоле", "hyperlink": true },
       { "input": "МногострочноеПоле", "path": "МногострочноеПоле", "multiLine": true, "height": 5, "title": "Комментарий" },
       { "input": "ПолеПароля", "path": "ПолеПароля", "passwordMode": true, "title": "Пароль" },
       { "input": "ПолеСКнопками", "path": "ПолеСКнопками", "choiceButton": true, "clearButton": true, "title": "Выбор" },
       { "input": "ПолеПодсказка", "path": "ПолеПодсказка", "inputHint": "Введите значение...", "title": "Подсказка" },
       { "check": "Флаг", "path": "Флаг", "title": "Включено" },
       { "check": "ФлагПлатформенный", "path": "ФлагПлатформенный", "title": "Слева", "titleLocation": "" },
-      { "check": "ФлагЯвный", "path": "ФлагЯвный", "title": "Сверху", "titleLocation": "top" }
+      { "check": "ФлагЯвный", "path": "ФлагЯвный", "title": "Сверху", "titleLocation": "top" },
+      { "check": "ФлагТумблер", "path": "ФлагТумблер", "title": "Тумблер", "checkBoxType": "switcher" }
     ],
     "attributes": [
       { "name": "Объект", "type": "DataProcessorObject.ПоляВвода", "main": true },
@@ -34,7 +36,8 @@
       { "name": "ПолеПодсказка", "type": "string" },
       { "name": "Флаг", "type": "boolean" },
       { "name": "ФлагПлатформенный", "type": "boolean" },
-      { "name": "ФлагЯвный", "type": "boolean" }
+      { "name": "ФлагЯвный", "type": "boolean" },
+      { "name": "ФлагТумблер", "type": "boolean" }
     ]
   }
 }

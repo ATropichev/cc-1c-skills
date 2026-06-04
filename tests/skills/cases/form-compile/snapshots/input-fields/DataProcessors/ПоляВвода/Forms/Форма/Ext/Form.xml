@@ -17,10 +17,17 @@
 					<v8:content>Обычное поле</v8:content>
 				</v8:item>
 			</Title>
+			<EditMode>EnterOnInput</EditMode>
 			<ContextMenu name="ОбычноеПолеКонтекстноеМеню" id="2"/>
 			<ExtendedTooltip name="ОбычноеПолеРасширеннаяПодсказка" id="3"/>
 		</InputField>
-		<InputField name="МногострочноеПоле" id="4">
+		<LabelField name="Ссылка" id="4">
+			<DataPath>ОбычноеПоле</DataPath>
+			<Hiperlink>true</Hiperlink>
+			<ContextMenu name="СсылкаКонтекстноеМеню" id="5"/>
+			<ExtendedTooltip name="СсылкаРасширеннаяПодсказка" id="6"/>
+		</LabelField>
+		<InputField name="МногострочноеПоле" id="7">
 			<DataPath>МногострочноеПоле</DataPath>
 			<Title>
 				<v8:item>
@@ -31,10 +38,10 @@
 			<MultiLine>true</MultiLine>
 			<AutoMaxWidth>false</AutoMaxWidth>
 			<Height>5</Height>
-			<ContextMenu name="МногострочноеПолеКонтекстноеМеню" id="5"/>
-			<ExtendedTooltip name="МногострочноеПолеРасширеннаяПодсказка" id="6"/>
+			<ContextMenu name="МногострочноеПолеКонтекстноеМеню" id="8"/>
+			<ExtendedTooltip name="МногострочноеПолеРасширеннаяПодсказка" id="9"/>
 		</InputField>
-		<InputField name="ПолеПароля" id="7">
+		<InputField name="ПолеПароля" id="10">
 			<DataPath>ПолеПароля</DataPath>
 			<Title>
 				<v8:item>
@@ -43,10 +50,10 @@
 				</v8:item>
 			</Title>
 			<PasswordMode>true</PasswordMode>
-			<ContextMenu name="ПолеПароляКонтекстноеМеню" id="8"/>
-			<ExtendedTooltip name="ПолеПароляРасширеннаяПодсказка" id="9"/>
+			<ContextMenu name="ПолеПароляКонтекстноеМеню" id="11"/>
+			<ExtendedTooltip name="ПолеПароляРасширеннаяПодсказка" id="12"/>
 		</InputField>
-		<InputField name="ПолеСКнопками" id="10">
+		<InputField name="ПолеСКнопками" id="13">
 			<DataPath>ПолеСКнопками</DataPath>
 			<Title>
 				<v8:item>
@@ -55,10 +62,10 @@
 				</v8:item>
 			</Title>
 			<ClearButton>true</ClearButton>
-			<ContextMenu name="ПолеСКнопкамиКонтекстноеМеню" id="11"/>
-			<ExtendedTooltip name="ПолеСКнопкамиРасширеннаяПодсказка" id="12"/>
+			<ContextMenu name="ПолеСКнопкамиКонтекстноеМеню" id="14"/>
+			<ExtendedTooltip name="ПолеСКнопкамиРасширеннаяПодсказка" id="15"/>
 		</InputField>
-		<InputField name="ПолеПодсказка" id="13">
+		<InputField name="ПолеПодсказка" id="16">
 			<DataPath>ПолеПодсказка</DataPath>
 			<Title>
 				<v8:item>
@@ -72,10 +79,10 @@
 					<v8:content>Введите значение...</v8:content>
 				</v8:item>
 			</InputHint>
-			<ContextMenu name="ПолеПодсказкаКонтекстноеМеню" id="14"/>
-			<ExtendedTooltip name="ПолеПодсказкаРасширеннаяПодсказка" id="15"/>
+			<ContextMenu name="ПолеПодсказкаКонтекстноеМеню" id="17"/>
+			<ExtendedTooltip name="ПолеПодсказкаРасширеннаяПодсказка" id="18"/>
 		</InputField>
-		<CheckBoxField name="Флаг" id="16">
+		<CheckBoxField name="Флаг" id="19">
 			<DataPath>Флаг</DataPath>
 			<Title>
 				<v8:item>
@@ -83,11 +90,12 @@
 					<v8:content>Включено</v8:content>
 				</v8:item>
 			</Title>
+			<CheckBoxType>Auto</CheckBoxType>
 			<TitleLocation>Right</TitleLocation>
-			<ContextMenu name="ФлагКонтекстноеМеню" id="17"/>
-			<ExtendedTooltip name="ФлагРасширеннаяПодсказка" id="18"/>
+			<ContextMenu name="ФлагКонтекстноеМеню" id="20"/>
+			<ExtendedTooltip name="ФлагРасширеннаяПодсказка" id="21"/>
 		</CheckBoxField>
-		<CheckBoxField name="ФлагПлатформенный" id="19">
+		<CheckBoxField name="ФлагПлатформенный" id="22">
 			<DataPath>ФлагПлатформенный</DataPath>
 			<Title>
 				<v8:item>
@@ -95,10 +103,11 @@
 					<v8:content>Слева</v8:content>
 				</v8:item>
 			</Title>
-			<ContextMenu name="ФлагПлатформенныйКонтекстноеМеню" id="20"/>
-			<ExtendedTooltip name="ФлагПлатформенныйРасширеннаяПодсказка" id="21"/>
+			<CheckBoxType>Auto</CheckBoxType>
+			<ContextMenu name="ФлагПлатформенныйКонтекстноеМеню" id="23"/>
+			<ExtendedTooltip name="ФлагПлатформенныйРасширеннаяПодсказка" id="24"/>
 		</CheckBoxField>
-		<CheckBoxField name="ФлагЯвный" id="22">
+		<CheckBoxField name="ФлагЯвный" id="25">
 			<DataPath>ФлагЯвный</DataPath>
 			<Title>
 				<v8:item>
@@ -106,19 +115,33 @@
 					<v8:content>Сверху</v8:content>
 				</v8:item>
 			</Title>
+			<CheckBoxType>Auto</CheckBoxType>
 			<TitleLocation>Top</TitleLocation>
-			<ContextMenu name="ФлагЯвныйКонтекстноеМеню" id="23"/>
-			<ExtendedTooltip name="ФлагЯвныйРасширеннаяПодсказка" id="24"/>
+			<ContextMenu name="ФлагЯвныйКонтекстноеМеню" id="26"/>
+			<ExtendedTooltip name="ФлагЯвныйРасширеннаяПодсказка" id="27"/>
+		</CheckBoxField>
+		<CheckBoxField name="ФлагТумблер" id="28">
+			<DataPath>ФлагТумблер</DataPath>
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Тумблер</v8:content>
+				</v8:item>
+			</Title>
+			<CheckBoxType>Switcher</CheckBoxType>
+			<TitleLocation>Right</TitleLocation>
+			<ContextMenu name="ФлагТумблерКонтекстноеМеню" id="29"/>
+			<ExtendedTooltip name="ФлагТумблерРасширеннаяПодсказка" id="30"/>
 		</CheckBoxField>
 	</ChildItems>
 	<Attributes>
-		<Attribute name="Объект" id="25">
+		<Attribute name="Объект" id="31">
 			<Type>
 				<v8:Type>cfg:DataProcessorObject.ПоляВвода</v8:Type>
 			</Type>
 			<MainAttribute>true</MainAttribute>
 		</Attribute>
-		<Attribute name="ОбычноеПоле" id="26">
+		<Attribute name="ОбычноеПоле" id="32">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -133,7 +156,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="МногострочноеПоле" id="27">
+		<Attribute name="МногострочноеПоле" id="33">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -148,7 +171,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="ПолеПароля" id="28">
+		<Attribute name="ПолеПароля" id="34">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -163,7 +186,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="ПолеСКнопками" id="29">
+		<Attribute name="ПолеСКнопками" id="35">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -178,7 +201,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="ПолеПодсказка" id="30">
+		<Attribute name="ПолеПодсказка" id="36">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -193,7 +216,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="Флаг" id="31">
+		<Attribute name="Флаг" id="37">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -204,7 +227,7 @@
 				<v8:Type>xs:boolean</v8:Type>
 			</Type>
 		</Attribute>
-		<Attribute name="ФлагПлатформенный" id="32">
+		<Attribute name="ФлагПлатформенный" id="38">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -215,11 +238,22 @@
 				<v8:Type>xs:boolean</v8:Type>
 			</Type>
 		</Attribute>
-		<Attribute name="ФлагЯвный" id="33">
+		<Attribute name="ФлагЯвный" id="39">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
 					<v8:content>Флаг явный</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type>xs:boolean</v8:Type>
+			</Type>
+		</Attribute>
+		<Attribute name="ФлагТумблер" id="40">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Флаг тумблер</v8:content>
 				</v8:item>
 			</Title>
 			<Type>

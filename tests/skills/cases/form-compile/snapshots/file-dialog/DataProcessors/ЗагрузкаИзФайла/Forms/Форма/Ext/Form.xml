@@ -53,6 +53,7 @@
 				</InputField>
 				<CheckBoxField name="ПерваяСтрокаЗаголовок" id="10">
 					<DataPath>ПерваяСтрокаЗаголовок</DataPath>
+					<CheckBoxType>Auto</CheckBoxType>
 					<TitleLocation>Right</TitleLocation>
 					<ContextMenu name="ПерваяСтрокаЗаголовокКонтекстноеМеню" id="11"/>
 					<ExtendedTooltip name="ПерваяСтрокаЗаголовокРасширеннаяПодсказка" id="12"/>

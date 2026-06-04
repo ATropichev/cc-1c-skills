@@ -198,6 +198,7 @@
 | `spinButton` | bool | Показывать кнопку прокрутки |
 | `dropListButton` | bool | Показывать кнопку раскрытия |
 | `markIncomplete` | bool | Автопометка незаполненных |
+| `editMode` | string | Режим редактирования: `EnterOnInput`, `Directly` |
 | `skipOnInput` | bool | Пропускать при вводе |
 | `inputHint` | string | Подсказка ввода (placeholder) |
 | `width` | int | Ширина |
@@ -216,6 +217,8 @@
 | Свойство | Тип | Описание |
 |----------|-----|----------|
 | `path` | string | DataPath |
+| `checkBoxType` | string | Вид флажка. **Нет ключа** → умный дефолт `Auto`. **`""`** → дефолт платформы (тег не пишется). Значения: `auto`, `checkBox`, `switcher`, `tumbler` |
+| `editMode` | string | Режим редактирования: `EnterOnInput`, `Directly` |
 | `titleLocation` | string | Расположение заголовка. **Нет ключа** → умный дефолт `Right` (флажки почти всегда справа). **`""`** → дефолт платформы (`Left`, тег не пишется). Значение (`none`/`left`/`top`/…) → как указано |
 
 #### radio — RadioButtonField
@@ -271,7 +274,8 @@
 | Свойство | Тип | Описание |
 |----------|-----|----------|
 | `path` | string | DataPath |
-| `hyperlink` | bool | Режим гиперссылки |
+| `hyperlink` | bool | Режим гиперссылки (у LabelField платформенный тег `<Hiperlink>` — опечатка 1С, компилятор учитывает) |
+| `editMode` | string | Режим редактирования: `EnterOnInput`, `Directly` |
 
 #### table — Table
 
