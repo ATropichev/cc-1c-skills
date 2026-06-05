@@ -410,8 +410,19 @@ Pages поддерживает `pagesRepresentation`: `None`, `TabsOnTop`, `Tabs
 #### calendar — CalendarField
 
 ```json
-{ "calendar": "Дата", "path": "ДатаОтчета" }
+{ "calendar": "Дата", "path": "ДатаОтчета",
+  "selectionMode": "Interval", "showCurrentDate": false, "widthInMonths": 2 }
 ```
+
+| Свойство | XML | Значения |
+|----------|-----|----------|
+| `selectionMode` | `<SelectionMode>` | `Single`, `Multiple`, `Interval` |
+| `showCurrentDate` | `<ShowCurrentDate>` | bool (выводится при наличии ключа) |
+| `widthInMonths` | `<WidthInMonths>` | число месяцев по ширине |
+| `heightInMonths` | `<HeightInMonths>` | число месяцев по высоте |
+| `showMonthsPanel` | `<ShowMonthsPanel>` | bool |
+
+Также поддерживается общий `titleLocation` (`none`/`left`/`right`/`top`/`bottom`/`auto`).
 
 #### cmdBar — CommandBar
 

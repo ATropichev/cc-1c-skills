@@ -1,4 +1,4 @@
-﻿# form-compile v1.32 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.33 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -1982,6 +1982,8 @@ function Emit-Element {
 		"excludedCommands"=1
 		"choiceMode"=1;"initialTreeView"=1;"enableDrag"=1;"enableStartDrag"=1
 		"rowPictureDataPath"=1;"tableAutofill"=1
+		# calendar-specific
+		"selectionMode"=1;"showCurrentDate"=1;"widthInMonths"=1;"heightInMonths"=1;"showMonthsPanel"=1
 		# pages-specific
 		"pagesRepresentation"=1
 		# button-specific
@@ -2862,7 +2864,28 @@ function Emit-Calendar {
 
 	Emit-Title -el $el -name $name -indent $inner -auto:(-not $el.path)
 	Emit-CommonFlags -el $el -indent $inner
+
+	if ($el.titleLocation) {
+		$loc = switch ("$($el.titleLocation)") {
+			"none"   { "None" }
+			"left"   { "Left" }
+			"right"  { "Right" }
+			"top"    { "Top" }
+			"bottom" { "Bottom" }
+			"auto"   { "Auto" }
+			default  { "$($el.titleLocation)" }
+		}
+		X "$inner<TitleLocation>$loc</TitleLocation>"
+	}
+
 	Emit-Layout -el $el -indent $inner
+
+	# Календарно-специфичные свойства (порядок схемы: после layout, до companions)
+	if ($el.selectionMode) { X "$inner<SelectionMode>$($el.selectionMode)</SelectionMode>" }
+	if ($null -ne $el.showCurrentDate) { $v = if ($el.showCurrentDate) { "true" } else { "false" }; X "$inner<ShowCurrentDate>$v</ShowCurrentDate>" }
+	if ($null -ne $el.widthInMonths) { X "$inner<WidthInMonths>$($el.widthInMonths)</WidthInMonths>" }
+	if ($null -ne $el.heightInMonths) { X "$inner<HeightInMonths>$($el.heightInMonths)</HeightInMonths>" }
+	if ($null -ne $el.showMonthsPanel) { $v = if ($el.showMonthsPanel) { "true" } else { "false" }; X "$inner<ShowMonthsPanel>$v</ShowMonthsPanel>" }
 
 	# Companions
 	Emit-Companion -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner

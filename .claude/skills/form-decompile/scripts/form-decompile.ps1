@@ -1,4 +1,4 @@
-﻿# form-decompile v0.12 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.13 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -422,6 +422,12 @@ function Decompile-Element {
 			$obj[$key] = $name
 			$dp = Get-Child $node 'DataPath'; if ($dp) { $obj['path'] = $dp }
 			Add-CommonProps $obj $node $name
+			$tl = Get-Child $node 'TitleLocation'; if ($tl) { $obj['titleLocation'] = $tl.ToLower() }
+			$sm = Get-Child $node 'SelectionMode'; if ($sm) { $obj['selectionMode'] = $sm }
+			$scd = Get-Child $node 'ShowCurrentDate'; if ($null -ne $scd) { $obj['showCurrentDate'] = ($scd -eq 'true') }
+			$wim = Get-Child $node 'WidthInMonths'; if ($null -ne $wim) { $obj['widthInMonths'] = [int]$wim }
+			$him = Get-Child $node 'HeightInMonths'; if ($null -ne $him) { $obj['heightInMonths'] = [int]$him }
+			$smp = Get-Child $node 'ShowMonthsPanel'; if ($null -ne $smp) { $obj['showMonthsPanel'] = ($smp -eq 'true') }
 		}
 		'Table' {
 			$obj[$key] = $name

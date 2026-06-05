@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.32 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.33 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1357,6 +1357,7 @@ KNOWN_KEYS = {
     "name", "path", "title",
     "visible", "hidden", "enabled", "disabled", "readOnly", "userVisible",
     "events", "on", "handlers",
+    "selectionMode", "showCurrentDate", "widthInMonths", "heightInMonths", "showMonthsPanel",
     "titleLocation", "representation", "width", "height",
     "horizontalStretch", "verticalStretch", "autoMaxWidth", "autoMaxHeight",
     "maxWidth", "maxHeight",
@@ -2494,7 +2495,25 @@ def emit_calendar(lines, el, name, eid, indent):
 
     emit_title(lines, el, name, inner, auto=not el.get('path'))
     emit_common_flags(lines, el, inner)
+
+    if el.get('titleLocation'):
+        loc_map = {'none': 'None', 'left': 'Left', 'right': 'Right', 'top': 'Top', 'bottom': 'Bottom', 'auto': 'Auto'}
+        loc = loc_map.get(str(el['titleLocation']), str(el['titleLocation']))
+        lines.append(f'{inner}<TitleLocation>{loc}</TitleLocation>')
+
     emit_layout(lines, el, inner)
+
+    # \u041a\u0430\u043b\u0435\u043d\u0434\u0430\u0440\u043d\u043e-\u0441\u043f\u0435\u0446\u0438\u0444\u0438\u0447\u043d\u044b\u0435 \u0441\u0432\u043e\u0439\u0441\u0442\u0432\u0430 (\u043f\u043e\u0440\u044f\u0434\u043e\u043a \u0441\u0445\u0435\u043c\u044b: \u043f\u043e\u0441\u043b\u0435 layout, \u0434\u043e companions)
+    if el.get('selectionMode'):
+        lines.append(f'{inner}<SelectionMode>{el["selectionMode"]}</SelectionMode>')
+    if el.get('showCurrentDate') is not None:
+        lines.append(f'{inner}<ShowCurrentDate>{"true" if el["showCurrentDate"] else "false"}</ShowCurrentDate>')
+    if el.get('widthInMonths') is not None:
+        lines.append(f'{inner}<WidthInMonths>{el["widthInMonths"]}</WidthInMonths>')
+    if el.get('heightInMonths') is not None:
+        lines.append(f'{inner}<HeightInMonths>{el["heightInMonths"]}</HeightInMonths>')
+    if el.get('showMonthsPanel') is not None:
+        lines.append(f'{inner}<ShowMonthsPanel>{"true" if el["showMonthsPanel"] else "false"}</ShowMonthsPanel>')
 
     # Companions
     emit_companion(lines, 'ContextMenu', f'{name}\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442\u043d\u043e\u0435\u041c\u0435\u043d\u044e', inner)
