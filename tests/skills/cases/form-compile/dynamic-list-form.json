@@ -16,7 +16,12 @@
   "input": {
     "title": "Товары",
     "attributes": [
-      { "name": "Список", "type": "DynamicList", "settings": { "mainTable": "Catalog.Товары", "dynamicDataRead": true } }
+      { "name": "Список", "type": "DynamicList", "settings": {
+        "mainTable": "Catalog.Товары", "dynamicDataRead": true,
+        "order": [ "Description", "Code desc" ],
+        "filter": [ "Артикул = _ @off @user" ],
+        "conditionalAppearance": [ { "filter": ["Артикул = _"], "appearance": { "ЦветТекста": "web:Red" } } ]
+      } }
     ],
     "elements": [
       { "table": "Список", "path": "Список", "columns": [

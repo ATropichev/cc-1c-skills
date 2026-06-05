@@ -1,4 +1,4 @@
-﻿# form-compile v1.38 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.39 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -1496,6 +1496,22 @@ if ($FromObject) {
 	$def = $json | ConvertFrom-Json
 }
 
+# Базовая директория для @file-ссылок в query динсписка (зеркало skd-compile)
+$script:queryBaseDir = if ($JsonPath) { [System.IO.Path]::GetDirectoryName((Resolve-Path $JsonPath).Path) } else { (Get-Location).Path }
+function Resolve-QueryValue {
+	param([string]$val, [string]$baseDir)
+	if (-not $val.StartsWith("@")) { return $val }
+	$filePath = $val.Substring(1)
+	if ([System.IO.Path]::IsPathRooted($filePath)) {
+		$candidates = @($filePath)
+	} else {
+		$candidates = @((Join-Path $baseDir $filePath), (Join-Path (Get-Location).Path $filePath))
+	}
+	foreach ($c in $candidates) { if (Test-Path $c) { return (Get-Content -Raw -Encoding UTF8 $c).TrimEnd() } }
+	Write-Error "Query file not found: $filePath (searched: $($candidates -join ', '))"
+	exit 1
+}
+
 # --- 2. ID allocator ---
 
 $script:nextId = 1
@@ -1545,6 +1561,347 @@ function Emit-MLText {
 	X "$indent<$tag>"
 	Emit-MLItems -val $text -indent "$indent`t"
 	X "$indent</$tag>"
+}
+
+# Каноничные GUID пустых контейнеров ListSettings (умолчание платформы, ~90% форм).
+# Декомпилятор опускает пустые настройки → компилятор регенерит этот скелет → раундтрип
+# (harness нормализует GUID для хвоста с иными идентификаторами).
+$script:CANON_FILTER_ID = 'dfcece9d-5077-440b-b6b3-45a5cb4538eb'
+$script:CANON_ORDER_ID  = '88619765-ccb3-46c6-ac52-38e9c992ebd4'
+$script:CANON_CA_ID     = 'b75fecce-942b-4aed-abc9-e6a02e460fb3'
+$script:CANON_ITEMS_ID  = '911b6018-f537-43e8-a417-da56b22f9aec'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Настройки компоновщика ListSettings: filter/order/conditionalAppearance.
+# Грамматика DSL и эмиссия dcsset скопированы из skd-compile (навыки автономны).
+# ─────────────────────────────────────────────────────────────────────────────
+function New-Guid-String { return [System.Guid]::NewGuid().ToString() }
+
+$script:comparisonTypes = @{
+	"=" = "Equal"; "<>" = "NotEqual"
+	">" = "Greater"; ">=" = "GreaterOrEqual"
+	"<" = "Less"; "<=" = "LessOrEqual"
+	"in" = "InList"; "notIn" = "NotInList"
+	"inHierarchy" = "InHierarchy"; "inListByHierarchy" = "InListByHierarchy"
+	"contains" = "Contains"; "notContains" = "NotContains"
+	"beginsWith" = "BeginsWith"; "notBeginsWith" = "NotBeginsWith"
+	"filled" = "Filled"; "notFilled" = "NotFilled"
+}
+
+function Parse-FilterShorthand {
+	param([string]$s)
+	$result = @{ field = ""; op = "Equal"; value = $null; use = $true; userSettingID = $null; viewMode = $null; presentation = $null }
+	if ($s -match '@user') { $result.userSettingID = "auto"; $s = $s -replace '\s*@user', '' }
+	if ($s -match '@off') { $result.use = $false; $s = $s -replace '\s*@off', '' }
+	if ($s -match '@quickAccess') { $result.viewMode = "QuickAccess"; $s = $s -replace '\s*@quickAccess', '' }
+	if ($s -match '@normal') { $result.viewMode = "Normal"; $s = $s -replace '\s*@normal', '' }
+	if ($s -match '@inaccessible') { $result.viewMode = "Inaccessible"; $s = $s -replace '\s*@inaccessible', '' }
+	$s = $s.Trim()
+	$opPatterns = @('<>', '>=', '<=', '=', '>', '<',
+		'notIn\b', 'in\b', 'inHierarchy\b', 'inListByHierarchy\b',
+		'notContains\b', 'contains\b', 'notBeginsWith\b', 'beginsWith\b',
+		'notFilled\b', 'filled\b')
+	$opJoined = $opPatterns -join '|'
+	if ($s -match "^(.+?)\s+($opJoined)\s*(.*)?$") {
+		$result.field = $Matches[1].Trim()
+		$result.op = $Matches[2].Trim()
+		$valPart = if ($Matches[3]) { $Matches[3].Trim() } else { "" }
+		if ($valPart -and $valPart -ne "_") {
+			if ($valPart -eq "true" -or $valPart -eq "false") { $result.value = [bool]($valPart -eq "true"); $result["valueType"] = "xs:boolean" }
+			elseif ($valPart -match '^\d{4}-\d{2}-\d{2}T') { $result.value = $valPart; $result["valueType"] = "xs:dateTime" }
+			elseif ($valPart -match '^\d+(\.\d+)?$') { $result.value = $valPart; $result["valueType"] = "xs:decimal" }
+			elseif ($valPart -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.') { $result.value = $valPart; $result["valueType"] = "dcscor:DesignTimeValue" }
+			else { $result.value = $valPart; $result["valueType"] = "xs:string" }
+		}
+	} else { $result.field = $s }
+	return $result
+}
+
+function Emit-FilterItem {
+	param($item, [string]$indent)
+	if ($item.group) {
+		$groupType = switch ("$($item.group)") { "And" { "AndGroup" } "Or" { "OrGroup" } "Not" { "NotGroup" } default { "$($item.group)Group" } }
+		X "$indent<dcsset:item xsi:type=`"dcsset:FilterItemGroup`">"
+		X "$indent`t<dcsset:groupType>$groupType</dcsset:groupType>"
+		if ($item.items) {
+			foreach ($sub in $item.items) {
+				if ($sub -is [string]) {
+					$parsed = Parse-FilterShorthand $sub
+					$obj = @{ field = $parsed.field; op = $parsed.op }
+					if ($parsed.use -eq $false) { $obj.use = $false }
+					if ($null -ne $parsed.value) { $obj.value = $parsed.value }
+					if ($parsed["valueType"]) { $obj.valueType = $parsed["valueType"] }
+					if ($parsed.userSettingID) { $obj.userSettingID = $parsed.userSettingID }
+					if ($parsed.viewMode) { $obj.viewMode = $parsed.viewMode }
+					$sub = [pscustomobject]$obj
+				}
+				Emit-FilterItem -item $sub -indent "$indent`t"
+			}
+		}
+		if ($item.presentation) { Emit-MLText -tag "dcsset:presentation" -text $item.presentation -indent "$indent`t" }
+		if ($item.viewMode) { X "$indent`t<dcsset:viewMode>$(Esc-Xml "$($item.viewMode)")</dcsset:viewMode>" }
+		if ($item.userSettingID) {
+			$guid = if ("$($item.userSettingID)" -eq "auto") { New-Guid-String } else { "$($item.userSettingID)" }
+			X "$indent`t<dcsset:userSettingID>$(Esc-Xml $guid)</dcsset:userSettingID>"
+		}
+		if ($item.userSettingPresentation) { Emit-MLText -tag "dcsset:userSettingPresentation" -text $item.userSettingPresentation -indent "$indent`t" }
+		X "$indent</dcsset:item>"
+		return
+	}
+	X "$indent<dcsset:item xsi:type=`"dcsset:FilterItemComparison`">"
+	if ($item.use -eq $false) { X "$indent`t<dcsset:use>false</dcsset:use>" }
+	X "$indent`t<dcsset:left xsi:type=`"dcscor:Field`">$(Esc-Xml "$($item.field)")</dcsset:left>"
+	$compType = $script:comparisonTypes["$($item.op)"]
+	if (-not $compType) { $compType = "$($item.op)" }
+	X "$indent`t<dcsset:comparisonType>$(Esc-Xml $compType)</dcsset:comparisonType>"
+	$valIsArray = ($item.value -is [array]) -or ($item.value -is [System.Collections.IList] -and $item.value -isnot [string])
+	if ($valIsArray) {
+		if (@($item.value).Count -eq 0) {
+			X "$indent`t<dcsset:right xsi:type=`"v8:ValueListType`">"
+			X "$indent`t`t<v8:valueType/>"
+			X "$indent`t`t<v8:lastId xsi:type=`"xs:decimal`">-1</v8:lastId>"
+			X "$indent`t</dcsset:right>"
+		} else {
+			foreach ($v in $item.value) {
+				$vt = if ($item.valueType) { "$($item.valueType)" } else { "" }
+				if (-not $vt) {
+					if ($v -is [bool]) { $vt = 'xs:boolean' }
+					elseif ($v -is [int] -or $v -is [long] -or $v -is [double]) { $vt = 'xs:decimal' }
+					elseif ("$v" -match '^\d{4}-\d{2}-\d{2}T') { $vt = 'xs:dateTime' }
+					elseif ("$v" -match '^-?\d+(\.\d+)?$') { $vt = 'xs:decimal' }
+					elseif ("$v" -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') { $vt = 'dcscor:DesignTimeValue' }
+					else { $vt = 'xs:string' }
+				}
+				$vStr = if ($v -is [bool]) { "$v".ToLower() } else { Esc-Xml "$v" }
+				X "$indent`t<dcsset:right xsi:type=`"$vt`">$vStr</dcsset:right>"
+			}
+		}
+	} elseif ($null -ne $item.value) {
+		$vt = if ($item.valueType) { "$($item.valueType)" } else { "" }
+		if (-not $vt) {
+			$v = $item.value
+			if ($v -is [bool]) { $vt = "xs:boolean" }
+			elseif ($v -is [int] -or $v -is [long] -or $v -is [double]) { $vt = "xs:decimal" }
+			elseif ("$v" -match '^\d{4}-\d{2}-\d{2}T') { $vt = "xs:dateTime" }
+			elseif ("$v" -match '^-?\d+(\.\d+)?$') { $vt = "xs:decimal" }
+			elseif ("$v" -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') { $vt = "dcscor:DesignTimeValue" }
+			else { $vt = "xs:string" }
+		}
+		$vStr = if ($item.value -is [bool]) { "$($item.value)".ToLower() } else { Esc-Xml "$($item.value)" }
+		X "$indent`t<dcsset:right xsi:type=`"$vt`">$vStr</dcsset:right>"
+	}
+	if ($item.presentation) { Emit-MLText -tag "dcsset:presentation" -text $item.presentation -indent "$indent`t" }
+	if ($item.viewMode) { X "$indent`t<dcsset:viewMode>$(Esc-Xml "$($item.viewMode)")</dcsset:viewMode>" }
+	if ($item.userSettingID) {
+		$uid = if ("$($item.userSettingID)" -eq "auto") { New-Guid-String } else { "$($item.userSettingID)" }
+		X "$indent`t<dcsset:userSettingID>$(Esc-Xml $uid)</dcsset:userSettingID>"
+	}
+	if ($item.userSettingPresentation) { Emit-MLText -tag "dcsset:userSettingPresentation" -text $item.userSettingPresentation -indent "$indent`t" }
+	X "$indent</dcsset:item>"
+}
+
+function Emit-Filter {
+	param($items, [string]$indent, $blockViewMode = $null, $blockUserSettingID = $null)
+	$hasItems = $items -and $items.Count -gt 0
+	$hasBlockMeta = ($null -ne $blockViewMode) -or ($null -ne $blockUserSettingID)
+	if (-not $hasItems -and -not $hasBlockMeta) { return }
+	X "$indent<dcsset:filter>"
+	foreach ($item in $items) {
+		if ($item -is [string]) {
+			$parsed = Parse-FilterShorthand $item
+			$obj = @{ field = $parsed.field; op = $parsed.op }
+			if ($parsed.use -eq $false) { $obj.use = $false }
+			if ($null -ne $parsed.value) { $obj.value = $parsed.value }
+			if ($parsed["valueType"]) { $obj.valueType = $parsed["valueType"] }
+			if ($parsed.userSettingID) { $obj.userSettingID = $parsed.userSettingID }
+			if ($parsed.viewMode) { $obj.viewMode = $parsed.viewMode }
+			Emit-FilterItem -item ([pscustomobject]$obj) -indent "$indent`t"
+		} else { Emit-FilterItem -item $item -indent "$indent`t" }
+	}
+	if ($null -ne $blockViewMode) { X "$indent`t<dcsset:viewMode>$(Esc-Xml "$blockViewMode")</dcsset:viewMode>" }
+	if ($null -ne $blockUserSettingID) {
+		$uid = if ("$blockUserSettingID" -eq 'auto') { New-Guid-String } else { "$blockUserSettingID" }
+		X "$indent`t<dcsset:userSettingID>$(Esc-Xml $uid)</dcsset:userSettingID>"
+	}
+	X "$indent</dcsset:filter>"
+}
+
+function Emit-Order {
+	param($items, [string]$indent, [switch]$skipAuto, $blockViewMode = $null, $blockUserSettingID = $null)
+	$hasItems = $items -and $items.Count -gt 0
+	$hasBlockMeta = ($null -ne $blockViewMode) -or ($null -ne $blockUserSettingID)
+	if (-not $hasItems -and -not $hasBlockMeta) { return }
+	X "$indent<dcsset:order>"
+	foreach ($item in $items) {
+		if ($item -is [string]) {
+			if ($item -eq "Auto") { if (-not $skipAuto) { X "$indent`t<dcsset:item xsi:type=`"dcsset:OrderItemAuto`"/>" } }
+			else {
+				$parts = $item -split '\s+'
+				$field = $parts[0]
+				$dir = "Asc"
+				if ($parts.Count -gt 1 -and $parts[1] -match '^(?i)(desc|убыв)') { $dir = "Desc" }
+				elseif ($parts.Count -gt 1 -and $parts[1] -match '^(?i)(asc|возр)') { $dir = "Asc" }
+				X "$indent`t<dcsset:item xsi:type=`"dcsset:OrderItemField`">"
+				X "$indent`t`t<dcsset:field>$(Esc-Xml $field)</dcsset:field>"
+				X "$indent`t`t<dcsset:orderType>$dir</dcsset:orderType>"
+				X "$indent`t</dcsset:item>"
+			}
+		} else {
+			if ($item.field -eq "Auto" -or $item.type -eq "auto") { if (-not $skipAuto) { X "$indent`t<dcsset:item xsi:type=`"dcsset:OrderItemAuto`"/>" }; continue }
+			$dir = if ($item.direction) { "$($item.direction)" } else { "Asc" }
+			if ($dir -match '^(?i)(desc|убыв)') { $dir = "Desc" } elseif ($dir -match '^(?i)(asc|возр)') { $dir = "Asc" }
+			X "$indent`t<dcsset:item xsi:type=`"dcsset:OrderItemField`">"
+			if ($item.use -eq $false) { X "$indent`t`t<dcsset:use>false</dcsset:use>" }
+			X "$indent`t`t<dcsset:field>$(Esc-Xml "$($item.field)")</dcsset:field>"
+			X "$indent`t`t<dcsset:orderType>$dir</dcsset:orderType>"
+			if ($item.viewMode) { X "$indent`t`t<dcsset:viewMode>$(Esc-Xml "$($item.viewMode)")</dcsset:viewMode>" }
+			X "$indent`t</dcsset:item>"
+		}
+	}
+	if ($null -ne $blockViewMode) { X "$indent`t<dcsset:viewMode>$(Esc-Xml "$blockViewMode")</dcsset:viewMode>" }
+	if ($null -ne $blockUserSettingID) {
+		$uid = if ("$blockUserSettingID" -eq 'auto') { New-Guid-String } else { "$blockUserSettingID" }
+		X "$indent`t<dcsset:userSettingID>$(Esc-Xml $uid)</dcsset:userSettingID>"
+	}
+	X "$indent</dcsset:order>"
+}
+
+function Emit-AppearanceValue {
+	param([string]$key, $val, [string]$indent)
+	X "$indent<dcscor:item xsi:type=`"dcsset:SettingsParameterValue`">"
+	function _HasKey { param($o, [string]$k)
+		if ($o -is [PSCustomObject]) { return [bool]$o.PSObject.Properties[$k] }
+		if ($o -is [System.Collections.IDictionary]) { return $o.Contains($k) }
+		return $false
+	}
+	function _Get { param($o, [string]$k)
+		if ($o -is [PSCustomObject]) { return $o.$k }
+		if ($o -is [System.Collections.IDictionary]) { return $o[$k] }
+		return $null
+	}
+	$isTopLevelLine = (_HasKey $val '@type') -and ("$(_Get $val '@type')" -eq 'Line')
+	$useWrapper = $false
+	$innerVal = $val
+	$nestedItems = $null
+	if ($isTopLevelLine) {
+		if ((_HasKey $val 'use') -and ((_Get $val 'use') -eq $false)) { $useWrapper = $true }
+		if (_HasKey $val 'items') { $nestedItems = (_Get $val 'items') }
+	} elseif ((_HasKey $val 'value') -and (($val -is [PSCustomObject]) -or ($val -is [System.Collections.IDictionary]))) {
+		$innerVal = (_Get $val 'value')
+		if ((_HasKey $val 'use') -and ((_Get $val 'use') -eq $false)) { $useWrapper = $true }
+		if (_HasKey $val 'items') { $nestedItems = (_Get $val 'items') }
+	}
+	if ($useWrapper) { X "$indent`t<dcscor:use>false</dcscor:use>" }
+	X "$indent`t<dcscor:parameter>$(Esc-Xml $key)</dcscor:parameter>"
+	$isFontDict = $false
+	if ($innerVal -is [PSCustomObject]) {
+		$tProp = $innerVal.PSObject.Properties['@type']
+		if ($tProp -and "$($tProp.Value)" -eq 'Font') { $isFontDict = $true }
+	} elseif ($innerVal -is [System.Collections.IDictionary]) {
+		if ($innerVal.Contains('@type') -and "$($innerVal['@type'])" -eq 'Font') { $isFontDict = $true }
+	}
+	$isLineDict = $false
+	if (_HasKey $innerVal '@type') { $isLineDict = ("$(_Get $innerVal '@type')" -eq 'Line') }
+	$isDict = ($innerVal -is [hashtable]) -or ($innerVal -is [System.Collections.IDictionary]) -or ($innerVal -is [PSCustomObject])
+	if ($isLineDict) {
+		$lw = if (_HasKey $innerVal 'width') { _Get $innerVal 'width' } else { 0 }
+		$lg = if (_HasKey $innerVal 'gap') { if ((_Get $innerVal 'gap')) { 'true' } else { 'false' } } else { 'false' }
+		$ls = if (_HasKey $innerVal 'style') { "$(_Get $innerVal 'style')" } else { 'None' }
+		X "$indent`t<dcscor:value xsi:type=`"v8ui:Line`" width=`"$lw`" gap=`"$lg`">"
+		X "$indent`t`t<v8ui:style xsi:type=`"v8ui:SpreadsheetDocumentCellLineType`">$(Esc-Xml $ls)</v8ui:style>"
+		X "$indent`t</dcscor:value>"
+	} elseif ($isFontDict) {
+		$attrParts = @()
+		foreach ($attrName in @('ref','faceName','height','bold','italic','underline','strikeout','kind','scale')) {
+			$av = $null
+			if ($innerVal -is [PSCustomObject]) { $ap = $innerVal.PSObject.Properties[$attrName]; if ($ap) { $av = $ap.Value } }
+			else { if ($innerVal.Contains($attrName)) { $av = $innerVal[$attrName] } }
+			if ($null -ne $av) { $attrParts += "$attrName=`"$(Esc-Xml "$av")`"" }
+		}
+		X "$indent`t<dcscor:value xsi:type=`"v8ui:Font`" $($attrParts -join ' ')/>"
+	} elseif ($isDict) {
+		Emit-MLText -tag "dcscor:value" -text $innerVal -indent "$indent`t"
+	} else {
+		$actualVal = "$innerVal"
+		$keyTypeMap = @{
+			'Размещение'           = 'dcscor:DataCompositionTextPlacementType'
+			'ГоризонтальноеПоложение' = 'v8ui:HorizontalAlign'
+			'ВертикальноеПоложение' = 'v8ui:VerticalAlign'
+			'ОриентацияТекста'     = 'xs:decimal'
+			'РасположениеИтогов'   = 'dcscor:DataCompositionTotalPlacement'
+			'ТипМакета'            = 'dcsset:DataCompositionGroupTemplateType'
+		}
+		$keyType = $keyTypeMap[$key]
+		if ($keyType) { X "$indent`t<dcscor:value xsi:type=`"$keyType`">$(Esc-Xml $actualVal)</dcscor:value>" }
+		elseif ($actualVal -match '^(style|web|win):') { X "$indent`t<dcscor:value xsi:type=`"v8ui:Color`">$(Esc-Xml $actualVal)</dcscor:value>" }
+		elseif ($actualVal -eq "true" -or $actualVal -eq "false") { X "$indent`t<dcscor:value xsi:type=`"xs:boolean`">$actualVal</dcscor:value>" }
+		elseif ($key -eq "Текст" -or $key -eq "Заголовок" -or $key -eq "Формат") { Emit-MLText -tag "dcscor:value" -text $actualVal -indent "$indent`t" }
+		elseif ($actualVal -match '^-?\d+(\.\d+)?$') { X "$indent`t<dcscor:value xsi:type=`"xs:decimal`">$actualVal</dcscor:value>" }
+		elseif ($key -eq 'ЦветТекста' -or $key -eq 'ЦветФона' -or $key -eq 'ЦветГраницы') { X "$indent`t<dcscor:value xsi:type=`"v8ui:Color`">$(Esc-Xml $actualVal)</dcscor:value>" }
+		else { X "$indent`t<dcscor:value xsi:type=`"xs:string`">$(Esc-Xml $actualVal)</dcscor:value>" }
+	}
+	if ($nestedItems) {
+		$niProps = if ($nestedItems -is [PSCustomObject]) { $nestedItems.PSObject.Properties } else { $null }
+		if ($niProps) { foreach ($np in $niProps) { Emit-AppearanceValue -key $np.Name -val $np.Value -indent "$indent`t" } }
+		elseif ($nestedItems -is [System.Collections.IDictionary]) { foreach ($nk in $nestedItems.Keys) { Emit-AppearanceValue -key $nk -val $nestedItems[$nk] -indent "$indent`t" } }
+	}
+	X "$indent</dcscor:item>"
+}
+
+function Emit-ConditionalAppearance {
+	param($items, [string]$indent, $blockViewMode = $null, $blockUserSettingID = $null)
+	$hasItems = $items -and $items.Count -gt 0
+	$hasBlockMeta = ($null -ne $blockViewMode) -or ($null -ne $blockUserSettingID)
+	if (-not $hasItems -and -not $hasBlockMeta) { return }
+	X "$indent<dcsset:conditionalAppearance>"
+	foreach ($ca in $items) {
+		X "$indent`t<dcsset:item>"
+		if ($ca.use -eq $false) { X "$indent`t`t<dcsset:use>false</dcsset:use>" }
+		if ($ca.selection -and $ca.selection.Count -gt 0) {
+			X "$indent`t`t<dcsset:selection>"
+			foreach ($sel in $ca.selection) {
+				X "$indent`t`t`t<dcsset:item>"
+				X "$indent`t`t`t`t<dcsset:field>$(Esc-Xml "$sel")</dcsset:field>"
+				X "$indent`t`t`t</dcsset:item>"
+			}
+			X "$indent`t`t</dcsset:selection>"
+		} else { X "$indent`t`t<dcsset:selection/>" }
+		if ($ca.filter -and $ca.filter.Count -gt 0) { Emit-Filter -items $ca.filter -indent "$indent`t`t" }
+		else { X "$indent`t`t<dcsset:filter/>" }
+		if ($ca.appearance) {
+			X "$indent`t`t<dcsset:appearance>"
+			foreach ($prop in $ca.appearance.PSObject.Properties) { Emit-AppearanceValue -key $prop.Name -val $prop.Value -indent "$indent`t`t`t" }
+			X "$indent`t`t</dcsset:appearance>"
+		}
+		if ($ca.presentation) {
+			if ($ca.presentation -is [hashtable] -or $ca.presentation -is [System.Collections.IDictionary] -or $ca.presentation -is [PSCustomObject]) { Emit-MLText -tag "dcsset:presentation" -text $ca.presentation -indent "$indent`t`t" }
+			else { X "$indent`t`t<dcsset:presentation xsi:type=`"xs:string`">$(Esc-Xml "$($ca.presentation)")</dcsset:presentation>" }
+		}
+		if ($ca.viewMode) { X "$indent`t`t<dcsset:viewMode>$(Esc-Xml "$($ca.viewMode)")</dcsset:viewMode>" }
+		if ($ca.userSettingID) {
+			$uid = if ("$($ca.userSettingID)" -eq "auto") { New-Guid-String } else { "$($ca.userSettingID)" }
+			X "$indent`t`t<dcsset:userSettingID>$(Esc-Xml $uid)</dcsset:userSettingID>"
+		}
+		if ($ca.userSettingPresentation) { Emit-MLText -tag "dcsset:userSettingPresentation" -text $ca.userSettingPresentation -indent "$indent`t`t" }
+		if ($ca.useInDontUse -and $ca.useInDontUse.Count -gt 0) {
+			$useInOrder = @('group','hierarchicalGroup','overall','fieldsHeader','header','parameters','filter','resourceFieldsHeader','overallHeader','overallResourceFieldsHeader')
+			$set = @{}
+			foreach ($n in $ca.useInDontUse) { $set["$n"] = $true }
+			foreach ($n in $useInOrder) {
+				if ($set.ContainsKey($n)) {
+					$tag = "useIn" + ($n.Substring(0,1).ToUpper()) + ($n.Substring(1))
+					X "$indent`t`t<dcsset:$tag>DontUse</dcsset:$tag>"
+				}
+			}
+		}
+		X "$indent`t</dcsset:item>"
+	}
+	if ($null -ne $blockViewMode) { X "$indent`t<dcsset:viewMode>$(Esc-Xml "$blockViewMode")</dcsset:viewMode>" }
+	if ($null -ne $blockUserSettingID) {
+		$uid = if ("$blockUserSettingID" -eq 'auto') { New-Guid-String } else { "$blockUserSettingID" }
+		X "$indent`t<dcsset:userSettingID>$(Esc-Xml $uid)</dcsset:userSettingID>"
+	}
+	X "$indent</dcsset:conditionalAppearance>"
 }
 
 # --- 5. Type emitter ---
@@ -2327,8 +2684,24 @@ $script:refRootSynonyms = @{
 	"РегистрБухгалтерии"      = "AccountingRegister"
 	"РегистрРасчета"          = "CalculationRegister"
 	"РегистрРасчёта"          = "CalculationRegister"
+	"ЖурналДокументов"        = "DocumentJournal"
+	"КритерийОтбора"          = "FilterCriterion"
 }
 $script:enumValueSynonyms = @("EnumValue","ЗначениеПеречисления")
+
+# Нормализация типа таблицы динсписка: "Справочник.Контрагенты" → "Catalog.Контрагенты".
+# Прощающий ввод: принимаем рус-имя метаданных, переводим в платформенное. Уже англ — без изменений.
+function Normalize-MetaTypeRef {
+	param([string]$ref)
+	if ([string]::IsNullOrEmpty($ref)) { return $ref }
+	$dot = $ref.IndexOf('.')
+	if ($dot -lt 1) { return $ref }
+	$root = $ref.Substring(0, $dot)
+	if ($script:refRootSynonyms.ContainsKey($root)) {
+		return $script:refRootSynonyms[$root] + $ref.Substring($dot)
+	}
+	return $ref
+}
 
 # Normalize a choiceList item value: returns @{ XsiType = "..."; Text = "..." }
 function Normalize-ChoiceValue {
@@ -3056,15 +3429,48 @@ function Emit-Attributes {
 			X "$inner</Columns>"
 		}
 
-		# Settings (for DynamicList)
+		# Settings (динамический список)
 		if ($attr.settings) {
+			$st = $attr.settings
 			X "$inner<Settings xsi:type=`"DynamicList`">"
 			$si = "$inner`t"
-			if ($attr.settings.mainTable) { X "$si<MainTable>$($attr.settings.mainTable)</MainTable>" }
-			$mq = if ($attr.settings.manualQuery -eq $true) { "true" } else { "false" }
+			# Порядок платформы: ManualQuery, DynamicDataRead, QueryText, Field*, MainTable, ListSettings
+			$hasQuery = $st.query -and "$($st.query)".Trim()
+			$mq = if ($hasQuery -or $st.manualQuery -eq $true) { "true" } else { "false" }
 			X "$si<ManualQuery>$mq</ManualQuery>"
-			$ddr = if ($attr.settings.dynamicDataRead -eq $true) { "true" } else { "false" }
+			# DynamicDataRead: дефолт true; false только при явном отключении
+			$ddr = if ($st.dynamicDataRead -eq $false) { "false" } else { "true" }
 			X "$si<DynamicDataRead>$ddr</DynamicDataRead>"
+			if ($hasQuery) {
+				$qtext = Resolve-QueryValue "$($st.query)" $script:queryBaseDir
+				X "$si<QueryText>$(Esc-Xml $qtext)</QueryText>"
+			}
+			# Явные поля набора (редко): override title/dataPath
+			if ($st.fields) {
+				foreach ($fld in $st.fields) {
+					X "$si<Field xsi:type=`"dcssch:DataSetFieldField`">"
+					$dp = if ($fld.dataPath) { $fld.dataPath } else { $fld.field }
+					X "$si`t<dcssch:dataPath>$(Esc-Xml "$dp")</dcssch:dataPath>"
+					X "$si`t<dcssch:field>$(Esc-Xml "$($fld.field)")</dcssch:field>"
+					if ($fld.title) {
+						X "$si`t<dcssch:title xsi:type=`"v8:LocalStringType`">"
+						Emit-MLItems -val $fld.title -indent "$si`t`t"
+						X "$si`t</dcssch:title>"
+					}
+					X "$si</Field>"
+				}
+			}
+			if ($st.mainTable) { X "$si<MainTable>$(Normalize-MetaTypeRef "$($st.mainTable)")</MainTable>" }
+			# ListSettings: filter/order/conditionalAppearance (skd-грамматика) + каноничные блок-GUID.
+			# Нет items → контейнеры всё равно эмитятся (blockMeta) = каноничный пустой скелет платформы.
+			$lsi = "$si`t"
+			X "$si<ListSettings>"
+			Emit-Filter -items $st.filter -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_FILTER_ID
+			Emit-Order -items $st.order -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_ORDER_ID
+			Emit-ConditionalAppearance -items $st.conditionalAppearance -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_CA_ID
+			X "$lsi<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>"
+			X "$lsi<dcsset:itemsUserSettingID>$($script:CANON_ITEMS_ID)</dcsset:itemsUserSettingID>"
+			X "$si</ListSettings>"
 			X "$inner</Settings>"
 		}
 

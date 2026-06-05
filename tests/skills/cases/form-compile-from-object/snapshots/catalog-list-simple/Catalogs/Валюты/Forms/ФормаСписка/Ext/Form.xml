@@ -105,9 +105,25 @@
 			</Type>
 			<MainAttribute>true</MainAttribute>
 			<Settings xsi:type="DynamicList">
-				<MainTable>Catalog.Валюты</MainTable>
 				<ManualQuery>false</ManualQuery>
 				<DynamicDataRead>true</DynamicDataRead>
+				<MainTable>Catalog.Валюты</MainTable>
+				<ListSettings>
+					<dcsset:filter>
+						<dcsset:viewMode>Normal</dcsset:viewMode>
+						<dcsset:userSettingID>UUID-001</dcsset:userSettingID>
+					</dcsset:filter>
+					<dcsset:order>
+						<dcsset:viewMode>Normal</dcsset:viewMode>
+						<dcsset:userSettingID>UUID-002</dcsset:userSettingID>
+					</dcsset:order>
+					<dcsset:conditionalAppearance>
+						<dcsset:viewMode>Normal</dcsset:viewMode>
+						<dcsset:userSettingID>UUID-003</dcsset:userSettingID>
+					</dcsset:conditionalAppearance>
+					<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>
+					<dcsset:itemsUserSettingID>UUID-004</dcsset:itemsUserSettingID>
+				</ListSettings>
 			</Settings>
 		</Attribute>
 	</Attributes>

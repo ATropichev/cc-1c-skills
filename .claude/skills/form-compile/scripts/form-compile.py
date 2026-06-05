@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.38 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.39 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1256,6 +1256,26 @@ def esc_xml(s):
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
+# Базовая директория для @file-ссылок в query динсписка (устанавливается в main)
+QUERY_BASE_DIR = None
+
+
+def resolve_query_value(val, base_dir):
+    if not val.startswith('@'):
+        return val
+    file_path = val[1:]
+    if os.path.isabs(file_path):
+        candidates = [file_path]
+    else:
+        candidates = [os.path.join(base_dir or os.getcwd(), file_path), os.path.join(os.getcwd(), file_path)]
+    for c in candidates:
+        if os.path.exists(c):
+            with open(c, 'r', encoding='utf-8-sig') as f:
+                return f.read().rstrip()
+    print(f"Query file not found: {file_path} (searched: {', '.join(candidates)})", file=sys.stderr)
+    sys.exit(1)
+
+
 def emit_ml_items(lines, indent, val):
     # строка → один ru-элемент; объект {lang: text} → по элементу на язык
     if isinstance(val, dict):
@@ -1280,8 +1300,393 @@ def emit_mltext(lines, indent, tag, text):
     lines.append(f"{indent}</{tag}>")
 
 
+# Каноничные GUID пустых контейнеров ListSettings (умолчание платформы, ~90% форм).
+CANON_FILTER_ID = 'dfcece9d-5077-440b-b6b3-45a5cb4538eb'
+CANON_ORDER_ID = '88619765-ccb3-46c6-ac52-38e9c992ebd4'
+CANON_CA_ID = 'b75fecce-942b-4aed-abc9-e6a02e460fb3'
+CANON_ITEMS_ID = '911b6018-f537-43e8-a417-da56b22f9aec'
+
+
 def new_uuid():
     return str(uuid.uuid4())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Настройки компоновщика ListSettings: filter/order/conditionalAppearance.
+# Грамматика DSL и эмиссия dcsset скопированы из skd-compile (навыки автономны).
+# ─────────────────────────────────────────────────────────────────────────────
+COMPARISON_TYPES = {
+    '=': 'Equal', '<>': 'NotEqual',
+    '>': 'Greater', '>=': 'GreaterOrEqual',
+    '<': 'Less', '<=': 'LessOrEqual',
+    'in': 'InList', 'notIn': 'NotInList',
+    'inHierarchy': 'InHierarchy', 'inListByHierarchy': 'InListByHierarchy',
+    'contains': 'Contains', 'notContains': 'NotContains',
+    'beginsWith': 'BeginsWith', 'notBeginsWith': 'NotBeginsWith',
+    'filled': 'Filled', 'notFilled': 'NotFilled',
+}
+
+_REF_TYPE_RE = re.compile(
+    r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|'
+    r'БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|'
+    r'ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|'
+    r'InformationRegister|ExchangePlan)\.')
+
+
+def parse_filter_shorthand(s):
+    result = {'field': '', 'op': 'Equal', 'value': None, 'use': True,
+              'userSettingID': None, 'viewMode': None, 'presentation': None}
+    if re.search(r'@user', s):
+        result['userSettingID'] = 'auto'
+        s = re.sub(r'\s*@user', '', s)
+    if re.search(r'@off', s):
+        result['use'] = False
+        s = re.sub(r'\s*@off', '', s)
+    if re.search(r'@quickAccess', s):
+        result['viewMode'] = 'QuickAccess'
+        s = re.sub(r'\s*@quickAccess', '', s)
+    if re.search(r'@normal', s):
+        result['viewMode'] = 'Normal'
+        s = re.sub(r'\s*@normal', '', s)
+    if re.search(r'@inaccessible', s):
+        result['viewMode'] = 'Inaccessible'
+        s = re.sub(r'\s*@inaccessible', '', s)
+    s = s.strip()
+    op_patterns = ['<>', '>=', '<=', '=', '>', '<',
+                   r'notIn\b', r'in\b', r'inHierarchy\b', r'inListByHierarchy\b',
+                   r'notContains\b', r'contains\b', r'notBeginsWith\b', r'beginsWith\b',
+                   r'notFilled\b', r'filled\b']
+    op_joined = '|'.join(op_patterns)
+    m = re.match(r'^(.+?)\s+(' + op_joined + r')\s*(.*)?$', s)
+    if m:
+        result['field'] = m.group(1).strip()
+        result['op'] = m.group(2).strip()
+        val_part = m.group(3).strip() if m.group(3) else ''
+        if val_part and val_part != '_':
+            if val_part == 'true' or val_part == 'false':
+                result['value'] = (val_part == 'true')
+                result['valueType'] = 'xs:boolean'
+            elif re.match(r'^\d{4}-\d{2}-\d{2}T', val_part):
+                result['value'] = val_part
+                result['valueType'] = 'xs:dateTime'
+            elif re.match(r'^\d+(\.\d+)?$', val_part):
+                result['value'] = val_part
+                result['valueType'] = 'xs:decimal'
+            elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.', val_part):
+                result['value'] = val_part
+                result['valueType'] = 'dcscor:DesignTimeValue'
+            else:
+                result['value'] = val_part
+                result['valueType'] = 'xs:string'
+    else:
+        result['field'] = s
+    return result
+
+
+def _value_type_for(v, explicit=None):
+    if explicit:
+        return explicit
+    if isinstance(v, bool):
+        return 'xs:boolean'
+    if isinstance(v, (int, float)):
+        return 'xs:decimal'
+    vs = str(v)
+    if re.match(r'^\d{4}-\d{2}-\d{2}T', vs):
+        return 'xs:dateTime'
+    if re.match(r'^-?\d+(\.\d+)?$', vs):
+        return 'xs:decimal'
+    if _REF_TYPE_RE.match(vs):
+        return 'dcscor:DesignTimeValue'
+    return 'xs:string'
+
+
+def emit_filter_item(lines, item, indent):
+    if item.get('group'):
+        g = str(item['group'])
+        group_type = {'And': 'AndGroup', 'Or': 'OrGroup', 'Not': 'NotGroup'}.get(g, g + 'Group')
+        lines.append(f'{indent}<dcsset:item xsi:type="dcsset:FilterItemGroup">')
+        lines.append(f'{indent}\t<dcsset:groupType>{group_type}</dcsset:groupType>')
+        if item.get('items'):
+            for sub in item['items']:
+                if isinstance(sub, str):
+                    parsed = parse_filter_shorthand(sub)
+                    obj = {'field': parsed['field'], 'op': parsed['op']}
+                    if parsed['use'] is False:
+                        obj['use'] = False
+                    if parsed['value'] is not None:
+                        obj['value'] = parsed['value']
+                    if parsed.get('valueType'):
+                        obj['valueType'] = parsed['valueType']
+                    if parsed.get('userSettingID'):
+                        obj['userSettingID'] = parsed['userSettingID']
+                    if parsed.get('viewMode'):
+                        obj['viewMode'] = parsed['viewMode']
+                    sub = obj
+                emit_filter_item(lines, sub, f'{indent}\t')
+        if item.get('presentation'):
+            emit_mltext(lines, f'{indent}\t', 'dcsset:presentation', item['presentation'])
+        if item.get('viewMode'):
+            lines.append(f'{indent}\t<dcsset:viewMode>{esc_xml(str(item["viewMode"]))}</dcsset:viewMode>')
+        if item.get('userSettingID'):
+            guid = new_uuid() if str(item['userSettingID']) == 'auto' else str(item['userSettingID'])
+            lines.append(f'{indent}\t<dcsset:userSettingID>{esc_xml(guid)}</dcsset:userSettingID>')
+        if item.get('userSettingPresentation'):
+            emit_mltext(lines, f'{indent}\t', 'dcsset:userSettingPresentation', item['userSettingPresentation'])
+        lines.append(f'{indent}</dcsset:item>')
+        return
+
+    lines.append(f'{indent}<dcsset:item xsi:type="dcsset:FilterItemComparison">')
+    if item.get('use') is False:
+        lines.append(f'{indent}\t<dcsset:use>false</dcsset:use>')
+    lines.append(f'{indent}\t<dcsset:left xsi:type="dcscor:Field">{esc_xml(str(item.get("field", "")))}</dcsset:left>')
+    comp_type = COMPARISON_TYPES.get(str(item.get('op')))
+    if not comp_type:
+        comp_type = str(item.get('op'))
+    lines.append(f'{indent}\t<dcsset:comparisonType>{esc_xml(comp_type)}</dcsset:comparisonType>')
+    val = item.get('value')
+    if isinstance(val, list):
+        if len(val) == 0:
+            lines.append(f'{indent}\t<dcsset:right xsi:type="v8:ValueListType">')
+            lines.append(f'{indent}\t\t<v8:valueType/>')
+            lines.append(f'{indent}\t\t<v8:lastId xsi:type="xs:decimal">-1</v8:lastId>')
+            lines.append(f'{indent}\t</dcsset:right>')
+        else:
+            for v in val:
+                vt = _value_type_for(v, item.get('valueType'))
+                v_str = str(v).lower() if isinstance(v, bool) else esc_xml(str(v))
+                lines.append(f'{indent}\t<dcsset:right xsi:type="{vt}">{v_str}</dcsset:right>')
+    elif val is not None:
+        vt = _value_type_for(val, item.get('valueType'))
+        v_str = str(val).lower() if isinstance(val, bool) else esc_xml(str(val))
+        lines.append(f'{indent}\t<dcsset:right xsi:type="{vt}">{v_str}</dcsset:right>')
+    if item.get('presentation'):
+        emit_mltext(lines, f'{indent}\t', 'dcsset:presentation', item['presentation'])
+    if item.get('viewMode'):
+        lines.append(f'{indent}\t<dcsset:viewMode>{esc_xml(str(item["viewMode"]))}</dcsset:viewMode>')
+    if item.get('userSettingID'):
+        uid = new_uuid() if str(item['userSettingID']) == 'auto' else str(item['userSettingID'])
+        lines.append(f'{indent}\t<dcsset:userSettingID>{esc_xml(uid)}</dcsset:userSettingID>')
+    if item.get('userSettingPresentation'):
+        emit_mltext(lines, f'{indent}\t', 'dcsset:userSettingPresentation', item['userSettingPresentation'])
+    lines.append(f'{indent}</dcsset:item>')
+
+
+def emit_filter(lines, items, indent, block_view_mode=None, block_user_setting_id=None):
+    has_items = bool(items) and len(items) > 0
+    has_block_meta = (block_view_mode is not None) or (block_user_setting_id is not None)
+    if not has_items and not has_block_meta:
+        return
+    lines.append(f'{indent}<dcsset:filter>')
+    for item in (items or []):
+        if isinstance(item, str):
+            parsed = parse_filter_shorthand(item)
+            obj = {'field': parsed['field'], 'op': parsed['op']}
+            if parsed['use'] is False:
+                obj['use'] = False
+            if parsed['value'] is not None:
+                obj['value'] = parsed['value']
+            if parsed.get('valueType'):
+                obj['valueType'] = parsed['valueType']
+            if parsed.get('userSettingID'):
+                obj['userSettingID'] = parsed['userSettingID']
+            if parsed.get('viewMode'):
+                obj['viewMode'] = parsed['viewMode']
+            emit_filter_item(lines, obj, f'{indent}\t')
+        else:
+            emit_filter_item(lines, item, f'{indent}\t')
+    if block_view_mode is not None:
+        lines.append(f'{indent}\t<dcsset:viewMode>{esc_xml(str(block_view_mode))}</dcsset:viewMode>')
+    if block_user_setting_id is not None:
+        uid = new_uuid() if str(block_user_setting_id) == 'auto' else str(block_user_setting_id)
+        lines.append(f'{indent}\t<dcsset:userSettingID>{esc_xml(uid)}</dcsset:userSettingID>')
+    lines.append(f'{indent}</dcsset:filter>')
+
+
+def emit_order(lines, items, indent, skip_auto=False, block_view_mode=None, block_user_setting_id=None):
+    has_items = bool(items) and len(items) > 0
+    has_block_meta = (block_view_mode is not None) or (block_user_setting_id is not None)
+    if not has_items and not has_block_meta:
+        return
+    lines.append(f'{indent}<dcsset:order>')
+    for item in (items or []):
+        if isinstance(item, str):
+            if item == 'Auto':
+                if not skip_auto:
+                    lines.append(f'{indent}\t<dcsset:item xsi:type="dcsset:OrderItemAuto"/>')
+            else:
+                parts = re.split(r'\s+', item)
+                field = parts[0]
+                direction = 'Asc'
+                if len(parts) > 1 and re.match(r'(?i)^(desc|убыв)', parts[1]):
+                    direction = 'Desc'
+                elif len(parts) > 1 and re.match(r'(?i)^(asc|возр)', parts[1]):
+                    direction = 'Asc'
+                lines.append(f'{indent}\t<dcsset:item xsi:type="dcsset:OrderItemField">')
+                lines.append(f'{indent}\t\t<dcsset:field>{esc_xml(field)}</dcsset:field>')
+                lines.append(f'{indent}\t\t<dcsset:orderType>{direction}</dcsset:orderType>')
+                lines.append(f'{indent}\t</dcsset:item>')
+        else:
+            if item.get('field') == 'Auto' or item.get('type') == 'auto':
+                if not skip_auto:
+                    lines.append(f'{indent}\t<dcsset:item xsi:type="dcsset:OrderItemAuto"/>')
+                continue
+            direction = str(item['direction']) if item.get('direction') else 'Asc'
+            if re.match(r'(?i)^(desc|убыв)', direction):
+                direction = 'Desc'
+            elif re.match(r'(?i)^(asc|возр)', direction):
+                direction = 'Asc'
+            lines.append(f'{indent}\t<dcsset:item xsi:type="dcsset:OrderItemField">')
+            if item.get('use') is False:
+                lines.append(f'{indent}\t\t<dcsset:use>false</dcsset:use>')
+            lines.append(f'{indent}\t\t<dcsset:field>{esc_xml(str(item.get("field", "")))}</dcsset:field>')
+            lines.append(f'{indent}\t\t<dcsset:orderType>{direction}</dcsset:orderType>')
+            if item.get('viewMode'):
+                lines.append(f'{indent}\t\t<dcsset:viewMode>{esc_xml(str(item["viewMode"]))}</dcsset:viewMode>')
+            lines.append(f'{indent}\t</dcsset:item>')
+    if block_view_mode is not None:
+        lines.append(f'{indent}\t<dcsset:viewMode>{esc_xml(str(block_view_mode))}</dcsset:viewMode>')
+    if block_user_setting_id is not None:
+        uid = new_uuid() if str(block_user_setting_id) == 'auto' else str(block_user_setting_id)
+        lines.append(f'{indent}\t<dcsset:userSettingID>{esc_xml(uid)}</dcsset:userSettingID>')
+    lines.append(f'{indent}</dcsset:order>')
+
+
+def emit_appearance_value(lines, key, val, indent):
+    lines.append(f'{indent}<dcscor:item xsi:type="dcsset:SettingsParameterValue">')
+
+    def _has_key(o, k):
+        return isinstance(o, dict) and (k in o)
+
+    def _get(o, k):
+        return o.get(k) if isinstance(o, dict) else None
+
+    is_top_level_line = _has_key(val, '@type') and (str(_get(val, '@type')) == 'Line')
+    use_wrapper = False
+    inner_val = val
+    nested_items = None
+    if is_top_level_line:
+        if _has_key(val, 'use') and (_get(val, 'use') is False):
+            use_wrapper = True
+        if _has_key(val, 'items'):
+            nested_items = _get(val, 'items')
+    elif _has_key(val, 'value') and isinstance(val, dict):
+        inner_val = _get(val, 'value')
+        if _has_key(val, 'use') and (_get(val, 'use') is False):
+            use_wrapper = True
+        if _has_key(val, 'items'):
+            nested_items = _get(val, 'items')
+    if use_wrapper:
+        lines.append(f'{indent}\t<dcscor:use>false</dcscor:use>')
+    lines.append(f'{indent}\t<dcscor:parameter>{esc_xml(key)}</dcscor:parameter>')
+
+    is_font_dict = isinstance(inner_val, dict) and inner_val.get('@type') is not None and str(inner_val.get('@type')) == 'Font'
+    is_line_dict = _has_key(inner_val, '@type') and (str(_get(inner_val, '@type')) == 'Line')
+    is_dict = isinstance(inner_val, dict)
+    if is_line_dict:
+        lw = _get(inner_val, 'width') if _has_key(inner_val, 'width') else 0
+        lg = ('true' if _get(inner_val, 'gap') else 'false') if _has_key(inner_val, 'gap') else 'false'
+        ls = str(_get(inner_val, 'style')) if _has_key(inner_val, 'style') else 'None'
+        lines.append(f'{indent}\t<dcscor:value xsi:type="v8ui:Line" width="{lw}" gap="{lg}">')
+        lines.append(f'{indent}\t\t<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">{esc_xml(ls)}</v8ui:style>')
+        lines.append(f'{indent}\t</dcscor:value>')
+    elif is_font_dict:
+        attr_parts = []
+        for attr_name in ('ref', 'faceName', 'height', 'bold', 'italic', 'underline', 'strikeout', 'kind', 'scale'):
+            if attr_name in inner_val:
+                av = inner_val[attr_name]
+                if av is not None:
+                    attr_parts.append(f'{attr_name}="{esc_xml(str(av))}"')
+        lines.append(f'{indent}\t<dcscor:value xsi:type="v8ui:Font" {" ".join(attr_parts)}/>')
+    elif is_dict:
+        emit_mltext(lines, f'{indent}\t', 'dcscor:value', inner_val)
+    else:
+        actual_val = str(inner_val)
+        key_type_map = {
+            'Размещение': 'dcscor:DataCompositionTextPlacementType',
+            'ГоризонтальноеПоложение': 'v8ui:HorizontalAlign',
+            'ВертикальноеПоложение': 'v8ui:VerticalAlign',
+            'ОриентацияТекста': 'xs:decimal',
+            'РасположениеИтогов': 'dcscor:DataCompositionTotalPlacement',
+            'ТипМакета': 'dcsset:DataCompositionGroupTemplateType',
+        }
+        key_type = key_type_map.get(key)
+        if key_type:
+            lines.append(f'{indent}\t<dcscor:value xsi:type="{key_type}">{esc_xml(actual_val)}</dcscor:value>')
+        elif re.match(r'^(style|web|win):', actual_val):
+            lines.append(f'{indent}\t<dcscor:value xsi:type="v8ui:Color">{esc_xml(actual_val)}</dcscor:value>')
+        elif actual_val == 'true' or actual_val == 'false':
+            lines.append(f'{indent}\t<dcscor:value xsi:type="xs:boolean">{actual_val}</dcscor:value>')
+        elif key == 'Текст' or key == 'Заголовок' or key == 'Формат':
+            emit_mltext(lines, f'{indent}\t', 'dcscor:value', actual_val)
+        elif re.match(r'^-?\d+(\.\d+)?$', actual_val):
+            lines.append(f'{indent}\t<dcscor:value xsi:type="xs:decimal">{actual_val}</dcscor:value>')
+        elif key == 'ЦветТекста' or key == 'ЦветФона' or key == 'ЦветГраницы':
+            lines.append(f'{indent}\t<dcscor:value xsi:type="v8ui:Color">{esc_xml(actual_val)}</dcscor:value>')
+        else:
+            lines.append(f'{indent}\t<dcscor:value xsi:type="xs:string">{esc_xml(actual_val)}</dcscor:value>')
+    if nested_items:
+        if isinstance(nested_items, dict):
+            for nk, nv in nested_items.items():
+                emit_appearance_value(lines, nk, nv, f'{indent}\t')
+    lines.append(f'{indent}</dcscor:item>')
+
+
+def emit_conditional_appearance(lines, items, indent, block_view_mode=None, block_user_setting_id=None):
+    has_items = bool(items) and len(items) > 0
+    has_block_meta = (block_view_mode is not None) or (block_user_setting_id is not None)
+    if not has_items and not has_block_meta:
+        return
+    lines.append(f'{indent}<dcsset:conditionalAppearance>')
+    for ca in (items or []):
+        lines.append(f'{indent}\t<dcsset:item>')
+        if ca.get('use') is False:
+            lines.append(f'{indent}\t\t<dcsset:use>false</dcsset:use>')
+        if ca.get('selection') and len(ca['selection']) > 0:
+            lines.append(f'{indent}\t\t<dcsset:selection>')
+            for sel in ca['selection']:
+                lines.append(f'{indent}\t\t\t<dcsset:item>')
+                lines.append(f'{indent}\t\t\t\t<dcsset:field>{esc_xml(str(sel))}</dcsset:field>')
+                lines.append(f'{indent}\t\t\t</dcsset:item>')
+            lines.append(f'{indent}\t\t</dcsset:selection>')
+        else:
+            lines.append(f'{indent}\t\t<dcsset:selection/>')
+        if ca.get('filter') and len(ca['filter']) > 0:
+            emit_filter(lines, ca['filter'], f'{indent}\t\t')
+        else:
+            lines.append(f'{indent}\t\t<dcsset:filter/>')
+        if ca.get('appearance'):
+            lines.append(f'{indent}\t\t<dcsset:appearance>')
+            for k, v in ca['appearance'].items():
+                emit_appearance_value(lines, k, v, f'{indent}\t\t\t')
+            lines.append(f'{indent}\t\t</dcsset:appearance>')
+        if ca.get('presentation'):
+            if isinstance(ca['presentation'], dict):
+                emit_mltext(lines, f'{indent}\t\t', 'dcsset:presentation', ca['presentation'])
+            else:
+                lines.append(f'{indent}\t\t<dcsset:presentation xsi:type="xs:string">{esc_xml(str(ca["presentation"]))}</dcsset:presentation>')
+        if ca.get('viewMode'):
+            lines.append(f'{indent}\t\t<dcsset:viewMode>{esc_xml(str(ca["viewMode"]))}</dcsset:viewMode>')
+        if ca.get('userSettingID'):
+            uid = new_uuid() if str(ca['userSettingID']) == 'auto' else str(ca['userSettingID'])
+            lines.append(f'{indent}\t\t<dcsset:userSettingID>{esc_xml(uid)}</dcsset:userSettingID>')
+        if ca.get('userSettingPresentation'):
+            emit_mltext(lines, f'{indent}\t\t', 'dcsset:userSettingPresentation', ca['userSettingPresentation'])
+        if ca.get('useInDontUse') and len(ca['useInDontUse']) > 0:
+            use_in_order = ['group', 'hierarchicalGroup', 'overall', 'fieldsHeader', 'header',
+                            'parameters', 'filter', 'resourceFieldsHeader', 'overallHeader',
+                            'overallResourceFieldsHeader']
+            sset = {str(n): True for n in ca['useInDontUse']}
+            for n in use_in_order:
+                if n in sset:
+                    tag = 'useIn' + n[0].upper() + n[1:]
+                    lines.append(f'{indent}\t\t<dcsset:{tag}>DontUse</dcsset:{tag}>')
+        lines.append(f'{indent}\t</dcsset:item>')
+    if block_view_mode is not None:
+        lines.append(f'{indent}\t<dcsset:viewMode>{esc_xml(str(block_view_mode))}</dcsset:viewMode>')
+    if block_user_setting_id is not None:
+        uid = new_uuid() if str(block_user_setting_id) == 'auto' else str(block_user_setting_id)
+        lines.append(f'{indent}\t<dcsset:userSettingID>{esc_xml(uid)}</dcsset:userSettingID>')
+    lines.append(f'{indent}</dcsset:conditionalAppearance>')
 
 
 def write_utf8_bom(path, content):
@@ -1440,8 +1845,23 @@ REF_ROOT_SYNONYMS = {
     "РегистрБухгалтерии": "AccountingRegister",
     "РегистрРасчета": "CalculationRegister",
     "РегистрРасчёта": "CalculationRegister",
+    "ЖурналДокументов": "DocumentJournal",
+    "КритерийОтбора": "FilterCriterion",
 }
 ENUM_VALUE_SYNONYMS = {"EnumValue", "ЗначениеПеречисления"}
+
+
+def normalize_meta_type_ref(ref):
+    # "Справочник.Контрагенты" → "Catalog.Контрагенты"; уже англ — без изменений
+    if not ref:
+        return ref
+    dot = ref.find('.')
+    if dot < 1:
+        return ref
+    root = ref[:dot]
+    if root in REF_ROOT_SYNONYMS:
+        return REF_ROOT_SYNONYMS[root] + ref[dot:]
+    return ref
 
 
 def normalize_choice_value(value):
@@ -2669,17 +3089,45 @@ def emit_attributes(lines, attrs, indent):
                 lines.append(f'{inner}\t</Column>')
             lines.append(f'{inner}</Columns>')
 
-        # Settings (for DynamicList)
+        # Settings (динамический список)
         if attr.get('settings'):
             s = attr['settings']
             lines.append(f'{inner}<Settings xsi:type="DynamicList">')
             si = f'{inner}\t'
-            if s.get('mainTable'):
-                lines.append(f'{si}<MainTable>{s["mainTable"]}</MainTable>')
-            mq = 'true' if s.get('manualQuery') else 'false'
+            # Порядок платформы: ManualQuery, DynamicDataRead, QueryText, Field*, MainTable, ListSettings
+            has_query = bool(s.get('query') and str(s['query']).strip())
+            mq = 'true' if (has_query or s.get('manualQuery')) else 'false'
             lines.append(f'{si}<ManualQuery>{mq}</ManualQuery>')
-            ddr = 'true' if s.get('dynamicDataRead') else 'false'
+            # DynamicDataRead: дефолт true; false только при явном отключении
+            ddr = 'false' if s.get('dynamicDataRead') is False else 'true'
             lines.append(f'{si}<DynamicDataRead>{ddr}</DynamicDataRead>')
+            if has_query:
+                qtext = resolve_query_value(str(s['query']), QUERY_BASE_DIR)
+                lines.append(f'{si}<QueryText>{esc_xml(qtext)}</QueryText>')
+            # Явные поля набора (редко): override title/dataPath
+            if s.get('fields'):
+                for fld in s['fields']:
+                    lines.append(f'{si}<Field xsi:type="dcssch:DataSetFieldField">')
+                    dp = fld.get('dataPath') or fld.get('field')
+                    lines.append(f'{si}\t<dcssch:dataPath>{esc_xml(str(dp))}</dcssch:dataPath>')
+                    lines.append(f'{si}\t<dcssch:field>{esc_xml(str(fld.get("field", "")))}</dcssch:field>')
+                    if fld.get('title'):
+                        lines.append(f'{si}\t<dcssch:title xsi:type="v8:LocalStringType">')
+                        emit_ml_items(lines, f'{si}\t\t', fld['title'])
+                        lines.append(f'{si}\t</dcssch:title>')
+                    lines.append(f'{si}</Field>')
+            if s.get('mainTable'):
+                lines.append(f'{si}<MainTable>{normalize_meta_type_ref(str(s["mainTable"]))}</MainTable>')
+            # ListSettings: filter/order/conditionalAppearance (skd-грамматика) + каноничные блок-GUID.
+            # Нет items → контейнеры всё равно эмитятся (blockMeta) = каноничный пустой скелет платформы.
+            lsi = f'{si}\t'
+            lines.append(f'{si}<ListSettings>')
+            emit_filter(lines, s.get('filter'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_FILTER_ID)
+            emit_order(lines, s.get('order'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_ORDER_ID)
+            emit_conditional_appearance(lines, s.get('conditionalAppearance'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_CA_ID)
+            lines.append(f'{lsi}<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>')
+            lines.append(f'{lsi}<dcsset:itemsUserSettingID>{CANON_ITEMS_ID}</dcsset:itemsUserSettingID>')
+            lines.append(f'{si}</ListSettings>')
             lines.append(f'{inner}</Settings>')
 
         lines.append(f'{indent}\t</Attribute>')
@@ -3047,6 +3495,8 @@ def main():
 
         with open(json_path, 'r', encoding='utf-8-sig') as f:
             defn = json.load(f)
+        global QUERY_BASE_DIR
+        QUERY_BASE_DIR = os.path.dirname(os.path.abspath(json_path))
 
     # --- 1b. Pre-pass: synonyms, main attribute inference, heuristics, autoCmdBar extraction ---
     def _normalize_synonyms(el):

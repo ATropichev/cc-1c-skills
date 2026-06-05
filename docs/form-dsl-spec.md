@@ -500,6 +500,56 @@ Pages поддерживает `pagesRepresentation`: `None`, `TabsOnTop`, `Tabs
 | `savedData` | bool | Сохраняемые данные |
 | `fillChecking` | string | `Show`, `DontShow` |
 | `columns` | array | Колонки для ValueTable/ValueTree |
+| `settings` | object | Настройки динамического списка (только `type: "DynamicList"`) |
+
+### settings — динамический список
+
+Для реквизита `type: "DynamicList"` объект `settings` описывает источник данных и настройки компоновщика (`ListSettings`).
+
+```json
+{ "name": "Список", "type": "DynamicList", "main": true,
+  "settings": {
+    "mainTable": "Catalog.Контрагенты",
+    "query": "@Список.sql",
+    "dynamicDataRead": false,
+    "fields": [ { "field": "Отложен", "title": "Отложен" } ]
+  } }
+```
+
+| Ключ | Тип | Описание |
+|------|-----|----------|
+| `mainTable` | string | Основная таблица. Принимает рус-имена метаданных (`Справочник.X` → `Catalog.X`) |
+| `query` | string | Текст запроса (`ManualQuery=true`). Поддерживает `@file.sql` (путь относительно JSON) |
+| `dynamicDataRead` | bool | Динамическое считывание. **Умолчание `true`** — указывать только для отключения (`false`) |
+| `fields` | array | Явные поля набора (редко): `{ field, dataPath?, title? }` — для переопределения заголовка. Обычно поля выводятся из запроса автоматически |
+| `order` | array | Сортировка списка (см. ниже) |
+| `filter` | array | Отбор списка (грамматика как в СКД) |
+| `conditionalAppearance` | array | Условное оформление списка (грамматика как в СКД) |
+
+`ManualQuery` выводится из наличия `query` — отдельным ключом не задаётся.
+
+Пустой блок настроек компоновщика (`ListSettings`) генерируется автоматически (каноничный скелет платформы); указывать ничего не нужно.
+
+#### order / filter / conditionalAppearance
+
+Грамматика этих ключей идентична настройкам СКД — см. [skd-dsl-spec.md](skd-dsl-spec.md) (разделы filter / order / conditionalAppearance). Кратко:
+
+```json
+"settings": {
+  "mainTable": "Catalog.Контрагенты",
+  "order": [ "Дата desc", "Наименование", "Auto" ],
+  "filter": [ "Организация = _ @off @user", "Сумма > 1000" ],
+  "conditionalAppearance": [
+    { "filter": ["Просрочено = true"], "appearance": { "ЦветТекста": "web:Red" } }
+  ]
+}
+```
+
+- **order** — строка `"Поле"` (asc) / `"Поле desc"` (синонимы `убыв`/`desc`, `возр`/`asc`) / `"Auto"`, либо объект `{ field, direction?, use?, viewMode? }`.
+- **filter** — shorthand `"Поле оператор значение @флаги"` (`@off`, `@user`, `@quickAccess`, `@normal`, `@inaccessible`; `_` = пусто) или объект `{ field, op, value?, use?, userSettingID? }` или группа `{ group: "And"|"Or"|"Not", items: [...] }`.
+- **conditionalAppearance** — объект `{ selection?, filter?, appearance?, presentation?, viewMode?, userSettingID?, use? }`. `appearance` — словарь «параметр: значение» платформы (`ЦветТекста`, `ЦветФона`, `Шрифт` и т.п.).
+
+`userSettingID: "auto"` → платформа сгенерирует идентификатор пользовательской настройки. Пустые контейнеры (без правил) эмитируются автоматически.
 
 ---
 

@@ -1,4 +1,4 @@
-﻿# form-decompile v0.18 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.21 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -36,11 +36,80 @@ $NS_V8  = "http://v8.1c.ru/8.1/data/core"
 $NS_XR  = "http://v8.1c.ru/8.3/xcf/readable"
 $NS_XSI = "http://www.w3.org/2001/XMLSchema-instance"
 
+$NS_DCSSET = "http://v8.1c.ru/8.1/data-composition-system/settings"
+$NS_DCSSCH = "http://v8.1c.ru/8.1/data-composition-system/schema"
+$NS_DCSCOR = "http://v8.1c.ru/8.1/data-composition-system/core"
+$NS_V8UI   = "http://v8.1c.ru/8.1/data/ui"
+
 $ns = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
 $ns.AddNamespace("lf", $NS_LF)
 $ns.AddNamespace("v8", $NS_V8)
 $ns.AddNamespace("xr", $NS_XR)
 $ns.AddNamespace("xsi", $NS_XSI)
+$ns.AddNamespace("dcsset", $NS_DCSSET)
+$ns.AddNamespace("dcssch", $NS_DCSSCH)
+$ns.AddNamespace("dcscor", $NS_DCSCOR)
+$ns.AddNamespace("v8ui", $NS_V8UI)
+
+# Каноничные GUID пустых контейнеров ListSettings (умолчание платформы, ~90% форм).
+# Если ListSettings = пустой скелет с этими GUID → декомпилятор опускает настройки вовсе,
+# компилятор регенерит тот же скелет → чистый раундтрип.
+$CANON_FILTER_ID = 'dfcece9d-5077-440b-b6b3-45a5cb4538eb'
+$CANON_ORDER_ID  = '88619765-ccb3-46c6-ac52-38e9c992ebd4'
+$CANON_CA_ID     = 'b75fecce-942b-4aed-abc9-e6a02e460fb3'
+$CANON_ITEMS_ID  = '911b6018-f537-43e8-a417-da56b22f9aec'
+
+# --- Вынос запроса динсписка в .sql рядом с output (зеркало skd-decompile) ---
+$script:outputDir = $null
+$script:outputBasename = $null
+if ($OutputPath) {
+	$od = Split-Path -Parent $OutputPath
+	if (-not $od) { $od = (Get-Location).Path }
+	$script:outputDir = $od
+	$script:outputBasename = [System.IO.Path]::GetFileNameWithoutExtension($OutputPath)
+}
+$script:queryFilesAccumulator = @()
+$script:queryFileNamesUsed = @{}
+
+# Запрос ≥3 строк + есть outputDir → вынести в `<basename>-<listName>.sql`, вернуть "@file".
+function Maybe-ExternalizeQuery {
+	param([string]$queryText, [string]$listName)
+	if (-not $queryText) { return $queryText }
+	if (-not $script:outputDir) { return $queryText }
+	$lineCount = ([regex]::Matches($queryText, "`n")).Count + 1
+	if ($lineCount -lt 3) { return $queryText }
+	$safe = ($listName -replace '[^\w\-]', '_'); if (-not $safe) { $safe = 'query' }
+	$prefix = if ($script:outputBasename) { "$($script:outputBasename)-" } else { '' }
+	$fileName = "$prefix$safe.sql"
+	$suffix = 1
+	while ($script:queryFileNamesUsed.ContainsKey($fileName)) { $suffix++; $fileName = "$prefix$safe`_$suffix.sql" }
+	$script:queryFileNamesUsed[$fileName] = $true
+	$script:queryFilesAccumulator += [ordered]@{ fileName = $fileName; text = $queryText }
+	return "@$fileName"
+}
+function Save-QueryFiles {
+	if ($script:queryFilesAccumulator.Count -eq 0) { return }
+	if (-not $script:outputDir) { return }
+	$enc = New-Object System.Text.UTF8Encoding($false)
+	foreach ($qf in $script:queryFilesAccumulator) {
+		[System.IO.File]::WriteAllText((Join-Path $script:outputDir $qf.fileName), $qf.text, $enc)
+	}
+	[Console]::Error.WriteLine("Saved $($script:queryFilesAccumulator.Count) external query file(s)")
+}
+
+# Есть ли в ListSettings содержательные настройки (реальные items фильтра/порядка/
+# условного оформления/параметров)? Пустой скелет (только viewMode+GUID) → false:
+# декомпилятор опускает настройки, компилятор регенерит каноничный скелет, harness
+# нормализует GUID → чистый раундтрип. true → контент захватывается (см. ниже).
+function Test-ListSettingsHasContent {
+	param($lsNode)
+	if (-not $lsNode) { return $false }
+	foreach ($cont in @('filter','order','conditionalAppearance','dataParameters')) {
+		$cn = $lsNode.SelectSingleNode("dcsset:$cont", $ns)
+		if ($cn -and $cn.SelectSingleNode("dcsset:item", $ns)) { return $true }
+	}
+	return $false
+}
 
 # --- 1b. Ring-3 scan: конструкции вне зоны поддержки (draft list) ---
 function Fail-Ring3 {
@@ -182,6 +251,464 @@ function Convert-TypedValue {
 		'boolean$' { return ($raw -eq 'true') }
 		default { return $raw }
 	}
+}
+
+# =====================================================================
+# Захват настроек компоновщика динамического списка (ListSettings):
+# filter / order / conditionalAppearance. Логика портирована из навыка
+# skd-decompile (Build-FilterItem/Build-Order/Build-ConditionalAppearance
+# и сериализаторы оформления). Механизм New-Sentinel/Add-Warning из skd
+# заменён на запись в stderr + пропуск элемента (form-decompile — draft,
+# скрипт не падает на непокрытых конструкциях).
+# =====================================================================
+
+# Прочитать дочерний скаляр по xpath (с $ns). Аналог skd Get-Text.
+function Get-Text {
+	param($node, [string]$xpath)
+	if (-not $node) { return $null }
+	if ([string]::IsNullOrEmpty($xpath)) { return $node.InnerText }
+	$n = $node.SelectSingleNode($xpath, $ns)
+	if ($n) { return $n.InnerText } else { return $null }
+}
+
+# Мультиязычный текст (LocalStringType) → string (ru) или ordered hash.
+# Алиас на уже существующий Get-LangText (тот же контракт).
+function Get-MLText { param($node) return (Get-LangText $node) }
+
+# Презентация: либо мультиязычный LocalStringType, либо плоский xs:string.
+# Get-MLText даёт $null для xs:string (нет v8:item) → откат к InnerText.
+function Get-PresText {
+	param($node)
+	if (-not $node) { return $null }
+	$ml = Get-MLText $node
+	if ($null -ne $ml) { return $ml }
+	if ($node.InnerText) { return $node.InnerText }
+	return $null
+}
+
+# Снять namespace-префикс с xsi:type ("dcsset:Foo" → "Foo")
+function Get-LocalXsiType {
+	param($node)
+	if (-not $node) { return $null }
+	$t = $node.GetAttribute("type", $NS_XSI)
+	if ($t -match ':(.+)$') { return $matches[1] }
+	return $t
+}
+
+# Шрифт оформления → объект {@type:Font, ...} (bit-perfect для compile).
+function Get-FontValue {
+	param($valNode)
+	$f = [ordered]@{ '@type' = 'Font' }
+	foreach ($attrName in @('ref','faceName','height','bold','italic','underline','strikeout','kind','scale')) {
+		$a = $valNode.Attributes[$attrName]
+		if ($null -ne $a) { $f[$attrName] = $a.Value }
+	}
+	return $f
+}
+
+# Линия (граница) оформления → объект {@type:Line, width, gap, style}.
+function Get-LineValue {
+	param($valNode)
+	$obj = [ordered]@{ '@type' = 'Line' }
+	$w = $valNode.GetAttribute("width")
+	$g = $valNode.GetAttribute("gap")
+	if ($w -ne '') { $obj['width'] = if ($w -match '^-?\d+$') { [int]$w } else { $w } }
+	if ($g -ne '') { $obj['gap']  = ($g -eq 'true') }
+	$styleNode = $valNode.SelectSingleNode("v8ui:style", $ns)
+	if ($styleNode) { $obj['style'] = $styleNode.InnerText }
+	return $obj
+}
+
+# Прочитать <dcscor:value> в JSON-значение: Font/Line/multilang/raw text.
+function Read-AppearanceValueNode {
+	param($valNode)
+	if (-not $valNode) { return $null }
+	$vt = Get-LocalXsiType $valNode
+	if ($vt -eq 'LocalStringType') { return (Get-MLText $valNode) }
+	if ($vt -eq 'Font') { return (Get-FontValue $valNode) }
+	if ($vt -eq 'Line') { return (Get-LineValue $valNode) }
+	return $valNode.InnerText
+}
+
+# Обратная карта comparisonType → короткий оператор фильтра (зеркало skd).
+$script:filterOpMap = @{
+	'Equal'='='; 'NotEqual'='<>'; 'Greater'='>'; 'GreaterOrEqual'='>=';
+	'Less'='<'; 'LessOrEqual'='<='; 'InList'='in'; 'NotInList'='notIn';
+	'InHierarchy'='inHierarchy'; 'InListByHierarchy'='inListByHierarchy';
+	'Contains'='contains'; 'NotContains'='notContains';
+	'BeginsWith'='beginsWith'; 'NotBeginsWith'='notBeginsWith';
+	'Filled'='filled'; 'NotFilled'='notFilled'
+}
+
+# Render filter value node → shorthand-acceptable scalar string
+function Get-FilterValue {
+	param($valNode)
+	if (-not $valNode) { return '_' }
+	$nil = $valNode.GetAttribute("nil", $NS_XSI)
+	if ($nil -eq 'true') { return '_' }
+	$vType = Get-LocalXsiType $valNode
+	if ($vType -eq 'DesignTimeValue') { return $valNode.InnerText }
+	if ($vType -eq 'LocalStringType') { return (Get-MLText $valNode) }
+	$txt = $valNode.InnerText
+	if (-not $txt) { return '_' }
+	return $txt
+}
+
+# Get-FilterValue + xsi:type значения (для valueType, например dcscor:Field).
+function Get-FilterValueWithType {
+	param($valNode)
+	if (-not $valNode) { return @{ value = '_'; type = $null } }
+	$rawType = $valNode.GetAttribute("type", $NS_XSI)
+	$nil = $valNode.GetAttribute("nil", $NS_XSI)
+	if ($nil -eq 'true') { return @{ value = '_'; type = $null } }
+	$vType = Get-LocalXsiType $valNode
+	if ($vType -eq 'LocalStringType') {
+		return @{ value = (Get-MLText $valNode); type = $rawType }
+	}
+	$txt = $valNode.InnerText
+	if (-not $txt) { return @{ value = '_'; type = $rawType } }
+	if ($vType -eq 'boolean') { return @{ value = ($txt -eq 'true'); type = $rawType } }
+	if ($vType -eq 'decimal') {
+		if ($txt -match '^-?\d+$') { return @{ value = [int]$txt; type = $rawType } }
+		return @{ value = [double]$txt; type = $rawType }
+	}
+	return @{ value = $txt; type = $rawType }
+}
+
+# Convert filter item node → shorthand string или object form (рекурсивно для групп).
+function Build-FilterItem {
+	param($itemNode, [string]$loc)
+	$xtype = Get-LocalXsiType $itemNode
+	if ($xtype -eq 'FilterItemGroup') {
+		$gt = Get-Text $itemNode "dcsset:groupType"
+		$groupName = switch ($gt) { 'OrGroup' { 'Or' } 'NotGroup' { 'Not' } default { 'And' } }
+		$items = @()
+		foreach ($c in $itemNode.SelectNodes("dcsset:item", $ns)) {
+			$bi = (Build-FilterItem -itemNode $c -loc "$loc/item")
+			if ($null -ne $bi) { $items += $bi }
+		}
+		$gObj = [ordered]@{ group = $groupName; items = $items }
+		$gPresNode = $itemNode.SelectSingleNode("dcsset:presentation", $ns)
+		if ($gPresNode) {
+			$gPres = Get-MLText $gPresNode
+			if (-not $gPres) { $gPres = $gPresNode.InnerText }
+			if ($gPres) { $gObj['presentation'] = $gPres }
+		}
+		$gVMNode = $itemNode.SelectSingleNode("dcsset:viewMode", $ns)
+		if ($gVMNode) { $gObj['viewMode'] = $gVMNode.InnerText }
+		$gUSID = Get-Text $itemNode "dcsset:userSettingID"
+		if ($gUSID) { $gObj['userSettingID'] = 'auto' }
+		$gUSPN = $itemNode.SelectSingleNode("dcsset:userSettingPresentation", $ns)
+		if ($gUSPN) {
+			$gUSP = Get-PresText $gUSPN
+			if ($gUSP) { $gObj['userSettingPresentation'] = $gUSP }
+		}
+		return $gObj
+	}
+	if ($xtype -ne 'FilterItemComparison') {
+		[Console]::Error.WriteLine("form-decompile: пропущен фильтр неизвестного типа '$xtype' (path: $loc)")
+		return $null
+	}
+	$leftNode = $itemNode.SelectSingleNode("dcsset:left", $ns)
+	$field = if ($leftNode) { $leftNode.InnerText } else { $null }
+	$ct = Get-Text $itemNode "dcsset:comparisonType"
+	$op = $script:filterOpMap[$ct]
+	if (-not $op) { $op = $ct }
+
+	$rightNodes = @($itemNode.SelectNodes("dcsset:right", $ns))
+	$value = $null
+	$valueIsArrayFlag = $false
+	$valueTypeAttr = $null
+	if ($rightNodes.Count -eq 1) {
+		$rn = $rightNodes[0]
+		if ((Get-LocalXsiType $rn) -eq 'ValueListType') {
+			$value = @()
+			$valueIsArrayFlag = $true
+		} else {
+			$vt = Get-FilterValueWithType $rn
+			$value = $vt.value
+			$autoDetectsDTV = ($vt.type -eq 'dcscor:DesignTimeValue') -and `
+				("$($vt.value)" -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.')
+			if ($vt.type -and $vt.type -notmatch '^xs:' -and -not $autoDetectsDTV) {
+				$valueTypeAttr = $vt.type
+			}
+		}
+	} elseif ($rightNodes.Count -gt 1) {
+		$arr = @()
+		$rawTypes = @()
+		foreach ($rn in $rightNodes) {
+			$arr += (Get-FilterValue $rn)
+			$rawTypes += $rn.GetAttribute("type", $NS_XSI)
+		}
+		$value = $arr
+		$valueIsArrayFlag = $true
+		$uniqTypes = @($rawTypes | Sort-Object -Unique)
+		if ($uniqTypes.Count -eq 1 -and $uniqTypes[0]) {
+			$autoDetectsDTV = ($uniqTypes[0] -eq 'dcscor:DesignTimeValue') -and `
+				($arr.Count -gt 0) -and `
+				(@($arr | Where-Object { "$_" -notmatch '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.' }).Count -eq 0)
+			if (-not $autoDetectsDTV) {
+				$valueTypeAttr = $uniqTypes[0]
+			}
+		}
+	}
+
+	$use = Get-Text $itemNode "dcsset:use"
+	$userId = Get-Text $itemNode "dcsset:userSettingID"
+	$vmNode = $itemNode.SelectSingleNode("dcsset:viewMode", $ns)
+	$viewMode = if ($vmNode) { $vmNode.InnerText } else { $null }
+	$userPresNode = $itemNode.SelectSingleNode("dcsset:userSettingPresentation", $ns)
+	$fiPresNode = $itemNode.SelectSingleNode("dcsset:presentation", $ns)
+	$fiPres = $null
+	if ($fiPresNode) {
+		$fiPres = Get-MLText $fiPresNode
+		if (-not $fiPres) { $fiPres = $fiPresNode.InnerText }
+	}
+
+	$flags = @()
+	if ($use -eq 'false') { $flags += '@off' }
+	if ($userId) { $flags += '@user' }
+	if ($viewMode -eq 'QuickAccess') { $flags += '@quickAccess' }
+	elseif ($viewMode -eq 'Inaccessible') { $flags += '@inaccessible' }
+	elseif ($viewMode -eq 'Normal') { $flags += '@normal' }
+
+	$noValueOps = @('filled','notFilled')
+
+	if ($userPresNode -or $valueIsArrayFlag -or $valueTypeAttr -or $fiPres) {
+		$obj = [ordered]@{ field = $field; op = $op }
+		if ($op -notin $noValueOps -and $null -ne $value) {
+			if ($valueIsArrayFlag) {
+				$arrAsList = New-Object System.Collections.ArrayList
+				foreach ($vv in @($value)) { [void]$arrAsList.Add($vv) }
+				$obj['value'] = $arrAsList
+			} else {
+				$obj['value'] = $value
+			}
+		}
+		if ($valueTypeAttr) { $obj['valueType'] = $valueTypeAttr }
+		if ($use -eq 'false') { $obj['use'] = $false }
+		if ($userId) { $obj['userSettingID'] = 'auto' }
+		if ($fiPres) { $obj['presentation'] = $fiPres }
+		if ($viewMode) { $obj['viewMode'] = $viewMode }
+		if ($userPresNode) { $obj['userSettingPresentation'] = Get-PresText $userPresNode }
+		return $obj
+	}
+
+	$s = $field
+	if ($op -in $noValueOps) {
+		$s += " $op"
+	} else {
+		$vDisplay = '_'
+		if ($null -ne $value) {
+			if ($value -is [bool]) { $vDisplay = if ($value) { 'true' } else { 'false' } }
+			elseif ("$value" -ne '') { $vDisplay = "$value" }
+		}
+		$s += " $op $vDisplay"
+	}
+	if ($flags) { $s += ' ' + ($flags -join ' ') }
+	return $s
+}
+
+# Рекурсивный хелпер одного элемента selection (для conditionalAppearance).
+function Build-SelectionItem {
+	param($item, [string]$loc)
+	$xt = Get-LocalXsiType $item
+	if (-not $xt) {
+		$fName = Get-Text $item "dcsset:field"
+		if ($fName) { return $fName }
+		$fieldEl = $item.SelectSingleNode("dcsset:field", $ns)
+		if ($fieldEl) { return 'Auto' }
+	}
+	switch ($xt) {
+		'SelectedItemAuto' {
+			$useV = Get-Text $item "dcsset:use"
+			if ($useV -eq 'false') {
+				return [ordered]@{ auto = $true; use = $false }
+			}
+			return 'Auto'
+		}
+		'SelectedItemField' {
+			$fName = Get-Text $item "dcsset:field"
+			$titleNode = $item.SelectSingleNode("dcsset:lwsTitle", $ns)
+			$title = Get-MLText $titleNode
+			$vmN = $item.SelectSingleNode("dcsset:viewMode", $ns)
+			$useV = Get-Text $item "dcsset:use"
+			$useFalse = ($useV -eq 'false')
+			if ($title -or $vmN -or $useFalse) {
+				$obj = [ordered]@{ field = $fName }
+				if ($useFalse) { $obj['use'] = $false }
+				if ($title) { $obj['title'] = $title }
+				if ($vmN) { $obj['viewMode'] = $vmN.InnerText }
+				return $obj
+			}
+			return $fName
+		}
+		'SelectedItemFolder' {
+			$titleNode = $item.SelectSingleNode("dcsset:lwsTitle", $ns)
+			$folderTitle = Get-MLText $titleNode
+			$inner = @()
+			foreach ($sub in $item.SelectNodes("dcsset:item", $ns)) {
+				$bi = (Build-SelectionItem -item $sub -loc "$loc/folder")
+				if ($null -ne $bi) { $inner += $bi }
+			}
+			$entry = [ordered]@{ folder = $folderTitle; items = $inner }
+			$folderField = Get-Text $item "dcsset:field"
+			if ($folderField) { $entry['field'] = $folderField }
+			$plN = $item.SelectSingleNode("dcsset:placement", $ns)
+			if ($plN -and $plN.InnerText -and $plN.InnerText -ne 'Auto') {
+				$entry['placement'] = $plN.InnerText
+			}
+			return $entry
+		}
+		default {
+			[Console]::Error.WriteLine("form-decompile: пропущен элемент selection неизвестного типа '$xt' (path: $loc)")
+			return $null
+		}
+	}
+}
+
+# Build selection items array (для conditionalAppearance).
+function Build-Selection {
+	param($selNode, [string]$loc)
+	if (-not $selNode) { return @() }
+	$out = @()
+	foreach ($it in $selNode.SelectNodes("dcsset:item", $ns)) {
+		$bi = (Build-SelectionItem -item $it -loc $loc)
+		if ($null -ne $bi) { $out += $bi }
+	}
+	return ,$out
+}
+
+# Build order items array.
+function Build-Order {
+	param($ordNode, [string]$loc)
+	if (-not $ordNode) { return @() }
+	$out = @()
+	foreach ($it in $ordNode.SelectNodes("dcsset:item", $ns)) {
+		$xt = Get-LocalXsiType $it
+		switch ($xt) {
+			'OrderItemAuto'  { $out += 'Auto' }
+			'OrderItemField' {
+				$fn = Get-Text $it "dcsset:field"
+				$ot = Get-Text $it "dcsset:orderType"
+				$vmN = $it.SelectSingleNode("dcsset:viewMode", $ns)
+				$useV = Get-Text $it "dcsset:use"
+				$useFalse = ($useV -eq 'false')
+				if ($vmN -or $useFalse) {
+					$obj = [ordered]@{ field = $fn }
+					if ($useFalse) { $obj['use'] = $false }
+					if ($ot -eq 'Desc') { $obj['direction'] = 'desc' }
+					if ($vmN) { $obj['viewMode'] = $vmN.InnerText }
+					$out += $obj
+				} else {
+					if ($ot -eq 'Desc') { $out += "$fn desc" } else { $out += $fn }
+				}
+			}
+			default {
+				[Console]::Error.WriteLine("form-decompile: пропущен элемент сортировки неизвестного типа '$xt' (path: $loc)")
+			}
+		}
+	}
+	return ,$out
+}
+
+# Build appearance dict из <dcsset:appearance> (Line/Font/multilang/nested items).
+function Get-SettingsAppearance {
+	param($appNode)
+	if (-not $appNode) { return $null }
+	$dict = [ordered]@{}
+	foreach ($it in $appNode.SelectNodes("dcscor:item", $ns)) {
+		$pName = Get-Text $it "dcscor:parameter"
+		$val = $it.SelectSingleNode("dcscor:value", $ns)
+		if (-not $pName -or -not $val) { continue }
+		$rawVal = Read-AppearanceValueNode $val
+		$useV = Get-Text $it "dcscor:use"
+		$nestedItems = [ordered]@{}
+		foreach ($sub in $it.SelectNodes("dcscor:item", $ns)) {
+			$subName = Get-Text $sub "dcscor:parameter"
+			$subVal = $sub.SelectSingleNode("dcscor:value", $ns)
+			if (-not $subName) { continue }
+			$subRaw = Read-AppearanceValueNode $subVal
+			$subUse = Get-Text $sub "dcscor:use"
+			$subEntry = [ordered]@{ value = $subRaw }
+			if ($subUse -eq 'false') { $subEntry['use'] = $false }
+			$nestedItems[$subName] = $subEntry
+		}
+		$valIsLine = ($rawVal -is [System.Collections.IDictionary]) -and $rawVal.Contains('@type') -and ($rawVal['@type'] -eq 'Line')
+		if ($valIsLine) {
+			if ($useV -eq 'false') { $rawVal['use'] = $false }
+			if ($nestedItems.Count -gt 0) { $rawVal['items'] = $nestedItems }
+			$dict[$pName] = $rawVal
+		} elseif (($useV -eq 'false') -or ($nestedItems.Count -gt 0)) {
+			$wrap = [ordered]@{ value = $rawVal }
+			if ($useV -eq 'false') { $wrap['use'] = $false }
+			if ($nestedItems.Count -gt 0) { $wrap['items'] = $nestedItems }
+			$dict[$pName] = $wrap
+		} else {
+			$dict[$pName] = $rawVal
+		}
+	}
+	return $dict
+}
+
+# Build conditionalAppearance array.
+function Build-ConditionalAppearance {
+	param($caNode, [string]$loc)
+	if (-not $caNode) { return @() }
+	$out = @()
+	$i = 0
+	foreach ($it in $caNode.SelectNodes("dcsset:item", $ns)) {
+		$entry = [ordered]@{}
+		$scopeNode = $it.SelectSingleNode("dcsset:scope", $ns)
+		if ($scopeNode -and $scopeNode.HasChildNodes) {
+			[Console]::Error.WriteLine("form-decompile: conditionalAppearance item имеет scope — не воспроизводится в DSL (path: $loc/$i/scope)")
+		}
+		$selNode = $it.SelectSingleNode("dcsset:selection", $ns)
+		if ($selNode -and $selNode.SelectNodes("dcsset:item", $ns).Count -gt 0) {
+			$entry['selection'] = Build-Selection -selNode $selNode -loc "$loc/$i/selection"
+		}
+		$filterNode = $it.SelectSingleNode("dcsset:filter", $ns)
+		if ($filterNode -and $filterNode.SelectNodes("dcsset:item", $ns).Count -gt 0) {
+			$f = @()
+			foreach ($fc in $filterNode.SelectNodes("dcsset:item", $ns)) {
+				$bi = (Build-FilterItem -itemNode $fc -loc "$loc/$i/filter")
+				if ($null -ne $bi) { $f += $bi }
+			}
+			$entry['filter'] = $f
+		}
+		$appNode = $it.SelectSingleNode("dcsset:appearance", $ns)
+		$ap = Get-SettingsAppearance $appNode
+		if ($ap -and $ap.Count -gt 0) { $entry['appearance'] = $ap }
+		$presNode = $it.SelectSingleNode("dcsset:presentation", $ns)
+		if ($presNode) {
+			$pres = Get-MLText $presNode
+			if (-not $pres) { $pres = $presNode.InnerText }
+			if ($pres) { $entry['presentation'] = $pres }
+		}
+		$vmN = $it.SelectSingleNode("dcsset:viewMode", $ns)
+		if ($vmN) { $entry['viewMode'] = $vmN.InnerText }
+		$usid = Get-Text $it "dcsset:userSettingID"
+		if ($usid) { $entry['userSettingID'] = 'auto' }
+		$uspN = $it.SelectSingleNode("dcsset:userSettingPresentation", $ns)
+		if ($uspN) {
+			$usp = Get-PresText $uspN
+			if ($usp) { $entry['userSettingPresentation'] = $usp }
+		}
+		$useV = Get-Text $it "dcsset:use"
+		if ($useV -eq 'false') { $entry['use'] = $false }
+		$useInDontUse = @()
+		foreach ($ch in $it.ChildNodes) {
+			if ($ch.NodeType -ne 'Element' -or $ch.NamespaceURI -ne $NS_DCSSET) { continue }
+			if ($ch.LocalName -match '^useIn(.+)$' -and $ch.InnerText -eq 'DontUse') {
+				$shortName = ($matches[1]).Substring(0, 1).ToLower() + ($matches[1]).Substring(1)
+				$useInDontUse += $shortName
+			}
+		}
+		if ($useInDontUse.Count -gt 0) { $entry['useInDontUse'] = $useInDontUse }
+		$out += $entry
+		$i++
+	}
+	return ,$out
 }
 
 # Общие layout-свойства → в $obj (симметрично Emit-Layout компилятора).
@@ -614,6 +1141,58 @@ if ($attrsNode) {
 			}
 			if ($cols.Count -gt 0) { $ao['columns'] = @($cols) }
 		}
+		# Settings динамического списка
+		$setNode = $a.SelectSingleNode("lf:Settings", $ns)
+		if ($setNode) {
+			$so = [ordered]@{}
+			$mt = Get-Child $setNode 'MainTable'; if ($mt) { $so['mainTable'] = $mt }
+			$qtNode = $setNode.SelectSingleNode("lf:QueryText", $ns)
+			if ($qtNode -and $qtNode.InnerText) { $so['query'] = Maybe-ExternalizeQuery -queryText $qtNode.InnerText -listName "$($ao['name'])" }
+			# DynamicDataRead: дефолт true → эмитим только false
+			if ((Get-Child $setNode 'DynamicDataRead') -eq 'false') { $so['dynamicDataRead'] = $false }
+			# Явные поля набора (редко, ~4.5%) — захват только при наличии Field
+			$fieldNodes = @($setNode.SelectNodes("lf:Field", $ns))
+			if ($fieldNodes.Count -gt 0) {
+				$fields = New-Object System.Collections.ArrayList
+				foreach ($fn in $fieldNodes) {
+					$fo = [ordered]@{}
+					$fld = Get-Child $fn 'field'
+					$dp  = Get-Child $fn 'dataPath'
+					if ($fld) { $fo['field'] = $fld }
+					if ($dp -and $dp -ne $fld) { $fo['dataPath'] = $dp }
+					$ftn = $fn.SelectSingleNode("dcssch:title", $ns)
+					if ($ftn) { $t = Get-LangText $ftn; if ($null -ne $t) { $fo['title'] = $t } }
+					[void]$fields.Add($fo)
+				}
+				$so['fields'] = @($fields)
+			}
+			# ListSettings: пустой скелет (только viewMode+GUID) опускаем — компилятор
+			# регенерит каноничный скелет. Захватываем только контейнеры с реальными
+			# dcsset:item (filter/order/conditionalAppearance) в формат компилятора.
+			$lsNode = $setNode.SelectSingleNode("lf:ListSettings", $ns)
+			if ($lsNode) {
+				$fNode = $lsNode.SelectSingleNode("dcsset:filter", $ns)
+				if ($fNode -and $fNode.SelectSingleNode("dcsset:item", $ns)) {
+					$flt = @()
+					foreach ($fc in $fNode.SelectNodes("dcsset:item", $ns)) {
+						$bi = (Build-FilterItem -itemNode $fc -loc "settings/filter")
+						if ($null -ne $bi) { $flt += $bi }
+					}
+					if ($flt.Count -gt 0) { $so['filter'] = @($flt) }
+				}
+				$oNode = $lsNode.SelectSingleNode("dcsset:order", $ns)
+				if ($oNode -and $oNode.SelectSingleNode("dcsset:item", $ns)) {
+					$ord = Build-Order -ordNode $oNode -loc "settings/order"
+					if (@($ord).Count -gt 0) { $so['order'] = @($ord) }
+				}
+				$caNode = $lsNode.SelectSingleNode("dcsset:conditionalAppearance", $ns)
+				if ($caNode -and $caNode.SelectSingleNode("dcsset:item", $ns)) {
+					$ca = Build-ConditionalAppearance -caNode $caNode -loc "settings/conditionalAppearance"
+					if (@($ca).Count -gt 0) { $so['conditionalAppearance'] = @($ca) }
+				}
+			}
+			if ($so.Count -gt 0) { $ao['settings'] = $so }
+		}
 		[void]$attrs.Add($ao)
 	}
 	if ($attrs.Count -gt 0) { $dsl['attributes'] = @($attrs) }
@@ -654,6 +1233,7 @@ if ($cmdsNode) {
 $json = ConvertTo-CompactJson -obj $dsl
 if ($OutputPath) {
 	[System.IO.File]::WriteAllText($OutputPath, $json, (New-Object System.Text.UTF8Encoding($false)))
+	Save-QueryFiles
 	Write-Host "form-decompile: $OutputPath"
 } else {
 	Write-Output $json
