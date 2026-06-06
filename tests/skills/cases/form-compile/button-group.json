@@ -21,7 +21,8 @@
         { "buttonGroup": "ГруппаПереместить", "title": "Переместить", "children": [
           { "button": "Вверх", "command": "Вверх" },
           { "button": "Вниз", "command": "Вниз" }
-        ]}
+        ]},
+        { "buttonGroup": "ГруппаГлобальныеКоманды", "commandSource": "FormCommandPanelGlobalCommands" }
       ]}
     ],
     "attributes": [

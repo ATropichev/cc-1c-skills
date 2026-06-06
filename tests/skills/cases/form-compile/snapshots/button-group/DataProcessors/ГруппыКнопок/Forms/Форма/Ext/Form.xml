@@ -41,11 +41,15 @@
 						</Button>
 					</ChildItems>
 				</ButtonGroup>
+				<ButtonGroup name="ГруппаГлобальныеКоманды" id="11">
+					<CommandSource>FormCommandPanelGlobalCommands</CommandSource>
+					<ExtendedTooltip name="ГруппаГлобальныеКомандыРасширеннаяПодсказка" id="12"/>
+				</ButtonGroup>
 			</ChildItems>
 		</CommandBar>
 	</ChildItems>
 	<Attributes>
-		<Attribute name="Объект" id="11">
+		<Attribute name="Объект" id="13">
 			<Type>
 				<v8:Type>cfg:DataProcessorObject.ГруппыКнопок</v8:Type>
 			</Type>
@@ -53,7 +57,7 @@
 		</Attribute>
 	</Attributes>
 	<Commands>
-		<Command name="Выполнить" id="12">
+		<Command name="Выполнить" id="14">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -69,7 +73,7 @@
 			<Action>ВыполнитьОбработка</Action>
 			<Shortcut>Ctrl+Enter</Shortcut>
 		</Command>
-		<Command name="Вверх" id="13">
+		<Command name="Вверх" id="15">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -79,7 +83,7 @@
 			<Action>ВверхОбработка</Action>
 			<CurrentRowUse>DontUse</CurrentRowUse>
 		</Command>
-		<Command name="Вниз" id="14">
+		<Command name="Вниз" id="16">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>

@@ -1,4 +1,4 @@
-﻿# form-compile v1.49 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.50 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -2400,6 +2400,8 @@ function Emit-Element {
 		"name"=1;"path"=1;"title"=1;"tooltip"=1;"tooltipRepresentation"=1;"extendedTooltip"=1
 		# companion-панели (свойства): командная панель + контекстное меню
 		"commandBar"=1;"contextMenu"=1
+		# источник команд группы/панели (ButtonGroup/CommandBar)
+		"commandSource"=1
 		# visibility & state
 		"visible"=1;"hidden"=1;"enabled"=1;"disabled"=1;"readOnly"=1;"userVisible"=1
 		# events ("events" — основной формат; on/handlers — legacy, принимаются ради совместимости)
@@ -3488,6 +3490,8 @@ function Emit-CommandBar {
 
 	Emit-Title -el $el -name $name -indent $inner
 
+	if ($el.commandSource) { X "$inner<CommandSource>$($el.commandSource)</CommandSource>" }
+
 	if ($el.autofill -eq $true) { X "$inner<Autofill>true</Autofill>" }
 
 	Emit-CommonFlags -el $el -indent $inner
@@ -3513,6 +3517,8 @@ function Emit-ButtonGroup {
 	$inner = "$indent`t"
 
 	Emit-Title -el $el -name $name -indent $inner
+
+	if ($el.commandSource) { X "$inner<CommandSource>$($el.commandSource)</CommandSource>" }
 
 	if ($el.representation) {
 		X "$inner<Representation>$($el.representation)</Representation>"

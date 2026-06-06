@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.49 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.50 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1780,7 +1780,7 @@ KNOWN_KEYS = {
     "excludedCommands",
     "pagesRepresentation",
     "type", "command", "commandName", "stdCommand", "defaultButton", "locationInCommandBar",
-    "commandBar", "contextMenu",
+    "commandBar", "contextMenu", "commandSource",
     "src", "valuesPicture", "loadTransparent",
     "autofill",
     "choiceMode", "initialTreeView", "enableDrag", "enableStartDrag",
@@ -3173,6 +3173,9 @@ def emit_command_bar(lines, el, name, eid, indent):
 
     emit_title(lines, el, name, inner)
 
+    if el.get('commandSource'):
+        lines.append(f'{inner}<CommandSource>{el["commandSource"]}</CommandSource>')
+
     if el.get('autofill') is True:
         lines.append(f'{inner}<Autofill>true</Autofill>')
 
@@ -3223,6 +3226,9 @@ def emit_button_group(lines, el, name, eid, indent):
     inner = f'{indent}\t'
 
     emit_title(lines, el, name, inner)
+
+    if el.get('commandSource'):
+        lines.append(f'{inner}<CommandSource>{el["commandSource"]}</CommandSource>')
 
     if el.get('representation'):
         lines.append(f'{inner}<Representation>{el["representation"]}</Representation>')
