@@ -1,4 +1,4 @@
-﻿# form-compile v1.44 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.45 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -2950,23 +2950,31 @@ function Emit-Radio {
 	X "$indent</RadioButtonField>"
 }
 
+# Заголовок декорации (Label/Picture): formatted-aware <Title> через единую ML-text форму
+# (reuse Resolve-MLFormatted, как у extendedTooltip). Атрибут formatted эмитится ВСЕГДА
+# (специфика декораций). Sibling-ключ `formatted` — back-compat override авто-детекта.
+function Emit-DecorationTitle {
+	param($el, [string]$name, [string]$indent, [switch]$auto)
+	$hasKey = $null -ne $el.PSObject.Properties['title']
+	$titleVal = if ($hasKey) { $el.title } elseif ($auto -and $name) { Title-FromName -name $name } else { $null }
+	if ($titleVal) {
+		$r = Resolve-MLFormatted $titleVal
+		$fmt = if ($null -ne $el.PSObject.Properties['formatted']) { [bool]$el.formatted } else { $r.formatted }
+		X "$indent<Title formatted=`"$(if ($fmt) { 'true' } else { 'false' })`">"
+		Emit-MLItems -val $r.text -indent "$indent`t"
+		X "$indent</Title>"
+	}
+	if ($el.tooltip) { Emit-MLText -tag "ToolTip" -text $el.tooltip -indent $indent }
+	if ($el.tooltipRepresentation) { X "$indent<ToolTipRepresentation>$($el.tooltipRepresentation)</ToolTipRepresentation>" }
+}
+
 function Emit-Label {
 	param($el, [string]$name, [int]$id, [string]$indent)
 
 	X "$indent<LabelDecoration name=`"$name`" id=`"$id`">"
 	$inner = "$indent`t"
 
-	$hasTitleKey = $null -ne $el.PSObject.Properties['title']
-	$labelTitle = if ($hasTitleKey) { $el.title } else { Title-FromName -name $name }
-	if ($labelTitle) {
-		# formatted — независимое свойство (НЕ выводится из hyperlink): ссылка может быть не-форматированной и наоборот.
-		$formatted = if ($el.formatted -eq $true) { "true" } else { "false" }
-		X "$inner<Title formatted=`"$formatted`">"
-		Emit-MLItems -val $labelTitle -indent "$inner`t"
-		X "$inner</Title>"
-	}
-	if ($el.tooltip) { Emit-MLText -tag "ToolTip" -text $el.tooltip -indent $inner }
-	if ($el.tooltipRepresentation) { X "$inner<ToolTipRepresentation>$($el.tooltipRepresentation)</ToolTipRepresentation>" }
+	Emit-DecorationTitle -el $el -name $name -indent $inner -auto
 
 	Emit-CommonFlags -el $el -indent $inner
 
@@ -3297,7 +3305,7 @@ function Emit-PictureDecoration {
 	X "$indent<PictureDecoration name=`"$name`" id=`"$id`">"
 	$inner = "$indent`t"
 
-	Emit-Title -el $el -name $name -indent $inner
+	Emit-DecorationTitle -el $el -name $name -indent $inner
 	Emit-CommonFlags -el $el -indent $inner
 
 	if ($el.picture -or $el.src) {

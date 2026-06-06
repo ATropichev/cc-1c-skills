@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.44 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.45 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -2639,21 +2639,29 @@ def emit_radio_button_field(lines, el, name, eid, indent):
     lines.append(f'{indent}</RadioButtonField>')
 
 
+# Заголовок декорации (Label/Picture): formatted-aware <Title> через единую ML-text форму
+# (reuse resolve_ml_formatted, как у extendedTooltip). Sibling-ключ formatted — back-compat override.
+def emit_decoration_title(lines, el, name, indent, auto=False):
+    has_key = 'title' in el
+    title_val = el['title'] if has_key else (title_from_name(name) if (auto and name) else None)
+    if title_val:
+        text, fmt = resolve_ml_formatted(title_val)
+        if 'formatted' in el:
+            fmt = bool(el['formatted'])
+        lines.append(f'{indent}<Title formatted="{"true" if fmt else "false"}">')
+        emit_ml_items(lines, f'{indent}\t', text)
+        lines.append(f'{indent}</Title>')
+    if el.get('tooltip'):
+        emit_mltext(lines, indent, 'ToolTip', el['tooltip'])
+    if el.get('tooltipRepresentation'):
+        lines.append(f'{indent}<ToolTipRepresentation>{el["tooltipRepresentation"]}</ToolTipRepresentation>')
+
+
 def emit_label(lines, el, name, eid, indent):
     lines.append(f'{indent}<LabelDecoration name="{name}" id="{eid}">')
     inner = f'{indent}\t'
 
-    label_title = el['title'] if 'title' in el else title_from_name(name)
-    if label_title:
-        # formatted — независимое свойство (НЕ выводится из hyperlink).
-        formatted = 'true' if el.get('formatted') is True else 'false'
-        lines.append(f'{inner}<Title formatted="{formatted}">')
-        emit_ml_items(lines, f'{inner}\t', label_title)
-        lines.append(f'{inner}</Title>')
-    if el.get('tooltip'):
-        emit_mltext(lines, inner, 'ToolTip', el['tooltip'])
-    if el.get('tooltipRepresentation'):
-        lines.append(f'{inner}<ToolTipRepresentation>{el["tooltipRepresentation"]}</ToolTipRepresentation>')
+    emit_decoration_title(lines, el, name, inner, auto=True)
 
     emit_common_flags(lines, el, inner)
 
@@ -2971,7 +2979,7 @@ def emit_picture_decoration(lines, el, name, eid, indent):
     lines.append(f'{indent}<PictureDecoration name="{name}" id="{eid}">')
     inner = f'{indent}\t'
 
-    emit_title(lines, el, name, inner)
+    emit_decoration_title(lines, el, name, inner)
     emit_common_flags(lines, el, inner)
 
     if el.get('picture') or el.get('src'):

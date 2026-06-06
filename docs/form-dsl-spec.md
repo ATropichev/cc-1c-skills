@@ -291,9 +291,9 @@
 
 | Свойство | Тип | Описание |
 |----------|-----|----------|
-| `title` | string | Текст надписи |
+| `title` | string/object | Текст надписи. Единая ML-text форма (см. §4.1): строка / `{ru,en}` / `{text, formatted}`. У декораций `<Title>` всегда несёт атрибут `formatted` (авто-детект по разметке) |
 | `hyperlink` | bool | Режим гиперссылки |
-| `formatted` | bool | Форматированный текст (`<Title formatted="true">`). **Независим от `hyperlink`** — выводится только при `true` |
+| `formatted` | bool | **Back-compat**: явный override авто-детекта formatted (раньше — отдельный ключ). Предпочтительно — форма `title: {text, formatted}` |
 | `width` | int | Ширина |
 | `height` | int | Высота |
 | `autoMaxWidth` | bool | Автомаксимальная ширина |

@@ -1,4 +1,4 @@
-﻿# form-decompile v0.26 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.27 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -951,9 +951,9 @@ function Decompile-Element {
 			$obj[$key] = $name
 			Add-CommonProps $obj $node $name
 			if ((Get-Child $node 'Hyperlink') -eq 'true') { $obj['hyperlink'] = $true }
-			# formatted — атрибут <Title formatted="…">, НЕЗАВИСИМ от hyperlink (true → ключ, false → опускаем)
+			# title декорации — единая ML-text форма с авто-детектом formatted (как extendedTooltip)
 			$tiNode = $node.SelectSingleNode("lf:Title", $ns)
-			if ($tiNode -and $tiNode.GetAttribute('formatted') -eq 'true') { $obj['formatted'] = $true }
+			if ($tiNode) { $tv = Get-MLFormattedValue $tiNode; if ($null -ne $tv) { $obj['title'] = $tv } }
 		}
 		'LabelField' {
 			$obj[$key] = $name
@@ -967,6 +967,9 @@ function Decompile-Element {
 		'PictureDecoration' {
 			$obj[$key] = $name
 			Add-CommonProps $obj $node $name
+			# title декорации — единая ML-text форма с formatted (атрибут <Title formatted> у PictureDecoration)
+			$tiNode = $node.SelectSingleNode("lf:Title", $ns)
+			if ($tiNode) { $tv = Get-MLFormattedValue $tiNode; if ($null -ne $tv) { $obj['title'] = $tv } }
 			$ref = $node.SelectSingleNode("lf:Picture/xr:Ref", $ns); if ($ref) { $obj['src'] = $ref.InnerText }
 			$lt = $node.SelectSingleNode("lf:Picture/xr:LoadTransparent", $ns); if ($lt -and $lt.InnerText -eq 'true') { $obj['loadTransparent'] = $true }
 			if ((Get-Child $node 'Hyperlink') -eq 'true') { $obj['hyperlink'] = $true }
