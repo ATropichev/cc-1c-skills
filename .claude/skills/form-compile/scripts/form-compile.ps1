@@ -1,4 +1,4 @@
-﻿# form-compile v1.43 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.44 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -1563,6 +1563,34 @@ function Emit-MLText {
 	X "$indent</$tag>"
 }
 
+# Детектор «настоящей» inline-разметки форматированного текста (1С: <link>/<b>/<color>/…
+# и закрывающий </>). Плейсхолдеры вида <не заполнен> НЕ срабатывают (нет известного тега/</>).
+# ВАЖНО: regex должен быть идентичен в form-decompile (иначе гибрид-раундтрип поедет).
+$script:fmtMarkupRe = '</>|<\s*(?:link|b|i|u|s|color|colorStyle|bgColor|bgColorStyle|font|fontSize|fontStyle|img)(?:\s|>)'
+function Test-HasRealMarkup {
+	param($text)
+	if ($null -eq $text) { return $false }
+	$vals = if ($text -is [System.Collections.IDictionary]) { @($text.Values) }
+		elseif ($text -is [System.Management.Automation.PSCustomObject]) { @($text.PSObject.Properties.Value) }
+		else { @("$text") }
+	foreach ($v in $vals) { if ("$v" -match $script:fmtMarkupRe) { return $true } }
+	return $false
+}
+# DSL-значение ML-поля → @{ text; formatted }. Форма {text, formatted} = явный override;
+# строка/мапа → авто-детект formatted по разметке.
+function Resolve-MLFormatted {
+	param($val)
+	$hasText = $false
+	if ($val -is [System.Management.Automation.PSCustomObject]) { $hasText = [bool]$val.PSObject.Properties['text'] }
+	elseif ($val -is [System.Collections.IDictionary]) { $hasText = $val.Contains('text') }
+	if ($hasText) {
+		$t = if ($val -is [System.Collections.IDictionary]) { $val['text'] } else { $val.text }
+		$f = if ($val -is [System.Collections.IDictionary]) { $val['formatted'] } else { $val.formatted }
+		return @{ text = $t; formatted = [bool]$f }
+	}
+	return @{ text = $val; formatted = (Test-HasRealMarkup $val) }
+}
+
 # Каноничные GUID пустых контейнеров ListSettings (умолчание платформы, ~90% форм).
 # Декомпилятор опускает пустые настройки → компилятор регенерит этот скелет → раундтрип
 # (harness нормализует GUID для хвоста с иными идентификаторами).
@@ -2219,9 +2247,21 @@ function Emit-Events {
 }
 
 function Emit-Companion {
-	param([string]$tag, [string]$name, [string]$indent)
+	param([string]$tag, [string]$name, [string]$indent, $content = $null)
 	$id = New-Id
-	X "$indent<$tag name=`"$name`" id=`"$id`"/>"
+	$hasContent = $null -ne $content -and -not ($content -is [string] -and "$content" -eq '')
+	if (-not $hasContent) {
+		X "$indent<$tag name=`"$name`" id=`"$id`"/>"
+		return
+	}
+	# Companion с контентом: <Title formatted="…"> (расширенная подсказка)
+	X "$indent<$tag name=`"$name`" id=`"$id`">"
+	$r = Resolve-MLFormatted $content
+	$fmt = if ($r.formatted) { 'true' } else { 'false' }
+	X "$indent`t<Title formatted=`"$fmt`">"
+	Emit-MLItems -val $r.text -indent "$indent`t`t"
+	X "$indent`t</Title>"
+	X "$indent</$tag>"
 }
 
 # Табличный addition (СтрокаПоиска/СостояниеПросмотра/УправлениеПоиском) с AdditionSource.
@@ -2316,7 +2356,7 @@ function Emit-Element {
 		# radio-specific
 		"radioButtonType"=1;"choiceList"=1;"columnsCount"=1;"checkBoxType"=1;"editMode"=1
 		# naming & binding
-		"name"=1;"path"=1;"title"=1;"tooltip"=1;"tooltipRepresentation"=1
+		"name"=1;"path"=1;"title"=1;"tooltip"=1;"tooltipRepresentation"=1;"extendedTooltip"=1
 		# visibility & state
 		"visible"=1;"hidden"=1;"enabled"=1;"disabled"=1;"readOnly"=1;"userVisible"=1
 		# events ("events" — основной формат; on/handlers — legacy, принимаются ради совместимости)
@@ -2548,7 +2588,7 @@ function Emit-Group {
 	Emit-Layout -el $el -indent $inner
 
 	# Companion: ExtendedTooltip
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	# Children
 	if ($el.children -and $el.children.Count -gt 0) {
@@ -2590,7 +2630,7 @@ function Emit-ColumnGroup {
 	Emit-Layout -el $el -indent $inner
 
 	# Companion: ExtendedTooltip
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	# Children
 	if ($el.children -and $el.children.Count -gt 0) {
@@ -2645,7 +2685,7 @@ function Emit-Input {
 
 	# Companions
 	Emit-Companion -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	Emit-Events -el $el -elementName $name -indent $inner -typeKey "input"
 
@@ -2678,7 +2718,7 @@ function Emit-Check {
 
 	# Companions
 	Emit-Companion -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	Emit-Events -el $el -elementName $name -indent $inner -typeKey "check"
 
@@ -2903,7 +2943,7 @@ function Emit-Radio {
 
 	# Companions
 	Emit-Companion -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	Emit-Events -el $el -elementName $name -indent $inner -typeKey "radio"
 
@@ -2935,7 +2975,7 @@ function Emit-Label {
 
 	# Companions
 	Emit-Companion -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	Emit-Events -el $el -elementName $name -indent $inner -typeKey "label"
 
@@ -2961,7 +3001,7 @@ function Emit-LabelField {
 
 	# Companions
 	Emit-Companion -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	Emit-Events -el $el -elementName $name -indent $inner -typeKey "labelField"
 
@@ -3108,7 +3148,7 @@ function Emit-Pages {
 	Emit-Layout -el $el -indent $inner
 
 	# Companion
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	Emit-Events -el $el -elementName $name -indent $inner -typeKey "pages"
 
@@ -3146,7 +3186,7 @@ function Emit-Page {
 	Emit-Layout -el $el -indent $inner
 
 	# Companion
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	# Children
 	if ($el.children -and $el.children.Count -gt 0) {
@@ -3244,7 +3284,7 @@ function Emit-Button {
 	Emit-Layout -el $el -indent $inner
 
 	# Companion
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	Emit-Events -el $el -elementName $name -indent $inner -typeKey "button"
 
@@ -3274,7 +3314,7 @@ function Emit-PictureDecoration {
 
 	# Companions
 	Emit-Companion -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	Emit-Events -el $el -elementName $name -indent $inner -typeKey "picture"
 
@@ -3308,7 +3348,7 @@ function Emit-PictureField {
 
 	# Companions
 	Emit-Companion -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	Emit-Events -el $el -elementName $name -indent $inner -typeKey "picField"
 
@@ -3350,7 +3390,7 @@ function Emit-Calendar {
 
 	# Companions
 	Emit-Companion -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	Emit-Events -el $el -elementName $name -indent $inner -typeKey "calendar"
 
@@ -3398,7 +3438,7 @@ function Emit-ButtonGroup {
 	Emit-Layout -el $el -indent $inner
 
 	# Companion: ExtendedTooltip
-	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	# Children (кнопки в контексте командной панели)
 	if ($el.children -and $el.children.Count -gt 0) {
@@ -3676,7 +3716,7 @@ function Emit-Properties {
 function Normalize-ElementSynonyms {
 	param($el)
 	if ($null -eq $el) { return }
-	$synonyms = @{ "commandBar" = "cmdBar"; "autoCommandBar" = "autoCmdBar" }
+	$synonyms = @{ "commandBar" = "cmdBar"; "autoCommandBar" = "autoCmdBar"; "extTooltip" = "extendedTooltip" }
 	foreach ($pair in $synonyms.GetEnumerator()) {
 		if ($null -ne $el.PSObject.Properties[$pair.Key] -and $null -eq $el.PSObject.Properties[$pair.Value]) {
 			$val = $el.($pair.Key)

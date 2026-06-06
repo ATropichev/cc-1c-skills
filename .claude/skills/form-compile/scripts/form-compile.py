@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.43 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.44 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1761,7 +1761,7 @@ KNOWN_KEYS = {
     "button", "picture", "picField", "calendar", "cmdBar", "popup",
     "showInHeader",
     "radioButtonType", "choiceList", "columnsCount", "checkBoxType", "editMode",
-    "name", "path", "title", "tooltip", "tooltipRepresentation",
+    "name", "path", "title", "tooltip", "tooltipRepresentation", "extendedTooltip",
     "visible", "hidden", "enabled", "disabled", "readOnly", "userVisible",
     "events", "on", "handlers",
     "selectionMode", "showCurrentDate", "widthInMonths", "heightInMonths", "showMonthsPanel",
@@ -2012,9 +2012,37 @@ def emit_events(lines, el, element_name, indent, type_key):
     lines.append(f"{indent}</Events>")
 
 
-def emit_companion(lines, tag, name, indent):
+# Детектор «настоящей» inline-разметки (1С: <link>/<b>/<color>/… и </>). Должен быть
+# идентичен form-decompile/form-compile.ps1, иначе гибрид-раундтрип поедет.
+_FMT_MARKUP_RE = re.compile(r'</>|<\s*(?:link|b|i|u|s|color|colorStyle|bgColor|bgColorStyle|font|fontSize|fontStyle|img)(?:\s|>)', re.I)
+
+
+def _has_real_markup(text):
+    if text is None:
+        return False
+    vals = list(text.values()) if isinstance(text, dict) else [text]
+    return any(_FMT_MARKUP_RE.search(str(v)) for v in vals)
+
+
+def resolve_ml_formatted(val):
+    # {text, formatted} = явный override; строка/мапа → авто-детект formatted
+    if isinstance(val, dict) and 'text' in val:
+        return val['text'], bool(val.get('formatted'))
+    return val, _has_real_markup(val)
+
+
+def emit_companion(lines, tag, name, indent, content=None):
     cid = new_id()
-    lines.append(f'{indent}<{tag} name="{name}" id="{cid}"/>')
+    has_content = content is not None and not (isinstance(content, str) and content == '')
+    if not has_content:
+        lines.append(f'{indent}<{tag} name="{name}" id="{cid}"/>')
+        return
+    lines.append(f'{indent}<{tag} name="{name}" id="{cid}">')
+    text, fmt = resolve_ml_formatted(content)
+    lines.append(f'{indent}\t<Title formatted="{"true" if fmt else "false"}">')
+    emit_ml_items(lines, f'{indent}\t\t', text)
+    lines.append(f'{indent}\t</Title>')
+    lines.append(f'{indent}</{tag}>')
 
 
 def emit_table_addition(lines, tag, table_name, name_suffix, src_type, indent):
@@ -2422,7 +2450,7 @@ def emit_group(lines, el, name, eid, indent):
     emit_layout(lines, el, inner)
 
     # Companion: ExtendedTooltip
-    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
 
     # Children
     if el.get('children') and len(el['children']) > 0:
@@ -2459,7 +2487,7 @@ def emit_column_group(lines, el, name, eid, indent):
     emit_common_flags(lines, el, inner)
     emit_layout(lines, el, inner)
 
-    emit_companion(lines, 'ExtendedTooltip', f'{name}РасширеннаяПодсказка', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}РасширеннаяПодсказка', inner, el.get('extendedTooltip'))
 
     if el.get('children') and len(el['children']) > 0:
         lines.append(f'{inner}<ChildItems>')
@@ -2512,7 +2540,7 @@ def emit_input(lines, el, name, eid, indent):
 
     # Companions
     emit_companion(lines, 'ContextMenu', f'{name}\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442\u043d\u043e\u0435\u041c\u0435\u043d\u044e', inner)
-    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
 
     emit_events(lines, el, name, inner, 'input')
 
@@ -2545,7 +2573,7 @@ def emit_check(lines, el, name, eid, indent):
 
     # Companions
     emit_companion(lines, 'ContextMenu', f'{name}\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442\u043d\u043e\u0435\u041c\u0435\u043d\u044e', inner)
-    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
 
     emit_events(lines, el, name, inner, 'check')
 
@@ -2604,7 +2632,7 @@ def emit_radio_button_field(lines, el, name, eid, indent):
     emit_layout(lines, el, inner)
 
     emit_companion(lines, 'ContextMenu', f'{name}КонтекстноеМеню', inner)
-    emit_companion(lines, 'ExtendedTooltip', f'{name}РасширеннаяПодсказка', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}РасширеннаяПодсказка', inner, el.get('extendedTooltip'))
 
     emit_events(lines, el, name, inner, 'radio')
 
@@ -2635,7 +2663,7 @@ def emit_label(lines, el, name, eid, indent):
 
     # Companions
     emit_companion(lines, 'ContextMenu', f'{name}\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442\u043d\u043e\u0435\u041c\u0435\u043d\u044e', inner)
-    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
 
     emit_events(lines, el, name, inner, 'label')
 
@@ -2663,7 +2691,7 @@ def emit_label_field(lines, el, name, eid, indent):
 
     # Companions
     emit_companion(lines, 'ContextMenu', f'{name}\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442\u043d\u043e\u0435\u041c\u0435\u043d\u044e', inner)
-    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
 
     emit_events(lines, el, name, inner, 'labelField')
 
@@ -2815,7 +2843,7 @@ def emit_pages(lines, el, name, eid, indent):
     emit_layout(lines, el, inner)
 
     # Companion
-    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
 
     emit_events(lines, el, name, inner, 'pages')
 
@@ -2849,7 +2877,7 @@ def emit_page(lines, el, name, eid, indent):
     emit_layout(lines, el, inner)
 
     # Companion
-    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
 
     # Children
     if el.get('children') and len(el['children']) > 0:
@@ -2932,7 +2960,7 @@ def emit_button(lines, el, name, eid, indent, in_cmd_bar=False):
     emit_layout(lines, el, inner)
 
     # Companion
-    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
 
     emit_events(lines, el, name, inner, 'button')
 
@@ -2960,7 +2988,7 @@ def emit_picture_decoration(lines, el, name, eid, indent):
 
     # Companions
     emit_companion(lines, 'ContextMenu', f'{name}\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442\u043d\u043e\u0435\u041c\u0435\u043d\u044e', inner)
-    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
 
     emit_events(lines, el, name, inner, 'picture')
 
@@ -2994,7 +3022,7 @@ def emit_picture_field(lines, el, name, eid, indent):
 
     # Companions
     emit_companion(lines, 'ContextMenu', f'{name}\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442\u043d\u043e\u0435\u041c\u0435\u043d\u044e', inner)
-    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
 
     emit_events(lines, el, name, inner, 'picField')
 
@@ -3032,7 +3060,7 @@ def emit_calendar(lines, el, name, eid, indent):
 
     # Companions
     emit_companion(lines, 'ContextMenu', f'{name}\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442\u043d\u043e\u0435\u041c\u0435\u043d\u044e', inner)
-    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
 
     emit_events(lines, el, name, inner, 'calendar')
 
@@ -3101,7 +3129,7 @@ def emit_button_group(lines, el, name, eid, indent):
     emit_layout(lines, el, inner)
 
     # Companion: ExtendedTooltip
-    emit_companion(lines, 'ExtendedTooltip', f'{name}РасширеннаяПодсказка', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}РасширеннаяПодсказка', inner, el.get('extendedTooltip'))
 
     # Children (кнопки в контексте командной панели)
     if el.get('children') and len(el['children']) > 0:
@@ -3575,7 +3603,7 @@ def main():
     def _normalize_synonyms(el):
         if not isinstance(el, dict):
             return
-        synonyms = {'commandBar': 'cmdBar', 'autoCommandBar': 'autoCmdBar'}
+        synonyms = {'commandBar': 'cmdBar', 'autoCommandBar': 'autoCmdBar', 'extTooltip': 'extendedTooltip'}
         for src, dst in synonyms.items():
             if src in el and dst not in el:
                 el[dst] = el.pop(src)

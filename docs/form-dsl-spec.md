@@ -118,6 +118,18 @@
 | `titleLocation` | string | Расположение заголовка: `none`/`left`/`right`/`top`/`bottom`/`auto`. Эмитится при наличии (input, labelField, picField, table, calendar). У `check`/`radio` — особая семантика с умным дефолтом (см. их разделы) |
 | `tooltip` | string/object | Всплывающая подсказка элемента (`<ToolTip>`). Строка → ru, объект `{ "ru": …, "en": … }` → мультиязычный (как `title`). Эмитится сразу после `title` |
 | `tooltipRepresentation` | string | Режим показа подсказки (`<ToolTipRepresentation>`): `None`, `Button`, `ShowBottom`, `ShowTop`, `ShowLeft`, `ShowRight`, `ShowAuto`, `Balloon`. Эмитится при наличии |
+| `extendedTooltip` | string/object | Расширенная подсказка (контент companion `<ExtendedTooltip>`). См. форму ML-текста ниже. Синоним: `extTooltip` |
+
+#### Форма ML-текста и `formatted`
+
+`title`/`tooltip`/`extendedTooltip` принимают:
+- `"строка"` — ru-текст;
+- `{ "ru": "…", "en": "…" }` — многоязычный;
+- `{ "text": <строка|мапа>, "formatted": true }` — **форматированный** текст (атрибут `<Title formatted="true">`).
+
+**`formatted`** включает интерпретацию inline-разметки в тексте (1С-формат, похож на BBCode): `<b>…</>`, `<i>`, `<u>`, `<color web:Red>…</>`, `<bgColor …>`, `<font …>`, `<fontSize …>`, `<link URL>…</>`, `<img …>`; закрывающий тег — `</>`. Текст несётся **raw** (разметка — часть строки), парсинг не требуется.
+
+Флаг авто-детектится по наличию известной разметки/`</>`: для plain-строки объект не нужен. Явная форма `{text, formatted}` — только когда авто-детект неверен (formatted-текст без разметки, либо буквальные `<…>`-плейсхолдеры в неформатированном).
 
 ### 4.1a. Общие layout-свойства
 

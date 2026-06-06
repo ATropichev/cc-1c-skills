@@ -1,4 +1,4 @@
-﻿# form-decompile v0.25 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.26 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -228,6 +228,27 @@ function Get-LangText {
 	}
 	if ($map.Count -eq 1 -and $map.Contains('ru')) { return $map['ru'] }
 	return $map
+}
+
+# Детектор «настоящей» inline-разметки форматированного текста (идентичен form-compile!).
+$script:fmtMarkupRe = '</>|<\s*(?:link|b|i|u|s|color|colorStyle|bgColor|bgColorStyle|font|fontSize|fontStyle|img)(?:\s|>)'
+function Test-HasRealMarkup {
+	param($text)
+	if ($null -eq $text) { return $false }
+	$vals = if ($text -is [System.Collections.IDictionary]) { @($text.Values) } else { @("$text") }
+	foreach ($v in $vals) { if ("$v" -match $script:fmtMarkupRe) { return $true } }
+	return $false
+}
+# Title-узел → DSL-значение ML-поля (гибрид): строка/мапа когда авто-детект formatted
+# совпал с атрибутом; иначе явный {text, formatted}.
+function Get-MLFormattedValue {
+	param($titleNode)
+	if (-not $titleNode) { return $null }
+	$text = Get-LangText $titleNode
+	if ($null -eq $text) { return $null }
+	$fmtAttr = ($titleNode.GetAttribute('formatted') -eq 'true')
+	if ($fmtAttr -eq (Test-HasRealMarkup $text)) { return $text }
+	$o = [ordered]@{}; $o['text'] = $text; $o['formatted'] = $fmtAttr; return $o
 }
 
 # Прочитать дочерний скаляр (по local-name, без namespace)
@@ -1086,6 +1107,9 @@ function Decompile-Element {
 		if ($autoTitle) { $obj['title'] = '' }
 	}
 	Add-Layout $obj $node
+	# extendedTooltip: контент companion <ExtendedTooltip><Title> (любой элемент)
+	$etTitle = $node.SelectSingleNode("lf:ExtendedTooltip/lf:Title", $ns)
+	if ($etTitle) { $et = Get-MLFormattedValue $etTitle; if ($null -ne $et) { $obj['extendedTooltip'] = $et } }
 	return $obj
 }
 
