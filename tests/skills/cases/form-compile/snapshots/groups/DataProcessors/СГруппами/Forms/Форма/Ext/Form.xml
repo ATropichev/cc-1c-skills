@@ -13,8 +13,9 @@
 	<ChildItems>
 		<CommandBar name="КоманднаяПанель" id="1">
 			<Autofill>true</Autofill>
+			<ExtendedTooltip name="КоманднаяПанельРасширеннаяПодсказка" id="2"/>
 		</CommandBar>
-		<UsualGroup name="ГруппаШапка" id="2">
+		<UsualGroup name="ГруппаШапка" id="3">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -24,9 +25,9 @@
 			<Group>Horizontal</Group>
 			<HorizontalStretch>true</HorizontalStretch>
 			<GroupHorizontalAlign>Right</GroupHorizontalAlign>
-			<ExtendedTooltip name="ГруппаШапкаРасширеннаяПодсказка" id="3"/>
+			<ExtendedTooltip name="ГруппаШапкаРасширеннаяПодсказка" id="4"/>
 			<ChildItems>
-				<InputField name="Поле1" id="4">
+				<InputField name="Поле1" id="5">
 					<DataPath>Поле1</DataPath>
 					<Title>
 						<v8:item>
@@ -36,10 +37,10 @@
 					</Title>
 					<SkipOnInput>true</SkipOnInput>
 					<Width>20</Width>
-					<ContextMenu name="Поле1КонтекстноеМеню" id="5"/>
-					<ExtendedTooltip name="Поле1РасширеннаяПодсказка" id="6"/>
+					<ContextMenu name="Поле1КонтекстноеМеню" id="6"/>
+					<ExtendedTooltip name="Поле1РасширеннаяПодсказка" id="7"/>
 				</InputField>
-				<InputField name="Поле2" id="7">
+				<InputField name="Поле2" id="8">
 					<DataPath>Поле2</DataPath>
 					<Title>
 						<v8:item>
@@ -47,18 +48,18 @@
 							<v8:content>Поле 2</v8:content>
 						</v8:item>
 					</Title>
-					<ContextMenu name="Поле2КонтекстноеМеню" id="8"/>
-					<ExtendedTooltip name="Поле2РасширеннаяПодсказка" id="9"/>
+					<ContextMenu name="Поле2КонтекстноеМеню" id="9"/>
+					<ExtendedTooltip name="Поле2РасширеннаяПодсказка" id="10"/>
 				</InputField>
-				<LabelField name="Метка" id="10">
+				<LabelField name="Метка" id="11">
 					<DataPath>Поле1</DataPath>
 					<GroupVerticalAlign>Center</GroupVerticalAlign>
-					<ContextMenu name="МеткаКонтекстноеМеню" id="11"/>
-					<ExtendedTooltip name="МеткаРасширеннаяПодсказка" id="12"/>
+					<ContextMenu name="МеткаКонтекстноеМеню" id="12"/>
+					<ExtendedTooltip name="МеткаРасширеннаяПодсказка" id="13"/>
 				</LabelField>
 			</ChildItems>
 		</UsualGroup>
-		<UsualGroup name="ГруппаПодвал" id="13">
+		<UsualGroup name="ГруппаПодвал" id="14">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -70,9 +71,9 @@
 				</v8:item>
 			</Title>
 			<Group>Vertical</Group>
-			<ExtendedTooltip name="ГруппаПодвалРасширеннаяПодсказка" id="14"/>
+			<ExtendedTooltip name="ГруппаПодвалРасширеннаяПодсказка" id="15"/>
 			<ChildItems>
-				<InputField name="Поле3" id="15">
+				<InputField name="Поле3" id="16">
 					<DataPath>Поле3</DataPath>
 					<Title>
 						<v8:item>
@@ -80,20 +81,20 @@
 							<v8:content>Поле 3</v8:content>
 						</v8:item>
 					</Title>
-					<ContextMenu name="Поле3КонтекстноеМеню" id="16"/>
-					<ExtendedTooltip name="Поле3РасширеннаяПодсказка" id="17"/>
+					<ContextMenu name="Поле3КонтекстноеМеню" id="17"/>
+					<ExtendedTooltip name="Поле3РасширеннаяПодсказка" id="18"/>
 				</InputField>
 			</ChildItems>
 		</UsualGroup>
 	</ChildItems>
 	<Attributes>
-		<Attribute name="Объект" id="18">
+		<Attribute name="Объект" id="19">
 			<Type>
 				<v8:Type>cfg:DataProcessorObject.СГруппами</v8:Type>
 			</Type>
 			<MainAttribute>true</MainAttribute>
 		</Attribute>
-		<Attribute name="Поле1" id="19">
+		<Attribute name="Поле1" id="20">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -108,7 +109,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="Поле2" id="20">
+		<Attribute name="Поле2" id="21">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -124,7 +125,7 @@
 				</v8:NumberQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="Поле3" id="21">
+		<Attribute name="Поле3" id="22">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>

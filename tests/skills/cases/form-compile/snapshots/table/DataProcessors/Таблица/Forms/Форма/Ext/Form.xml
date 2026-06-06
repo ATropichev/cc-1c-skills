@@ -23,57 +23,58 @@
 			</CommandSet>
 			<ContextMenu name="ДанныеКонтекстноеМеню" id="2"/>
 			<AutoCommandBar name="ДанныеКоманднаяПанель" id="3"/>
-			<SearchStringAddition name="ДанныеСтрокаПоиска" id="4">
+			<ExtendedTooltip name="ДанныеРасширеннаяПодсказка" id="4"/>
+			<SearchStringAddition name="ДанныеСтрокаПоиска" id="5">
 				<AdditionSource>
 					<Item>Данные</Item>
 					<Type>SearchStringRepresentation</Type>
 				</AdditionSource>
-				<ContextMenu name="ДанныеСтрокаПоискаКонтекстноеМеню" id="5"/>
-				<ExtendedTooltip name="ДанныеСтрокаПоискаРасширеннаяПодсказка" id="6"/>
+				<ContextMenu name="ДанныеСтрокаПоискаКонтекстноеМеню" id="6"/>
+				<ExtendedTooltip name="ДанныеСтрокаПоискаРасширеннаяПодсказка" id="7"/>
 			</SearchStringAddition>
-			<ViewStatusAddition name="ДанныеСостояниеПросмотра" id="7">
+			<ViewStatusAddition name="ДанныеСостояниеПросмотра" id="8">
 				<AdditionSource>
 					<Item>Данные</Item>
 					<Type>ViewStatusRepresentation</Type>
 				</AdditionSource>
-				<ContextMenu name="ДанныеСостояниеПросмотраКонтекстноеМеню" id="8"/>
-				<ExtendedTooltip name="ДанныеСостояниеПросмотраРасширеннаяПодсказка" id="9"/>
+				<ContextMenu name="ДанныеСостояниеПросмотраКонтекстноеМеню" id="9"/>
+				<ExtendedTooltip name="ДанныеСостояниеПросмотраРасширеннаяПодсказка" id="10"/>
 			</ViewStatusAddition>
-			<SearchControlAddition name="ДанныеУправлениеПоиском" id="10">
+			<SearchControlAddition name="ДанныеУправлениеПоиском" id="11">
 				<AdditionSource>
 					<Item>Данные</Item>
 					<Type>SearchControl</Type>
 				</AdditionSource>
-				<ContextMenu name="ДанныеУправлениеПоискомКонтекстноеМеню" id="11"/>
-				<ExtendedTooltip name="ДанныеУправлениеПоискомРасширеннаяПодсказка" id="12"/>
+				<ContextMenu name="ДанныеУправлениеПоискомКонтекстноеМеню" id="12"/>
+				<ExtendedTooltip name="ДанныеУправлениеПоискомРасширеннаяПодсказка" id="13"/>
 			</SearchControlAddition>
 			<ChildItems>
-				<InputField name="Дата" id="13">
+				<InputField name="Дата" id="14">
 					<DataPath>Данные.Дата</DataPath>
-					<ContextMenu name="ДатаКонтекстноеМеню" id="14"/>
-					<ExtendedTooltip name="ДатаРасширеннаяПодсказка" id="15"/>
+					<ContextMenu name="ДатаКонтекстноеМеню" id="15"/>
+					<ExtendedTooltip name="ДатаРасширеннаяПодсказка" id="16"/>
 				</InputField>
-				<InputField name="Сумма" id="16">
+				<InputField name="Сумма" id="17">
 					<DataPath>Данные.Сумма</DataPath>
-					<ContextMenu name="СуммаКонтекстноеМеню" id="17"/>
-					<ExtendedTooltip name="СуммаРасширеннаяПодсказка" id="18"/>
+					<ContextMenu name="СуммаКонтекстноеМеню" id="18"/>
+					<ExtendedTooltip name="СуммаРасширеннаяПодсказка" id="19"/>
 				</InputField>
-				<InputField name="Комментарий" id="19">
+				<InputField name="Комментарий" id="20">
 					<DataPath>Данные.Комментарий</DataPath>
-					<ContextMenu name="КомментарийКонтекстноеМеню" id="20"/>
-					<ExtendedTooltip name="КомментарийРасширеннаяПодсказка" id="21"/>
+					<ContextMenu name="КомментарийКонтекстноеМеню" id="21"/>
+					<ExtendedTooltip name="КомментарийРасширеннаяПодсказка" id="22"/>
 				</InputField>
 			</ChildItems>
 		</Table>
 	</ChildItems>
 	<Attributes>
-		<Attribute name="Объект" id="22">
+		<Attribute name="Объект" id="23">
 			<Type>
 				<v8:Type>cfg:DataProcessorObject.Таблица</v8:Type>
 			</Type>
 			<MainAttribute>true</MainAttribute>
 		</Attribute>
-		<Attribute name="Данные" id="23">
+		<Attribute name="Данные" id="24">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -84,7 +85,7 @@
 				<v8:Type>v8:ValueTable</v8:Type>
 			</Type>
 			<Columns>
-				<Column name="Дата" id="24">
+				<Column name="Дата" id="25">
 					<Type>
 						<v8:Type>xs:dateTime</v8:Type>
 						<v8:DateQualifiers>
@@ -92,7 +93,7 @@
 						</v8:DateQualifiers>
 					</Type>
 				</Column>
-				<Column name="Сумма" id="25">
+				<Column name="Сумма" id="26">
 					<Type>
 						<v8:Type>xs:decimal</v8:Type>
 						<v8:NumberQualifiers>
@@ -102,7 +103,7 @@
 						</v8:NumberQualifiers>
 					</Type>
 				</Column>
-				<Column name="Комментарий" id="26">
+				<Column name="Комментарий" id="27">
 					<Type>
 						<v8:Type>xs:string</v8:Type>
 						<v8:StringQualifiers>

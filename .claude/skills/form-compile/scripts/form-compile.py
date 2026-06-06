@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.45 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.46 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -2822,6 +2822,7 @@ def emit_table(lines, el, name, eid, indent):
         lines.append(f'{inner}</AutoCommandBar>')
     else:
         emit_companion(lines, 'AutoCommandBar', f'{name}\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f\u041f\u0430\u043d\u0435\u043b\u044c', inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}\u0420\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u043d\u0430\u044f\u041f\u043e\u0434\u0441\u043a\u0430\u0437\u043a\u0430', inner, el.get('extendedTooltip'))
     emit_table_addition(lines, 'SearchStringAddition', name, '\u0421\u0442\u0440\u043e\u043a\u0430\u041f\u043e\u0438\u0441\u043a\u0430', 'SearchStringRepresentation', inner)
     emit_table_addition(lines, 'ViewStatusAddition', name, '\u0421\u043e\u0441\u0442\u043e\u044f\u043d\u0438\u0435\u041f\u0440\u043e\u0441\u043c\u043e\u0442\u0440\u0430', 'ViewStatusRepresentation', inner)
     emit_table_addition(lines, 'SearchControlAddition', name, '\u0423\u043f\u0440\u0430\u0432\u043b\u0435\u043d\u0438\u0435\u041f\u043e\u0438\u0441\u043a\u043e\u043c', 'SearchControl', inner)
@@ -3086,6 +3087,7 @@ def emit_command_bar(lines, el, name, eid, indent):
 
     emit_common_flags(lines, el, inner)
     emit_layout(lines, el, inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}РасширеннаяПодсказка', inner, el.get('extendedTooltip'))
 
     # Children
     if el.get('children') and len(el['children']) > 0:
@@ -3113,6 +3115,7 @@ def emit_popup(lines, el, name, eid, indent):
     if el.get('representation'):
         lines.append(f'{inner}<Representation>{el["representation"]}</Representation>')
     emit_layout(lines, el, inner)
+    emit_companion(lines, 'ExtendedTooltip', f'{name}РасширеннаяПодсказка', inner, el.get('extendedTooltip'))
 
     # Children
     if el.get('children') and len(el['children']) > 0:

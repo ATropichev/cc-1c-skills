@@ -12,31 +12,32 @@
 	</AutoCommandBar>
 	<ChildItems>
 		<CommandBar name="Панель" id="1">
+			<ExtendedTooltip name="ПанельРасширеннаяПодсказка" id="2"/>
 			<ChildItems>
-				<Button name="Выполнить" id="2">
+				<Button name="Выполнить" id="3">
 					<Type>CommandBarButton</Type>
 					<CommandName>Form.Command.Выполнить</CommandName>
 					<DefaultButton>true</DefaultButton>
-					<ExtendedTooltip name="ВыполнитьРасширеннаяПодсказка" id="3"/>
+					<ExtendedTooltip name="ВыполнитьРасширеннаяПодсказка" id="4"/>
 				</Button>
-				<ButtonGroup name="ГруппаПереместить" id="4">
+				<ButtonGroup name="ГруппаПереместить" id="5">
 					<Title>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
 							<v8:content>Переместить</v8:content>
 						</v8:item>
 					</Title>
-					<ExtendedTooltip name="ГруппаПереместитьРасширеннаяПодсказка" id="5"/>
+					<ExtendedTooltip name="ГруппаПереместитьРасширеннаяПодсказка" id="6"/>
 					<ChildItems>
-						<Button name="Вверх" id="6">
+						<Button name="Вверх" id="7">
 							<Type>CommandBarButton</Type>
 							<CommandName>Form.Command.Вверх</CommandName>
-							<ExtendedTooltip name="ВверхРасширеннаяПодсказка" id="7"/>
+							<ExtendedTooltip name="ВверхРасширеннаяПодсказка" id="8"/>
 						</Button>
-						<Button name="Вниз" id="8">
+						<Button name="Вниз" id="9">
 							<Type>CommandBarButton</Type>
 							<CommandName>Form.Command.Вниз</CommandName>
-							<ExtendedTooltip name="ВнизРасширеннаяПодсказка" id="9"/>
+							<ExtendedTooltip name="ВнизРасширеннаяПодсказка" id="10"/>
 						</Button>
 					</ChildItems>
 				</ButtonGroup>
@@ -44,7 +45,7 @@
 		</CommandBar>
 	</ChildItems>
 	<Attributes>
-		<Attribute name="Объект" id="10">
+		<Attribute name="Объект" id="11">
 			<Type>
 				<v8:Type>cfg:DataProcessorObject.ГруппыКнопок</v8:Type>
 			</Type>
@@ -52,7 +53,7 @@
 		</Attribute>
 	</Attributes>
 	<Commands>
-		<Command name="Выполнить" id="11">
+		<Command name="Выполнить" id="12">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -68,7 +69,7 @@
 			<Action>ВыполнитьОбработка</Action>
 			<Shortcut>Ctrl+Enter</Shortcut>
 		</Command>
-		<Command name="Вверх" id="12">
+		<Command name="Вверх" id="13">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -78,7 +79,7 @@
 			<Action>ВверхОбработка</Action>
 			<CurrentRowUse>DontUse</CurrentRowUse>
 		</Command>
-		<Command name="Вниз" id="13">
+		<Command name="Вниз" id="14">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>

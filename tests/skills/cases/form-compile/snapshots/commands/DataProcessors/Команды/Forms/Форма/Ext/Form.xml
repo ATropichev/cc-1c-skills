@@ -12,38 +12,39 @@
 	</AutoCommandBar>
 	<ChildItems>
 		<CommandBar name="Панель" id="1">
+			<ExtendedTooltip name="ПанельРасширеннаяПодсказка" id="2"/>
 			<ChildItems>
-				<Button name="Выполнить" id="2">
+				<Button name="Выполнить" id="3">
 					<Type>CommandBarButton</Type>
 					<CommandName>Form.Command.Выполнить</CommandName>
 					<DefaultButton>true</DefaultButton>
-					<ExtendedTooltip name="ВыполнитьРасширеннаяПодсказка" id="3"/>
+					<ExtendedTooltip name="ВыполнитьРасширеннаяПодсказка" id="4"/>
 				</Button>
-				<Button name="Закрыть" id="4">
+				<Button name="Закрыть" id="5">
 					<Type>CommandBarButton</Type>
 					<CommandName>Form.StandardCommand.Close</CommandName>
-					<ExtendedTooltip name="ЗакрытьРасширеннаяПодсказка" id="5"/>
+					<ExtendedTooltip name="ЗакрытьРасширеннаяПодсказка" id="6"/>
 				</Button>
 			</ChildItems>
 		</CommandBar>
-		<InputField name="Результат" id="6">
+		<InputField name="Результат" id="7">
 			<DataPath>Результат</DataPath>
 			<ReadOnly>true</ReadOnly>
 			<MultiLine>true</MultiLine>
 			<AutoMaxWidth>false</AutoMaxWidth>
 			<Height>8</Height>
-			<ContextMenu name="РезультатКонтекстноеМеню" id="7"/>
-			<ExtendedTooltip name="РезультатРасширеннаяПодсказка" id="8"/>
+			<ContextMenu name="РезультатКонтекстноеМеню" id="8"/>
+			<ExtendedTooltip name="РезультатРасширеннаяПодсказка" id="9"/>
 		</InputField>
 	</ChildItems>
 	<Attributes>
-		<Attribute name="Объект" id="9">
+		<Attribute name="Объект" id="10">
 			<Type>
 				<v8:Type>cfg:DataProcessorObject.Команды</v8:Type>
 			</Type>
 			<MainAttribute>true</MainAttribute>
 		</Attribute>
-		<Attribute name="Результат" id="10">
+		<Attribute name="Результат" id="11">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -60,7 +61,7 @@
 		</Attribute>
 	</Attributes>
 	<Commands>
-		<Command name="Выполнить" id="11">
+		<Command name="Выполнить" id="12">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>

@@ -89,62 +89,63 @@
 			<DataPath>Объект.ExtDimensionTypes</DataPath>
 			<ContextMenu name="ВидыСубконтоКонтекстноеМеню" id="28"/>
 			<AutoCommandBar name="ВидыСубконтоКоманднаяПанель" id="29"/>
-			<SearchStringAddition name="ВидыСубконтоСтрокаПоиска" id="30">
+			<ExtendedTooltip name="ВидыСубконтоРасширеннаяПодсказка" id="30"/>
+			<SearchStringAddition name="ВидыСубконтоСтрокаПоиска" id="31">
 				<AdditionSource>
 					<Item>ВидыСубконто</Item>
 					<Type>SearchStringRepresentation</Type>
 				</AdditionSource>
-				<ContextMenu name="ВидыСубконтоСтрокаПоискаКонтекстноеМеню" id="31"/>
-				<ExtendedTooltip name="ВидыСубконтоСтрокаПоискаРасширеннаяПодсказка" id="32"/>
+				<ContextMenu name="ВидыСубконтоСтрокаПоискаКонтекстноеМеню" id="32"/>
+				<ExtendedTooltip name="ВидыСубконтоСтрокаПоискаРасширеннаяПодсказка" id="33"/>
 			</SearchStringAddition>
-			<ViewStatusAddition name="ВидыСубконтоСостояниеПросмотра" id="33">
+			<ViewStatusAddition name="ВидыСубконтоСостояниеПросмотра" id="34">
 				<AdditionSource>
 					<Item>ВидыСубконто</Item>
 					<Type>ViewStatusRepresentation</Type>
 				</AdditionSource>
-				<ContextMenu name="ВидыСубконтоСостояниеПросмотраКонтекстноеМеню" id="34"/>
-				<ExtendedTooltip name="ВидыСубконтоСостояниеПросмотраРасширеннаяПодсказка" id="35"/>
+				<ContextMenu name="ВидыСубконтоСостояниеПросмотраКонтекстноеМеню" id="35"/>
+				<ExtendedTooltip name="ВидыСубконтоСостояниеПросмотраРасширеннаяПодсказка" id="36"/>
 			</ViewStatusAddition>
-			<SearchControlAddition name="ВидыСубконтоУправлениеПоиском" id="36">
+			<SearchControlAddition name="ВидыСубконтоУправлениеПоиском" id="37">
 				<AdditionSource>
 					<Item>ВидыСубконто</Item>
 					<Type>SearchControl</Type>
 				</AdditionSource>
-				<ContextMenu name="ВидыСубконтоУправлениеПоискомКонтекстноеМеню" id="37"/>
-				<ExtendedTooltip name="ВидыСубконтоУправлениеПоискомРасширеннаяПодсказка" id="38"/>
+				<ContextMenu name="ВидыСубконтоУправлениеПоискомКонтекстноеМеню" id="38"/>
+				<ExtendedTooltip name="ВидыСубконтоУправлениеПоискомРасширеннаяПодсказка" id="39"/>
 			</SearchControlAddition>
 			<ChildItems>
-				<InputField name="ВидСубконто" id="39">
+				<InputField name="ВидСубконто" id="40">
 					<DataPath>Объект.ExtDimensionTypes.ExtDimensionType</DataPath>
-					<ContextMenu name="ВидСубконтоКонтекстноеМеню" id="40"/>
-					<ExtendedTooltip name="ВидСубконтоРасширеннаяПодсказка" id="41"/>
+					<ContextMenu name="ВидСубконтоКонтекстноеМеню" id="41"/>
+					<ExtendedTooltip name="ВидСубконтоРасширеннаяПодсказка" id="42"/>
 				</InputField>
-				<CheckBoxField name="ТолькоОбороты" id="42">
+				<CheckBoxField name="ТолькоОбороты" id="43">
 					<DataPath>Объект.ExtDimensionTypes.TurnoversOnly</DataPath>
 					<CheckBoxType>Auto</CheckBoxType>
 					<TitleLocation>Right</TitleLocation>
-					<ContextMenu name="ТолькоОборотыКонтекстноеМеню" id="43"/>
-					<ExtendedTooltip name="ТолькоОборотыРасширеннаяПодсказка" id="44"/>
+					<ContextMenu name="ТолькоОборотыКонтекстноеМеню" id="44"/>
+					<ExtendedTooltip name="ТолькоОборотыРасширеннаяПодсказка" id="45"/>
 				</CheckBoxField>
-				<CheckBoxField name="Валютный" id="45">
+				<CheckBoxField name="Валютный" id="46">
 					<DataPath>Объект.ExtDimensionTypes.Валютный</DataPath>
 					<CheckBoxType>Auto</CheckBoxType>
 					<TitleLocation>Right</TitleLocation>
-					<ContextMenu name="ВалютныйКонтекстноеМеню" id="46"/>
-					<ExtendedTooltip name="ВалютныйРасширеннаяПодсказка" id="47"/>
+					<ContextMenu name="ВалютныйКонтекстноеМеню" id="47"/>
+					<ExtendedTooltip name="ВалютныйРасширеннаяПодсказка" id="48"/>
 				</CheckBoxField>
-				<CheckBoxField name="Количественный" id="48">
+				<CheckBoxField name="Количественный" id="49">
 					<DataPath>Объект.ExtDimensionTypes.Количественный</DataPath>
 					<CheckBoxType>Auto</CheckBoxType>
 					<TitleLocation>Right</TitleLocation>
-					<ContextMenu name="КоличественныйКонтекстноеМеню" id="49"/>
-					<ExtendedTooltip name="КоличественныйРасширеннаяПодсказка" id="50"/>
+					<ContextMenu name="КоличественныйКонтекстноеМеню" id="50"/>
+					<ExtendedTooltip name="КоличественныйРасширеннаяПодсказка" id="51"/>
 				</CheckBoxField>
 			</ChildItems>
 		</Table>
 	</ChildItems>
 	<Attributes>
-		<Attribute name="Объект" id="51">
+		<Attribute name="Объект" id="52">
 			<Type>
 				<v8:Type>cfg:ChartOfAccountsObject.Хозрасчетный</v8:Type>
 			</Type>

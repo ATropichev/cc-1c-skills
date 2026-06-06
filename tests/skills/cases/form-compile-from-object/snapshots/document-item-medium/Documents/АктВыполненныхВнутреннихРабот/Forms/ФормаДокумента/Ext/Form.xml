@@ -140,119 +140,120 @@
 							<DataPath>Объект.Товары</DataPath>
 							<ContextMenu name="ТоварыКонтекстноеМеню" id="55"/>
 							<AutoCommandBar name="ТоварыКоманднаяПанель" id="56"/>
-							<SearchStringAddition name="ТоварыСтрокаПоиска" id="57">
+							<ExtendedTooltip name="ТоварыРасширеннаяПодсказка" id="57"/>
+							<SearchStringAddition name="ТоварыСтрокаПоиска" id="58">
 								<AdditionSource>
 									<Item>Товары</Item>
 									<Type>SearchStringRepresentation</Type>
 								</AdditionSource>
-								<ContextMenu name="ТоварыСтрокаПоискаКонтекстноеМеню" id="58"/>
-								<ExtendedTooltip name="ТоварыСтрокаПоискаРасширеннаяПодсказка" id="59"/>
+								<ContextMenu name="ТоварыСтрокаПоискаКонтекстноеМеню" id="59"/>
+								<ExtendedTooltip name="ТоварыСтрокаПоискаРасширеннаяПодсказка" id="60"/>
 							</SearchStringAddition>
-							<ViewStatusAddition name="ТоварыСостояниеПросмотра" id="60">
+							<ViewStatusAddition name="ТоварыСостояниеПросмотра" id="61">
 								<AdditionSource>
 									<Item>Товары</Item>
 									<Type>ViewStatusRepresentation</Type>
 								</AdditionSource>
-								<ContextMenu name="ТоварыСостояниеПросмотраКонтекстноеМеню" id="61"/>
-								<ExtendedTooltip name="ТоварыСостояниеПросмотраРасширеннаяПодсказка" id="62"/>
+								<ContextMenu name="ТоварыСостояниеПросмотраКонтекстноеМеню" id="62"/>
+								<ExtendedTooltip name="ТоварыСостояниеПросмотраРасширеннаяПодсказка" id="63"/>
 							</ViewStatusAddition>
-							<SearchControlAddition name="ТоварыУправлениеПоиском" id="63">
+							<SearchControlAddition name="ТоварыУправлениеПоиском" id="64">
 								<AdditionSource>
 									<Item>Товары</Item>
 									<Type>SearchControl</Type>
 								</AdditionSource>
-								<ContextMenu name="ТоварыУправлениеПоискомКонтекстноеМеню" id="64"/>
-								<ExtendedTooltip name="ТоварыУправлениеПоискомРасширеннаяПодсказка" id="65"/>
+								<ContextMenu name="ТоварыУправлениеПоискомКонтекстноеМеню" id="65"/>
+								<ExtendedTooltip name="ТоварыУправлениеПоискомРасширеннаяПодсказка" id="66"/>
 							</SearchControlAddition>
 							<ChildItems>
-								<LabelField name="ТоварыНомерСтроки" id="66">
+								<LabelField name="ТоварыНомерСтроки" id="67">
 									<DataPath>Объект.Товары.LineNumber</DataPath>
-									<ContextMenu name="ТоварыНомерСтрокиКонтекстноеМеню" id="67"/>
-									<ExtendedTooltip name="ТоварыНомерСтрокиРасширеннаяПодсказка" id="68"/>
+									<ContextMenu name="ТоварыНомерСтрокиКонтекстноеМеню" id="68"/>
+									<ExtendedTooltip name="ТоварыНомерСтрокиРасширеннаяПодсказка" id="69"/>
 								</LabelField>
-								<InputField name="ТоварыНоменклатура" id="69">
+								<InputField name="ТоварыНоменклатура" id="70">
 									<DataPath>Объект.Товары.Номенклатура</DataPath>
-									<ContextMenu name="ТоварыНоменклатураКонтекстноеМеню" id="70"/>
-									<ExtendedTooltip name="ТоварыНоменклатураРасширеннаяПодсказка" id="71"/>
+									<ContextMenu name="ТоварыНоменклатураКонтекстноеМеню" id="71"/>
+									<ExtendedTooltip name="ТоварыНоменклатураРасширеннаяПодсказка" id="72"/>
 								</InputField>
-								<InputField name="ТоварыХарактеристика" id="72">
+								<InputField name="ТоварыХарактеристика" id="73">
 									<DataPath>Объект.Товары.Характеристика</DataPath>
-									<ContextMenu name="ТоварыХарактеристикаКонтекстноеМеню" id="73"/>
-									<ExtendedTooltip name="ТоварыХарактеристикаРасширеннаяПодсказка" id="74"/>
+									<ContextMenu name="ТоварыХарактеристикаКонтекстноеМеню" id="74"/>
+									<ExtendedTooltip name="ТоварыХарактеристикаРасширеннаяПодсказка" id="75"/>
 								</InputField>
-								<InputField name="ТоварыНазначение" id="75">
+								<InputField name="ТоварыНазначение" id="76">
 									<DataPath>Объект.Товары.Назначение</DataPath>
-									<ContextMenu name="ТоварыНазначениеКонтекстноеМеню" id="76"/>
-									<ExtendedTooltip name="ТоварыНазначениеРасширеннаяПодсказка" id="77"/>
+									<ContextMenu name="ТоварыНазначениеКонтекстноеМеню" id="77"/>
+									<ExtendedTooltip name="ТоварыНазначениеРасширеннаяПодсказка" id="78"/>
 								</InputField>
-								<InputField name="ТоварыУпаковка" id="78">
+								<InputField name="ТоварыУпаковка" id="79">
 									<DataPath>Объект.Товары.Упаковка</DataPath>
-									<ContextMenu name="ТоварыУпаковкаКонтекстноеМеню" id="79"/>
-									<ExtendedTooltip name="ТоварыУпаковкаРасширеннаяПодсказка" id="80"/>
+									<ContextMenu name="ТоварыУпаковкаКонтекстноеМеню" id="80"/>
+									<ExtendedTooltip name="ТоварыУпаковкаРасширеннаяПодсказка" id="81"/>
 								</InputField>
-								<InputField name="ТоварыКоличествоУпаковок" id="81">
+								<InputField name="ТоварыКоличествоУпаковок" id="82">
 									<DataPath>Объект.Товары.КоличествоУпаковок</DataPath>
-									<ContextMenu name="ТоварыКоличествоУпаковокКонтекстноеМеню" id="82"/>
-									<ExtendedTooltip name="ТоварыКоличествоУпаковокРасширеннаяПодсказка" id="83"/>
+									<ContextMenu name="ТоварыКоличествоУпаковокКонтекстноеМеню" id="83"/>
+									<ExtendedTooltip name="ТоварыКоличествоУпаковокРасширеннаяПодсказка" id="84"/>
 								</InputField>
-								<InputField name="ТоварыКоличество" id="84">
+								<InputField name="ТоварыКоличество" id="85">
 									<DataPath>Объект.Товары.Количество</DataPath>
-									<ContextMenu name="ТоварыКоличествоКонтекстноеМеню" id="85"/>
-									<ExtendedTooltip name="ТоварыКоличествоРасширеннаяПодсказка" id="86"/>
+									<ContextMenu name="ТоварыКоличествоКонтекстноеМеню" id="86"/>
+									<ExtendedTooltip name="ТоварыКоличествоРасширеннаяПодсказка" id="87"/>
 								</InputField>
-								<InputField name="ТоварыПодразделение" id="87">
+								<InputField name="ТоварыПодразделение" id="88">
 									<DataPath>Объект.Товары.Подразделение</DataPath>
-									<ContextMenu name="ТоварыПодразделениеКонтекстноеМеню" id="88"/>
-									<ExtendedTooltip name="ТоварыПодразделениеРасширеннаяПодсказка" id="89"/>
+									<ContextMenu name="ТоварыПодразделениеКонтекстноеМеню" id="89"/>
+									<ExtendedTooltip name="ТоварыПодразделениеРасширеннаяПодсказка" id="90"/>
 								</InputField>
-								<InputField name="ТоварыГруппаПродукции" id="90">
+								<InputField name="ТоварыГруппаПродукции" id="91">
 									<DataPath>Объект.Товары.ГруппаПродукции</DataPath>
-									<ContextMenu name="ТоварыГруппаПродукцииКонтекстноеМеню" id="91"/>
-									<ExtendedTooltip name="ТоварыГруппаПродукцииРасширеннаяПодсказка" id="92"/>
+									<ContextMenu name="ТоварыГруппаПродукцииКонтекстноеМеню" id="92"/>
+									<ExtendedTooltip name="ТоварыГруппаПродукцииРасширеннаяПодсказка" id="93"/>
 								</InputField>
-								<InputField name="ТоварыАналитикаУчетаНоменклатуры" id="93">
+								<InputField name="ТоварыАналитикаУчетаНоменклатуры" id="94">
 									<DataPath>Объект.Товары.АналитикаУчетаНоменклатуры</DataPath>
-									<ContextMenu name="ТоварыАналитикаУчетаНоменклатурыКонтекстноеМеню" id="94"/>
-									<ExtendedTooltip name="ТоварыАналитикаУчетаНоменклатурыРасширеннаяПодсказка" id="95"/>
+									<ContextMenu name="ТоварыАналитикаУчетаНоменклатурыКонтекстноеМеню" id="95"/>
+									<ExtendedTooltip name="ТоварыАналитикаУчетаНоменклатурыРасширеннаяПодсказка" id="96"/>
 								</InputField>
-								<InputField name="ТоварыИдентификаторСтроки" id="96">
+								<InputField name="ТоварыИдентификаторСтроки" id="97">
 									<DataPath>Объект.Товары.ИдентификаторСтроки</DataPath>
-									<ContextMenu name="ТоварыИдентификаторСтрокиКонтекстноеМеню" id="97"/>
-									<ExtendedTooltip name="ТоварыИдентификаторСтрокиРасширеннаяПодсказка" id="98"/>
+									<ContextMenu name="ТоварыИдентификаторСтрокиКонтекстноеМеню" id="98"/>
+									<ExtendedTooltip name="ТоварыИдентификаторСтрокиРасширеннаяПодсказка" id="99"/>
 								</InputField>
 							</ChildItems>
 						</Table>
 					</ChildItems>
 				</Page>
-				<Page name="ГруппаДополнительно" id="99">
+				<Page name="ГруппаДополнительно" id="100">
 					<Title>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
 							<v8:content>Дополнительно</v8:content>
 						</v8:item>
 					</Title>
-					<ExtendedTooltip name="ГруппаДополнительноРасширеннаяПодсказка" id="100"/>
+					<ExtendedTooltip name="ГруппаДополнительноРасширеннаяПодсказка" id="101"/>
 					<ChildItems>
-						<UsualGroup name="ГруппаПараметры" id="101">
+						<UsualGroup name="ГруппаПараметры" id="102">
 							<Group>Horizontal</Group>
 							<ShowTitle>false</ShowTitle>
-							<ExtendedTooltip name="ГруппаПараметрыРасширеннаяПодсказка" id="102"/>
+							<ExtendedTooltip name="ГруппаПараметрыРасширеннаяПодсказка" id="103"/>
 							<ChildItems>
-								<UsualGroup name="ГруппаПараметрыЛево" id="103">
+								<UsualGroup name="ГруппаПараметрыЛево" id="104">
 									<Group>Vertical</Group>
 									<ShowTitle>false</ShowTitle>
-									<ExtendedTooltip name="ГруппаПараметрыЛевоРасширеннаяПодсказка" id="104"/>
+									<ExtendedTooltip name="ГруппаПараметрыЛевоРасширеннаяПодсказка" id="105"/>
 								</UsualGroup>
-								<UsualGroup name="ГруппаПараметрыПраво" id="105">
+								<UsualGroup name="ГруппаПараметрыПраво" id="106">
 									<Group>Vertical</Group>
 									<ShowTitle>false</ShowTitle>
-									<ExtendedTooltip name="ГруппаПараметрыПравоРасширеннаяПодсказка" id="106"/>
+									<ExtendedTooltip name="ГруппаПараметрыПравоРасширеннаяПодсказка" id="107"/>
 								</UsualGroup>
 							</ChildItems>
 						</UsualGroup>
-						<UsualGroup name="ГруппаДополнительныеРеквизиты" id="107">
+						<UsualGroup name="ГруппаДополнительныеРеквизиты" id="108">
 							<Group>Vertical</Group>
-							<ExtendedTooltip name="ГруппаДополнительныеРеквизитыРасширеннаяПодсказка" id="108"/>
+							<ExtendedTooltip name="ГруппаДополнительныеРеквизитыРасширеннаяПодсказка" id="109"/>
 						</UsualGroup>
 					</ChildItems>
 				</Page>
@@ -260,7 +261,7 @@
 		</Pages>
 	</ChildItems>
 	<Attributes>
-		<Attribute name="Объект" id="109">
+		<Attribute name="Объект" id="110">
 			<Type>
 				<v8:Type>cfg:DocumentObject.АктВыполненныхВнутреннихРабот</v8:Type>
 			</Type>

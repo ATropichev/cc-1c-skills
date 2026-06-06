@@ -1,4 +1,4 @@
-﻿# form-compile v1.45 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.46 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -3122,6 +3122,7 @@ function Emit-Table {
 	} else {
 		Emit-Companion -tag "AutoCommandBar" -name "${name}КоманднаяПанель" -indent $inner
 	}
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 	Emit-TableAddition -tag "SearchStringAddition" -tableName $name -nameSuffix "СтрокаПоиска" -srcType "SearchStringRepresentation" -indent $inner
 	Emit-TableAddition -tag "ViewStatusAddition" -tableName $name -nameSuffix "СостояниеПросмотра" -srcType "ViewStatusRepresentation" -indent $inner
 	Emit-TableAddition -tag "SearchControlAddition" -tableName $name -nameSuffix "УправлениеПоиском" -srcType "SearchControl" -indent $inner
@@ -3417,6 +3418,7 @@ function Emit-CommandBar {
 
 	Emit-CommonFlags -el $el -indent $inner
 	Emit-Layout -el $el -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	# Children
 	if ($el.children -and $el.children.Count -gt 0) {
@@ -3480,6 +3482,7 @@ function Emit-Popup {
 		X "$inner<Representation>$($el.representation)</Representation>"
 	}
 	Emit-Layout -el $el -indent $inner
+	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
 	# Children
 	if ($el.children -and $el.children.Count -gt 0) {
