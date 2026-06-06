@@ -136,7 +136,12 @@
 | `groupHorizontalAlign` | `<GroupHorizontalAlign>` | `Left`, `Center`, `Right` |
 | `groupVerticalAlign` | `<GroupVerticalAlign>` | `Top`, `Center`, `Bottom` |
 | `horizontalAlign` | `<HorizontalAlign>` | `Left`, `Center`, `Right` |
-| `skipOnInput` | `<SkipOnInput>` | `true` |
+| `skipOnInput` | `<SkipOnInput>` | `true`/`false` (эмитится явное значение, в т.ч. `false`) |
+| `defaultItem` | `<DefaultItem>` | `true` (элемент активируется по умолчанию) |
+| `enableStartDrag` | `<EnableStartDrag>` | `true` (разрешить начало перетаскивания) |
+| `fileDragMode` | `<FileDragMode>` | `AsFile`/… (режим drag-n-drop файлов) |
+
+> `defaultItem`/`enableStartDrag`/`fileDragMode`/`skipOnInput` — общие для любого типа элемента (таблица, поле, надпись, картинка, кнопка), не только таблицы.
 
 ### 4.2. События элемента и автоименование обработчиков
 
@@ -328,10 +333,8 @@
 | Свойство | Тип | Умолчание | Описание |
 |----------|-----|-----------|----------|
 | `rowPictureDataPath` | string | `<Список>.DefaultPicture` (если есть осн. таблица) | Путь к картинке строки. `""` — подавить авто-вывод |
-| `defaultItem` | bool | — | `<DefaultItem>` (элемент по умолчанию) |
 | `useAlternationRowColor` | bool | — | Чередование цвета строк |
 | `initialTreeView` | string | — | `ExpandTopLevel`, `ExpandAllLevels`, `NoExpand` |
-| `enableStartDrag` / `fileDragMode` | bool / string | — | Перетаскивание; `fileDragMode` = `AsFile`/… |
 | `autoRefresh` | bool | `false` | Автообновление |
 | `autoRefreshPeriod` | int | `60` | Период автообновления, сек |
 | `choiceFoldersAndItems` | string | `Items` | `Items`, `Folders`, `FoldersAndItems` |

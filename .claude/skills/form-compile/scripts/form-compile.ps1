@@ -1,4 +1,4 @@
-﻿# form-compile v1.40 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.41 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -2405,9 +2405,21 @@ function Emit-CommonFlags {
 # историческим выводом input/label, чтобы не сдвигать существующие снапшоты.
 # -skipHeight: для Table (height → HeightInTableRows, эмитится в Emit-Table).
 # -multiLineDefault: input без явного autoMaxWidth при multiLine → AutoMaxWidth=false.
+# Общие свойства элемента (любой тип, включая Button/cmdBar): default/skip/drag.
+function Emit-CommonElementProps {
+	param($el, [string]$indent)
+	if ($el.defaultItem -eq $true) { X "$indent<DefaultItem>true</DefaultItem>" }
+	if ($el.PSObject.Properties['skipOnInput'] -and $null -ne $el.skipOnInput) {
+		$siv = if ($el.skipOnInput -eq $true) { 'true' } else { 'false' }
+		X "$indent<SkipOnInput>$siv</SkipOnInput>"
+	}
+	if ($el.enableStartDrag -eq $true) { X "$indent<EnableStartDrag>true</EnableStartDrag>" }
+	if ($el.fileDragMode) { X "$indent<FileDragMode>$($el.fileDragMode)</FileDragMode>" }
+}
+
 function Emit-Layout {
 	param($el, [string]$indent, [switch]$skipHeight, [bool]$multiLineDefault = $false)
-	if ($el.skipOnInput -eq $true) { X "$indent<SkipOnInput>true</SkipOnInput>" }
+	Emit-CommonElementProps -el $el -indent $indent
 	$amwExplicit = ($el.PSObject.Properties.Name -contains 'autoMaxWidth')
 	if ($amwExplicit) {
 		if ($el.autoMaxWidth -eq $false) { X "$indent<AutoMaxWidth>false</AutoMaxWidth>" }
@@ -2960,10 +2972,9 @@ function Emit-LabelField {
 # DSL-ключ переопределяет; декомпилятор инвертирует (опускает значения = дефолту).
 function Emit-DynListTableBlock {
 	param($el, [string]$indent)
-	# Group B (условные опц.): defaultItem / useAlternationRowColor / fileDragMode
-	if ($el.defaultItem -eq $true) { X "$indent<DefaultItem>true</DefaultItem>" }
+	# UseAlternationRowColor — специфично для list-таблицы (defaultItem/fileDragMode/
+	# enableStartDrag — общие, эмитятся в Emit-Layout)
 	if ($el.useAlternationRowColor -eq $true) { X "$indent<UseAlternationRowColor>true</UseAlternationRowColor>" }
-	if ($el.fileDragMode) { X "$indent<FileDragMode>$($el.fileDragMode)</FileDragMode>" }
 	# Group A (гарант. блок, n=5079): дефолт + override
 	$ar = if ($el.autoRefresh -eq $true) { "true" } else { "false" }
 	X "$indent<AutoRefresh>$ar</AutoRefresh>"
@@ -3019,7 +3030,6 @@ function Emit-Table {
 	}
 	if ($el.choiceMode -eq $true) { X "$inner<ChoiceMode>true</ChoiceMode>" }
 	if ($el.initialTreeView) { X "$inner<InitialTreeView>$($el.initialTreeView)</InitialTreeView>" }
-	if ($el.enableStartDrag -eq $true) { X "$inner<EnableStartDrag>true</EnableStartDrag>" }
 	if ($el.enableDrag -eq $true) { X "$inner<EnableDrag>true</EnableDrag>" }
 	if ($el.rowPictureDataPath) { X "$inner<RowPictureDataPath>$($el.rowPictureDataPath)</RowPictureDataPath>" }
 	if ($el.rowsPicture) {
@@ -3143,6 +3153,7 @@ function Emit-Button {
 
 	X "$indent<Button name=`"$name`" id=`"$id`">"
 	$inner = "$indent`t"
+	# (общие свойства — через Emit-Layout ниже; отдельный вызов был бы двойной эмиссией)
 
 	# Type — context-aware:
 	# Inside command bar (cmdBar/autoCmdBar/popup) only CommandBarButton/CommandBarHyperlink are valid.

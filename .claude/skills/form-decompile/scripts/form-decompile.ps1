@@ -1,4 +1,4 @@
-﻿# form-decompile v0.22 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.23 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -716,7 +716,11 @@ function Build-ConditionalAppearance {
 # (<Height>); Table хранит высоту в строках (<HeightInTableRows>) и ловит её сам.
 function Add-Layout {
 	param($obj, $node)
-	if ((Get-Child $node 'SkipOnInput') -eq 'true') { $obj['skipOnInput'] = $true }
+	# Общие свойства элемента (любой тип): default/drag/skip
+	if ((Get-Child $node 'DefaultItem') -eq 'true') { $obj['defaultItem'] = $true }
+	$soi = Get-Child $node 'SkipOnInput'; if ($null -ne $soi) { $obj['skipOnInput'] = ($soi -eq 'true') }
+	if ((Get-Child $node 'EnableStartDrag') -eq 'true') { $obj['enableStartDrag'] = $true }
+	$fdm = Get-Child $node 'FileDragMode'; if ($fdm) { $obj['fileDragMode'] = $fdm }
 	if ((Get-Child $node 'AutoMaxWidth') -eq 'false') { $obj['autoMaxWidth'] = $false }
 	$mw = Get-Child $node 'MaxWidth'; if ($mw) { $obj['maxWidth'] = [int]$mw }
 	if ((Get-Child $node 'AutoMaxHeight') -eq 'false') { $obj['autoMaxHeight'] = $false }
@@ -991,12 +995,10 @@ function Decompile-Element {
 				if ((Get-Child $node 'AllowRootChoice') -eq 'true') { $obj['allowRootChoice'] = $true }
 				$uodc = Get-Child $node 'UpdateOnDataChange'; if ($uodc -and $uodc -ne 'Auto') { $obj['updateOnDataChange'] = $uodc }
 				if ((Get-Child $node 'AllowGettingCurrentRowURL') -eq 'false') { $obj['allowGettingCurrentRowURL'] = $false }
-				# Group B (захват при наличии)
-				if ((Get-Child $node 'DefaultItem') -eq 'true') { $obj['defaultItem'] = $true }
+				# list-таблица: useAlternationRowColor/initialTreeView (defaultItem/enableStartDrag/
+				# fileDragMode — общие, ловятся в Add-Layout)
 				if ((Get-Child $node 'UseAlternationRowColor') -eq 'true') { $obj['useAlternationRowColor'] = $true }
 				$itv = Get-Child $node 'InitialTreeView'; if ($itv) { $obj['initialTreeView'] = $itv }
-				if ((Get-Child $node 'EnableStartDrag') -eq 'true') { $obj['enableStartDrag'] = $true }
-				$fdm = Get-Child $node 'FileDragMode'; if ($fdm) { $obj['fileDragMode'] = $fdm }
 				# Group C
 				$rpdp = Get-Child $node 'RowPictureDataPath'
 				if ($null -eq $rpdp) { $obj['rowPictureDataPath'] = '' }

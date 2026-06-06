@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.40 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.41 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -2043,13 +2043,25 @@ def emit_common_flags(lines, el, indent):
         lines.append(f"{indent}<ReadOnly>true</ReadOnly>")
 
 
+# Общие свойства элемента (любой тип, включая Button/cmdBar): default/skip/drag.
+def emit_common_element_props(lines, el, indent):
+    if el.get('defaultItem') is True:
+        lines.append(f"{indent}<DefaultItem>true</DefaultItem>")
+    if 'skipOnInput' in el and el['skipOnInput'] is not None:
+        siv = 'true' if el['skipOnInput'] is True else 'false'
+        lines.append(f"{indent}<SkipOnInput>{siv}</SkipOnInput>")
+    if el.get('enableStartDrag') is True:
+        lines.append(f"{indent}<EnableStartDrag>true</EnableStartDrag>")
+    if el.get('fileDragMode'):
+        lines.append(f"{indent}<FileDragMode>{el['fileDragMode']}</FileDragMode>")
+
+
 def emit_layout(lines, el, indent, skip_height=False, multi_line_default=False):
     # Общие layout-свойства — применимы ко всем элементам. Порядок согласован
     # с историческим выводом input/label, чтобы не сдвигать существующие снапшоты.
     # skip_height: для Table (height → HeightInTableRows, эмитится в emit_table).
     # multi_line_default: input без явного autoMaxWidth при multiLine → AutoMaxWidth=false.
-    if el.get('skipOnInput') is True:
-        lines.append(f"{indent}<SkipOnInput>true</SkipOnInput>")
+    emit_common_element_props(lines, el, indent)
     if 'autoMaxWidth' in el:
         if el.get('autoMaxWidth') is False:
             lines.append(f"{indent}<AutoMaxWidth>false</AutoMaxWidth>")
@@ -2659,13 +2671,10 @@ def emit_label_field(lines, el, name, eid, indent):
 
 # Блок свойств таблицы, привязанной к динамическому списку (Group A defaults + B/C).
 def emit_dynlist_table_block(lines, el, indent):
-    # Group B (условные опц.)
-    if el.get('defaultItem') is True:
-        lines.append(f'{indent}<DefaultItem>true</DefaultItem>')
+    # UseAlternationRowColor — специфично для list-таблицы (defaultItem/fileDragMode/
+    # enableStartDrag — общие, эмитятся в emit_layout)
     if el.get('useAlternationRowColor') is True:
         lines.append(f'{indent}<UseAlternationRowColor>true</UseAlternationRowColor>')
-    if el.get('fileDragMode'):
-        lines.append(f'{indent}<FileDragMode>{el["fileDragMode"]}</FileDragMode>')
     # Group A (гарант. блок): дефолт + override
     ar = 'true' if el.get('autoRefresh') is True else 'false'
     lines.append(f'{indent}<AutoRefresh>{ar}</AutoRefresh>')
@@ -2727,8 +2736,6 @@ def emit_table(lines, el, name, eid, indent):
         lines.append(f'{inner}<ChoiceMode>true</ChoiceMode>')
     if el.get('initialTreeView'):
         lines.append(f'{inner}<InitialTreeView>{el["initialTreeView"]}</InitialTreeView>')
-    if el.get('enableStartDrag') is True:
-        lines.append(f'{inner}<EnableStartDrag>true</EnableStartDrag>')
     if el.get('enableDrag') is True:
         lines.append(f'{inner}<EnableDrag>true</EnableDrag>')
     if el.get('rowPictureDataPath'):
@@ -2843,6 +2850,7 @@ def emit_page(lines, el, name, eid, indent):
 def emit_button(lines, el, name, eid, indent, in_cmd_bar=False):
     lines.append(f'{indent}<Button name="{name}" id="{eid}">')
     inner = f'{indent}\t'
+    # (общие свойства — через emit_layout ниже; отдельный вызов был бы двойной эмиссией)
 
     # Type — context-aware. Inside command bars (cmdBar/autoCmdBar/popup) only
     # CommandBarButton/CommandBarHyperlink are valid; UsualButton/Hyperlink would be ignored.
