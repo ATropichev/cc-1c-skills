@@ -320,6 +320,13 @@
 | `autoInsertNewRow` | bool | Автодобавление новой строки |
 | `enableDrag` | bool | Разрешить перетаскивание из таблицы |
 | `rowFilter` | null | Отбор строк (nil-плейсхолдер `<RowFilter xsi:nil="true"/>`); значение всегда `null` |
+| `choiceMode` | bool | Режим выбора |
+| `useAlternationRowColor` | bool | Чередование цвета строк |
+| `selectionMode` | string | Режим выделения (`SingleRow`, …) |
+| `rowSelectionMode` | string | Режим выделения строки (`Row`, …) |
+| `verticalLines` / `horizontalLines` | bool | Линии сетки (эмитится явное `false`) |
+| `initialTreeView` | string | `ExpandTopLevel`, `ExpandAllLevels`, `NoExpand` |
+| `rowsPicture` | string | Картинка строк (`CommonPicture.X`) |
 | `height` | int | Высота в строках таблицы |
 | `header` | bool | Показывать шапку |
 | `footer` | bool | Показывать подвал |
@@ -336,8 +343,6 @@
 | Свойство | Тип | Умолчание | Описание |
 |----------|-----|-----------|----------|
 | `rowPictureDataPath` | string | `<Список>.DefaultPicture` (если есть осн. таблица) | Путь к картинке строки. `""` — подавить авто-вывод |
-| `useAlternationRowColor` | bool | — | Чередование цвета строк |
-| `initialTreeView` | string | — | `ExpandTopLevel`, `ExpandAllLevels`, `NoExpand` |
 | `autoRefresh` | bool | `false` | Автообновление |
 | `autoRefreshPeriod` | int | `60` | Период автообновления, сек |
 | `choiceFoldersAndItems` | string | `Items` | `Items`, `Folders`, `FoldersAndItems` |

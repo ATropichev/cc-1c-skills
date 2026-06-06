@@ -1,4 +1,4 @@
-﻿# form-compile v1.42 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.43 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -2342,6 +2342,7 @@ function Emit-Element {
 		"excludedCommands"=1
 		"choiceMode"=1;"initialTreeView"=1;"enableDrag"=1;"enableStartDrag"=1
 		"rowPictureDataPath"=1;"tableAutofill"=1
+		"rowSelectionMode"=1;"verticalLines"=1;"horizontalLines"=1
 		# dynamic-list table block
 		"defaultItem"=1;"useAlternationRowColor"=1;"fileDragMode"=1;"autoRefresh"=1
 		"autoRefreshPeriod"=1;"choiceFoldersAndItems"=1;"restoreCurrentRow"=1;"showRoot"=1
@@ -2972,9 +2973,7 @@ function Emit-LabelField {
 # DSL-ключ переопределяет; декомпилятор инвертирует (опускает значения = дефолту).
 function Emit-DynListTableBlock {
 	param($el, [string]$indent)
-	# UseAlternationRowColor — специфично для list-таблицы (defaultItem/fileDragMode/
-	# enableStartDrag — общие, эмитятся в Emit-Layout)
-	if ($el.useAlternationRowColor -eq $true) { X "$indent<UseAlternationRowColor>true</UseAlternationRowColor>" }
+	# (useAlternationRowColor — общее свойство таблицы, эмитится в Emit-Table)
 	# Group A (гарант. блок, n=5079): дефолт + override
 	$ar = if ($el.autoRefresh -eq $true) { "true" } else { "false" }
 	X "$indent<AutoRefresh>$ar</AutoRefresh>"
@@ -3037,6 +3036,11 @@ function Emit-Table {
 		X "$inner<SearchStringLocation>$($el.searchStringLocation)</SearchStringLocation>"
 	}
 	if ($el.choiceMode -eq $true) { X "$inner<ChoiceMode>true</ChoiceMode>" }
+	if ($el.useAlternationRowColor -eq $true) { X "$inner<UseAlternationRowColor>true</UseAlternationRowColor>" }
+	if ($el.selectionMode) { X "$inner<SelectionMode>$($el.selectionMode)</SelectionMode>" }
+	if ($el.rowSelectionMode) { X "$inner<RowSelectionMode>$($el.rowSelectionMode)</RowSelectionMode>" }
+	if ($el.verticalLines -eq $false) { X "$inner<VerticalLines>false</VerticalLines>" }
+	if ($el.horizontalLines -eq $false) { X "$inner<HorizontalLines>false</HorizontalLines>" }
 	if ($el.initialTreeView) { X "$inner<InitialTreeView>$($el.initialTreeView)</InitialTreeView>" }
 	if ($el.enableDrag -eq $true) { X "$inner<EnableDrag>true</EnableDrag>" }
 	if ($el.rowPictureDataPath) { X "$inner<RowPictureDataPath>$($el.rowPictureDataPath)</RowPictureDataPath>" }

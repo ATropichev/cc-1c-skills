@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.42 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.43 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1783,6 +1783,7 @@ KNOWN_KEYS = {
     "src", "valuesPicture", "loadTransparent",
     "autofill",
     "choiceMode", "initialTreeView", "enableDrag", "enableStartDrag",
+    "rowSelectionMode", "verticalLines", "horizontalLines",
     "rowPictureDataPath", "tableAutofill",
     # dynamic-list table block
     "defaultItem", "useAlternationRowColor", "fileDragMode", "autoRefresh",
@@ -2671,10 +2672,7 @@ def emit_label_field(lines, el, name, eid, indent):
 
 # Блок свойств таблицы, привязанной к динамическому списку (Group A defaults + B/C).
 def emit_dynlist_table_block(lines, el, indent):
-    # UseAlternationRowColor — специфично для list-таблицы (defaultItem/fileDragMode/
-    # enableStartDrag — общие, эмитятся в emit_layout)
-    if el.get('useAlternationRowColor') is True:
-        lines.append(f'{indent}<UseAlternationRowColor>true</UseAlternationRowColor>')
+    # (useAlternationRowColor — общее свойство таблицы, эмитится в emit_table)
     # Group A (гарант. блок): дефолт + override
     ar = 'true' if el.get('autoRefresh') is True else 'false'
     lines.append(f'{indent}<AutoRefresh>{ar}</AutoRefresh>')
@@ -2740,6 +2738,16 @@ def emit_table(lines, el, name, eid, indent):
 
     if el.get('choiceMode') is True:
         lines.append(f'{inner}<ChoiceMode>true</ChoiceMode>')
+    if el.get('useAlternationRowColor') is True:
+        lines.append(f'{inner}<UseAlternationRowColor>true</UseAlternationRowColor>')
+    if el.get('selectionMode'):
+        lines.append(f'{inner}<SelectionMode>{el["selectionMode"]}</SelectionMode>')
+    if el.get('rowSelectionMode'):
+        lines.append(f'{inner}<RowSelectionMode>{el["rowSelectionMode"]}</RowSelectionMode>')
+    if el.get('verticalLines') is False:
+        lines.append(f'{inner}<VerticalLines>false</VerticalLines>')
+    if el.get('horizontalLines') is False:
+        lines.append(f'{inner}<HorizontalLines>false</HorizontalLines>')
     if el.get('initialTreeView'):
         lines.append(f'{inner}<InitialTreeView>{el["initialTreeView"]}</InitialTreeView>')
     if el.get('enableDrag') is True:

@@ -1,4 +1,4 @@
-﻿# form-decompile v0.24 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.25 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -986,10 +986,18 @@ function Decompile-Element {
 			$ssl = Get-Child $node 'SearchStringLocation'; if ($ssl) { $obj['searchStringLocation'] = $ssl }
 			$vsl = Get-Child $node 'ViewStatusLocation'; if ($vsl) { $obj['viewStatusLocation'] = $vsl }
 			$scl = Get-Child $node 'SearchControlLocation'; if ($scl) { $obj['searchControlLocation'] = $scl }
-			# --- Блок свойств дин-список-таблицы (признак: дочерний <UpdateOnDataChange>) ---
+			# --- Общие свойства таблицы (любой тип таблицы, не только динсписок) ---
+			if ((Get-Child $node 'ChoiceMode') -eq 'true') { $obj['choiceMode'] = $true }
+			$selm = Get-Child $node 'SelectionMode'; if ($selm) { $obj['selectionMode'] = $selm }
+			$rsm = Get-Child $node 'RowSelectionMode'; if ($rsm) { $obj['rowSelectionMode'] = $rsm }
+			if ((Get-Child $node 'VerticalLines') -eq 'false') { $obj['verticalLines'] = $false }
+			if ((Get-Child $node 'HorizontalLines') -eq 'false') { $obj['horizontalLines'] = $false }
+			if ((Get-Child $node 'UseAlternationRowColor') -eq 'true') { $obj['useAlternationRowColor'] = $true }
+			$itv = Get-Child $node 'InitialTreeView'; if ($itv) { $obj['initialTreeView'] = $itv }
+			$rpRef = $node.SelectSingleNode("lf:RowsPicture/xr:Ref", $ns); if ($rpRef) { $obj['rowsPicture'] = $rpRef.InnerText }
+			$rpdp = Get-Child $node 'RowPictureDataPath'
+			# --- Блок дин-список-таблицы (признак: дочерний <UpdateOnDataChange>) ---
 			if (Has-Child $node 'UpdateOnDataChange') {
-				$listName = Get-Child $node 'DataPath'
-				# Group A (инверсия дефолтов)
 				if ((Get-Child $node 'AutoRefresh') -eq 'true') { $obj['autoRefresh'] = $true }
 				$arp = Get-Child $node 'AutoRefreshPeriod'; if ($arp -and $arp -ne '60') { $obj['autoRefreshPeriod'] = [int]$arp }
 				$cfi = Get-Child $node 'ChoiceFoldersAndItems'; if ($cfi -and $cfi -ne 'Items') { $obj['choiceFoldersAndItems'] = $cfi }
@@ -998,17 +1006,11 @@ function Decompile-Element {
 				if ((Get-Child $node 'AllowRootChoice') -eq 'true') { $obj['allowRootChoice'] = $true }
 				$uodc = Get-Child $node 'UpdateOnDataChange'; if ($uodc -and $uodc -ne 'Auto') { $obj['updateOnDataChange'] = $uodc }
 				if ((Get-Child $node 'AllowGettingCurrentRowURL') -eq 'false') { $obj['allowGettingCurrentRowURL'] = $false }
-				# list-таблица: useAlternationRowColor/initialTreeView (defaultItem/enableStartDrag/
-				# fileDragMode — общие, ловятся в Add-Layout)
-				if ((Get-Child $node 'UseAlternationRowColor') -eq 'true') { $obj['useAlternationRowColor'] = $true }
-				$itv = Get-Child $node 'InitialTreeView'; if ($itv) { $obj['initialTreeView'] = $itv }
-				# Group C
-				$rpdp = Get-Child $node 'RowPictureDataPath'
+				# RowPictureDataPath: инверсия умного дефолта <Список>.DefaultPicture
 				if ($null -eq $rpdp) { $obj['rowPictureDataPath'] = '' }
-				elseif ($rpdp -ne "$listName.DefaultPicture") { $obj['rowPictureDataPath'] = $rpdp }
-				$rpRef = $node.SelectSingleNode("lf:RowsPicture/xr:Ref", $ns); if ($rpRef) { $obj['rowsPicture'] = $rpRef.InnerText }
+				elseif ($rpdp -ne "$($obj['path']).DefaultPicture") { $obj['rowPictureDataPath'] = $rpdp }
 				$usg = Get-Child $node 'UserSettingsGroup'; if ($usg) { $obj['userSettingsGroup'] = $usg }
-			}
+			} elseif ($rpdp) { $obj['rowPictureDataPath'] = $rpdp }
 			$csNode = $node.SelectSingleNode("lf:CommandSet", $ns)
 			if ($csNode) {
 				$exc = New-Object System.Collections.ArrayList
