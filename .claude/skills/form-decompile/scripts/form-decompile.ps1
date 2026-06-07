@@ -1,4 +1,4 @@
-﻿# form-decompile v0.38 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.39 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -753,6 +753,12 @@ function Add-Layout {
 	$gha = Get-Child $node 'GroupHorizontalAlign'; if ($gha) { $obj['groupHorizontalAlign'] = $gha }
 	$gva = Get-Child $node 'GroupVerticalAlign'; if ($gva) { $obj['groupVerticalAlign'] = $gva }
 	$ha = Get-Child $node 'HorizontalAlign'; if ($ha) { $obj['horizontalAlign'] = $ha }
+	# Cell-свойства поля в таблице (общие для Input/Label/Picture/CheckBox): захват «как есть»
+	foreach ($p in @('ShowInHeader','ShowInFooter','AutoCellHeight')) {
+		$v = Get-Child $node $p; if ($null -ne $v) { $obj[($p.Substring(0,1).ToLower()+$p.Substring(1))] = ($v -eq 'true') }
+	}
+	$fha = Get-Child $node 'FooterHorizontalAlign'; if ($fha) { $obj['footerHorizontalAlign'] = $fha }
+	$hha = Get-Child $node 'HeaderHorizontalAlign'; if ($hha) { $obj['headerHorizontalAlign'] = $hha }
 }
 
 # TitleLocation у check/radio (зеркало Emit-TitleLocation):
@@ -1032,6 +1038,11 @@ function Decompile-Element {
 			foreach ($p in @('ChoiceButton','ClearButton','SpinButton','DropListButton')) {
 				$v = Get-Child $node $p; if ($null -ne $v) { $obj[($p.Substring(0,1).ToLower()+$p.Substring(1))] = (To-Bool $v) }
 			}
+			# InputField-специфичные скаляры (захват «как есть»)
+			foreach ($p in @('Wrap','OpenButton','ListChoiceMode','ExtendedEditMultipleValues','ChooseType')) {
+				$v = Get-Child $node $p; if ($null -ne $v) { $obj[($p.Substring(0,1).ToLower()+$p.Substring(1))] = (To-Bool $v) }
+			}
+			$cbr = Get-Child $node 'ChoiceButtonRepresentation'; if ($cbr) { $obj['choiceButtonRepresentation'] = $cbr }
 			$cl = Decompile-ChoiceList $node; if ($cl) { $obj['choiceList'] = $cl }
 		}
 		'CheckBoxField' {

@@ -1,4 +1,4 @@
-﻿# form-compile v1.56 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.57 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -2432,6 +2432,9 @@ function Emit-Element {
 		"multiLine"=1;"passwordMode"=1;"choiceButton"=1;"clearButton"=1
 		"spinButton"=1;"dropListButton"=1;"markIncomplete"=1;"skipOnInput"=1;"inputHint"=1
 		"textEdit"=1
+		"wrap"=1;"openButton"=1;"listChoiceMode"=1;"showInFooter"=1
+		"extendedEditMultipleValues"=1;"chooseType"=1;"autoCellHeight"=1
+		"choiceButtonRepresentation"=1;"footerHorizontalAlign"=1;"headerHorizontalAlign"=1
 		# label/hyperlink
 		"hyperlink"=1;"formatted"=1
 		# group-specific
@@ -2543,6 +2546,12 @@ function Emit-CommonElementProps {
 	}
 	if ($el.enableStartDrag -eq $true) { X "$indent<EnableStartDrag>true</EnableStartDrag>" }
 	if ($el.fileDragMode) { X "$indent<FileDragMode>$($el.fileDragMode)</FileDragMode>" }
+	# Cell-свойства поля в таблице (общие для Input/Label/Picture/CheckBox): захват «как есть»
+	foreach ($p in @(@('showInHeader','ShowInHeader'), @('showInFooter','ShowInFooter'), @('autoCellHeight','AutoCellHeight'))) {
+		if ($null -ne $el.($p[0])) { X "$indent<$($p[1])>$(if ($el.($p[0])){'true'}else{'false'})</$($p[1])>" }
+	}
+	if ($el.footerHorizontalAlign) { X "$indent<FooterHorizontalAlign>$($el.footerHorizontalAlign)</FooterHorizontalAlign>" }
+	if ($el.headerHorizontalAlign) { X "$indent<HeaderHorizontalAlign>$($el.headerHorizontalAlign)</HeaderHorizontalAlign>" }
 }
 
 function Emit-Layout {
@@ -2712,10 +2721,7 @@ function Emit-ColumnGroup {
 	if ($orientation) { X "$inner<Group>$orientation</Group>" }
 
 	if ($el.showTitle -eq $false) { X "$inner<ShowTitle>false</ShowTitle>" }
-	if ($null -ne $el.showInHeader) {
-		$shVal = if ($el.showInHeader) { "true" } else { "false" }
-		X "$inner<ShowInHeader>$shVal</ShowInHeader>"
-	}
+	# showInHeader эмитится общим Emit-CommonElementProps (через Emit-Layout)
 
 	Emit-CommonFlags -el $el -indent $inner
 	Emit-Layout -el $el -indent $inner
@@ -2768,6 +2774,14 @@ function Emit-Input {
 	if ($el.markIncomplete -eq $true) { X "$inner<AutoMarkIncomplete>true</AutoMarkIncomplete>" }
 	if ($el.editMode) { X "$inner<EditMode>$($el.editMode)</EditMode>" }
 	if ($el.textEdit -eq $false) { X "$inner<TextEdit>false</TextEdit>" }
+	# InputField-специфичные скаляры (захват «как есть»: платформа эмитит явное не-дефолтное значение)
+	foreach ($p in @(
+		@('wrap','Wrap'), @('openButton','OpenButton'), @('listChoiceMode','ListChoiceMode'),
+		@('extendedEditMultipleValues','ExtendedEditMultipleValues'), @('chooseType','ChooseType')
+	)) {
+		if ($null -ne $el.($p[0])) { X "$inner<$($p[1])>$(if ($el.($p[0])){'true'}else{'false'})</$($p[1])>" }
+	}
+	if ($el.choiceButtonRepresentation) { X "$inner<ChoiceButtonRepresentation>$($el.choiceButtonRepresentation)</ChoiceButtonRepresentation>" }
 	Emit-Layout -el $el -indent $inner -multiLineDefault ([bool]($el.multiLine -eq $true))
 
 	if ($el.inputHint) {

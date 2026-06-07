@@ -18,7 +18,7 @@
     "elements": [
       { "input": "ОбычноеПоле", "path": "ОбычноеПоле", "title": "Обычное поле", "tooltip": "Введите значение поля", "tooltipRepresentation": "ShowBottom", "editMode": "EnterOnInput" },
       { "labelField": "Ссылка", "path": "ОбычноеПоле", "titleLocation": "left", "hyperlink": true },
-      { "input": "МногострочноеПоле", "path": "МногострочноеПоле", "multiLine": true, "height": 5, "title": "Комментарий" },
+      { "input": "МногострочноеПоле", "path": "МногострочноеПоле", "multiLine": true, "height": 5, "title": "Комментарий", "wrap": false, "showInHeader": false, "showInFooter": false, "autoCellHeight": true, "footerHorizontalAlign": "Right", "openButton": false, "chooseType": false },
       { "input": "ПолеПароля", "path": "ПолеПароля", "passwordMode": true, "title": "Пароль" },
       { "input": "ПолеСКнопками", "path": "ПолеСКнопками", "choiceButton": true, "clearButton": true, "title": "Выбор" },
       { "input": "ПолеСписокВыбора", "path": "ПолеСписокВыбора", "title": "Список выбора", "choiceList": [

@@ -216,8 +216,13 @@ companion-панели с собственным контентом. Оба не
 | `defaultItem` | `<DefaultItem>` | `true` (элемент активируется по умолчанию) |
 | `enableStartDrag` | `<EnableStartDrag>` | `true` (разрешить начало перетаскивания) |
 | `fileDragMode` | `<FileDragMode>` | `AsFile`/… (режим drag-n-drop файлов) |
+| `showInHeader` | `<ShowInHeader>` | bool — показывать в шапке таблицы (поле-колонка) |
+| `showInFooter` | `<ShowInFooter>` | bool — показывать в подвале таблицы |
+| `autoCellHeight` | `<AutoCellHeight>` | bool — авто-высота ячейки |
+| `footerHorizontalAlign` | `<FooterHorizontalAlign>` | `Left`/`Right`/`Center` |
+| `headerHorizontalAlign` | `<HeaderHorizontalAlign>` | `Left`/`Right`/`Center`/`Auto` |
 
-> `defaultItem`/`enableStartDrag`/`fileDragMode`/`skipOnInput` — общие для любого типа элемента (таблица, поле, надпись, картинка, кнопка), не только таблицы.
+> `defaultItem`/`enableStartDrag`/`fileDragMode`/`skipOnInput` + cell-свойства (`showInHeader`/`showInFooter`/`autoCellHeight`/`footerHorizontalAlign`/`headerHorizontalAlign`) — общие для любого поля-колонки (input, label, picField, check).
 
 ### 4.2. События элемента и автоименование обработчиков
 
@@ -301,6 +306,12 @@ companion-панели с собственным контентом. Оба не
 | `skipOnInput` | bool | Пропускать при вводе |
 | `inputHint` | string | Подсказка ввода (placeholder) |
 | `choiceList` | array | Список выбора: массив `{ value, presentation?/title? }` — та же грамматика, что у `radio` (см. ниже) |
+| `wrap` | bool | Перенос по словам (`<Wrap>`) |
+| `openButton` | bool | Кнопка открытия (`<OpenButton>`) |
+| `listChoiceMode` | bool | Режим выбора из списка (`<ListChoiceMode>`) |
+| `extendedEditMultipleValues` | bool | Расширенное редактирование нескольких значений |
+| `chooseType` | bool | Выбор типа (`<ChooseType>`) |
+| `choiceButtonRepresentation` | string | `ShowInInputField`, `ShowInDropList`, `ShowInDropListAndInInputField` |
 | `width` | int | Ширина |
 | `height` | int | Высота |
 | `horizontalStretch` | bool | Растягивание по горизонтали |

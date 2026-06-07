@@ -44,6 +44,13 @@
 				</v8:item>
 			</Title>
 			<MultiLine>true</MultiLine>
+			<Wrap>false</Wrap>
+			<OpenButton>false</OpenButton>
+			<ChooseType>false</ChooseType>
+			<ShowInHeader>false</ShowInHeader>
+			<ShowInFooter>false</ShowInFooter>
+			<AutoCellHeight>true</AutoCellHeight>
+			<FooterHorizontalAlign>Right</FooterHorizontalAlign>
 			<AutoMaxWidth>false</AutoMaxWidth>
 			<Height>5</Height>
 			<ContextMenu name="МногострочноеПолеКонтекстноеМеню" id="8"/>

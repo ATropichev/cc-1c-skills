@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.56 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.57 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1771,7 +1771,10 @@ KNOWN_KEYS = {
     "groupHorizontalAlign", "groupVerticalAlign", "horizontalAlign",
     "multiLine", "passwordMode", "choiceButton", "clearButton",
     "spinButton", "dropListButton", "markIncomplete", "skipOnInput", "inputHint",
-    "textEdit",
+    "textEdit", "choiceList",
+    "wrap", "openButton", "listChoiceMode", "showInHeader", "showInFooter",
+    "extendedEditMultipleValues", "chooseType", "autoCellHeight",
+    "choiceButtonRepresentation", "footerHorizontalAlign", "headerHorizontalAlign",
     "hyperlink", "formatted",
     "showTitle", "united", "collapsed", "behavior",
     "children", "columns",
@@ -2198,6 +2201,14 @@ def emit_common_element_props(lines, el, indent):
         lines.append(f"{indent}<EnableStartDrag>true</EnableStartDrag>")
     if el.get('fileDragMode'):
         lines.append(f"{indent}<FileDragMode>{el['fileDragMode']}</FileDragMode>")
+    # Cell-свойства поля в таблице (общие для Input/Label/Picture/CheckBox): захват «как есть»
+    for key, tag in (('showInHeader', 'ShowInHeader'), ('showInFooter', 'ShowInFooter'), ('autoCellHeight', 'AutoCellHeight')):
+        if el.get(key) is not None:
+            lines.append(f'{indent}<{tag}>{"true" if el[key] else "false"}</{tag}>')
+    if el.get('footerHorizontalAlign'):
+        lines.append(f"{indent}<FooterHorizontalAlign>{el['footerHorizontalAlign']}</FooterHorizontalAlign>")
+    if el.get('headerHorizontalAlign'):
+        lines.append(f"{indent}<HeaderHorizontalAlign>{el['headerHorizontalAlign']}</HeaderHorizontalAlign>")
 
 
 def emit_layout(lines, el, indent, skip_height=False, multi_line_default=False):
@@ -2620,9 +2631,7 @@ def emit_column_group(lines, el, name, eid, indent):
 
     if el.get('showTitle') is False:
         lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
-    if el.get('showInHeader') is not None:
-        sh_val = 'true' if el['showInHeader'] else 'false'
-        lines.append(f'{inner}<ShowInHeader>{sh_val}</ShowInHeader>')
+    # showInHeader эмитится общим emit_common_element_props (через emit_layout)
 
     emit_common_flags(lines, el, inner)
     emit_layout(lines, el, inner)
@@ -2673,6 +2682,13 @@ def emit_input(lines, el, name, eid, indent):
         lines.append(f'{inner}<EditMode>{el["editMode"]}</EditMode>')
     if el.get('textEdit') is False:
         lines.append(f'{inner}<TextEdit>false</TextEdit>')
+    # InputField-специфичные скаляры (захват «как есть»: платформа эмитит явное не-дефолтное значение)
+    for key, tag in (('wrap', 'Wrap'), ('openButton', 'OpenButton'), ('listChoiceMode', 'ListChoiceMode'),
+                     ('extendedEditMultipleValues', 'ExtendedEditMultipleValues'), ('chooseType', 'ChooseType')):
+        if el.get(key) is not None:
+            lines.append(f'{inner}<{tag}>{"true" if el[key] else "false"}</{tag}>')
+    if el.get('choiceButtonRepresentation'):
+        lines.append(f'{inner}<ChoiceButtonRepresentation>{el["choiceButtonRepresentation"]}</ChoiceButtonRepresentation>')
     emit_layout(lines, el, inner, multi_line_default=(el.get('multiLine') is True))
 
     if el.get('inputHint'):
