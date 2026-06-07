@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.69 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.70 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1910,6 +1910,10 @@ def normalize_choice_value(value):
     s = "" if value is None else str(value)
     if not s:
         return {"xsi_type": "xs:string", "text": ""}
+
+    # ISO datetime ("2020-01-01T00:00:00") → xs:dateTime
+    if re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}', s):
+        return {"xsi_type": "xs:dateTime", "text": s}
 
     parts = s.split(".")
     if len(parts) >= 2:

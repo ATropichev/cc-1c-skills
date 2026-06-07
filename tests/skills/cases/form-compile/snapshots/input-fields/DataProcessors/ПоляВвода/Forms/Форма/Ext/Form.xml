@@ -175,6 +175,12 @@
 						<Value xsi:type="xs:string">Основной</Value>
 					</app:value>
 				</app:item>
+				<app:item name="Отбор.Дата">
+					<app:value xsi:type="FormChoiceListDesTimeValue">
+						<Presentation/>
+						<Value xsi:type="xs:dateTime">2020-01-01T00:00:00</Value>
+					</app:value>
+				</app:item>
 				<app:item name="Отбор.Список">
 					<app:value xsi:type="FormChoiceListDesTimeValue">
 						<Presentation/>
@@ -229,6 +235,12 @@
 					<app:value xsi:type="FormChoiceListDesTimeValue">
 						<Presentation/>
 						<Value xsi:type="xs:string">Основной</Value>
+					</app:value>
+				</app:item>
+				<app:item name="Отбор.Дата">
+					<app:value xsi:type="FormChoiceListDesTimeValue">
+						<Presentation/>
+						<Value xsi:type="xs:dateTime">2020-01-01T00:00:00</Value>
 					</app:value>
 				</app:item>
 				<app:item name="Отбор.Список">

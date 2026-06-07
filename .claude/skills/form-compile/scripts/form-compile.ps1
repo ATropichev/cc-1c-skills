@@ -1,4 +1,4 @@
-﻿# form-compile v1.69 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.70 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -3047,6 +3047,11 @@ function Normalize-ChoiceValue {
 	$s = "$value"
 	if ([string]::IsNullOrEmpty($s)) {
 		return @{ XsiType = "xs:string"; Text = "" }
+	}
+
+	# ISO datetime ("2020-01-01T00:00:00") → xs:dateTime
+	if ($s -match '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$') {
+		return @{ XsiType = "xs:dateTime"; Text = $s }
 	}
 
 	# Try to detect typed reference path: "<Root>.<Type>[.<Member>.<Value>]"
