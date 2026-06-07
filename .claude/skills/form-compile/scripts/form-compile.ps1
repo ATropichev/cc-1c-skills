@@ -1,4 +1,4 @@
-﻿# form-compile v1.62 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.63 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -2464,7 +2464,7 @@ function Emit-Element {
 		# button-specific
 		"type"=1;"command"=1;"commandName"=1;"stdCommand"=1;"defaultButton"=1;"locationInCommandBar"=1
 		# picture/decoration
-		"src"=1;"valuesPicture"=1;"loadTransparent"=1
+		"src"=1;"valuesPicture"=1;"loadTransparent"=1;"headerPicture"=1;"footerPicture"=1
 		# cmdBar-specific
 		"autofill"=1
 	}
@@ -2556,6 +2556,49 @@ function Emit-CommonElementProps {
 	}
 	if ($el.footerHorizontalAlign) { X "$indent<FooterHorizontalAlign>$($el.footerHorizontalAlign)</FooterHorizontalAlign>" }
 	if ($el.headerHorizontalAlign) { X "$indent<HeaderHorizontalAlign>$($el.headerHorizontalAlign)</HeaderHorizontalAlign>" }
+}
+
+# Картинка-ссылка с прозрачностью (HeaderPicture/FooterPicture/ValuesPicture).
+# Платформа ВСЕГДА эмитит <xr:LoadTransparent> → пишем всегда (false по умолчанию).
+# Значение: скаляр (Ref) ИЛИ объект {src, loadTransparent}.
+function Emit-PictureRef {
+	param($val, [string]$picTag, [string]$indent)
+	if (-not $val) { return }
+	$src = $null; $lt = $false
+	if ($val -is [string]) { $src = $val }
+	else { $src = $val.src; if ($val.loadTransparent -eq $true) { $lt = $true } }
+	if (-not $src) { return }
+	X "$indent<$picTag>"
+	X "$indent`t<xr:Ref>$src</xr:Ref>"
+	X "$indent`t<xr:LoadTransparent>$(if ($lt) { 'true' } else { 'false' })</xr:LoadTransparent>"
+	X "$indent</$picTag>"
+}
+
+# Картинки заголовка/подвала колонки поля — по схеме сразу после <EditMode>,
+# перед тип-специфичными элементами и layout (порядок XDTO строгий именно здесь).
+function Emit-ColumnPics {
+	param($el, [string]$indent)
+	Emit-PictureRef -val $el.headerPicture -picTag 'HeaderPicture' -indent $indent
+	Emit-PictureRef -val $el.footerPicture -picTag 'FooterPicture' -indent $indent
+}
+
+# <Picture> кнопки/попапа/команды. Дефолт LoadTransparent=true, отклонение false
+# (обратная конвенция относительно header/values-картинок). Прощающий ввод:
+# принимает скаляр (Ref) ИЛИ объект {src, loadTransparent} — на случай если модель
+# опишет картинку объектно по аналогии с headerPicture. $elemLt — legacy
+# элемент-уровневый ключ loadTransparent (используется, если в объекте флаг не задан).
+function Emit-CommandPicture {
+	param($pic, $elemLt, [string]$indent)
+	if (-not $pic) { return }
+	$src = $null; $lt = $null
+	if ($pic -is [string]) { $src = $pic }
+	else { $src = $pic.src; if ($null -ne $pic.loadTransparent) { $lt = [bool]$pic.loadTransparent } }
+	if (-not $src) { return }
+	if ($null -eq $lt -and $null -ne $elemLt) { $lt = [bool]$elemLt }
+	X "$indent<Picture>"
+	X "$indent`t<xr:Ref>$src</xr:Ref>"
+	X "$indent`t<xr:LoadTransparent>$(if ($lt -eq $false) { 'false' } else { 'true' })</xr:LoadTransparent>"
+	X "$indent</Picture>"
 }
 
 function Emit-Layout {
@@ -2777,6 +2820,7 @@ function Emit-Input {
 	if ($el.dropListButton -eq $true) { X "$inner<DropListButton>true</DropListButton>" }
 	if ($el.markIncomplete -eq $true) { X "$inner<AutoMarkIncomplete>true</AutoMarkIncomplete>" }
 	if ($el.editMode) { X "$inner<EditMode>$($el.editMode)</EditMode>" }
+	Emit-ColumnPics -el $el -indent $inner
 	if ($el.textEdit -eq $false) { X "$inner<TextEdit>false</TextEdit>" }
 	# InputField-специфичные скаляры (захват «как есть»: платформа эмитит явное не-дефолтное значение)
 	foreach ($p in @(
@@ -2815,6 +2859,7 @@ function Emit-Check {
 	Emit-CommonFlags -el $el -indent $inner
 
 	if ($el.editMode) { X "$inner<EditMode>$($el.editMode)</EditMode>" }
+	Emit-ColumnPics -el $el -indent $inner
 	# CheckBoxType: нет ключа → умный дефолт Auto; "" → подавить; значение → маппинг
 	if ($null -ne $el.PSObject.Properties['checkBoxType']) {
 		if ($el.checkBoxType) {
@@ -3117,6 +3162,7 @@ function Emit-LabelField {
 
 	if ($el.titleLocation) { X "$inner<TitleLocation>$(Map-TitleLoc "$($el.titleLocation)")</TitleLocation>" }
 	if ($el.editMode) { X "$inner<EditMode>$($el.editMode)</EditMode>" }
+	Emit-ColumnPics -el $el -indent $inner
 	# ВНИМАНИЕ: у LabelField платформенный тег именно <Hiperlink> (опечатка 1С), не <Hyperlink>.
 	if ($el.hyperlink -eq $true) { X "$inner<Hiperlink>true</Hiperlink>" }
 	Emit-Layout -el $el -indent $inner
@@ -3398,12 +3444,7 @@ function Emit-Button {
 	if ($el.defaultButton -eq $true) { X "$inner<DefaultButton>true</DefaultButton>" }
 
 	# Picture
-	if ($el.picture) {
-		X "$inner<Picture>"
-		X "$inner`t<xr:Ref>$($el.picture)</xr:Ref>"
-		X "$inner`t<xr:LoadTransparent>$(if ($el.loadTransparent -eq $false){'false'}else{'true'})</xr:LoadTransparent>"
-		X "$inner</Picture>"
-	}
+	Emit-CommandPicture -pic $el.picture -elemLt $el.loadTransparent -indent $inner
 
 	if ($el.representation) {
 		X "$inner<Representation>$($el.representation)</Representation>"
@@ -3463,19 +3504,16 @@ function Emit-PictureField {
 	Emit-Title -el $el -name $name -indent $inner
 	Emit-CommonFlags -el $el -indent $inner
 
+	if ($el.editMode) { X "$inner<EditMode>$($el.editMode)</EditMode>" }
+	Emit-ColumnPics -el $el -indent $inner
 	if ($el.titleLocation) { X "$inner<TitleLocation>$(Map-TitleLoc "$($el.titleLocation)")</TitleLocation>" }
+
+	Emit-Layout -el $el -indent $inner
 
 	# ValuesPicture — picture (collection) used to render the field's value.
 	# Required for a Boolean-bound PictureField to actually show an icon.
-	# loadTransparent emitted only when true (1С default is false).
-	if ($el.valuesPicture) {
-		X "$inner<ValuesPicture>"
-		X "$inner`t<xr:Ref>$($el.valuesPicture)</xr:Ref>"
-		if ($el.loadTransparent) { X "$inner`t<xr:LoadTransparent>true</xr:LoadTransparent>" }
-		X "$inner</ValuesPicture>"
-	}
-
-	Emit-Layout -el $el -indent $inner
+	# Скаляр (Ref) или объект {src, loadTransparent}; LoadTransparent эмитится всегда.
+	Emit-PictureRef -val $el.valuesPicture -picTag 'ValuesPicture' -indent $inner
 
 	# Companions
 	Emit-CompanionPanel -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner -panel $el.contextMenu
@@ -3597,12 +3635,7 @@ function Emit-Popup {
 	Emit-Title -el $el -name $name -indent $inner -auto
 	Emit-CommonFlags -el $el -indent $inner
 
-	if ($el.picture) {
-		X "$inner<Picture>"
-		X "$inner`t<xr:Ref>$($el.picture)</xr:Ref>"
-		X "$inner`t<xr:LoadTransparent>$(if ($el.loadTransparent -eq $false){'false'}else{'true'})</xr:LoadTransparent>"
-		X "$inner</Picture>"
-	}
+	Emit-CommandPicture -pic $el.picture -elemLt $el.loadTransparent -indent $inner
 
 	if ($el.representation) {
 		X "$inner<Representation>$($el.representation)</Representation>"
@@ -3855,12 +3888,7 @@ function Emit-Commands {
 			X "$inner<Shortcut>$($cmd.shortcut)</Shortcut>"
 		}
 
-		if ($cmd.picture) {
-			X "$inner<Picture>"
-			X "$inner`t<xr:Ref>$($cmd.picture)</xr:Ref>"
-			X "$inner`t<xr:LoadTransparent>$(if ($cmd.loadTransparent -eq $false){'false'}else{'true'})</xr:LoadTransparent>"
-			X "$inner</Picture>"
-		}
+		Emit-CommandPicture -pic $cmd.picture -elemLt $cmd.loadTransparent -indent $inner
 
 		if ($cmd.representation) {
 			X "$inner<Representation>$($cmd.representation)</Representation>"

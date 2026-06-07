@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.62 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.63 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1784,7 +1784,7 @@ KNOWN_KEYS = {
     "pagesRepresentation",
     "type", "command", "commandName", "stdCommand", "defaultButton", "locationInCommandBar",
     "commandBar", "contextMenu", "commandSource",
-    "src", "valuesPicture", "loadTransparent",
+    "src", "valuesPicture", "loadTransparent", "headerPicture", "footerPicture",
     "autofill",
     "choiceMode", "initialTreeView", "enableDrag", "enableStartDrag",
     "rowSelectionMode", "verticalLines", "horizontalLines",
@@ -2213,6 +2213,57 @@ def emit_common_element_props(lines, el, indent):
         lines.append(f"{indent}<FooterHorizontalAlign>{el['footerHorizontalAlign']}</FooterHorizontalAlign>")
     if el.get('headerHorizontalAlign'):
         lines.append(f"{indent}<HeaderHorizontalAlign>{el['headerHorizontalAlign']}</HeaderHorizontalAlign>")
+
+
+def emit_picture_ref(lines, val, pic_tag, indent):
+    """Картинка-ссылка с прозрачностью (HeaderPicture/FooterPicture/ValuesPicture).
+    Платформа ВСЕГДА эмитит <xr:LoadTransparent> → пишем всегда (false по умолчанию).
+    Значение: скаляр (Ref) ИЛИ объект {src, loadTransparent}."""
+    if not val:
+        return
+    if isinstance(val, str):
+        src, lt = val, False
+    else:
+        src = val.get('src')
+        lt = val.get('loadTransparent') is True
+    if not src:
+        return
+    lines.append(f"{indent}<{pic_tag}>")
+    lines.append(f"{indent}\t<xr:Ref>{src}</xr:Ref>")
+    lines.append(f'{indent}\t<xr:LoadTransparent>{"true" if lt else "false"}</xr:LoadTransparent>')
+    lines.append(f"{indent}</{pic_tag}>")
+
+
+def emit_column_pics(lines, el, indent):
+    """Картинки заголовка/подвала колонки поля — по схеме сразу после <EditMode>,
+    перед тип-специфичными элементами и layout (порядок XDTO строгий именно здесь)."""
+    emit_picture_ref(lines, el.get('headerPicture'), 'HeaderPicture', indent)
+    emit_picture_ref(lines, el.get('footerPicture'), 'FooterPicture', indent)
+
+
+def emit_command_picture(lines, pic, elem_lt, indent):
+    """<Picture> кнопки/попапа/команды. Дефолт LoadTransparent=true, отклонение false
+    (обратная конвенция относительно header/values-картинок). Прощающий ввод:
+    принимает скаляр (Ref) ИЛИ объект {src, loadTransparent} — на случай если модель
+    опишет картинку объектно по аналогии с headerPicture. elem_lt — legacy
+    элемент-уровневый ключ loadTransparent (если в объекте флаг не задан)."""
+    if not pic:
+        return
+    lt = None
+    if isinstance(pic, str):
+        src = pic
+    else:
+        src = pic.get('src')
+        if pic.get('loadTransparent') is not None:
+            lt = bool(pic.get('loadTransparent'))
+    if not src:
+        return
+    if lt is None and elem_lt is not None:
+        lt = bool(elem_lt)
+    lines.append(f'{indent}<Picture>')
+    lines.append(f'{indent}\t<xr:Ref>{src}</xr:Ref>')
+    lines.append(f'{indent}\t<xr:LoadTransparent>{"false" if lt is False else "true"}</xr:LoadTransparent>')
+    lines.append(f'{indent}</Picture>')
 
 
 def emit_layout(lines, el, indent, skip_height=False, multi_line_default=False):
@@ -2684,6 +2735,7 @@ def emit_input(lines, el, name, eid, indent):
         lines.append(f'{inner}<AutoMarkIncomplete>true</AutoMarkIncomplete>')
     if el.get('editMode'):
         lines.append(f'{inner}<EditMode>{el["editMode"]}</EditMode>')
+    emit_column_pics(lines, el, inner)
     if el.get('textEdit') is False:
         lines.append(f'{inner}<TextEdit>false</TextEdit>')
     # InputField-специфичные скаляры (захват «как есть»: платформа эмитит явное не-дефолтное значение)
@@ -2721,6 +2773,7 @@ def emit_check(lines, el, name, eid, indent):
 
     if el.get('editMode'):
         lines.append(f'{inner}<EditMode>{el["editMode"]}</EditMode>')
+    emit_column_pics(lines, el, inner)
     # CheckBoxType: нет ключа → умный дефолт Auto; "" → подавить; значение → маппинг
     _cbt_map = {'auto': 'Auto', 'checkbox': 'CheckBox', 'switcher': 'Switcher', 'tumbler': 'Tumbler'}
     if 'checkBoxType' in el:
@@ -2825,6 +2878,7 @@ def emit_label_field(lines, el, name, eid, indent):
         lines.append(f'{inner}<TitleLocation>{map_title_loc(el["titleLocation"])}</TitleLocation>')
     if el.get('editMode'):
         lines.append(f'{inner}<EditMode>{el["editMode"]}</EditMode>')
+    emit_column_pics(lines, el, inner)
     # ВНИМАНИЕ: у LabelField платформенный тег <Hiperlink> (опечатка 1С), не <Hyperlink>.
     if el.get('hyperlink') is True:
         lines.append(f'{inner}<Hiperlink>true</Hiperlink>')
@@ -3096,11 +3150,7 @@ def emit_button(lines, el, name, eid, indent, in_cmd_bar=False):
         lines.append(f'{inner}<DefaultButton>true</DefaultButton>')
 
     # Picture
-    if el.get('picture'):
-        lines.append(f'{inner}<Picture>')
-        lines.append(f'{inner}\t<xr:Ref>{el["picture"]}</xr:Ref>')
-        lines.append(f'{inner}\t<xr:LoadTransparent>{"false" if el.get("loadTransparent") is False else "true"}</xr:LoadTransparent>')
-        lines.append(f'{inner}</Picture>')
+    emit_command_picture(lines, el.get('picture'), el.get('loadTransparent'), inner)
 
     if el.get('representation'):
         lines.append(f'{inner}<Representation>{el["representation"]}</Representation>')
@@ -3155,20 +3205,18 @@ def emit_picture_field(lines, el, name, eid, indent):
     emit_title(lines, el, name, inner)
     emit_common_flags(lines, el, inner)
 
+    if el.get('editMode'):
+        lines.append(f'{inner}<EditMode>{el["editMode"]}</EditMode>')
+    emit_column_pics(lines, el, inner)
     if el.get('titleLocation'):
         lines.append(f'{inner}<TitleLocation>{map_title_loc(el["titleLocation"])}</TitleLocation>')
 
+    emit_layout(lines, el, inner)
+
     # ValuesPicture \u2014 picture (collection) used to render the field's value.
     # Required for a Boolean-bound PictureField to actually show an icon.
-    # loadTransparent emitted only when true (1\u0421 default is false).
-    if el.get('valuesPicture'):
-        lines.append(f'{inner}<ValuesPicture>')
-        lines.append(f'{inner}\t<xr:Ref>{el["valuesPicture"]}</xr:Ref>')
-        if el.get('loadTransparent'):
-            lines.append(f'{inner}\t<xr:LoadTransparent>true</xr:LoadTransparent>')
-        lines.append(f'{inner}</ValuesPicture>')
-
-    emit_layout(lines, el, inner)
+    # \u0421\u043a\u0430\u043b\u044f\u0440 (Ref) \u0438\u043b\u0438 \u043e\u0431\u044a\u0435\u043a\u0442 {src, loadTransparent}; LoadTransparent \u044d\u043c\u0438\u0442\u0438\u0442\u0441\u044f \u0432\u0441\u0435\u0433\u0434\u0430.
+    emit_picture_ref(lines, el.get('valuesPicture'), 'ValuesPicture', inner)
 
     # Companions
     emit_companion_panel(lines, 'ContextMenu', f'{name}\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442\u043d\u043e\u0435\u041c\u0435\u043d\u044e', inner, el.get('contextMenu'))
@@ -3250,11 +3298,7 @@ def emit_popup(lines, el, name, eid, indent):
     emit_title(lines, el, name, inner, auto=True)
     emit_common_flags(lines, el, inner)
 
-    if el.get('picture'):
-        lines.append(f'{inner}<Picture>')
-        lines.append(f'{inner}\t<xr:Ref>{el["picture"]}</xr:Ref>')
-        lines.append(f'{inner}\t<xr:LoadTransparent>{"false" if el.get("loadTransparent") is False else "true"}</xr:LoadTransparent>')
-        lines.append(f'{inner}</Picture>')
+    emit_command_picture(lines, el.get('picture'), el.get('loadTransparent'), inner)
 
     if el.get('representation'):
         lines.append(f'{inner}<Representation>{el["representation"]}</Representation>')
@@ -3510,11 +3554,7 @@ def emit_commands(lines, cmds, indent):
         if cmd.get('shortcut'):
             lines.append(f'{inner}<Shortcut>{cmd["shortcut"]}</Shortcut>')
 
-        if cmd.get('picture'):
-            lines.append(f'{inner}<Picture>')
-            lines.append(f'{inner}\t<xr:Ref>{cmd["picture"]}</xr:Ref>')
-            lines.append(f'{inner}\t<xr:LoadTransparent>{"false" if cmd.get("loadTransparent") is False else "true"}</xr:LoadTransparent>')
-            lines.append(f'{inner}</Picture>')
+        emit_command_picture(lines, cmd.get('picture'), cmd.get('loadTransparent'), inner)
 
         if cmd.get('representation'):
             lines.append(f'{inner}<Representation>{cmd["representation"]}</Representation>')

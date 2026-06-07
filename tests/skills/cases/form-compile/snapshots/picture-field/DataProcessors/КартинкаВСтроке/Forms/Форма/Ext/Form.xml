@@ -46,9 +46,14 @@
 				</InputField>
 				<PictureField name="ТаблицаДанныхКартинка" id="17">
 					<DataPath>ТаблицаДанных.Картинка</DataPath>
+					<EditMode>EnterOnInput</EditMode>
+					<HeaderPicture>
+						<xr:Ref>StdPicture.ExecuteTask</xr:Ref>
+						<xr:LoadTransparent>false</xr:LoadTransparent>
+					</HeaderPicture>
 					<TitleLocation>None</TitleLocation>
 					<ValuesPicture>
-						<xr:Ref>StdPicture.Favorites</xr:Ref>
+						<xr:Ref>StdPicture.FilterCriterion</xr:Ref>
 						<xr:LoadTransparent>true</xr:LoadTransparent>
 					</ValuesPicture>
 					<ContextMenu name="ТаблицаДанныхКартинкаКонтекстноеМеню" id="18"/>
@@ -62,6 +67,10 @@
 							<v8:content>Флаг</v8:content>
 						</v8:item>
 					</Title>
+					<HeaderPicture>
+						<xr:Ref>StdPicture.ClearFilter</xr:Ref>
+						<xr:LoadTransparent>true</xr:LoadTransparent>
+					</HeaderPicture>
 					<CheckBoxType>Auto</CheckBoxType>
 					<TitleLocation>Right</TitleLocation>
 					<ContextMenu name="ТаблицаДанныхКартинкаФлагКонтекстноеМеню" id="21"/>

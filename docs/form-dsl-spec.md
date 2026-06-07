@@ -221,8 +221,24 @@ companion-панели с собственным контентом. Оба не
 | `autoCellHeight` | `<AutoCellHeight>` | bool — авто-высота ячейки |
 | `footerHorizontalAlign` | `<FooterHorizontalAlign>` | `Left`/`Right`/`Center` |
 | `headerHorizontalAlign` | `<HeaderHorizontalAlign>` | `Left`/`Right`/`Center`/`Auto` |
+| `headerPicture` | `<HeaderPicture>` | Картинка в шапке колонки. Формат — см. «Картинка-ссылка» ниже |
+| `footerPicture` | `<FooterPicture>` | Картинка в подвале колонки. Формат — см. «Картинка-ссылка» ниже |
 
-> `defaultItem`/`enableStartDrag`/`fileDragMode`/`skipOnInput` + cell-свойства (`showInHeader`/`showInFooter`/`autoCellHeight`/`footerHorizontalAlign`/`headerHorizontalAlign`) — общие для любого поля-колонки (input, label, picField, check).
+> `defaultItem`/`enableStartDrag`/`fileDragMode`/`skipOnInput` + cell-свойства (`showInHeader`/`showInFooter`/`autoCellHeight`/`footerHorizontalAlign`/`headerHorizontalAlign`/`headerPicture`/`footerPicture`) — общие для любого поля-колонки (input, label, picField, check).
+
+#### Картинка-ссылка (`headerPicture`/`footerPicture`/`valuesPicture`)
+
+Картинка с флагом прозрачности. Два формата:
+
+```json
+"headerPicture": "CommonPicture.Важность"                       // loadTransparent = false (частый случай)
+"headerPicture": { "src": "StdPicture.ExecuteTask", "loadTransparent": true }   // отклонение
+```
+
+- скаляр-строка — ссылка `StdPicture.*`/`CommonPicture.*`, `loadTransparent=false` (дефолт по корпусу: ~64% картинок);
+- объект `{ src, loadTransparent: true }` — только когда нужен `true` (объектная форма существует ровно ради этого отклонения; флаг привязан к конкретной картинке, т.к. на одном поле их бывает несколько).
+
+> Не путать с `loadTransparent` у `<Picture>` кнопки/команды/попапа (§«button»/§7) — там обратная конвенция (дефолт `true`, отдельный скаляр-ключ на элементе).
 
 ### 4.2. События элемента и автоименование обработчиков
 
@@ -499,8 +515,8 @@ Pages поддерживает `pagesRepresentation`: `None`, `TabsOnTop`, `Tabs
 | `stdCommand` | string | Стандартная команда (→ `Form.StandardCommand.<name>`; `X.Y` → `Form.Item.X.StandardCommand.Y`) |
 | `type` | string | `usual`, `hyperlink`, `commandBar` |
 | `defaultButton` | bool | Кнопка по умолчанию |
-| `picture` | string | Ссылка на картинку (`StdPicture.Name`) |
-| `loadTransparent` | bool | Загружать картинку прозрачной (у `<Picture>` кнопки/команды/попапа). **Дефолт `true`** (эмитится всегда; `false` — явно). Также у `command` (§7) и `popup` |
+| `picture` | string \| object | Ссылка на картинку (`StdPicture.Name`). Скаляр-строка ИЛИ объект `{src, loadTransparent}` (прощающий ввод — флаг можно задать прямо в объекте) |
+| `loadTransparent` | bool | Загружать картинку прозрачной (у `<Picture>` кнопки/команды/попапа). **Дефолт `true`** (эмитится всегда; `false` — явно). Элемент-уровневый ключ ИЛИ поле объекта `picture`. Также у `command` (§7) и `popup`. ⚠️ Полярность обратна `headerPicture`/`valuesPicture` (там дефолт `false`, см. §4.1) |
 | `path` | string | DataPath кнопки общей команды (`Объект.Ref`, `Items.X.CurrentData.Поле`) — привязка к контексту |
 | `representation` | string | `Auto`, `Picture`, `Text`, `PictureAndText` |
 | `locationInCommandBar` | string | `InCommandBar`, `InAdditionalSubmenu` |
@@ -529,13 +545,13 @@ Pages поддерживает `pagesRepresentation`: `None`, `TabsOnTop`, `Tabs
 
 ```json
 { "picField": "Картинка", "path": "Таблица.Картинка",
-  "valuesPicture": "StdPicture.Favorites", "loadTransparent": true }
+  "valuesPicture": "StdPicture.FilterCriterion" }
 ```
 
 | Свойство | Тип | Описание |
 |----------|-----|----------|
-| `valuesPicture` | string | Ссылка на картинку значения (`StdPicture.*`, `CommonPicture.*`) |
-| `loadTransparent` | bool | Скрыть кадр «нет значения». Выводится только при `true` |
+| `valuesPicture` | string \| object | Картинка значения. Формат картинки-ссылки — см. §4.1 «Картинка-ссылка» |
+| `editMode` | string | Режим редактирования колонки (`EnterOnInput` и т.п.) |
 
 #### calendar — CalendarField
 

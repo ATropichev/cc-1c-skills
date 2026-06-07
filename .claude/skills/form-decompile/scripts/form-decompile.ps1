@@ -1,4 +1,4 @@
-﻿# form-decompile v0.44 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.45 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -853,6 +853,20 @@ function Decompile-AttrColumn {
 }
 
 # Общие свойства элемента (visible/enabled/readonly/title/events) → в hash
+# Картинка-ссылка с прозрачностью (HeaderPicture/FooterPicture/ValuesPicture).
+# Платформа ВСЕГДА эмитит <xr:LoadTransparent> (и true, и false) → дефолт DSL = false.
+# Скаляр (Ref) при loadTransparent=false; объект {src,loadTransparent:true} при true.
+function Get-PictureRef {
+	param($node, [string]$picTag)
+	$ref = $node.SelectSingleNode("lf:$picTag/xr:Ref", $ns)
+	if (-not $ref) { return $null }
+	$lt = $node.SelectSingleNode("lf:$picTag/xr:LoadTransparent", $ns)
+	if ($lt -and $lt.InnerText -eq 'true') {
+		return [ordered]@{ src = $ref.InnerText; loadTransparent = $true }
+	}
+	return $ref.InnerText
+}
+
 function Add-CommonProps {
 	param($obj, $node, [string]$elName)
 	if ((Get-Child $node 'Visible') -eq 'false') { $obj['hidden'] = $true }
@@ -868,6 +882,9 @@ function Add-CommonProps {
 	$ttNode = $node.SelectSingleNode("lf:ToolTip", $ns)
 	if ($ttNode) { $tt = Get-LangText $ttNode; if ($null -ne $tt) { $obj['tooltip'] = $tt } }
 	$ttr = Get-Child $node 'ToolTipRepresentation'; if ($ttr) { $obj['tooltipRepresentation'] = $ttr }
+	# Картинки заголовка/подвала колонки (любой field-тип, эмитятся платформой как column header/footer icon)
+	$hp = Get-PictureRef $node 'HeaderPicture'; if ($null -ne $hp) { $obj['headerPicture'] = $hp }
+	$fp = Get-PictureRef $node 'FooterPicture'; if ($null -ne $fp) { $obj['footerPicture'] = $fp }
 	$ev = Get-Events $node $elName
 	if ($ev) { $obj['events'] = $ev }
 }
@@ -1121,8 +1138,9 @@ function Decompile-Element {
 			$obj[$key] = $name
 			$dp = Get-Child $node 'DataPath'; if ($dp) { $obj['path'] = $dp }
 			Add-CommonProps $obj $node $name
+			$em = Get-Child $node 'EditMode'; if ($em) { $obj['editMode'] = $em }
 			$tl = Get-Child $node 'TitleLocation'; if ($tl) { $obj['titleLocation'] = $tl.ToLower() }
-			$ref = $node.SelectSingleNode("lf:ValuesPicture/xr:Ref", $ns); if ($ref) { $obj['valuesPicture'] = $ref.InnerText }
+			$vp = Get-PictureRef $node 'ValuesPicture'; if ($null -ne $vp) { $obj['valuesPicture'] = $vp }
 		}
 		'CalendarField' {
 			$obj[$key] = $name
