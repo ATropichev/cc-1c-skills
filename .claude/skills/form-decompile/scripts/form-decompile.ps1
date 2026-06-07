@@ -1,4 +1,4 @@
-﻿# form-decompile v0.43 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.44 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1016,9 +1016,12 @@ function Decompile-Element {
 	switch ($tag) {
 		'UsualGroup' {
 			# group = направление (<Group>); behavior = <Behavior> (Авто = нет тега → ключ опускаем).
+			# group = направление (<Group>). Нет тега → '' (тип-маркер сохраняется, направление
+			# не эмитим). Платформа явно пишет Vertical в большинстве случаев, поэтому '' ≠ 'vertical'
+			# — иначе компилятор додумает <Group>Vertical</Group> там, где его нет.
 			$g = Get-Child $node 'Group'
 			$gmap = @{ 'Horizontal'='horizontal'; 'Vertical'='vertical'; 'AlwaysHorizontal'='alwaysHorizontal'; 'AlwaysVertical'='alwaysVertical' }
-			if ($g -and $gmap.ContainsKey($g)) { $obj[$key] = $gmap[$g] } else { $obj[$key] = 'vertical' }
+			if ($g -and $gmap.ContainsKey($g)) { $obj[$key] = $gmap[$g] } else { $obj[$key] = '' }
 			$behavior = Get-Child $node 'Behavior'
 			if ($behavior) {
 				$bmap = @{ 'Usual'='usual'; 'Collapsible'='collapsible'; 'PopUp'='popup' }
@@ -1035,9 +1038,11 @@ function Decompile-Element {
 			if ($kids) { $obj['children'] = $kids }
 		}
 		'ColumnGroup' {
+			# columnGroup = направление (<Group>). Нет тега → '' (тип-маркер сохраняется, направление
+			# не эмитим). Иначе компилятор додумает <Group>Horizontal</Group> там, где его нет.
 			$g = Get-Child $node 'Group'
 			$gmap = @{ 'Horizontal'='horizontal'; 'Vertical'='vertical'; 'InCell'='inCell' }
-			if ($g -and $gmap.ContainsKey($g)) { $obj[$key] = $gmap[$g] } else { $obj[$key] = 'horizontal' }
+			if ($g -and $gmap.ContainsKey($g)) { $obj[$key] = $gmap[$g] } else { $obj[$key] = '' }
 			$obj['name'] = $name
 			Add-CommonProps $obj $node $name
 			if ((Get-Child $node 'ShowTitle') -eq 'false') { $obj['showTitle'] = $false }

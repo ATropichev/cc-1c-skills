@@ -277,7 +277,7 @@ companion-панели с собственным контентом. Оба не
 
 | Свойство | Тип | Описание |
 |----------|-----|----------|
-| `group` | string | Ориентация: `horizontal`, `vertical`, `alwaysHorizontal`, `alwaysVertical`. (Legacy: `collapsible` = `vertical` + `behavior:'collapsible'`) |
+| `group` | string | Ориентация: `horizontal`, `vertical`, `alwaysHorizontal`, `alwaysVertical`. **`""`** → `<Group>` не эмитится (тег отсутствовал в исходнике; платформа сериализует «Группировку», только если она задана в конфигураторе — даже явный `Vertical` хранится, поэтому `""` ≠ `vertical`). Ключ обязателен как тип-маркер группы. (Legacy: `collapsible` = `vertical` + `behavior:'collapsible'`) |
 | `behavior` | string | Поведение (`<Behavior>`): `usual`, `collapsible`, `popup`. **Отсутствие = Авто** (дефолт, не эмитится). Свёртываемая/всплывающая несут доп. свойства |
 | `collapsed` | bool | Свёрнута (у `collapsible`/`popup`) |
 | `children` | array | Вложенные элементы |
@@ -462,7 +462,7 @@ companion-панели с собственным контентом. Оба не
 
 | Свойство | Тип | Описание |
 |----------|-----|----------|
-| `columnGroup` | string | Ориентация: `horizontal`, `vertical`, `inCell` (склейка колонок в одной ячейке шапки) |
+| `columnGroup` | string | Ориентация: `horizontal`, `vertical`, `inCell` (склейка колонок в одной ячейке шапки). **`""`** → `<Group>` не эмитится (тега не было в исходнике). Ключ обязателен как тип-маркер |
 | `name` | string | Имя элемента (рекомендуется задавать явно) |
 | `title` | string/object | Заголовок группы |
 | `showTitle` | bool | Показывать заголовок |
