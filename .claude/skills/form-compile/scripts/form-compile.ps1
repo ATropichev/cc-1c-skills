@@ -1,4 +1,4 @@
-﻿# form-compile v1.66 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.67 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -3607,8 +3607,8 @@ function Emit-PictureDecoration {
 	if ($el.hyperlink -eq $true) { X "$inner<Hyperlink>true</Hyperlink>" }
 	Emit-Layout -el $el -indent $inner
 
-	# Оформление PictureDecoration: XSD расщепляет appearance вокруг Title (Border после Title)
-	# + позиция Picture — отдельный кластер, пока не разводим (декомпилятор захватывает в keys).
+	# Оформление (цвета/шрифт/граница) — профиль декорации (1С толерантна к порядку appearance)
+	Emit-Appearance -el $el -indent $inner -profile 'decoration'
 
 	# Companions
 	Emit-CompanionPanel -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner -panel $el.contextMenu

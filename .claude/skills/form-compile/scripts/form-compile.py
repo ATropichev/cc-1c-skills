@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.66 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.67 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -3302,8 +3302,8 @@ def emit_picture_decoration(lines, el, name, eid, indent):
         lines.append(f'{inner}<Hyperlink>true</Hyperlink>')
     emit_layout(lines, el, inner)
 
-    # Оформление PictureDecoration: XSD расщепляет appearance вокруг Title (Border после Title)
-    # + позиция Picture — отдельный кластер, пока не разводим (декомпилятор захватывает в keys).
+    # Оформление (цвета/шрифт/граница) — профиль декорации (1С толерантна к порядку appearance)
+    emit_appearance(lines, el, inner, 'decoration')
 
     # Companions
     emit_companion_panel(lines, 'ContextMenu', f'{name}\u041a\u043e\u043d\u0442\u0435\u043a\u0441\u0442\u043d\u043e\u0435\u041c\u0435\u043d\u044e', inner, el.get('contextMenu'))

@@ -1,5 +1,5 @@
 {
-  "name": "Оформление элементов — цвета/шрифты/граница на decoration/input/button/group (профили порядка)",
+  "name": "Оформление элементов — цвета/шрифты/граница на decoration/input/button/group/picture (профили порядка)",
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
@@ -36,7 +36,10 @@
         "font": "style:NormalTextFont" },
       { "group": "ГруппаОформление", "backColor": "web:Honeydew", "children": [
         { "input": "Цена2", "path": "Объект.Цена", "textColor": "web:DimGray" }
-      ]}
+      ]},
+      { "picture": "Логотип", "src": "StdPicture.Print",
+        "textColor": "web:FireBrick", "font": "style:NormalTextFont",
+        "border": { "width": 1, "style": "Single" } }
     ]
   }
 }
