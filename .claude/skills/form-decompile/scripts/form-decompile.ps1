@@ -1,4 +1,4 @@
-﻿# form-decompile v0.34 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.35 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -802,6 +802,20 @@ function Decompile-XrFlag {
 	return $o
 }
 
+# <FunctionalOptions><Item>FunctionalOption.X</Item>…> → массив строк (префикс FunctionalOption. снят; GUID — как есть).
+function Decompile-FunctionalOptions {
+	param($node)
+	$foNode = $node.SelectSingleNode("lf:FunctionalOptions", $ns)
+	if (-not $foNode) { return $null }
+	$opts = New-Object System.Collections.ArrayList
+	foreach ($it in @($foNode.SelectNodes("lf:Item", $ns))) {
+		$t = $it.InnerText.Trim() -replace '^FunctionalOption\.', ''
+		[void]$opts.Add($t)
+	}
+	if ($opts.Count -gt 0) { return ,@($opts) }
+	return $null
+}
+
 # Общие свойства элемента (visible/enabled/readonly/title/events) → в hash
 function Add-CommonProps {
 	param($obj, $node, [string]$elName)
@@ -830,10 +844,12 @@ function Decompile-Type {
 	foreach ($vt in @($typeNode.SelectNodes("v8:Type", $ns))) {
 		$raw = $vt.InnerText.Trim()
 		$short = $raw
+		# break обязателен: иначе общий case ^(v8|v8ui|cfg): перетирает специфичные (напр. v8:ValueListType → ValueList).
 		switch -regex ($raw) {
 			'^xs:string$' {
 				$len = $typeNode.SelectSingleNode("v8:StringQualifiers/v8:Length", $ns)
 				if ($len -and [int]$len.InnerText -gt 0) { $short = "string($($len.InnerText))" } else { $short = "string" }
+				break
 			}
 			'^xs:decimal$' {
 				$d = $typeNode.SelectSingleNode("v8:NumberQualifiers/v8:Digits", $ns)
@@ -842,15 +858,28 @@ function Decompile-Type {
 				$dd = if ($d) { $d.InnerText } else { '0' }
 				$ff = if ($f) { $f.InnerText } else { '0' }
 				if ($sgn -and $sgn.InnerText -eq 'Nonnegative') { $short = "decimal($dd,$ff,nonneg)" } else { $short = "decimal($dd,$ff)" }
+				break
 			}
-			'^xs:boolean$' { $short = "boolean" }
+			'^xs:boolean$' { $short = "boolean"; break }
 			'^xs:dateTime$' {
 				$df = $typeNode.SelectSingleNode("v8:DateQualifiers/v8:DateFractions", $ns)
 				$dfv = if ($df) { $df.InnerText } else { 'DateTime' }
 				switch ($dfv) { 'Date' { $short = 'date' } 'Time' { $short = 'time' } default { $short = 'dateTime' } }
+				break
 			}
-			'^v8:ValueListType$' { $short = 'ValueList' }
-			'^(v8|v8ui|cfg):(.+)$' { $short = $matches[2] }
+			'^cfg:(.+)$' { $short = $matches[1]; break }
+			'^(v8|v8ui):' {
+				# Платформенный тип: friendly-шорткат если есть, иначе оставляем с префиксом
+				# (компилятор эмитит verbatim) — чтобы не терять v8:UUID и прочий хвост.
+				$rev = @{
+					'v8:ValueTable'='ValueTable'; 'v8:ValueTree'='ValueTree'; 'v8:ValueListType'='ValueList'
+					'v8:TypeDescription'='TypeDescription'; 'v8:Universal'='Universal'
+					'v8:FixedArray'='FixedArray'; 'v8:FixedStructure'='FixedStructure'
+					'v8ui:FormattedString'='FormattedString'; 'v8ui:Picture'='Picture'; 'v8ui:Color'='Color'; 'v8ui:Font'='Font'
+				}
+				if ($rev.ContainsKey($raw)) { $short = $rev[$raw] } else { $short = $raw }
+				break
+			}
 			default { $short = $raw }
 		}
 		[void]$parts.Add($short)
@@ -1287,6 +1316,7 @@ if ($attrsNode) {
 		$tNode = $a.SelectSingleNode("lf:Title", $ns); if ($tNode) { $t = Get-LangText $tNode; if ($null -ne $t) { $ao['title'] = $t } }
 		if ((Get-Child $a 'SavedData') -eq 'true') { $ao['savedData'] = $true }
 		$fc = Get-Child $a 'FillChecking'; if ($fc) { $ao['fillChecking'] = $fc }
+		$afo = Decompile-FunctionalOptions $a; if ($afo) { $ao['functionalOptions'] = $afo }
 		$colsNode = $a.SelectSingleNode("lf:Columns", $ns)
 		if ($colsNode) {
 			$cols = New-Object System.Collections.ArrayList
@@ -1294,6 +1324,7 @@ if ($attrsNode) {
 				$co = [ordered]@{}; $co['name'] = $c.GetAttribute("name")
 				$cty = Decompile-Type ($c.SelectSingleNode("lf:Type", $ns)); if ($cty) { $co['type'] = $cty }
 				$ctNode = $c.SelectSingleNode("lf:Title", $ns); if ($ctNode) { $t = Get-LangText $ctNode; if ($null -ne $t) { $co['title'] = $t } }
+				$cfo = Decompile-FunctionalOptions $c; if ($cfo) { $co['functionalOptions'] = $cfo }
 				[void]$cols.Add($co)
 			}
 			if ($cols.Count -gt 0) { $ao['columns'] = @($cols) }
@@ -1378,6 +1409,7 @@ if ($cmdsNode) {
 		$tNode = $c.SelectSingleNode("lf:Title", $ns); if ($tNode) { $t = Get-LangText $tNode; if ($null -ne $t) { $co['title'] = $t } }
 		$ttNode = $c.SelectSingleNode("lf:ToolTip", $ns); if ($ttNode) { $t = Get-LangText $ttNode; if ($null -ne $t) { $co['tooltip'] = $t } }
 		$us = Decompile-XrFlag $c 'Use'; if ($null -ne $us) { $co['use'] = $us }
+		$cfo = Decompile-FunctionalOptions $c; if ($cfo) { $co['functionalOptions'] = $cfo }
 		$cru = Get-Child $c 'CurrentRowUse'; if ($cru) { $co['currentRowUse'] = $cru }
 		$sc = Get-Child $c 'Shortcut'; if ($sc) { $co['shortcut'] = $sc }
 		$ref = $c.SelectSingleNode("lf:Picture/xr:Ref", $ns); if ($ref) { $co['picture'] = $ref.InnerText }

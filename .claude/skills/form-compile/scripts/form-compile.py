@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.52 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.53 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -2452,7 +2452,10 @@ def emit_single_type(lines, type_str, indent):
     # Fallback with validation
     if type_str in KNOWN_INVALID_TYPES:
         raise ValueError(f"Invalid form attribute type '{type_str}': {KNOWN_INVALID_TYPES[type_str]}")
-    if '.' in type_str:
+    # Платформенный тип с префиксом (v8:/v8ui:/xs:/dcs*:) — verbatim (напр. v8:UUID, v8:StandardPeriod).
+    if re.match(r'^(v8|v8ui|xs|ent|style|sys|web|win|dcs\w*):', type_str):
+        lines.append(f'{indent}<v8:Type>{type_str}</v8:Type>')
+    elif '.' in type_str:
         lines.append(f'{indent}<v8:Type>cfg:{type_str}</v8:Type>')
     else:
         print(f"WARNING: Unrecognized bare type '{type_str}' — will be emitted without namespace prefix", file=sys.stderr)
@@ -3271,6 +3274,24 @@ def emit_button_group(lines, el, name, eid, indent):
 
 # --- Attribute emitter ---
 
+def emit_functional_options(lines, fo, indent):
+    # <FunctionalOptions><Item>FunctionalOption.X</Item>…> — у Attribute/Command/Column.
+    # Forgiving: "X"/"FunctionalOption.X" → FunctionalOption.X; GUID (расширение) — как есть.
+    if not fo:
+        return
+    lines.append(f'{indent}<FunctionalOptions>')
+    for opt in fo:
+        v = str(opt)
+        if re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}$', v):
+            pass
+        elif v.startswith('FunctionalOption.'):
+            pass
+        else:
+            v = f'FunctionalOption.{v}'
+        lines.append(f'{indent}\t<Item>{v}</Item>')
+    lines.append(f'{indent}</FunctionalOptions>')
+
+
 def emit_attributes(lines, attrs, indent):
     if not attrs or len(attrs) == 0:
         return
@@ -3310,6 +3331,7 @@ def emit_attributes(lines, attrs, indent):
             lines.append(f'{inner}<SavedData>true</SavedData>')
         if attr.get('fillChecking'):
             lines.append(f'{inner}<FillChecking>{attr["fillChecking"]}</FillChecking>')
+        emit_functional_options(lines, attr.get('functionalOptions'), inner)
 
         # Columns (for ValueTable/ValueTree)
         if attr.get('columns') and len(attr['columns']) > 0:
@@ -3320,6 +3342,7 @@ def emit_attributes(lines, attrs, indent):
                 if col.get('title'):
                     emit_mltext(lines, f'{inner}\t\t', 'Title', col['title'])
                 emit_type(lines, str(col.get('type', '')), f'{inner}\t\t')
+                emit_functional_options(lines, col.get('functionalOptions'), f'{inner}\t\t')
                 lines.append(f'{inner}\t</Column>')
             lines.append(f'{inner}</Columns>')
 
@@ -3413,6 +3436,8 @@ def emit_commands(lines, cmds, indent):
 
         if cmd.get('action'):
             lines.append(f'{inner}<Action>{cmd["action"]}</Action>')
+
+        emit_functional_options(lines, cmd.get('functionalOptions'), inner)
 
         if cmd.get('currentRowUse'):
             lines.append(f'{inner}<CurrentRowUse>{cmd["currentRowUse"]}</CurrentRowUse>')

@@ -26,7 +26,9 @@
       { "name": "Строка", "type": "string(200)", "view": false },
       { "name": "Число", "type": "decimal(10,0,nonneg)", "edit": false },
       { "name": "Дата", "type": "dateTime" },
-      { "name": "Булево", "type": "boolean" }
+      { "name": "Булево", "type": "boolean" },
+      { "name": "СписокЗначений", "type": "ValueList" },
+      { "name": "Идентификатор", "type": "v8:UUID" }
     ]
   }
 }

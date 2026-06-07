@@ -611,6 +611,7 @@ Pages поддерживает `pagesRepresentation`: `None`, `TabsOnTop`, `Tabs
 | `title` | string | Заголовок |
 | `view` | bool/object | Просмотр по ролям (`<View>`). См. §4.1c |
 | `edit` | bool/object | Редактирование по ролям (`<Edit>`). См. §4.1c |
+| `functionalOptions` | array | Функциональные опции (`<FunctionalOptions><Item>FunctionalOption.X</Item>…`). Массив имён; forgiving: `"X"`/`"FunctionalOption.X"`. Также у колонок (`columns[*]`) и команд (§7) |
 | `savedData` | bool | Сохраняемые данные |
 | `fillChecking` | string | `Show`, `DontShow` |
 | `columns` | array | Колонки для ValueTable/ValueTree |
@@ -700,6 +701,7 @@ Pages поддерживает `pagesRepresentation`: `None`, `TabsOnTop`, `Tabs
 | `title` | string | Заголовок |
 | `tooltip` | string/object | Всплывающая подсказка команды (`<ToolTip>`) |
 | `use` | bool/object | Доступность команды по ролям (`<Use>`). См. §4.1c |
+| `functionalOptions` | array | Функциональные опции команды (см. §5) |
 | `currentRowUse` | string | Использование текущей строки: `Auto`, `DontUse`, `Use` |
 | `shortcut` | string | Клавиатурное сочетание |
 | `picture` | string | Ссылка на картинку |

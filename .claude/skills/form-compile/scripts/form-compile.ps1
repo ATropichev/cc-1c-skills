@@ -1,4 +1,4 @@
-﻿# form-compile v1.52 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.53 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -2134,7 +2134,10 @@ function Emit-SingleType {
 	if ($script:knownInvalidTypes.ContainsKey($typeStr)) {
 		throw "Invalid form attribute type '$typeStr': $($script:knownInvalidTypes[$typeStr])"
 	}
-	if ($typeStr.Contains('.')) {
+	# Платформенный тип с префиксом (v8:/v8ui:/xs:/dcs*:) — эмитим verbatim (напр. v8:UUID, v8:StandardPeriod).
+	if ($typeStr -match '^(v8|v8ui|xs|ent|style|sys|web|win|dcs\w*):') {
+		X "$indent<v8:Type>$typeStr</v8:Type>"
+	} elseif ($typeStr.Contains('.')) {
 		X "$indent<v8:Type>cfg:$typeStr</v8:Type>"
 	} else {
 		Write-Warning "Unrecognized bare type '$typeStr' — will be emitted without namespace prefix"
@@ -3597,6 +3600,22 @@ function Emit-Popup {
 
 # --- 8. Attribute emitter ---
 
+# <FunctionalOptions><Item>FunctionalOption.X</Item>…</FunctionalOptions> — у Attribute/Command/Column.
+# DSL: массив строк. Forgiving: "X" / "FunctionalOption.X" → FunctionalOption.X; GUID (расширение) — как есть.
+function Emit-FunctionalOptions {
+	param($fo, [string]$indent)
+	if (-not $fo -or @($fo).Count -eq 0) { return }
+	X "$indent<FunctionalOptions>"
+	foreach ($opt in @($fo)) {
+		$v = "$opt"
+		if ($v -match '^[0-9a-fA-F]{8}-[0-9a-fA-F-]{27,}$') { }          # GUID — как есть
+		elseif ($v -match '^FunctionalOption\.') { }                     # уже с префиксом
+		else { $v = "FunctionalOption.$v" }
+		X "$indent`t<Item>$v</Item>"
+	}
+	X "$indent</FunctionalOptions>"
+}
+
 function Emit-Attributes {
 	param($attrs, [string]$indent)
 
@@ -3638,6 +3657,7 @@ function Emit-Attributes {
 		if ($attr.fillChecking) {
 			X "$inner<FillChecking>$($attr.fillChecking)</FillChecking>"
 		}
+		Emit-FunctionalOptions -fo $attr.functionalOptions -indent $inner
 
 		# Columns (for ValueTable/ValueTree)
 		if ($attr.columns -and $attr.columns.Count -gt 0) {
@@ -3649,6 +3669,7 @@ function Emit-Attributes {
 					Emit-MLText -tag "Title" -text $col.title -indent "$inner`t`t"
 				}
 				Emit-Type -typeStr "$($col.type)" -indent "$inner`t`t"
+				Emit-FunctionalOptions -fo $col.functionalOptions -indent "$inner`t`t"
 				X "$inner`t</Column>"
 			}
 			X "$inner</Columns>"
@@ -3755,6 +3776,8 @@ function Emit-Commands {
 		if ($cmd.action) {
 			X "$inner<Action>$($cmd.action)</Action>"
 		}
+
+		Emit-FunctionalOptions -fo $cmd.functionalOptions -indent $inner
 
 		if ($cmd.currentRowUse) {
 			X "$inner<CurrentRowUse>$($cmd.currentRowUse)</CurrentRowUse>"
