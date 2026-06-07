@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.67 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.69 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -2011,6 +2011,56 @@ def get_el_prop(obj, names):
     return None
 
 
+def to_scalar_literal(s):
+    # Литерал shorthand → тип: true/false → bool, целое/дробное → число, иначе строка.
+    t = str(s).strip()
+    if t.lower() == 'true':
+        return True
+    if t.lower() == 'false':
+        return False
+    if re.fullmatch(r'-?\d+', t):
+        return int(t)
+    if re.fullmatch(r'-?\d+\.\d+', t):
+        return float(t)
+    return t
+
+
+def from_choice_param_shorthand(s):
+    # "name=value" либо "name=v1, v2, …" (запятые → массив). → {name, value}.
+    eq = s.find('=')
+    if eq < 0:
+        return {'name': s.strip()}
+    name = s[:eq].strip()
+    rest = s[eq + 1:]
+    if ',' in rest:
+        return {'name': name, 'value': [to_scalar_literal(p) for p in rest.split(',')]}
+    return {'name': name, 'value': to_scalar_literal(rest)}
+
+
+def from_choice_param_link_shorthand(s):
+    # "name=dataPath" либо "name=dataPath:DontChange". → {name, dataPath, valueChange?}.
+    eq = s.find('=')
+    if eq < 0:
+        return {'name': s.strip()}
+    o = {'name': s[:eq].strip()}
+    rest = s[eq + 1:].strip()
+    m = re.fullmatch(r'(.*):(Clear|DontChange|очистить|неизменять)', rest, re.IGNORECASE)
+    if m:
+        o['dataPath'] = m.group(1).strip()
+        o['valueChange'] = m.group(2)
+    else:
+        o['dataPath'] = rest
+    return o
+
+
+def from_type_link_shorthand(s):
+    # "dataPath" либо "dataPath#linkItem". → {dataPath, linkItem}.
+    m = re.fullmatch(r'(.*)#(\d+)', str(s))
+    if m:
+        return {'dataPath': m.group(1).strip(), 'linkItem': int(m.group(2))}
+    return {'dataPath': str(s).strip()}
+
+
 def emit_choice_param_value(lines, value, indent):
     # Внутреннее значение параметра выбора (FormChoiceListDesTimeValue): <Presentation/> + <Value>.
     # Скаляр → один Value; массив → v8:FixedArray из вложенных FormChoiceListDesTimeValue.
@@ -2037,6 +2087,8 @@ def emit_choice_parameters(lines, el, indent):
         return
     lines.append(f'{indent}<ChoiceParameters>')
     for item in cp:
+        if isinstance(item, str):
+            item = from_choice_param_shorthand(item)
         name = get_el_prop(item, ('name', 'имя'))
         val = get_el_prop(item, ('value', 'значение'))
         name_s = '' if name is None else str(name)
@@ -2056,6 +2108,8 @@ def emit_choice_parameter_links(lines, el, indent):
         return
     lines.append(f'{indent}<ChoiceParameterLinks>')
     for lk in cpl:
+        if isinstance(lk, str):
+            lk = from_choice_param_link_shorthand(lk)
         name = get_el_prop(lk, ('name', 'имя'))
         dp = get_el_prop(lk, ('dataPath', 'path', 'путь'))
         vc_raw = get_el_prop(lk, ('valueChange', 'режимИзменения'))
@@ -2083,6 +2137,8 @@ def emit_type_link(lines, el, indent):
     tl = el.get('typeLink')
     if not tl:
         return
+    if isinstance(tl, str):
+        tl = from_type_link_shorthand(tl)
     dp = get_el_prop(tl, ('dataPath', 'path', 'путь'))
     li = get_el_prop(tl, ('linkItem', 'элементСвязи'))
     if li is None:

@@ -390,6 +390,19 @@ companion-панели с собственным контентом. Оба не
 - **`choiceParameterLinks`** — `[{ name, dataPath, valueChange? }]`. `valueChange`: `Clear` (дефолт, опускается) / `DontChange`; forgiving `очистить`/`неизменять`. Синонимы: `имя`/`путь`/`режимИзменения`.
 - **`typeLink`** — `{ dataPath, linkItem }`. `linkItem` — индекс (дефолт `0`). Синонимы: `путь`/`элементСвязи`.
 
+**Короткая форма (shorthand)** — то же самое строками (эквивалентно объектной форме):
+
+```json
+{ "input": "Контрагент", "path": "Объект.Контрагент",
+  "choiceParameters": [ "Отбор.Активный=true", "Отбор.ВидПродукции=Enum.Виды.Агрохимикат, Enum.Виды.Пестицид" ],
+  "choiceParameterLinks": [ "Отбор.Организация=Объект.Организация", "Отбор.Тип=Объект.Тип:DontChange" ],
+  "typeLink": "Объект.ЗначениеДата" }
+```
+
+- `choiceParameters`: `"name=value"`; значение с запятыми → массив; литералы коэрсятся (`true`/`false` → bool, число → number, остальное → строка/ref).
+- `choiceParameterLinks`: `"name=dataPath"`, опц. хвост `:Clear`/`:DontChange` (по умолчанию Clear).
+- `typeLink`: `"dataPath"` или `"dataPath#linkItem"`.
+
 #### check — CheckBoxField
 
 ```json

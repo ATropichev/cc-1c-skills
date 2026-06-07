@@ -194,7 +194,63 @@
 			<ContextMenu name="ПолеСвязиКонтекстноеМеню" id="23"/>
 			<ExtendedTooltip name="ПолеСвязиРасширеннаяПодсказка" id="24"/>
 		</InputField>
-		<CheckBoxField name="Флаг" id="25">
+		<InputField name="ПолеСвязиКратко" id="25">
+			<DataPath>ПолеСвязиКратко</DataPath>
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Связи (короткая форма)</v8:content>
+				</v8:item>
+			</Title>
+			<TypeLink>
+				<xr:DataPath>ПолеПодсказка</xr:DataPath>
+				<xr:LinkItem>0</xr:LinkItem>
+			</TypeLink>
+			<ChoiceParameterLinks>
+				<xr:Link>
+					<xr:Name>Отбор.Организация</xr:Name>
+					<xr:DataPath xsi:type="xs:string">ОбычноеПоле</xr:DataPath>
+					<xr:ValueChange>Clear</xr:ValueChange>
+				</xr:Link>
+				<xr:Link>
+					<xr:Name>Отбор.Тип</xr:Name>
+					<xr:DataPath xsi:type="xs:string">ПолеСписокВыбора</xr:DataPath>
+					<xr:ValueChange>DontChange</xr:ValueChange>
+				</xr:Link>
+			</ChoiceParameterLinks>
+			<ChoiceParameters>
+				<app:item name="Отбор.Активный">
+					<app:value xsi:type="FormChoiceListDesTimeValue">
+						<Presentation/>
+						<Value xsi:type="xs:boolean">true</Value>
+					</app:value>
+				</app:item>
+				<app:item name="Отбор.Вид">
+					<app:value xsi:type="FormChoiceListDesTimeValue">
+						<Presentation/>
+						<Value xsi:type="xs:string">Основной</Value>
+					</app:value>
+				</app:item>
+				<app:item name="Отбор.Список">
+					<app:value xsi:type="FormChoiceListDesTimeValue">
+						<Presentation/>
+						<Value xsi:type="v8:FixedArray">
+							<v8:Value xsi:type="FormChoiceListDesTimeValue">
+								<Presentation/>
+								<Value xsi:type="xs:string">Один</Value>
+							</v8:Value>
+							<v8:Value xsi:type="FormChoiceListDesTimeValue">
+								<Presentation/>
+								<Value xsi:type="xs:string">Два</Value>
+							</v8:Value>
+						</Value>
+					</app:value>
+				</app:item>
+			</ChoiceParameters>
+			<ContextMenu name="ПолеСвязиКраткоКонтекстноеМеню" id="26"/>
+			<ExtendedTooltip name="ПолеСвязиКраткоРасширеннаяПодсказка" id="27"/>
+		</InputField>
+		<CheckBoxField name="Флаг" id="28">
 			<DataPath>Флаг</DataPath>
 			<Title>
 				<v8:item>
@@ -204,10 +260,10 @@
 			</Title>
 			<CheckBoxType>Auto</CheckBoxType>
 			<TitleLocation>Right</TitleLocation>
-			<ContextMenu name="ФлагКонтекстноеМеню" id="26"/>
-			<ExtendedTooltip name="ФлагРасширеннаяПодсказка" id="27"/>
+			<ContextMenu name="ФлагКонтекстноеМеню" id="29"/>
+			<ExtendedTooltip name="ФлагРасширеннаяПодсказка" id="30"/>
 		</CheckBoxField>
-		<CheckBoxField name="ФлагПлатформенный" id="28">
+		<CheckBoxField name="ФлагПлатформенный" id="31">
 			<DataPath>ФлагПлатформенный</DataPath>
 			<Title>
 				<v8:item>
@@ -216,10 +272,10 @@
 				</v8:item>
 			</Title>
 			<CheckBoxType>Auto</CheckBoxType>
-			<ContextMenu name="ФлагПлатформенныйКонтекстноеМеню" id="29"/>
-			<ExtendedTooltip name="ФлагПлатформенныйРасширеннаяПодсказка" id="30"/>
+			<ContextMenu name="ФлагПлатформенныйКонтекстноеМеню" id="32"/>
+			<ExtendedTooltip name="ФлагПлатформенныйРасширеннаяПодсказка" id="33"/>
 		</CheckBoxField>
-		<CheckBoxField name="ФлагЯвный" id="31">
+		<CheckBoxField name="ФлагЯвный" id="34">
 			<DataPath>ФлагЯвный</DataPath>
 			<Title>
 				<v8:item>
@@ -229,10 +285,10 @@
 			</Title>
 			<CheckBoxType>Auto</CheckBoxType>
 			<TitleLocation>Top</TitleLocation>
-			<ContextMenu name="ФлагЯвныйКонтекстноеМеню" id="32"/>
-			<ExtendedTooltip name="ФлагЯвныйРасширеннаяПодсказка" id="33"/>
+			<ContextMenu name="ФлагЯвныйКонтекстноеМеню" id="35"/>
+			<ExtendedTooltip name="ФлагЯвныйРасширеннаяПодсказка" id="36"/>
 		</CheckBoxField>
-		<CheckBoxField name="ФлагТумблер" id="34">
+		<CheckBoxField name="ФлагТумблер" id="37">
 			<DataPath>ФлагТумблер</DataPath>
 			<Title>
 				<v8:item>
@@ -242,18 +298,18 @@
 			</Title>
 			<CheckBoxType>Switcher</CheckBoxType>
 			<TitleLocation>Right</TitleLocation>
-			<ContextMenu name="ФлагТумблерКонтекстноеМеню" id="35"/>
-			<ExtendedTooltip name="ФлагТумблерРасширеннаяПодсказка" id="36"/>
+			<ContextMenu name="ФлагТумблерКонтекстноеМеню" id="38"/>
+			<ExtendedTooltip name="ФлагТумблерРасширеннаяПодсказка" id="39"/>
 		</CheckBoxField>
 	</ChildItems>
 	<Attributes>
-		<Attribute name="Объект" id="37">
+		<Attribute name="Объект" id="40">
 			<Type>
 				<v8:Type>cfg:DataProcessorObject.ПоляВвода</v8:Type>
 			</Type>
 			<MainAttribute>true</MainAttribute>
 		</Attribute>
-		<Attribute name="ОбычноеПоле" id="38">
+		<Attribute name="ОбычноеПоле" id="41">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -268,7 +324,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="МногострочноеПоле" id="39">
+		<Attribute name="МногострочноеПоле" id="42">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -283,7 +339,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="ПолеПароля" id="40">
+		<Attribute name="ПолеПароля" id="43">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -298,7 +354,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="ПолеСКнопками" id="41">
+		<Attribute name="ПолеСКнопками" id="44">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -313,7 +369,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="ПолеСписокВыбора" id="42">
+		<Attribute name="ПолеСписокВыбора" id="45">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -328,7 +384,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="ПолеПодсказка" id="43">
+		<Attribute name="ПолеПодсказка" id="46">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -343,7 +399,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="ПолеСвязи" id="44">
+		<Attribute name="ПолеСвязи" id="47">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -358,7 +414,22 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="Флаг" id="45">
+		<Attribute name="ПолеСвязиКратко" id="48">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Поле связи кратко</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type>xs:string</v8:Type>
+				<v8:StringQualifiers>
+					<v8:Length>0</v8:Length>
+					<v8:AllowedLength>Variable</v8:AllowedLength>
+				</v8:StringQualifiers>
+			</Type>
+		</Attribute>
+		<Attribute name="Флаг" id="49">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -369,7 +440,7 @@
 				<v8:Type>xs:boolean</v8:Type>
 			</Type>
 		</Attribute>
-		<Attribute name="ФлагПлатформенный" id="46">
+		<Attribute name="ФлагПлатформенный" id="50">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -380,7 +451,7 @@
 				<v8:Type>xs:boolean</v8:Type>
 			</Type>
 		</Attribute>
-		<Attribute name="ФлагЯвный" id="47">
+		<Attribute name="ФлагЯвный" id="51">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -391,7 +462,7 @@
 				<v8:Type>xs:boolean</v8:Type>
 			</Type>
 		</Attribute>
-		<Attribute name="ФлагТумблер" id="48">
+		<Attribute name="ФлагТумблер" id="52">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>

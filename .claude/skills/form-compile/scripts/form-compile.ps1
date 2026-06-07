@@ -1,4 +1,4 @@
-﻿# form-compile v1.68 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.69 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -3196,6 +3196,55 @@ function Get-ElProp {
 	return $null
 }
 
+# Приведение строкового литерала shorthand к типу: true/false → bool, целое/дробное → число,
+# иначе строка (ref-путь нормализует уже Normalize-ChoiceValue).
+function ConvertTo-ScalarLiteral {
+	param([string]$s)
+	$t = "$s".Trim()
+	if ($t -match '^(?i:true)$')  { return $true }
+	if ($t -match '^(?i:false)$') { return $false }
+	if ($t -match '^-?\d+$')       { return [int]$t }
+	if ($t -match '^-?\d+\.\d+$')  { return [double]::Parse($t, [System.Globalization.CultureInfo]::InvariantCulture) }
+	return $t
+}
+
+# Shorthand параметра выбора: "name=value" либо "name=v1, v2, …" (запятые → массив). → {name, value}.
+function ConvertFrom-ChoiceParamShorthand {
+	param([string]$s)
+	$eq = $s.IndexOf('=')
+	if ($eq -lt 0) { return @{ name = $s.Trim() } }
+	$name = $s.Substring(0, $eq).Trim()
+	$rest = $s.Substring($eq + 1)
+	if ($rest -match ',') {
+		$vals = @()
+		foreach ($part in ($rest -split ',')) { $vals += ,(ConvertTo-ScalarLiteral $part) }
+		return @{ name = $name; value = $vals }
+	}
+	return @{ name = $name; value = (ConvertTo-ScalarLiteral $rest) }
+}
+
+# Shorthand связи параметров выбора: "name=dataPath" либо "name=dataPath:DontChange". → {name, dataPath, valueChange?}.
+function ConvertFrom-ChoiceParamLinkShorthand {
+	param([string]$s)
+	$eq = $s.IndexOf('=')
+	if ($eq -lt 0) { return @{ name = $s.Trim() } }
+	$o = @{ name = $s.Substring(0, $eq).Trim() }
+	$rest = $s.Substring($eq + 1).Trim()
+	if ($rest -match '^(.*):(?i:(Clear|DontChange|очистить|неизменять))$') {
+		$o['dataPath'] = $matches[1].Trim(); $o['valueChange'] = $matches[2]
+	} else {
+		$o['dataPath'] = $rest
+	}
+	return $o
+}
+
+# Shorthand связи по типу: "dataPath" либо "dataPath#linkItem". → {dataPath, linkItem}.
+function ConvertFrom-TypeLinkShorthand {
+	param([string]$s)
+	if ($s -match '^(.*)#(\d+)$') { return @{ dataPath = $matches[1].Trim(); linkItem = [int]$matches[2] } }
+	return @{ dataPath = "$s".Trim() }
+}
+
 # Внутреннее значение параметра выбора (FormChoiceListDesTimeValue): <Presentation/> + <Value>.
 # Скаляр → один Value (через Normalize-ChoiceValue); массив → v8:FixedArray из вложенных FormChoiceListDesTimeValue.
 function Emit-ChoiceParamValue {
@@ -3226,6 +3275,7 @@ function Emit-ChoiceParameters {
 	if (-not $cp -or @($cp).Count -eq 0) { return }
 	X "$indent<ChoiceParameters>"
 	foreach ($item in @($cp)) {
+		if ($item -is [string]) { $item = ConvertFrom-ChoiceParamShorthand $item }
 		$name = Get-ElProp $item @('name','имя')
 		$val = Get-ElProp $item @('value','значение')
 		X "$indent`t<app:item name=`"$(Esc-Xml "$name")`">"
@@ -3245,6 +3295,7 @@ function Emit-ChoiceParameterLinks {
 	if (-not $cpl -or @($cpl).Count -eq 0) { return }
 	X "$indent<ChoiceParameterLinks>"
 	foreach ($lk in @($cpl)) {
+		if ($lk -is [string]) { $lk = ConvertFrom-ChoiceParamLinkShorthand $lk }
 		$name = Get-ElProp $lk @('name','имя')
 		$dp = Get-ElProp $lk @('dataPath','path','путь')
 		$vcRaw = Get-ElProp $lk @('valueChange','режимИзменения')
@@ -3270,6 +3321,7 @@ function Emit-TypeLink {
 	param($el, [string]$indent)
 	$tl = $el.typeLink
 	if (-not $tl) { return }
+	if ($tl -is [string]) { $tl = ConvertFrom-TypeLinkShorthand $tl }
 	$dp = Get-ElProp $tl @('dataPath','path','путь')
 	$li = Get-ElProp $tl @('linkItem','элементСвязи')
 	if ($null -eq $li) { $li = 0 }

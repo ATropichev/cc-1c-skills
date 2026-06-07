@@ -38,6 +38,11 @@
         ],
         "typeLink": { "dataPath": "ПолеПодсказка", "linkItem": 0 }
       },
+      { "input": "ПолеСвязиКратко", "path": "ПолеСвязиКратко", "title": "Связи (короткая форма)",
+        "choiceParameters": [ "Отбор.Активный=true", "Отбор.Вид=Основной", "Отбор.Список=Один, Два" ],
+        "choiceParameterLinks": [ "Отбор.Организация=ОбычноеПоле", "Отбор.Тип=ПолеСписокВыбора:DontChange" ],
+        "typeLink": "ПолеПодсказка"
+      },
       { "check": "Флаг", "path": "Флаг", "title": "Включено" },
       { "check": "ФлагПлатформенный", "path": "ФлагПлатформенный", "title": "Слева", "titleLocation": "" },
       { "check": "ФлагЯвный", "path": "ФлагЯвный", "title": "Сверху", "titleLocation": "top" },
@@ -52,6 +57,7 @@
       { "name": "ПолеСписокВыбора", "type": "string" },
       { "name": "ПолеПодсказка", "type": "string" },
       { "name": "ПолеСвязи", "type": "string" },
+      { "name": "ПолеСвязиКратко", "type": "string" },
       { "name": "Флаг", "type": "boolean" },
       { "name": "ФлагПлатформенный", "type": "boolean" },
       { "name": "ФлагЯвный", "type": "boolean" },
