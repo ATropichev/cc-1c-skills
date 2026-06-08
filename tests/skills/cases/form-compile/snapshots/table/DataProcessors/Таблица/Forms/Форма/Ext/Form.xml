@@ -41,6 +41,7 @@
 					<Button name="ПанельОбновить" id="8">
 						<Type>CommandBarButton</Type>
 						<CommandName>Form.Command.Обновить</CommandName>
+						<Check>true</Check>
 						<ExtendedTooltip name="ПанельОбновитьРасширеннаяПодсказка" id="9"/>
 					</Button>
 				</ChildItems>
@@ -73,6 +74,7 @@
 			<ChildItems>
 				<InputField name="Дата" id="20">
 					<DataPath>Данные.Дата</DataPath>
+					<FixingInTable>Left</FixingInTable>
 					<ContextMenu name="ДатаКонтекстноеМеню" id="21"/>
 					<ExtendedTooltip name="ДатаРасширеннаяПодсказка" id="22"/>
 				</InputField>

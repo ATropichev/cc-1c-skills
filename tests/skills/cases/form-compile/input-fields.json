@@ -20,7 +20,7 @@
       { "labelField": "Ссылка", "path": "ОбычноеПоле", "titleLocation": "left", "hyperlink": true, "format": { "ru": "ДЛФ=D", "en": "DLF=D" } },
       { "input": "МногострочноеПоле", "path": "МногострочноеПоле", "multiLine": true, "height": 5, "title": "Комментарий", "wrap": false, "showInHeader": false, "showInFooter": false, "autoCellHeight": true, "footerHorizontalAlign": "Right", "openButton": false, "chooseType": false },
       { "input": "ПолеПароля", "path": "ПолеПароля", "passwordMode": true, "title": "Пароль" },
-      { "input": "ПолеСКнопками", "path": "ПолеСКнопками", "choiceButton": true, "clearButton": true, "title": "Выбор" },
+      { "input": "ПолеСКнопками", "path": "ПолеСКнопками", "choiceButton": true, "clearButton": true, "dropListButton": false, "spinButton": true, "choiceListButton": true, "quickChoice": false, "autoChoiceIncomplete": true, "choiceHistoryOnInput": "DontUse", "choiceForm": "DataProcessor.ПоляВвода.Form.Форма", "title": "Выбор" },
       { "input": "ПолеСписокВыбора", "path": "ПолеСписокВыбора", "title": "Список выбора", "choiceList": [
         { "value": "", "presentation": "Все" },
         { "value": "Первый" },

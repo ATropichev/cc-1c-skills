@@ -1,4 +1,4 @@
-﻿# form-decompile v0.61 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.62 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1135,6 +1135,7 @@ $GENERIC_SCALARS = @(
 	@{ Tag='RowInputMode'; Key='rowInputMode'; Kind='value' }
 	@{ Tag='Mask'; Key='mask'; Kind='value' }
 	@{ Tag='CreateButton'; Key='createButton'; Kind='bool' }
+	@{ Tag='FixingInTable'; Key='fixingInTable'; Kind='value' }
 )
 
 # Захват generic-скаляров. Специфичная обработка (если ключ уже задан) — побеждает.
@@ -1376,12 +1377,16 @@ function Decompile-Element {
 			$em = Get-Child $node 'EditMode'; if ($em) { $obj['editMode'] = $em }
 			$tl = Get-Child $node 'TitleLocation'; if ($tl) { $obj['titleLocation'] = $tl.ToLower() }
 			$ih = $node.SelectSingleNode("lf:InputHint", $ns); if ($ih) { $t = Get-LangText $ih; if ($t) { $obj['inputHint'] = $t } }
-			foreach ($p in @('ChoiceButton','ClearButton','SpinButton','DropListButton')) {
+			foreach ($p in @('ChoiceButton','ClearButton','SpinButton','DropListButton','ChoiceListButton')) {
 				$v = Get-Child $node $p; if ($null -ne $v) { $obj[($p.Substring(0,1).ToLower()+$p.Substring(1))] = (To-Bool $v) }
 			}
-			# InputField-специфичные скаляры (захват «как есть»)
-			foreach ($p in @('Wrap','OpenButton','ListChoiceMode','ExtendedEditMultipleValues','ChooseType')) {
+			# InputField-специфичные bool-скаляры (захват «как есть»)
+			foreach ($p in @('Wrap','OpenButton','ListChoiceMode','ExtendedEditMultipleValues','ChooseType','QuickChoice','AutoChoiceIncomplete')) {
 				$v = Get-Child $node $p; if ($null -ne $v) { $obj[($p.Substring(0,1).ToLower()+$p.Substring(1))] = (To-Bool $v) }
+			}
+			# InputField-специфичные value-скаляры (захват «как есть»)
+			foreach ($p in @('ChoiceForm','ChoiceHistoryOnInput','ChoiceFoldersAndItems','FooterDataPath')) {
+				$v = Get-Child $node $p; if ($null -ne $v) { $obj[($p.Substring(0,1).ToLower()+$p.Substring(1))] = $v }
 			}
 			$cbr = Get-Child $node 'ChoiceButtonRepresentation'; if ($cbr) { $obj['choiceButtonRepresentation'] = $cbr }
 			if ((Get-Child $node 'TextEdit') -eq 'false') { $obj['textEdit'] = $false }
@@ -1554,6 +1559,7 @@ function Decompile-Element {
 			$type = Get-Child $node 'Type'
 			if ($type) { $tmap=@{'CommandBarButton'='commandBar';'UsualButton'='usual';'Hyperlink'='hyperlink';'CommandBarHyperlink'='hyperlink'}; if ($tmap.ContainsKey($type)) { $obj['type']=$tmap[$type] } else { $obj['type']=$type } }
 			if ((Get-Child $node 'DefaultButton') -eq 'true') { $obj['defaultButton'] = $true }
+			if ((Get-Child $node 'Check') -eq 'true') { $obj['checked'] = $true }
 			$ref = $node.SelectSingleNode("lf:Picture/xr:Ref", $ns); if ($ref) { $obj['picture'] = $ref.InnerText }
 			# Дефолт у picture кнопки/попапа = true → фиксируем только отклонение false (true опускаем)
 			$lt = $node.SelectSingleNode("lf:Picture/xr:LoadTransparent", $ns); if ($lt -and $lt.InnerText -eq 'false') { $obj['loadTransparent'] = $false }

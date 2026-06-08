@@ -1,4 +1,4 @@
-﻿# form-compile v1.84 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.86 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -380,10 +380,9 @@ function New-FieldElement {
 
 	$el = [ordered]@{ $elType = $attrName; path = $dataPath }
 
-	# Apply ref defaults
-	if ($isRef -and $fieldDefaults -and $fieldDefaults.ref) {
-		if ($fieldDefaults.ref.choiceButton -eq $true) { $el["choiceButton"] = $true }
-	}
+	# (ChoiceButton у ref-полей платформа выводит сама; компилятор эмитит true по StartChoice-эвристике.
+	#  Явный choiceButton из декомпиляции эмитится verbatim. Дефолт-«true» здесь НЕ ставим, чтобы
+	#  from-object вывод совпадал с сертифицированным и не плодил ChoiceButton на каждом ref-поле.)
 
 	# Extra props
 	if ($extraProps) {
@@ -2527,6 +2526,20 @@ function Emit-Element {
 		}
 	}
 
+	# Синонимы ключей-свойств (русские имена 1С → канон. англ.). Case/space-insensitive.
+	# Канон побеждает: если задан и русский, и англ. ключ — англ. остаётся, русский отбрасываем.
+	foreach ($pn in @($el.PSObject.Properties.Name)) {
+		$norm = ($pn -replace '\s','').ToLower()
+		$canon = $script:propSynonyms[$norm]
+		if ($canon -and $pn -ne $canon) {
+			if ($null -eq $el.PSObject.Properties[$canon]) {
+				$val = $el.($pn)
+				$el | Add-Member -NotePropertyName $canon -NotePropertyValue $val -Force
+			}
+			$el.PSObject.Properties.Remove($pn) | Out-Null
+		}
+	}
+
 	# Determine element type from key
 	$typeKey = $null
 	$xmlTag = $null
@@ -2614,12 +2627,18 @@ function Emit-Element {
 		# generic-скаляры (pass-through) + точечные
 		"verticalAlign"=1;"throughAlign"=1;"enableContentChange"=1;"pictureSize"=1;"titleHeight"=1
 		"childItemsWidth"=1;"showLeftMargin"=1;"cellHyperlink"=1;"viewMode"=1;"verticalScrollBar"=1
-		"rowInputMode"=1;"mask"=1;"createButton"=1
+		"rowInputMode"=1;"mask"=1;"createButton"=1;"fixingInTable"=1
+		# InputField choice-скаляры
+		"choiceListButton"=1;"quickChoice"=1;"autoChoiceIncomplete"=1
+		"choiceForm"=1;"choiceHistoryOnInput"=1;"footerDataPath"=1
+		# Button — пометка toggle-кнопки (ключ 'checked', не 'check' — во избежание конфликта с типом)
+		"checked"=1
 	}
 	# Оформление (цвета/шрифты/граница) — авто-регистрация из самих структур, чтобы allowlist
 	# не дрейфовал при добавлении новых ключей/синонимов. Канонические + forgiving-синонимы.
 	foreach ($k in $script:appearanceSpec.Keys)     { $knownKeys[$k] = 1 }
 	foreach ($k in $script:appearanceSynonyms.Keys) { $knownKeys[$k] = 1 }
+	foreach ($k in $script:propSynonyms.Keys)       { $knownKeys[$k] = 1 }
 	foreach ($p in $el.PSObject.Properties) {
 		if ($p.Name -like '_*') { continue }  # внутренние маркеры (напр. _dynList)
 		if (-not $knownKeys.ContainsKey($p.Name)) {
@@ -2782,6 +2801,22 @@ $script:appearanceSynonyms = @{
 	'цветтекстаподвала'='footerTextColor'; 'цветфонаподвала'='footerBackColor'; 'шрифтподвала'='footerFont'
 	'шрифт'='font'; 'рамка'='border'
 }
+# Синонимы ключей-свойств: русские имена свойств 1С (как в Конфигураторе) → канон. англ. ключ.
+# Ключи карты нормализованы (lowercase, без пробелов); сопоставление в Normalize-PropSynonyms тоже.
+# Прощающий ввод: модель может писать свойство по-русски. Англ. ключ работает всегда (это доп. слой).
+# Видимость/Доступность НЕ включаем — наш hidden/disabled инвертирован, был бы баг семантики.
+$script:propSynonyms = @{
+	'пометка'='checked'
+	'кнопкавыбора'='choiceButton'; 'кнопкаочистки'='clearButton'; 'кнопкарегулирования'='spinButton'
+	'кнопкавыпадающегосписка'='dropListButton'; 'кнопкасписковоговыбора'='choiceListButton'
+	'кнопкаоткрытия'='openButton'; 'кнопкапоумолчанию'='defaultButton'
+	'быстрыйвыбор'='quickChoice'; 'формавыбора'='choiceForm'; 'историявыборапривводе'='choiceHistoryOnInput'
+	'выборгруппиэлементов'='choiceFoldersAndItems'; 'фиксациявтаблице'='fixingInTable'
+	'путькданнымподвала'='footerDataPath'; 'автоотметканезаполненного'='markIncomplete'
+	'многострочныйрежим'='multiLine'; 'режимпароля'='passwordMode'; 'переноспословам'='wrap'
+	'расположениезаголовка'='titleLocation'; 'пропускатьпривводе'='skipOnInput'
+	'заголовок'='title'; 'ширина'='width'; 'высота'='height'; 'подсказкаввода'='inputHint'
+}
 # Профили порядка тегов по базовым типам (XSD-последовательность)
 $script:appOrderField      = @('titleTextColor','titleBackColor','titleFont','footerTextColor','footerBackColor','footerFont','textColor','backColor','borderColor','border','font')
 $script:appOrderDecoration = @('textColor','font','backColor','borderColor','border')
@@ -2803,6 +2838,7 @@ $script:genericScalars = @(
 	@{ Tag='RowInputMode';        Key='rowInputMode';        Kind='value' }
 	@{ Tag='Mask';                Key='mask';                Kind='value' }
 	@{ Tag='CreateButton';        Key='createButton';        Kind='bool'  }
+	@{ Tag='FixingInTable';       Key='fixingInTable';       Kind='value' }
 )
 
 function Emit-GenericScalars {
@@ -3107,11 +3143,14 @@ function Emit-Input {
 
 	if ($el.multiLine -eq $true) { X "$inner<MultiLine>true</MultiLine>" }
 	if ($el.passwordMode -eq $true) { X "$inner<PasswordMode>true</PasswordMode>" }
-	if ($el.choiceButton -eq $false) { X "$inner<ChoiceButton>false</ChoiceButton>" }
-	elseif ($el.choiceButton -eq $true -and (Test-ElementEvent $el 'StartChoice')) { X "$inner<ChoiceButton>true</ChoiceButton>" }
-	if ($el.clearButton -eq $true) { X "$inner<ClearButton>true</ClearButton>" }
-	if ($el.spinButton -eq $true) { X "$inner<SpinButton>true</SpinButton>" }
-	if ($el.dropListButton -eq $true) { X "$inner<DropListButton>true</DropListButton>" }
+	# ChoiceButton — захват «как есть» (платформа эмитит явное значение; ref-поля выводят сама,
+	# декомпилятор фиксирует факт. значение). Нет ключа → не эмитим (не додумываем по событию).
+	if ($null -ne $el.choiceButton) { X "$inner<ChoiceButton>$(if ($el.choiceButton){'true'}else{'false'})</ChoiceButton>" }
+	# Кнопки поля ввода — захват «как есть» (платформа эмитит явное значение, в т.ч. false)
+	if ($null -ne $el.clearButton)    { X "$inner<ClearButton>$(if ($el.clearButton){'true'}else{'false'})</ClearButton>" }
+	if ($null -ne $el.spinButton)     { X "$inner<SpinButton>$(if ($el.spinButton){'true'}else{'false'})</SpinButton>" }
+	if ($null -ne $el.dropListButton) { X "$inner<DropListButton>$(if ($el.dropListButton){'true'}else{'false'})</DropListButton>" }
+	if ($null -ne $el.choiceListButton) { X "$inner<ChoiceListButton>$(if ($el.choiceListButton){'true'}else{'false'})</ChoiceListButton>" }
 	if ($el.markIncomplete -eq $true) { X "$inner<AutoMarkIncomplete>true</AutoMarkIncomplete>" }
 	if ($el.editMode) { X "$inner<EditMode>$($el.editMode)</EditMode>" }
 	Emit-ColumnPics -el $el -indent $inner
@@ -3119,9 +3158,17 @@ function Emit-Input {
 	# InputField-специфичные скаляры (захват «как есть»: платформа эмитит явное не-дефолтное значение)
 	foreach ($p in @(
 		@('wrap','Wrap'), @('openButton','OpenButton'), @('listChoiceMode','ListChoiceMode'),
-		@('extendedEditMultipleValues','ExtendedEditMultipleValues'), @('chooseType','ChooseType')
+		@('extendedEditMultipleValues','ExtendedEditMultipleValues'), @('chooseType','ChooseType'),
+		@('quickChoice','QuickChoice'), @('autoChoiceIncomplete','AutoChoiceIncomplete')
 	)) {
 		if ($null -ne $el.($p[0])) { X "$inner<$($p[1])>$(if ($el.($p[0])){'true'}else{'false'})</$($p[1])>" }
+	}
+	# InputField-специфичные value-скаляры
+	foreach ($p in @(
+		@('choiceForm','ChoiceForm'), @('choiceHistoryOnInput','ChoiceHistoryOnInput'),
+		@('choiceFoldersAndItems','ChoiceFoldersAndItems'), @('footerDataPath','FooterDataPath')
+	)) {
+		if ($el.($p[0])) { X "$inner<$($p[1])>$(Esc-Xml "$($el.($p[0]))")</$($p[1])>" }
 	}
 	if ($el.choiceButtonRepresentation) { X "$inner<ChoiceButtonRepresentation>$($el.choiceButtonRepresentation)</ChoiceButtonRepresentation>" }
 	Emit-Layout -el $el -indent $inner -multiLineDefault ([bool]($el.multiLine -eq $true))
@@ -3935,6 +3982,9 @@ function Emit-Button {
 	Emit-CommonFlags -el $el -indent $inner
 
 	if ($el.defaultButton -eq $true) { X "$inner<DefaultButton>true</DefaultButton>" }
+	# Check (пометка toggle-кнопки командной панели) — платформа эмитит только true.
+	# Ключ 'checked' (не 'check': 'check' — тип-ключ CheckBoxField, был бы конфликт диспетчера типов)
+	if ($el.checked -eq $true) { X "$inner<Check>true</Check>" }
 
 	# Picture
 	Emit-CommandPicture -pic $el.picture -elemLt $el.loadTransparent -indent $inner

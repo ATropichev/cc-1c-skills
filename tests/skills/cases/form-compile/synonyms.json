@@ -1,5 +1,5 @@
 {
-  "name": "Синонимы commandBar/autoCommandBar нормализуются молча",
+  "name": "Синонимы commandBar/autoCommandBar + русские имена свойств нормализуются молча",
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
@@ -23,9 +23,9 @@
       { "autoCommandBar": "ФормаКоманднаяПанель", "children": [
         { "button": "Кн1", "command": "Кн1" }
       ]},
-      { "input": "Поле", "path": "Поле" },
+      { "input": "Поле", "path": "Поле", "КнопкаВыбора": true, "Быстрый выбор": false, "Ширина": 15 },
       { "commandBar": "ДопПанель", "children": [
-        { "button": "Кн2", "command": "Кн2" }
+        { "button": "Кн2", "command": "Кн2", "Пометка": true }
       ]}
     ],
     "commands": [

@@ -109,7 +109,15 @@
 					<v8:content>Выбор</v8:content>
 				</v8:item>
 			</Title>
+			<ChoiceButton>true</ChoiceButton>
 			<ClearButton>true</ClearButton>
+			<SpinButton>true</SpinButton>
+			<DropListButton>false</DropListButton>
+			<ChoiceListButton>true</ChoiceListButton>
+			<QuickChoice>false</QuickChoice>
+			<AutoChoiceIncomplete>true</AutoChoiceIncomplete>
+			<ChoiceForm>DataProcessor.ПоляВвода.Form.Форма</ChoiceForm>
+			<ChoiceHistoryOnInput>DontUse</ChoiceHistoryOnInput>
 			<ContextMenu name="ПолеСКнопкамиКонтекстноеМеню" id="14"/>
 			<ExtendedTooltip name="ПолеСКнопкамиРасширеннаяПодсказка" id="15"/>
 		</InputField>

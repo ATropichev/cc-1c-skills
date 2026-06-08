@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.84 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.86 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -357,10 +357,9 @@ def new_field_element(attr_name, data_path, attr_type, field_defaults, extra_pro
     el[el_type] = attr_name
     el['path'] = data_path
 
-    # Apply ref defaults
-    if is_ref and field_defaults and field_defaults.get('ref'):
-        if field_defaults['ref'].get('choiceButton') is True:
-            el['choiceButton'] = True
+    # (ChoiceButton у ref-полей платформа выводит сама; компилятор эмитит true по StartChoice-эвристике.
+    #  Явный choiceButton из декомпиляции эмитится verbatim. Дефолт-«true» здесь НЕ ставим, чтобы
+    #  from-object вывод совпадал с сертифицированным и не плодил ChoiceButton на каждом ref-поле.)
 
     # Extra props
     if extra_props:
@@ -1816,7 +1815,12 @@ KNOWN_KEYS = {
     # generic-скаляры (pass-through)
     "verticalAlign", "throughAlign", "enableContentChange", "pictureSize", "titleHeight",
     "childItemsWidth", "showLeftMargin", "cellHyperlink", "viewMode", "verticalScrollBar",
-    "rowInputMode", "mask", "createButton",
+    "rowInputMode", "mask", "createButton", "fixingInTable",
+    # InputField choice-скаляры
+    "choiceListButton", "quickChoice", "autoChoiceIncomplete",
+    "choiceForm", "choiceHistoryOnInput", "footerDataPath",
+    # Button — пометка toggle-кнопки
+    "checked",
 }
 
 # picture/picField — НИЗКИЙ приоритет: 'picture' это и тип (PictureDecoration), и свойство-иконка
@@ -2588,7 +2592,22 @@ APPEARANCE_SYNONYMS = {
     'цветтекстаподвала': 'footerTextColor', 'цветфонаподвала': 'footerBackColor', 'шрифтподвала': 'footerFont',
     'шрифт': 'font', 'рамка': 'border',
 }
-APP_ORDER_FIELD = ['titleTextColor', 'titleBackColor', 'titleFont', 'footerTextColor', 'footerBackColor', 'footerFont', 'textColor', 'backColor', 'borderColor', 'border', 'font']
+# Синонимы ключей-свойств: русские имена свойств 1С (как в Конфигураторе) → канон. англ. ключ.
+# Ключи нормализованы (lowercase, без пробелов); сопоставление в emit_element тоже. Англ. ключ
+# работает всегда (доп. слой прощающего ввода). Видимость/Доступность НЕ включаем (hidden/disabled инвертирован).
+PROP_SYNONYMS = {
+    'пометка': 'checked',
+    'кнопкавыбора': 'choiceButton', 'кнопкаочистки': 'clearButton', 'кнопкарегулирования': 'spinButton',
+    'кнопкавыпадающегосписка': 'dropListButton', 'кнопкасписковоговыбора': 'choiceListButton',
+    'кнопкаоткрытия': 'openButton', 'кнопкапоумолчанию': 'defaultButton',
+    'быстрыйвыбор': 'quickChoice', 'формавыбора': 'choiceForm', 'историявыборапривводе': 'choiceHistoryOnInput',
+    'выборгруппиэлементов': 'choiceFoldersAndItems', 'фиксациявтаблице': 'fixingInTable',
+    'путькданнымподвала': 'footerDataPath', 'автоотметканезаполненного': 'markIncomplete',
+    'многострочныйрежим': 'multiLine', 'режимпароля': 'passwordMode', 'переноспословам': 'wrap',
+    'расположениезаголовка': 'titleLocation', 'пропускатьпривводе': 'skipOnInput',
+    'заголовок': 'title', 'ширина': 'width', 'высота': 'height', 'подсказкаввода': 'inputHint',
+}
+APP_ORDER_FIELD =['titleTextColor', 'titleBackColor', 'titleFont', 'footerTextColor', 'footerBackColor', 'footerFont', 'textColor', 'backColor', 'borderColor', 'border', 'font']
 APP_ORDER_DECORATION = ['textColor', 'font', 'backColor', 'borderColor', 'border']
 APP_ORDER_BUTTON = ['textColor', 'backColor', 'borderColor', 'font']
 
@@ -2668,6 +2687,7 @@ GENERIC_SCALARS = [
     ('RowInputMode', 'rowInputMode', 'value'),
     ('Mask', 'mask', 'value'),
     ('CreateButton', 'createButton', 'bool'),
+    ('FixingInTable', 'fixingInTable', 'value'),
 ]
 
 
@@ -2985,6 +3005,16 @@ def emit_element(lines, el, indent, in_cmd_bar=False):
                 continue
             el[dst] = el.pop(src)
 
+    # Синонимы ключей-свойств (русские имена 1С → канон. англ.). Case/space-insensitive.
+    # Канон побеждает: если задан и русский, и англ. ключ — англ. остаётся, русский отбрасываем.
+    for p_name in list(el.keys()):
+        norm = p_name.replace(' ', '').lower()
+        canon = PROP_SYNONYMS.get(norm)
+        if canon and p_name != canon:
+            val = el.pop(p_name)
+            if canon not in el:
+                el[canon] = val
+
     type_key = None
     for key in TYPE_KEYS:
         if el.get(key) is not None:
@@ -3165,16 +3195,19 @@ def emit_input(lines, el, name, eid, indent):
         lines.append(f'{inner}<MultiLine>true</MultiLine>')
     if el.get('passwordMode') is True:
         lines.append(f'{inner}<PasswordMode>true</PasswordMode>')
-    if el.get('choiceButton') is False:
-        lines.append(f'{inner}<ChoiceButton>false</ChoiceButton>')
-    elif el.get('choiceButton') is True and test_element_event(el, 'StartChoice'):
-        lines.append(f'{inner}<ChoiceButton>true</ChoiceButton>')
-    if el.get('clearButton') is True:
-        lines.append(f'{inner}<ClearButton>true</ClearButton>')
-    if el.get('spinButton') is True:
-        lines.append(f'{inner}<SpinButton>true</SpinButton>')
-    if el.get('dropListButton') is True:
-        lines.append(f'{inner}<DropListButton>true</DropListButton>')
+    # ChoiceButton — захват «как есть» (платформа эмитит явное значение; ref-поля выводят сама,
+    # декомпилятор фиксирует факт. значение). Нет ключа → не эмитим (не додумываем по событию).
+    if el.get('choiceButton') is not None:
+        lines.append(f'{inner}<ChoiceButton>{"true" if el["choiceButton"] else "false"}</ChoiceButton>')
+    # Кнопки поля ввода — захват «как есть» (платформа эмитит явное значение, в т.ч. false)
+    if el.get('clearButton') is not None:
+        lines.append(f'{inner}<ClearButton>{"true" if el["clearButton"] else "false"}</ClearButton>')
+    if el.get('spinButton') is not None:
+        lines.append(f'{inner}<SpinButton>{"true" if el["spinButton"] else "false"}</SpinButton>')
+    if el.get('dropListButton') is not None:
+        lines.append(f'{inner}<DropListButton>{"true" if el["dropListButton"] else "false"}</DropListButton>')
+    if el.get('choiceListButton') is not None:
+        lines.append(f'{inner}<ChoiceListButton>{"true" if el["choiceListButton"] else "false"}</ChoiceListButton>')
     if el.get('markIncomplete') is True:
         lines.append(f'{inner}<AutoMarkIncomplete>true</AutoMarkIncomplete>')
     if el.get('editMode'):
@@ -3184,9 +3217,15 @@ def emit_input(lines, el, name, eid, indent):
         lines.append(f'{inner}<TextEdit>false</TextEdit>')
     # InputField-специфичные скаляры (захват «как есть»: платформа эмитит явное не-дефолтное значение)
     for key, tag in (('wrap', 'Wrap'), ('openButton', 'OpenButton'), ('listChoiceMode', 'ListChoiceMode'),
-                     ('extendedEditMultipleValues', 'ExtendedEditMultipleValues'), ('chooseType', 'ChooseType')):
+                     ('extendedEditMultipleValues', 'ExtendedEditMultipleValues'), ('chooseType', 'ChooseType'),
+                     ('quickChoice', 'QuickChoice'), ('autoChoiceIncomplete', 'AutoChoiceIncomplete')):
         if el.get(key) is not None:
             lines.append(f'{inner}<{tag}>{"true" if el[key] else "false"}</{tag}>')
+    # InputField-специфичные value-скаляры
+    for key, tag in (('choiceForm', 'ChoiceForm'), ('choiceHistoryOnInput', 'ChoiceHistoryOnInput'),
+                     ('choiceFoldersAndItems', 'ChoiceFoldersAndItems'), ('footerDataPath', 'FooterDataPath')):
+        if el.get(key):
+            lines.append(f'{inner}<{tag}>{esc_xml(str(el[key]))}</{tag}>')
     if el.get('choiceButtonRepresentation'):
         lines.append(f'{inner}<ChoiceButtonRepresentation>{el["choiceButtonRepresentation"]}</ChoiceButtonRepresentation>')
     emit_layout(lines, el, inner, multi_line_default=(el.get('multiLine') is True))
@@ -3636,6 +3675,10 @@ def emit_button(lines, el, name, eid, indent, in_cmd_bar=False):
 
     if el.get('defaultButton') is True:
         lines.append(f'{inner}<DefaultButton>true</DefaultButton>')
+    # Check (пометка toggle-кнопки командной панели) — платформа эмитит только true.
+    # Ключ 'checked' (не 'check': 'check' — тип-ключ CheckBoxField, был бы конфликт диспетчера типов)
+    if el.get('checked') is True:
+        lines.append(f'{inner}<Check>true</Check>')
 
     # Picture
     emit_command_picture(lines, el.get('picture'), el.get('loadTransparent'), inner)

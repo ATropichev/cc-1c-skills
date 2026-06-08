@@ -20,7 +20,7 @@
         "viewStatusLocation": "None", "searchControlLocation": "None",
         "excludedCommands": ["Add", "Delete", "MoveUp", "MoveDown"],
         "commandBar": { "autofill": false, "children": [
-          { "button": "ПанельОбновить", "command": "Обновить" }
+          { "button": "ПанельОбновить", "command": "Обновить", "checked": true }
         ]},
         "contextMenu": { "children": [
           { "buttonGroup": "МенюГруппа", "children": [
@@ -28,7 +28,7 @@
           ]}
         ]},
         "columns": [
-        { "input": "Дата", "path": "Данные.Дата" },
+        { "input": "Дата", "path": "Данные.Дата", "fixingInTable": "Left" },
         { "input": "Сумма", "path": "Данные.Сумма" },
         { "input": "Комментарий", "path": "Данные.Комментарий" }
       ]}

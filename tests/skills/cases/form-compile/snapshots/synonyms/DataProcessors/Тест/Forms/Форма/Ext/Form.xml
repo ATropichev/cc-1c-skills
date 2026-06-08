@@ -19,6 +19,9 @@
 	<ChildItems>
 		<InputField name="Поле" id="3">
 			<DataPath>Поле</DataPath>
+			<ChoiceButton>true</ChoiceButton>
+			<QuickChoice>false</QuickChoice>
+			<Width>15</Width>
 			<ContextMenu name="ПолеКонтекстноеМеню" id="4"/>
 			<ExtendedTooltip name="ПолеРасширеннаяПодсказка" id="5"/>
 		</InputField>
@@ -28,6 +31,7 @@
 				<Button name="Кн2" id="8">
 					<Type>CommandBarButton</Type>
 					<CommandName>Form.Command.Кн2</CommandName>
+					<Check>true</Check>
 					<ExtendedTooltip name="Кн2РасширеннаяПодсказка" id="9"/>
 				</Button>
 			</ChildItems>

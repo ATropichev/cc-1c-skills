@@ -135,6 +135,10 @@
 
 Флаг авто-детектится по наличию известной разметки/`</>`: для plain-строки объект не нужен. Явная форма `{text, formatted}` — только когда авто-детект неверен (formatted-текст без разметки, либо буквальные `<…>`-плейсхолдеры в неформатированном).
 
+#### Русские синонимы ключей-свойств (прощающий ввод)
+
+Скалярные свойства элементов можно писать русскими именами 1С (как в Конфигураторе) — компилятор молча нормализует их в канонические англ. ключи. Сопоставление **регистро- и пробело-независимое** (`Пометка` = `пометка`, `Быстрый выбор` = `быстрыйВыбор`). Англ. ключ работает всегда; если заданы оба — побеждает англ. Поддержаны (в т.ч.): `Пометка`→`checked`, `Заголовок`→`title`, `Ширина`→`width`, `Высота`→`height`, `КнопкаВыбора`→`choiceButton`, `КнопкаОчистки`→`clearButton`, `КнопкаВыпадающегоСписка`→`dropListButton`, `КнопкаСписковогоВыбора`→`choiceListButton`, `БыстрыйВыбор`→`quickChoice`, `ФормаВыбора`→`choiceForm`, `ИсторияВыбораПриВводе`→`choiceHistoryOnInput`, `ВыборГруппИЭлементов`→`choiceFoldersAndItems`, `ФиксацияВТаблице`→`fixingInTable`, `ПутьКДаннымПодвала`→`footerDataPath`, `МногострочныйРежим`→`multiLine`, `РежимПароля`→`passwordMode`, `РасположениеЗаголовка`→`titleLocation`. (`Видимость`/`Доступность` НЕ синонимы — у нас `hidden`/`disabled` с обратной полярностью.) Оформление имеет свой набор рус. синонимов (§4.1e).
+
 ### 4.1c. Доступ по ролям (`userVisible` / `view` / `edit` / `use`)
 
 Единый механизм платформы (role-adjustable boolean): «общее значение + исключения по ролям».
@@ -373,6 +377,14 @@ companion-панели с собственным контентом. Оба не
 | `listChoiceMode` | bool | Режим выбора из списка (`<ListChoiceMode>`) |
 | `extendedEditMultipleValues` | bool | Расширенное редактирование нескольких значений |
 | `chooseType` | bool | Выбор типа (`<ChooseType>`) |
+| `choiceListButton` | bool | Кнопка списочного выбора (`<ChoiceListButton>`) |
+| `quickChoice` | bool | Быстрый выбор (`<QuickChoice>`) |
+| `autoChoiceIncomplete` | bool | Автоматический выбор незаполненного (`<AutoChoiceIncomplete>`) |
+| `choiceForm` | string | Форма выбора (`<ChoiceForm>`), напр. `Catalog.X.Form.ФормаВыбора` |
+| `choiceHistoryOnInput` | string | История выбора при вводе (`<ChoiceHistoryOnInput>`): `Auto`, `DontUse` |
+| `choiceFoldersAndItems` | string | Выбор групп и элементов (`<ChoiceFoldersAndItems>`): `Items`, `Folders`, `FoldersAndItems` |
+| `fixingInTable` | string | Фиксация колонки в таблице (`<FixingInTable>`): `Left`, `Right`, `None`. Так же у `labelField` и др. полей |
+| `footerDataPath` | string | DataPath подвала колонки таблицы (`<FooterDataPath>`) |
 | `choiceButtonRepresentation` | string | `ShowInInputField`, `ShowInDropList`, `ShowInDropListAndInInputField` |
 | `width` | int | Ширина |
 | `height` | int | Высота |
@@ -623,6 +635,7 @@ Pages поддерживает `pagesRepresentation`: `None`, `TabsOnTop`, `Tabs
 | `stdCommand` | string | Стандартная команда (→ `Form.StandardCommand.<name>`; `X.Y` → `Form.Item.X.StandardCommand.Y`) |
 | `type` | string | `usual`, `hyperlink`, `commandBar` |
 | `defaultButton` | bool | Кнопка по умолчанию |
+| `checked` | bool | Пометка (нажатое состояние toggle-кнопки командной панели) → `<Check>true</Check>`. Платформа эмитит только `true`. Ключ `checked` (не `check` — `check` — тип-ключ ПоляФлажка) |
 | `picture` | string \| object | Ссылка на картинку (`StdPicture.Name`). Скаляр-строка ИЛИ объект `{src, loadTransparent}` (прощающий ввод — флаг можно задать прямо в объекте) |
 | `loadTransparent` | bool | Загружать картинку прозрачной (у `<Picture>` кнопки/команды/попапа). **Дефолт `true`** (эмитится всегда; `false` — явно). Элемент-уровневый ключ ИЛИ поле объекта `picture`. Также у `command` (§7) и `popup`. ⚠️ Полярность обратна `headerPicture`/`valuesPicture` (там дефолт `false`, см. §4.1) |
 | `path` | string | DataPath кнопки общей команды (`Объект.Ref`, `Items.X.CurrentData.Поле`) — привязка к контексту |
