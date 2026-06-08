@@ -1,4 +1,4 @@
-﻿# form-compile v1.81 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.82 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -5027,6 +5027,20 @@ if ($def.excludedCommands -and $def.excludedCommands.Count -gt 0) {
 		X "`t`t<ExcludedCommand>$cmd</ExcludedCommand>"
 	}
 	X "`t</CommandSet>"
+}
+
+# 12c2. MobileDeviceCommandBarContent — форменный список имён командных панелей/кнопок
+# (Presentation пустой, CheckState=0, тип xs:string — константы; варьируется только имя-Value).
+if ($def.mobileCommandBarContent -and @($def.mobileCommandBarContent).Count -gt 0) {
+	X "`t<MobileDeviceCommandBarContent>"
+	foreach ($nm in @($def.mobileCommandBarContent)) {
+		X "`t`t<xr:Item>"
+		X "`t`t`t<xr:Presentation/>"
+		X "`t`t`t<xr:CheckState>0</xr:CheckState>"
+		X "`t`t`t<xr:Value xsi:type=`"xs:string`">$(Esc-Xml "$nm")</xr:Value>"
+		X "`t`t</xr:Item>"
+	}
+	X "`t</MobileDeviceCommandBarContent>"
 }
 
 # 12d. AutoCommandBar (always present, id=-1)

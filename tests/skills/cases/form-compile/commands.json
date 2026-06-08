@@ -15,6 +15,7 @@
   "validatePath": "DataProcessors/Команды/Forms/Форма/Ext/Form.xml",
   "input": {
     "title": "Форма с командами",
+    "mobileCommandBarContent": ["Панель", "Выполнить"],
     "elements": [
       { "cmdBar": "Панель", "horizontalLocation": "right", "children": [
         { "button": "Выполнить", "command": "Выполнить", "defaultButton": true },

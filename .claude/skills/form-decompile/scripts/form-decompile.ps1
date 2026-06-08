@@ -1,4 +1,4 @@
-﻿# form-decompile v0.57 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.58 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1654,6 +1654,16 @@ foreach ($pn in $KNOWN_FORM_PROPS) {
 # autoTitle=false при наличии title — это инъекция компилятора, опускаем (валидируем раундтрипом)
 if ($dsl.Contains('title') -and $props.Contains('autoTitle') -and $props['autoTitle'] -eq $false) { $props.Remove('autoTitle') }
 if ($props.Count -gt 0) { $dsl['properties'] = $props }
+
+# MobileDeviceCommandBarContent (form-level) → список имён командных панелей/кнопок
+$mdcb = $root.SelectSingleNode("lf:MobileDeviceCommandBarContent", $ns)
+if ($mdcb) {
+	$names = New-Object System.Collections.ArrayList
+	foreach ($it in @($mdcb.SelectNodes("xr:Item", $ns))) {
+		$v = $it.SelectSingleNode("xr:Value", $ns); if ($v) { [void]$names.Add($v.InnerText) }
+	}
+	if ($names.Count -gt 0) { $dsl['mobileCommandBarContent'] = @($names) }
+}
 
 # excludedCommands (form-level <CommandSet>)
 $csForm = $root.SelectSingleNode("lf:CommandSet", $ns)

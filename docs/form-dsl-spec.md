@@ -24,6 +24,7 @@
 | `title` | string | Заголовок формы (необязательный) |
 | `properties` | object | Свойства формы (необязательный) |
 | `excludedCommands` | string[] | Исключённые стандартные команды (необязательный) |
+| `mobileCommandBarContent` | string[] | Состав командной панели моб. устройства — список имён командных панелей/кнопок (`<MobileDeviceCommandBarContent>`). Константы (Presentation/CheckState=0/xs:string) ставит компилятор |
 | `events` | object | Обработчики событий формы (необязательный) |
 | `elements` | array | Дерево UI-элементов (необязательный) |
 | `attributes` | array | Реквизиты формы (необязательный) |

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.81 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.82 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -4876,6 +4876,18 @@ def main():
         for cmd in defn['excludedCommands']:
             lines.append(f'\t\t<ExcludedCommand>{cmd}</ExcludedCommand>')
         lines.append('\t</CommandSet>')
+
+    # MobileDeviceCommandBarContent — форменный список имён командных панелей/кнопок
+    # (Presentation пустой, CheckState=0, тип xs:string — константы; варьируется только имя-Value).
+    if defn.get('mobileCommandBarContent') and len(defn['mobileCommandBarContent']) > 0:
+        lines.append('\t<MobileDeviceCommandBarContent>')
+        for nm in defn['mobileCommandBarContent']:
+            lines.append('\t\t<xr:Item>')
+            lines.append('\t\t\t<xr:Presentation/>')
+            lines.append('\t\t\t<xr:CheckState>0</xr:CheckState>')
+            lines.append(f'\t\t\t<xr:Value xsi:type="xs:string">{esc_xml(str(nm))}</xr:Value>')
+            lines.append('\t\t</xr:Item>')
+        lines.append('\t</MobileDeviceCommandBarContent>')
 
     # AutoCommandBar (always present, id=-1)
     acb_autofill = _compute_main_acb_autofill()
