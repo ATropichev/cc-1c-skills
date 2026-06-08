@@ -1,4 +1,4 @@
-﻿# form-decompile v0.62 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.63 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1814,7 +1814,15 @@ if ($attrsNode) {
 			$shorts = New-Object System.Collections.ArrayList
 			foreach ($fn in @($uaNode.SelectNodes("lf:Field", $ns))) {
 				$t = $fn.InnerText.Trim()
-				if ($t.StartsWith($prefix)) { $t = $t.Substring($prefix.Length) }
+				# Снимаем префикс "ИмяРеквизита.". Маркер "~" (query-поле дин-списка) сохраняем,
+				# префикс снимаем ПОСЛЕ него: ~Список.Остановлен → ~Остановлен (компилятор развернёт обратно).
+				if ($t.StartsWith('~')) {
+					$rest = $t.Substring(1)
+					if ($rest.StartsWith($prefix)) { $rest = $rest.Substring($prefix.Length) }
+					$t = "~$rest"
+				} elseif ($t.StartsWith($prefix)) {
+					$t = $t.Substring($prefix.Length)
+				}
 				[void]$shorts.Add($t)
 			}
 			if ($ao.Contains('columns')) {

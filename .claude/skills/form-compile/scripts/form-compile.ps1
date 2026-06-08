@@ -1,4 +1,4 @@
-﻿# form-compile v1.86 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.87 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -4583,7 +4583,16 @@ function Emit-Attributes {
 		if ($attr.useAlways) {
 			foreach ($e in @($attr.useAlways)) {
 				$fld = "$e"
-				if ($fld -notmatch "^$([regex]::Escape($attrName))\.") { $fld = "$attrName.$fld" }
+				# Префикс "ИмяРеквизита." добавляем к коротким именам. Поля дин-списка с маркером "~"
+				# (query-поля, ~13% корпуса) — префикс ставится ПОСЛЕ "~": ~Остановлен → ~Список.Остановлен.
+				# Полная форма (~Список.Остановлен / Список.Остановлен) — verbatim (forgiving ввод).
+				if ($fld.StartsWith('~')) {
+					$bare = $fld.Substring(1)
+					if ($bare -notmatch "^$([regex]::Escape($attrName))\.") { $bare = "$attrName.$bare" }
+					$fld = "~$bare"
+				} elseif ($fld -notmatch "^$([regex]::Escape($attrName))\.") {
+					$fld = "$attrName.$fld"
+				}
 				if (-not $uaFields.Contains($fld)) { [void]$uaFields.Add($fld) }
 			}
 		}

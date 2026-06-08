@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.86 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.87 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -4294,7 +4294,15 @@ def emit_attributes(lines, attrs, indent):
         ua_fields = []
         for e in (attr.get('useAlways') or []):
             fld = str(e)
-            if not re.match(r'^' + re.escape(attr_name) + r'\.', fld):
+            # Префикс "ИмяРеквизита." добавляем к коротким именам. Поля дин-списка с маркером "~"
+            # (query-поля, ~13% корпуса) — префикс ставится ПОСЛЕ "~": ~Остановлен → ~Список.Остановлен.
+            # Полная форма (~Список.Остановлен / Список.Остановлен) — verbatim (forgiving ввод).
+            if fld.startswith('~'):
+                bare = fld[1:]
+                if not re.match(r'^' + re.escape(attr_name) + r'\.', bare):
+                    bare = f'{attr_name}.{bare}'
+                fld = f'~{bare}'
+            elif not re.match(r'^' + re.escape(attr_name) + r'\.', fld):
                 fld = f'{attr_name}.{fld}'
             if fld not in ua_fields:
                 ua_fields.append(fld)
