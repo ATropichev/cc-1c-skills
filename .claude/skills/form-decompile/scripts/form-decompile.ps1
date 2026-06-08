@@ -1,4 +1,4 @@
-﻿# form-decompile v0.59 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.60 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1617,8 +1617,10 @@ function Decompile-Element {
 		if ((Get-Child $etNode 'Hyperlink') -eq 'true') { $etObj['hyperlink'] = $true }
 		if ($etObj.Count -gt 0) {
 			if ($null -ne $textVal) {
-				if ($textVal -is [System.Collections.IDictionary]) { $etObj['text'] = $textVal['text']; if ($textVal['formatted']) { $etObj['formatted'] = $true } }
+				if ($textVal -is [System.Collections.IDictionary] -and $textVal.Contains('text')) { $etObj['text'] = $textVal['text']; if ($textVal['formatted']) { $etObj['formatted'] = $true } }
 				else { $etObj['text'] = $textVal }
+				# formatted ЯВНО из атрибута Title — компилятор не re-детектит markup на мультиязычном тексте
+				if (-not $etObj.Contains('formatted') -and $etTitle -and $etTitle.GetAttribute('formatted') -eq 'true') { $etObj['formatted'] = $true }
 			}
 			$obj['extendedTooltip'] = $etObj
 		} elseif ($null -ne $textVal) {
