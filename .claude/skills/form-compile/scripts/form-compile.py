@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.76 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.77 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -2772,6 +2772,14 @@ _FORM_TYPE_SYNONYMS = {
     "характеристика": "Characteristic",
     "любаяссылка": "AnyRef",
     "любаяссылкаиб": "AnyIBRef",
+    # Платформенные v8-типы (forgiving: англ. без префикса + рус.) → каноничный с префиксом v8:
+    "standardperiod": "v8:StandardPeriod",
+    "стандартныйпериод": "v8:StandardPeriod",
+    "standardbeginningdate": "v8:StandardBeginningDate",
+    "стандартнаядатаначала": "v8:StandardBeginningDate",
+    "uuid": "v8:UUID",
+    "уникальныйидентификатор": "v8:UUID",
+    "списокзначений": "ValueList",
 }
 
 

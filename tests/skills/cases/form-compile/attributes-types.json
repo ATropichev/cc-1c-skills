@@ -27,7 +27,7 @@
       { "name": "Число", "type": "decimal(10,0,nonneg)", "edit": false },
       { "name": "Дата", "type": "dateTime", "title": "" },
       { "name": "Булево", "type": "boolean" },
-      { "name": "Период", "type": "v8:StandardPeriod", "save": ["Период", "EndDate", "StartDate", "Variant"] },
+      { "name": "Период", "type": "СтандартныйПериод", "save": ["Период", "EndDate", "StartDate", "Variant"] },
       { "name": "СписокЗначений", "type": "ValueList" },
       { "name": "Идентификатор", "type": "v8:UUID" }
     ]

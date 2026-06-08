@@ -1,4 +1,4 @@
-﻿# form-compile v1.76 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.77 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -1972,6 +1972,14 @@ $script:formTypeSynonyms["определяемыйтип"]             = "Define
 $script:formTypeSynonyms["характеристика"]             = "Characteristic"
 $script:formTypeSynonyms["любаяссылка"]                = "AnyRef"
 $script:formTypeSynonyms["любаяссылкаиб"]              = "AnyIBRef"
+# Платформенные v8-типы (forgiving: англ. без префикса + рус.) → каноничный с префиксом v8: (эмитим verbatim)
+$script:formTypeSynonyms["standardperiod"]            = "v8:StandardPeriod"
+$script:formTypeSynonyms["стандартныйпериод"]          = "v8:StandardPeriod"
+$script:formTypeSynonyms["standardbeginningdate"]     = "v8:StandardBeginningDate"
+$script:formTypeSynonyms["стандартнаядатаначала"]      = "v8:StandardBeginningDate"
+$script:formTypeSynonyms["uuid"]                      = "v8:UUID"
+$script:formTypeSynonyms["уникальныйидентификатор"]    = "v8:UUID"
+$script:formTypeSynonyms["списокзначений"]            = "ValueList"
 
 # Known invalid types (runtime/UI types that don't exist in XDTO schema)
 $script:knownInvalidTypes = @{

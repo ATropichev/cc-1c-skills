@@ -896,10 +896,15 @@ Pages поддерживает `pagesRepresentation`: `None`, `TabsOnTop`, `Tabs
 |-----|-----|
 | `"ValueTable"` | `v8:ValueTable` |
 | `"ValueTree"` | `v8:ValueTree` |
-| `"ValueList"` | `v8:ValueListType` |
+| `"ValueList"` | `v8:ValueListType` (синоним `СписокЗначений`) |
 | `"FormattedString"` | `v8ui:FormattedString` |
 | `"Picture"` | `v8ui:Picture` |
 | `"DynamicList"` | `cfg:DynamicList` |
+| `"StandardPeriod"` | `v8:StandardPeriod` (forgiving: `СтандартныйПериод`, `v8:StandardPeriod`) |
+| `"StandardBeginningDate"` | `v8:StandardBeginningDate` (синоним `СтандартнаяДатаНачала`) |
+| `"UUID"` | `v8:UUID` (синоним `УникальныйИдентификатор`) |
+
+> Платформенные `v8:`-типы можно писать без префикса или по-русски — компилятор приводит к каноничному `v8:X`. Уже-префиксованную форму (`v8:StandardPeriod`) принимает как есть.
 
 ### Наборы типов (TypeSet → `<v8:TypeSet>`)
 
