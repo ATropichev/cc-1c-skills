@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.77 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.78 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -2894,18 +2894,20 @@ def emit_single_type(lines, type_str, indent):
         lines.append(f'{indent}<v8:Type>{type_str}</v8:Type>')
 
 
-def emit_type(lines, type_str, indent):
+def emit_type(lines, type_str, indent, tag="Type", tag_attrs=""):
+    # tag/tag_attrs — обёртка (по умолчанию <Type>); для valueType ValueList вызывается с
+    # tag="Settings", tag_attrs=' xsi:type="v8:TypeDescription"'.
     if not type_str:
-        lines.append(f'{indent}<Type/>')
+        lines.append(f'{indent}<{tag}{tag_attrs}/>')
         return
 
     type_string = str(type_str)
     parts = [p.strip() for p in re.split(r'[|+]', type_string)]
 
-    lines.append(f'{indent}<Type>')
+    lines.append(f'{indent}<{tag}{tag_attrs}>')
     for part in parts:
         emit_single_type(lines, part, f'{indent}\t')
-    lines.append(f'{indent}</Type>')
+    lines.append(f'{indent}</{tag}>')
 
 
 # --- Element emitters ---
@@ -4118,6 +4120,15 @@ def emit_attributes(lines, attrs, indent):
             emit_type(lines, str(attr['type']), inner)
         else:
             lines.append(f'{inner}<Type/>')
+        # valueType: ОписаниеТипов значений ValueList → <Settings xsi:type="v8:TypeDescription">
+        # (та же грамматика типа, включая составной "A | B"). Forgiving-синонимы.
+        vt_spec = None
+        for k in ('valueType', 'typeDescription', 'описаниеТипов', 'типЗначений'):
+            if attr.get(k):
+                vt_spec = attr[k]
+                break
+        if vt_spec:
+            emit_type(lines, str(vt_spec), inner, tag="Settings", tag_attrs=' xsi:type="v8:TypeDescription"')
 
         if attr.get('main') is True:
             lines.append(f'{inner}<MainAttribute>true</MainAttribute>')

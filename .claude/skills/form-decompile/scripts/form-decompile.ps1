@@ -1,4 +1,4 @@
-﻿# form-decompile v0.53 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.54 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1672,6 +1672,12 @@ if ($attrsNode) {
 		$ao = [ordered]@{}
 		$ao['name'] = $a.GetAttribute("name")
 		$ty = Decompile-Type ($a.SelectSingleNode("lf:Type", $ns)); if ($ty) { $ao['type'] = $ty }
+		# valueType: <Settings xsi:type="v8:TypeDescription"> — уточнение типа значений ValueList
+		# (та же грамматика типа). Дин-список Settings (xsi:type="DynamicList") обрабатывается отдельно.
+		$setNode = $a.SelectSingleNode("lf:Settings", $ns)
+		if ($setNode -and $setNode.GetAttribute("type", $NS_XSI) -match 'TypeDescription$') {
+			$vt = Decompile-Type $setNode; if ($vt) { $ao['valueType'] = $vt }
+		}
 		if ((Get-Child $a 'MainAttribute') -eq 'true') { $ao['main'] = $true }
 		$vw = Decompile-XrFlag $a 'View'; if ($null -ne $vw) { $ao['view'] = $vw }
 		$ed = Decompile-XrFlag $a 'Edit'; if ($null -ne $ed) { $ao['edit'] = $ed }

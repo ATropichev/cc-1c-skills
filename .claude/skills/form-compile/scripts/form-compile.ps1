@@ -1,4 +1,4 @@
-﻿# form-compile v1.77 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.78 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -2019,10 +2019,12 @@ function Resolve-TypeStr {
 }
 
 function Emit-Type {
-	param($typeStr, [string]$indent)
+	# $tag/$tagAttrs — обёртка (по умолчанию <Type>); для уточнения типа значений ValueList
+	# вызывается с tag="Settings", tagAttrs=' xsi:type="v8:TypeDescription"'.
+	param($typeStr, [string]$indent, [string]$tag = "Type", [string]$tagAttrs = "")
 
 	if (-not $typeStr) {
-		X "$indent<Type/>"
+		X "$indent<$tag$tagAttrs/>"
 		return
 	}
 
@@ -2031,12 +2033,12 @@ function Emit-Type {
 	# Composite type: "Type1 | Type2" or "Type1 + Type2"
 	$parts = $typeString -split '\s*[|+]\s*'
 
-	X "$indent<Type>"
+	X "$indent<$tag$tagAttrs>"
 	foreach ($part in $parts) {
 		$part = $part.Trim()
 		Emit-SingleType -typeStr $part -indent "$indent`t"
 	}
-	X "$indent</Type>"
+	X "$indent</$tag>"
 }
 
 function Emit-SingleType {
@@ -4393,6 +4395,15 @@ function Emit-Attributes {
 			Emit-Type -typeStr "$($attr.type)" -indent $inner
 		} else {
 			X "$inner<Type/>"
+		}
+		# valueType: уточнение типа значений ValueList → <Settings xsi:type="v8:TypeDescription">
+		# (та же грамматика типа, что и Type, включая составной "A | B"). Forgiving-синонимы.
+		$vtSpec = $null
+		foreach ($k in @('valueType','typeDescription','описаниеТипов','типЗначений')) {
+			if ($attr.PSObject.Properties[$k] -and $attr.$k) { $vtSpec = $attr.$k; break }
+		}
+		if ($vtSpec) {
+			Emit-Type -typeStr "$vtSpec" -indent $inner -tag "Settings" -tagAttrs ' xsi:type="v8:TypeDescription"'
 		}
 
 		if ($attr.main -eq $true) {
