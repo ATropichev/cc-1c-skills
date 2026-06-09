@@ -1,4 +1,4 @@
-﻿# form-decompile v0.65 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.66 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1934,6 +1934,8 @@ if ($cmdsNode) {
 		$us = Decompile-XrFlag $c 'Use'; if ($null -ne $us) { $co['use'] = $us }
 		$cfo = Decompile-FunctionalOptions $c; if ($cfo) { $co['functionalOptions'] = $cfo }
 		$cru = Get-Child $c 'CurrentRowUse'; if ($cru) { $co['currentRowUse'] = $cru }
+		# Используемая таблица — ссылка по имени элемента-таблицы (<AssociatedTableElementId xsi:type="xs:string">Имя</…>)
+		$ate = Get-Child $c 'AssociatedTableElementId'; if ($ate) { $co['table'] = $ate }
 		$sc = Get-Child $c 'Shortcut'; if ($sc) { $co['shortcut'] = $sc }
 		$ref = $c.SelectSingleNode("lf:Picture/xr:Ref", $ns); if ($ref) { $co['picture'] = $ref.InnerText }
 		# Дефолт у picture команды = true → фиксируем только отклонение false (true опускаем)

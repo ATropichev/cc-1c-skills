@@ -895,6 +895,7 @@ Pages поддерживает `pagesRepresentation`: `None`, `TabsOnTop`, `Tabs
 | `use` | bool/object | Доступность команды по ролям (`<Use>`). См. §4.1c |
 | `functionalOptions` | array | Функциональные опции команды (см. §5) |
 | `currentRowUse` | string | Использование текущей строки: `Auto`, `DontUse`, `Use` |
+| `table` | string | Используемая таблица — имя элемента-таблицы формы (`<AssociatedTableElementId xsi:type="xs:string">Имя</…>`). Команда работает в контексте этой таблицы (текущая строка). Forgiving-синонимы: `associatedTableElementId` (XML-тег), `ИспользуемаяТаблица` (рус., регистро-/пробело-независимо) |
 | `modifiesSavedData` | bool | Команда изменяет сохраняемые данные (`<ModifiesSavedData>`); эмитится только `true` |
 | `shortcut` | string | Клавиатурное сочетание |
 | `picture` | string | Ссылка на картинку |

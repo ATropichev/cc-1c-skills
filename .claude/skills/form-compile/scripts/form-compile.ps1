@@ -1,4 +1,4 @@
-﻿# form-compile v1.89 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.90 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -4764,6 +4764,15 @@ function Emit-Commands {
 
 		if ($cmd.currentRowUse) {
 			X "$inner<CurrentRowUse>$($cmd.currentRowUse)</CurrentRowUse>"
+		}
+
+		# Используемая таблица — имя элемента-таблицы (xsi:type обязателен).
+		# Forgiving-ключи: table / associatedTableElementId (XML-тег) / ИспользуемаяТаблица (рус., регистр-незав.)
+		$cmdTable = $cmd.table
+		if (-not $cmdTable) { $cmdTable = $cmd.associatedTableElementId }
+		if (-not $cmdTable) { $cmdTable = $cmd.используемаяТаблица }
+		if ($cmdTable) {
+			X "$inner<AssociatedTableElementId xsi:type=`"xs:string`">$(Esc-Xml "$cmdTable")</AssociatedTableElementId>"
 		}
 
 		if ($cmd.shortcut) {

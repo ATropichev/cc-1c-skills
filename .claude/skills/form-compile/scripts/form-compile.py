@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.89 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.90 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -4460,6 +4460,14 @@ def emit_commands(lines, cmds, indent):
 
         if cmd.get('currentRowUse'):
             lines.append(f'{inner}<CurrentRowUse>{cmd["currentRowUse"]}</CurrentRowUse>')
+
+        # Используемая таблица — имя элемента-таблицы (xsi:type обязателен).
+        # Forgiving-ключи: table / associatedTableElementId (XML-тег) / ИспользуемаяТаблица (рус., регистр-незав.)
+        _cmd_norm = {k.replace(' ', '').lower(): v for k, v in cmd.items()}
+        cmd_table = (_cmd_norm.get('table') or _cmd_norm.get('associatedtableelementid')
+                     or _cmd_norm.get('используемаятаблица'))
+        if cmd_table:
+            lines.append(f'{inner}<AssociatedTableElementId xsi:type="xs:string">{esc_xml(str(cmd_table))}</AssociatedTableElementId>')
 
         if cmd.get('shortcut'):
             lines.append(f'{inner}<Shortcut>{cmd["shortcut"]}</Shortcut>')

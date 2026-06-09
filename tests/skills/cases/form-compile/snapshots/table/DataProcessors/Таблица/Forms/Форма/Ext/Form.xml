@@ -168,6 +168,8 @@
 				</v8:item>
 			</Title>
 			<Action>ОбновитьОбработка</Action>
+			<CurrentRowUse>Use</CurrentRowUse>
+			<AssociatedTableElementId xsi:type="xs:string">Данные</AssociatedTableElementId>
 		</Command>
 	</Commands>
 </Form>
