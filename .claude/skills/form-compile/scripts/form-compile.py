@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.99 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.100 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -4160,10 +4160,15 @@ def parse_dl_param_shorthand(s):
     if m:
         result['title'] = m.group(1).strip()
         s = re.sub(r'\s*\[[^\]]*\]\s*', ' ', s).strip()
-    m = re.match(r'^([^:]+):\s*(\S+)(\s*=\s*(.*))?$', s)
+    # Тип может быть СОСТАВНЫМ (A | B | C — с пробелами); значение — после '=' (тип '=' не содержит).
+    m = re.match(r'^([^:]+):\s*([^=]+?)(\s*=\s*(.*))?$', s)
     if m:
         result['name'] = m.group(1).strip()
-        result['type'] = resolve_type_str(m.group(2).strip())
+        type_raw = m.group(2).strip()
+        if re.search(r'[|+]', type_raw):
+            result['type'] = ' | '.join(resolve_type_str(p.strip()) for p in re.split(r'\s*[|+]\s*', type_raw))
+        else:
+            result['type'] = resolve_type_str(type_raw)
         if m.group(4):
             rhs = m.group(4).strip()
             items = split_dl_valuelist_csv(rhs)

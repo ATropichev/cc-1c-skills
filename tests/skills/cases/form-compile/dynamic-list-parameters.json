@@ -22,6 +22,7 @@
         "parameters": [
           "Артикул",
           "Маска: string = %",
+          "Получатель: DocumentRef | CatalogRef",
           { "name": "ВидЦен", "valueListAllowed": true },
           { "name": "Период", "type": "dateTime", "useRestriction": false },
           {

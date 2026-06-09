@@ -1,4 +1,4 @@
-﻿# form-compile v1.99 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.100 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -4471,9 +4471,15 @@ function Parse-DLParamShorthand {
 	if ($s -match '@valueList') { $result.valueListAllowed = $true; $s = $s -replace '\s*@valueList', '' }
 	if ($s -match '@hidden')    { $result.hidden = $true; $s = $s -replace '\s*@hidden', '' }
 	if ($s -match '\[([^\]]*)\]') { $result.title = $Matches[1].Trim(); $s = ($s -replace '\s*\[[^\]]*\]\s*', ' ').Trim() }
-	if ($s -match '^([^:]+):\s*(\S+)(\s*=\s*(.*))?$') {
+	# Тип может быть СОСТАВНЫМ (A | B | C — с пробелами); значение — после '=' (тип '=' не содержит).
+	if ($s -match '^([^:]+):\s*([^=]+?)(\s*=\s*(.*))?$') {
 		$result.name = $Matches[1].Trim()
-		$result.type = Resolve-TypeStr ($Matches[2].Trim())
+		$typeRaw = $Matches[2].Trim()
+		if ($typeRaw -match '[|+]') {
+			$result.type = (($typeRaw -split '\s*[|+]\s*') | ForEach-Object { Resolve-TypeStr ($_.Trim()) }) -join ' | '
+		} else {
+			$result.type = Resolve-TypeStr $typeRaw
+		}
 		if ($Matches[4]) {
 			$rhs = $Matches[4].Trim()
 			$items = Split-DLValueListCsv $rhs
