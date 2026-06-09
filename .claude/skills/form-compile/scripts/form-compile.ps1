@@ -1,4 +1,4 @@
-﻿# form-compile v1.92 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.93 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -4711,11 +4711,28 @@ function Emit-Attributes {
 			# Нет items → контейнеры всё равно эмитятся (blockMeta) = каноничный пустой скелет платформы.
 			$lsi = "$si`t"
 			X "$si<ListSettings>"
-			Emit-Filter -items $st.filter -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_FILTER_ID
-			Emit-Order -items $st.order -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_ORDER_ID
-			Emit-ConditionalAppearance -items $st.conditionalAppearance -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_CA_ID
-			X "$lsi<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>"
-			X "$lsi<dcsset:itemsUserSettingID>$($script:CANON_ITEMS_ID)</dcsset:itemsUserSettingID>"
+			if ($st.PSObject.Properties['listSettings'] -and $null -ne $st.listSettings) {
+				# Частичная/минимальная форма скелета — эмитим ТОЛЬКО указанные части с их блок-метой.
+				# meta: 'v'=viewMode, 'u'=userSettingID (контейнеры); itemsViewMode/itemsUserSettingID → present.
+				foreach ($prop in $st.listSettings.PSObject.Properties) {
+					$tag = $prop.Name; $meta = "$($prop.Value)"
+					$bvm = if ($meta -match 'v') { 'Normal' } else { $null }
+					switch ($tag) {
+						'filter'                { $bus = if ($meta -match 'u') { $script:CANON_FILTER_ID } else { $null }; Emit-Filter -items $st.filter -indent $lsi -blockViewMode $bvm -blockUserSettingID $bus }
+						'order'                 { $bus = if ($meta -match 'u') { $script:CANON_ORDER_ID } else { $null }; Emit-Order -items $st.order -indent $lsi -blockViewMode $bvm -blockUserSettingID $bus }
+						'conditionalAppearance' { $bus = if ($meta -match 'u') { $script:CANON_CA_ID } else { $null }; Emit-ConditionalAppearance -items $st.conditionalAppearance -indent $lsi -blockViewMode $bvm -blockUserSettingID $bus }
+						'itemsViewMode'         { X "$lsi<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>" }
+						'itemsUserSettingID'    { X "$lsi<dcsset:itemsUserSettingID>$($script:CANON_ITEMS_ID)</dcsset:itemsUserSettingID>" }
+					}
+				}
+			} else {
+				# Полный каноничный скелет (умолчание, ~93% форм) — без изменений.
+				Emit-Filter -items $st.filter -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_FILTER_ID
+				Emit-Order -items $st.order -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_ORDER_ID
+				Emit-ConditionalAppearance -items $st.conditionalAppearance -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_CA_ID
+				X "$lsi<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>"
+				X "$lsi<dcsset:itemsUserSettingID>$($script:CANON_ITEMS_ID)</dcsset:itemsUserSettingID>"
+			}
 			X "$si</ListSettings>"
 			X "$inner</Settings>"
 		}

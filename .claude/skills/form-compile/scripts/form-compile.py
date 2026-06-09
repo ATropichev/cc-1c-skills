@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.92 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.93 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -4414,11 +4414,32 @@ def emit_attributes(lines, attrs, indent):
             # Нет items → контейнеры всё равно эмитятся (blockMeta) = каноничный пустой скелет платформы.
             lsi = f'{si}\t'
             lines.append(f'{si}<ListSettings>')
-            emit_filter(lines, s.get('filter'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_FILTER_ID)
-            emit_order(lines, s.get('order'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_ORDER_ID)
-            emit_conditional_appearance(lines, s.get('conditionalAppearance'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_CA_ID)
-            lines.append(f'{lsi}<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>')
-            lines.append(f'{lsi}<dcsset:itemsUserSettingID>{CANON_ITEMS_ID}</dcsset:itemsUserSettingID>')
+            ls_shape = s.get('listSettings')
+            if ls_shape is not None:
+                # Частичная/минимальная форма скелета — эмитим ТОЛЬКО указанные части с их блок-метой.
+                for tag, meta in ls_shape.items():
+                    meta = str(meta)
+                    bvm = 'Normal' if 'v' in meta else None
+                    if tag == 'filter':
+                        bus = CANON_FILTER_ID if 'u' in meta else None
+                        emit_filter(lines, s.get('filter'), lsi, block_view_mode=bvm, block_user_setting_id=bus)
+                    elif tag == 'order':
+                        bus = CANON_ORDER_ID if 'u' in meta else None
+                        emit_order(lines, s.get('order'), lsi, block_view_mode=bvm, block_user_setting_id=bus)
+                    elif tag == 'conditionalAppearance':
+                        bus = CANON_CA_ID if 'u' in meta else None
+                        emit_conditional_appearance(lines, s.get('conditionalAppearance'), lsi, block_view_mode=bvm, block_user_setting_id=bus)
+                    elif tag == 'itemsViewMode':
+                        lines.append(f'{lsi}<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>')
+                    elif tag == 'itemsUserSettingID':
+                        lines.append(f'{lsi}<dcsset:itemsUserSettingID>{CANON_ITEMS_ID}</dcsset:itemsUserSettingID>')
+            else:
+                # Полный каноничный скелет (умолчание, ~93% форм) — без изменений.
+                emit_filter(lines, s.get('filter'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_FILTER_ID)
+                emit_order(lines, s.get('order'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_ORDER_ID)
+                emit_conditional_appearance(lines, s.get('conditionalAppearance'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_CA_ID)
+                lines.append(f'{lsi}<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>')
+                lines.append(f'{lsi}<dcsset:itemsUserSettingID>{CANON_ITEMS_ID}</dcsset:itemsUserSettingID>')
             lines.append(f'{si}</ListSettings>')
             lines.append(f'{inner}</Settings>')
 

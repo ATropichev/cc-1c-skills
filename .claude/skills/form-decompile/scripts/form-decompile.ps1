@@ -1,4 +1,4 @@
-﻿# form-decompile v0.69 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.70 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -111,6 +111,31 @@ function Test-ListSettingsHasContent {
 		if ($cn -and $cn.SelectSingleNode("dcsset:item", $ns)) { return $true }
 	}
 	return $false
+}
+
+# Форма ListSettings: ordered-карта present top-level элементов (filter/order/conditionalAppearance →
+# блок-мета 'v'/'u'/'vu'/''; itemsViewMode/itemsUserSettingID → $true). Возвращает $null, если форма ==
+# полному каноничному скелету (компилятор регенерит сам) ИЛИ содержит неподдержанные top-level элементы
+# (item/dataParameters/viewMode/userSettingID/… → fallback на канон). Иначе — дескриптор для компилятора.
+function Get-ListSettingsShape {
+	param($lsNode)
+	if (-not $lsNode) { return $null }
+	$shape = [ordered]@{}
+	foreach ($child in $lsNode.ChildNodes) {
+		if ($child.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
+		$tag = $child.LocalName
+		if ($tag -in @('filter','order','conditionalAppearance')) {
+			$hasVM = $null -ne $child.SelectSingleNode("dcsset:viewMode", $ns)
+			$hasUS = $null -ne $child.SelectSingleNode("dcsset:userSettingID", $ns)
+			$shape[$tag] = "$(if ($hasVM) {'v'})$(if ($hasUS) {'u'})"
+		} elseif ($tag -eq 'itemsViewMode') { $shape['itemsViewMode'] = $true }
+		elseif ($tag -eq 'itemsUserSettingID') { $shape['itemsUserSettingID'] = $true }
+		else { return $null }  # item/dataParameters/itemsUserSettingPresentation/… → канон-fallback
+	}
+	# Полный каноничный скелет → опускаем (компилятор регенерит)
+	if ($shape.Count -eq 5 -and $shape['filter'] -eq 'vu' -and $shape['order'] -eq 'vu' -and `
+		$shape['conditionalAppearance'] -eq 'vu' -and $shape['itemsViewMode'] -eq $true -and $shape['itemsUserSettingID'] -eq $true) { return $null }
+	return $shape
 }
 
 # --- 1b. Ring-3 scan: конструкции вне зоны поддержки (draft list) ---
@@ -1955,6 +1980,10 @@ if ($attrsNode) {
 					$ca = Build-ConditionalAppearance -caNode $caNode -loc "settings/conditionalAppearance"
 					if (@($ca).Count -gt 0) { $so['conditionalAppearance'] = @($ca) }
 				}
+				# Форма скелета ListSettings: дескриптор только для НЕ-каноничных форм (частичные/минимальные).
+				# Канон → $null (компилятор регенерит полный скелет, как раньше).
+				$lsShape = Get-ListSettingsShape $lsNode
+				if ($null -ne $lsShape) { $so['listSettings'] = $lsShape }
 			}
 			if ($so.Count -gt 0) { $ao['settings'] = $so }
 		}

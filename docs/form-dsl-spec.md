@@ -814,7 +814,9 @@ Pages поддерживает `pagesRepresentation`: `None`, `TabsOnTop`, `Tabs
 
 `ManualQuery` выводится из наличия `query` — отдельным ключом не задаётся.
 
-Пустой блок настроек компоновщика (`ListSettings`) генерируется автоматически (каноничный скелет платформы); указывать ничего не нужно.
+Пустой блок настроек компоновщика (`ListSettings`) генерируется автоматически (каноничный полный скелет платформы — filter+order+conditionalAppearance+itemsViewMode+itemsUserSettingID, ~93% форм); указывать ничего не нужно.
+
+| `listSettings` | object | **Дескриптор формы скелета `<ListSettings>`** — только для НЕ-каноничных (частичных/минимальных) форм. Ordered-карта present top-level элементов: контейнеры `filter`/`order`/`conditionalAppearance` → блок-мета (`"vu"`=viewMode+userSettingID, `"u"`=только userSettingID, `"v"`, `""`); `itemsViewMode`/`itemsUserSettingID` → `true`. Компилятор эмитит ТОЛЬКО указанные части (контент берёт из `filter`/`order`/`conditionalAppearance`). Нет ключа → полный каноничный скелет. Декомпилятор пишет дескриптор только для отклонений от канона |
 
 #### parameters — параметры схемы дин-списка
 
