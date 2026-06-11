@@ -60,6 +60,7 @@
 			</Title>
 			<TitleLocation>None</TitleLocation>
 			<RadioButtonType>Auto</RadioButtonType>
+			<ColumnsCount>1</ColumnsCount>
 			<ChoiceList>
 				<xr:Item>
 					<xr:Presentation/>
@@ -101,6 +102,7 @@
 					</xr:Value>
 				</xr:Item>
 			</ChoiceList>
+			<EqualColumnsWidth>true</EqualColumnsWidth>
 			<ContextMenu name="ВидСчетаКонтекстноеМеню" id="5"/>
 			<ExtendedTooltip name="ВидСчетаРасширеннаяПодсказка" id="6"/>
 		</RadioButtonField>

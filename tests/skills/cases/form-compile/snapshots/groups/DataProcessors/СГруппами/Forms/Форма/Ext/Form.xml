@@ -7,6 +7,9 @@
 		</v8:item>
 	</Title>
 	<AutoTitle>false</AutoTitle>
+	<ShowCloseButton>false</ShowCloseButton>
+	<HorizontalAlign>Left</HorizontalAlign>
+	<ChildrenAlign>ItemsLeftTitlesLeft</ChildrenAlign>
 	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1">
 		<Autofill>false</Autofill>
 	</AutoCommandBar>
@@ -24,6 +27,7 @@
 			</Title>
 			<Group>Horizontal</Group>
 			<Behavior>Usual</Behavior>
+			<ShowTitle>true</ShowTitle>
 			<HorizontalStretch>true</HorizontalStretch>
 			<GroupHorizontalAlign>Right</GroupHorizontalAlign>
 			<VerticalAlign>Top</VerticalAlign>
@@ -31,6 +35,7 @@
 			<ChildItemsWidth>Equal</ChildItemsWidth>
 			<HorizontalSpacing>None</HorizontalSpacing>
 			<Shortcut>Ctrl+G</Shortcut>
+			<ChildrenAlign>ItemsRightTitlesLeft</ChildrenAlign>
 			<ExtendedTooltip name="ГруппаШапкаРасширеннаяПодсказка" id="4"/>
 			<ChildItems>
 				<InputField name="Поле1" id="5">

@@ -1,4 +1,4 @@
-﻿# form-decompile v0.98 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.99 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1348,6 +1348,14 @@ $GENERIC_SCALARS = @(
 	@{ Tag='ScrollOnCompress'; Key='scrollOnCompress'; Kind='bool' }
 	# Сочетание клавиш — общее свойство элемента (команда — отдельный путь)
 	@{ Tag='Shortcut'; Key='shortcut'; Kind='value' }
+	# Батч простых скаляров (зеркало компилятора; Table HeaderHeight/FooterHeight/CurrentRowUse — отдельно)
+	@{ Tag='IncompleteChoiceMode'; Key='incompleteChoiceMode'; Kind='value' }
+	@{ Tag='EqualColumnsWidth'; Key='equalColumnsWidth'; Kind='bool' }
+	@{ Tag='ChildrenAlign'; Key='childrenAlign'; Kind='value' }
+	@{ Tag='ImageScale'; Key='imageScale'; Kind='value' }
+	@{ Tag='Zoomable'; Key='zoomable'; Kind='bool' }
+	@{ Tag='Shape'; Key='shape'; Kind='value' }
+	@{ Tag='PictureLocation'; Key='pictureLocation'; Kind='value' }
 )
 
 # Захват generic-скаляров. Специфичная обработка (если ключ уже задан) — побеждает.
@@ -1586,7 +1594,7 @@ function Decompile-Element {
 			Add-CommonProps $obj $node $name
 			$rep = Get-Child $node 'Representation'
 			if ($rep) { $repmap=@{'None'='none';'NormalSeparation'='normal';'WeakSeparation'='weak';'StrongSeparation'='strong'}; if ($repmap.ContainsKey($rep)) { $obj['representation']=$repmap[$rep] } else { $obj['representation']=$rep } }
-			if ((Get-Child $node 'ShowTitle') -eq 'false') { $obj['showTitle'] = $false }
+			$st = Get-Child $node 'ShowTitle'; if ($null -ne $st) { $obj['showTitle'] = ($st -eq 'true') }  # факт. значение (явный true тоже)
 			$crt = $node.SelectSingleNode("lf:CollapsedRepresentationTitle", $ns); if ($crt) { $ct = Get-LangText $crt; if ($null -ne $ct -and $ct -ne '') { $obj['collapsedTitle'] = $ct } }
 			if ((Get-Child $node 'United') -eq 'false') { $obj['united'] = $false }
 			if ((Get-Child $node 'Collapsed') -eq 'true') { $obj['collapsed'] = $true }
@@ -1601,7 +1609,7 @@ function Decompile-Element {
 			if ($g -and $gmap.ContainsKey($g)) { $obj[$key] = $gmap[$g] } else { $obj[$key] = '' }
 			$obj['name'] = $name
 			Add-CommonProps $obj $node $name
-			if ((Get-Child $node 'ShowTitle') -eq 'false') { $obj['showTitle'] = $false }
+			$st = Get-Child $node 'ShowTitle'; if ($null -ne $st) { $obj['showTitle'] = ($st -eq 'true') }  # факт. значение (явный true тоже)
 			$sih = Get-Child $node 'ShowInHeader'; if ($null -ne $sih) { $obj['showInHeader'] = (To-Bool $sih) }
 			$kids = Decompile-Children $node
 			if ($kids) { $obj['children'] = $kids }
@@ -1707,6 +1715,7 @@ function Decompile-Element {
 			# title декорации — единая ML-text форма с formatted (атрибут <Title formatted> у PictureDecoration)
 			$tiNode = $node.SelectSingleNode("lf:Title", $ns)
 			if ($tiNode) { $tv = Get-MLFormattedValue $tiNode; if ($null -ne $tv) { $obj['title'] = $tv } }
+			$npt = $node.SelectSingleNode("lf:NonselectedPictureText", $ns); if ($npt) { $t = Get-LangText $npt; if ($null -ne $t) { $obj['nonselectedPictureText'] = $t } }
 			$ref = $node.SelectSingleNode("lf:Picture/xr:Ref", $ns)
 			$abs = $node.SelectSingleNode("lf:Picture/xr:Abs", $ns)
 			if ($ref) { $obj['src'] = $ref.InnerText } elseif ($abs) { $obj['src'] = "abs:$($abs.InnerText)" }  # встроенная картинка → префикс abs:
@@ -1820,7 +1829,7 @@ function Decompile-Element {
 			if ($g -and $gmap.ContainsKey($g)) { $obj['group'] = $gmap[$g] }
 			# Картинка страницы (иконка вкладки) — конвенция ValuesPicture (дефолт LoadTransparent=false)
 			$pp = Get-PictureRef $node 'Picture'; if ($null -ne $pp) { $obj['picture'] = $pp }
-			if ((Get-Child $node 'ShowTitle') -eq 'false') { $obj['showTitle'] = $false }
+			$st = Get-Child $node 'ShowTitle'; if ($null -ne $st) { $obj['showTitle'] = ($st -eq 'true') }  # факт. значение (явный true тоже)
 			$kids = Decompile-Children $node
 			if ($kids) { $obj['children'] = $kids }
 		}
@@ -2178,7 +2187,7 @@ $titleNode = $root.SelectSingleNode("lf:Title", $ns)
 if ($titleNode) { $t = Get-LangText $titleNode; if ($null -ne $t) { $dsl['title'] = $t } }
 
 # properties (прямые скаляры под <Form>, PascalCase → camelCase)
-$KNOWN_FORM_PROPS = @('AutoTitle','ReportResult','DetailsData','ReportFormType','AutoShowState','ReportResultViewMode','ViewModeApplicationOnSetReportResult','WindowOpeningMode','CommandBarLocation','SaveDataInSettings','AutoSaveDataInSettings','AutoTime','UsePostingMode','RepostOnWrite','AutoURL','AutoFillCheck','Customizable','EnterKeyBehavior','VerticalScroll','Width','Height','Group','UseForFoldersAndItems','SaveWindowSettings','ScalingMode','VerticalSpacing','VariantAppearance')
+$KNOWN_FORM_PROPS = @('AutoTitle','ReportResult','DetailsData','ReportFormType','AutoShowState','ReportResultViewMode','ViewModeApplicationOnSetReportResult','WindowOpeningMode','CommandBarLocation','SaveDataInSettings','AutoSaveDataInSettings','AutoTime','UsePostingMode','RepostOnWrite','AutoURL','AutoFillCheck','Customizable','EnterKeyBehavior','VerticalScroll','Width','Height','Group','UseForFoldersAndItems','SaveWindowSettings','ScalingMode','VerticalSpacing','VariantAppearance','ShowCloseButton','HorizontalAlign','ChildrenAlign','ShowTitle')
 $props = [ordered]@{}
 foreach ($pn in $KNOWN_FORM_PROPS) {
 	$v = Get-Child $root $pn

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.124 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.125 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -3142,6 +3142,14 @@ GENERIC_SCALARS = [
     ('ScrollOnCompress', 'scrollOnCompress', 'bool'),
     # Сочетание клавиш — общее свойство (команда — отдельный путь)
     ('Shortcut', 'shortcut', 'value'),
+    # Батч простых скаляров (input/radio/group/picDecoration/button; Table-специфичные — отдельно)
+    ('IncompleteChoiceMode', 'incompleteChoiceMode', 'value'),
+    ('EqualColumnsWidth', 'equalColumnsWidth', 'bool'),
+    ('ChildrenAlign', 'childrenAlign', 'value'),
+    ('ImageScale', 'imageScale', 'value'),
+    ('Zoomable', 'zoomable', 'bool'),
+    ('Shape', 'shape', 'value'),
+    ('PictureLocation', 'pictureLocation', 'value'),
 ]
 
 
@@ -3606,8 +3614,8 @@ def emit_group(lines, el, name, eid, indent):
         lines.append(f'{inner}<Representation>{repr_val}</Representation>')
 
     # ShowTitle
-    if el.get('showTitle') is False:
-        lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
+    if el.get('showTitle') is not None:
+        lines.append(f'{inner}<ShowTitle>{"true" if el["showTitle"] else "false"}</ShowTitle>')
     # Заголовок свёрнутого представления (collapsible/popup) — мультиязычный текст
     if el.get('collapsedTitle'):
         emit_mltext(lines, inner, 'CollapsedRepresentationTitle', el['collapsedTitle'])
@@ -3651,8 +3659,8 @@ def emit_column_group(lines, el, name, eid, indent):
     if orientation:
         lines.append(f'{inner}<Group>{orientation}</Group>')
 
-    if el.get('showTitle') is False:
-        lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
+    if el.get('showTitle') is not None:
+        lines.append(f'{inner}<ShowTitle>{"true" if el["showTitle"] else "false"}</ShowTitle>')
     # showInHeader эмитится общим emit_common_element_props (через emit_layout)
 
     emit_common_flags(lines, el, inner)
@@ -4134,8 +4142,8 @@ def emit_page(lines, el, name, eid, indent):
         orientation = orientation_map.get(str(el['group']))
         if orientation:
             lines.append(f'{inner}<Group>{orientation}</Group>')
-    if el.get('showTitle') is False:
-        lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
+    if el.get('showTitle') is not None:
+        lines.append(f'{inner}<ShowTitle>{"true" if el["showTitle"] else "false"}</ShowTitle>')
     emit_layout(lines, el, inner)
 
     # \u041e\u0444\u043e\u0440\u043c\u043b\u0435\u043d\u0438\u0435 \u0441\u0442\u0440\u0430\u043d\u0438\u0446\u044b (BackColor / TitleTextColor / TitleFont) \u2014 \u043f\u043e\u0441\u043b\u0435 ShowTitle, \u043f\u0435\u0440\u0435\u0434 \u043a\u043e\u043c\u043f\u0430\u043d\u044c\u043e\u043d\u043e\u043c
@@ -4246,6 +4254,9 @@ def emit_picture_decoration(lines, el, name, eid, indent):
     inner = f'{indent}\t'
 
     emit_decoration_title(lines, el, name, inner)
+    # Текст при невыбранной картинке (NonselectedPictureText) — после Title (порядок корпуса)
+    if el.get('nonselectedPictureText') is not None:
+        emit_mltext(lines, inner, 'NonselectedPictureText', el['nonselectedPictureText'])
     emit_common_flags(lines, el, inner)
 
     # Источник картинки — ТОЛЬКО src (ключ 'picture' = тип/имя элемента, не источник).

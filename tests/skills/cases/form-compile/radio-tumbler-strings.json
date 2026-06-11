@@ -35,6 +35,8 @@
       },
       {
         "radio": "ВидСчета",
+        "equalColumnsWidth": true,
+        "columnsCount": 1,
         "choiceList": [
           { "value": "Active", "valueType": "ent:AccountType", "presentation": "Активный" },
           { "value": "Passive", "valueType": "ent:AccountType", "presentation": "Пассивный" },

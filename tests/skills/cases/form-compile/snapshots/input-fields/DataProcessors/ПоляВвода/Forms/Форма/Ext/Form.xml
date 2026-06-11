@@ -143,6 +143,7 @@
 			<AutoChoiceIncomplete>true</AutoChoiceIncomplete>
 			<ChoiceForm>DataProcessor.ПоляВвода.Form.Форма</ChoiceForm>
 			<ChoiceHistoryOnInput>DontUse</ChoiceHistoryOnInput>
+			<IncompleteChoiceMode>OnActivate</IncompleteChoiceMode>
 			<ContextMenu name="ПолеСКнопкамиКонтекстноеМеню" id="17"/>
 			<ExtendedTooltip name="ПолеСКнопкамиРасширеннаяПодсказка" id="18"/>
 		</InputField>

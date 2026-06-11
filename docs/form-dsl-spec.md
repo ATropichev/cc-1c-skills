@@ -74,6 +74,10 @@
 | `reportResultViewMode` | `<ReportResultViewMode>` | `Auto` |
 | `viewModeApplicationOnSetReportResult` | `<ViewModeApplicationOnSetReportResult>` | `Auto` |
 | `variantAppearance` | `<VariantAppearance>` | Имя реквизита оформления варианта (форма отчёта) |
+| `showCloseButton` | `<ShowCloseButton>` | `true` / `false` — показывать кнопку закрытия |
+| `horizontalAlign` | `<HorizontalAlign>` | `Left`, `Center`, `Right` — горизонтальное выравнивание формы |
+| `childrenAlign` | `<ChildrenAlign>` | Выравнивание элементов/заголовков (`ItemsLeftTitlesLeft`, `ItemsRightTitlesLeft`, `None`, …) |
+| `showTitle` | `<ShowTitle>` | `true` / `false` — показывать заголовок формы |
 
 Нераспознанные ключи преобразуются с автоматическим PascalCase (первая буква в верхний регистр).
 

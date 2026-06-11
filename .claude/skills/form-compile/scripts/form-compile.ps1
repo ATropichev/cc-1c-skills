@@ -1,4 +1,4 @@
-﻿# form-compile v1.124 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.125 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -3024,6 +3024,17 @@ $script:genericScalars = @(
 	@{ Tag='ScrollOnCompress';      Key='scrollOnCompress';      Kind='bool'  }
 	# Сочетание клавиш — общее свойство (input/group/radio/page/picField/label/table/check; команда — отд. путь, §7)
 	@{ Tag='Shortcut';              Key='shortcut';              Kind='value' }
+	# Батч простых скаляров (input/radio/group/picDecoration/button): режим выбора незаполненного,
+	# равная ширина колонок, выравнивание детей, масштаб/зум картинки, форма/положение картинки кнопки.
+	# (Table HeaderHeight/FooterHeight/CurrentRowUse — НЕ здесь: строгий Table-XSD требует точной
+	#  позиции, generic-позиция ломает загрузку; отдельная задача в Emit-Table.)
+	@{ Tag='IncompleteChoiceMode';  Key='incompleteChoiceMode';  Kind='value' }
+	@{ Tag='EqualColumnsWidth';     Key='equalColumnsWidth';     Kind='bool'  }
+	@{ Tag='ChildrenAlign';         Key='childrenAlign';         Kind='value' }
+	@{ Tag='ImageScale';            Key='imageScale';            Kind='value' }
+	@{ Tag='Zoomable';              Key='zoomable';              Kind='bool'  }
+	@{ Tag='Shape';                 Key='shape';                 Kind='value' }
+	@{ Tag='PictureLocation';       Key='pictureLocation';       Kind='value' }
 )
 
 function Emit-GenericScalars {
@@ -3511,7 +3522,7 @@ function Emit-Group {
 	}
 
 	# ShowTitle
-	if ($el.showTitle -eq $false) { X "$inner<ShowTitle>false</ShowTitle>" }
+	if ($null -ne $el.showTitle) { X "$inner<ShowTitle>$(if ($el.showTitle){'true'}else{'false'})</ShowTitle>" }
 	# Заголовок свёрнутого представления (collapsible/popup) — мультиязычный текст
 	if ($el.collapsedTitle) { Emit-MLText -tag "CollapsedRepresentationTitle" -text $el.collapsedTitle -indent $inner }
 
@@ -3557,7 +3568,7 @@ function Emit-ColumnGroup {
 	}
 	if ($orientation) { X "$inner<Group>$orientation</Group>" }
 
-	if ($el.showTitle -eq $false) { X "$inner<ShowTitle>false</ShowTitle>" }
+	if ($null -ne $el.showTitle) { X "$inner<ShowTitle>$(if ($el.showTitle){'true'}else{'false'})</ShowTitle>" }
 	# showInHeader эмитится общим Emit-CommonElementProps (через Emit-Layout)
 
 	Emit-CommonFlags -el $el -indent $inner
@@ -4407,7 +4418,7 @@ function Emit-Page {
 		}
 		if ($orientation) { X "$inner<Group>$orientation</Group>" }
 	}
-	if ($el.showTitle -eq $false) { X "$inner<ShowTitle>false</ShowTitle>" }
+	if ($null -ne $el.showTitle) { X "$inner<ShowTitle>$(if ($el.showTitle){'true'}else{'false'})</ShowTitle>" }
 	Emit-Layout -el $el -indent $inner
 
 	# Оформление страницы (BackColor / TitleTextColor / TitleFont) — после ShowTitle, перед компаньоном
@@ -4533,6 +4544,8 @@ function Emit-PictureDecoration {
 	$inner = "$indent`t"
 
 	Emit-DecorationTitle -el $el -name $name -indent $inner
+	# Текст при невыбранной картинке (NonselectedPictureText) — после Title (порядок корпуса)
+	if ($null -ne $el.nonselectedPictureText) { Emit-MLText -tag "NonselectedPictureText" -text $el.nonselectedPictureText -indent $inner }
 	Emit-CommonFlags -el $el -indent $inner
 
 	# Источник картинки — ТОЛЬКО $el.src (у PictureDecoration ключ 'picture' = тип/имя элемента, не источник).

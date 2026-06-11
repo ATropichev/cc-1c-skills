@@ -31,6 +31,7 @@
         "font": "style:NormalTextFont",
         "border": "style:ControlBorder" },
       { "button": "ОК", "title": "ОК",
+        "shape": "Oval", "pictureLocation": "Right",
         "backColor": "web:Honeydew",
         "borderColor": "style:BorderColor",
         "font": "style:NormalTextFont" },
@@ -38,6 +39,7 @@
         { "input": "Цена2", "path": "Объект.Цена", "textColor": "web:DimGray" }
       ]},
       { "picture": "Логотип", "src": "StdPicture.Print",
+        "imageScale": 150, "zoomable": true, "nonselectedPictureText": "Нет изображения",
         "textColor": "web:FireBrick", "font": "style:NormalTextFont",
         "border": { "width": 1, "style": "Single" } }
     ]
