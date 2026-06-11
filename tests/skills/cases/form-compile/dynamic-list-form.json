@@ -18,7 +18,7 @@
     "properties": { "saveWindowSettings": false },
     "attributes": [
       { "name": "Список", "type": "DynamicList", "useAlways": ["~Артикул", "Список.Code", "Description"], "settings": {
-        "mainTable": "Catalog.Товары", "dynamicDataRead": true,
+        "mainTable": "Catalog.Товары", "dynamicDataRead": true, "autoSaveUserSettings": false,
         "order": [ "Description", "Code desc" ],
         "filter": [ "Артикул = _ @off @user" ],
         "conditionalAppearance": [ { "filter": ["Артикул = _"], "appearance": { "ЦветТекста": "web:Red" } } ]

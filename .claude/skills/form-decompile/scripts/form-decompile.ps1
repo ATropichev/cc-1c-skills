@@ -1,4 +1,4 @@
-﻿# form-decompile v0.85 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.86 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -2325,6 +2325,9 @@ if ($attrsNode) {
 			# AutoFillAvailableFields — дефолт true, платформа эмитит только отклонение (false). Захват «как есть».
 			$afaf = Get-Child $setNode 'AutoFillAvailableFields'; if ($null -ne $afaf) { $so['autoFillAvailableFields'] = ($afaf -eq 'true') }
 			$mt = Get-Child $setNode 'MainTable'; if ($mt) { $so['mainTable'] = $mt }
+			# AutoSaveUserSettings — авто-сохранение польз. настроек дин-списка (в корпусе только false;
+			# дефолт true → платформа эмитит отклонение). Захват факт. значения.
+			$asus = Get-Child $setNode 'AutoSaveUserSettings'; if ($null -ne $asus) { $so['autoSaveUserSettings'] = ($asus -eq 'true') }
 			$qtNode = $setNode.SelectSingleNode("lf:QueryText", $ns)
 			if ($qtNode -and $qtNode.InnerText) { $so['query'] = Maybe-ExternalizeQuery -queryText $qtNode.InnerText -listName "$($ao['name'])" }
 			# DynamicDataRead: дефолт true → эмитим только false

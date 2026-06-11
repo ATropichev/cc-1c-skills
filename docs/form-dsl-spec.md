@@ -913,6 +913,7 @@ Forgiving-синонимы типа: XML-имя (`SpreadSheetDocumentField`) и 
 | Ключ | Тип | Описание |
 |------|-----|----------|
 | `mainTable` | string | Основная таблица. Принимает рус-имена метаданных (`Справочник.X` → `Catalog.X`) |
+| `autoSaveUserSettings` | bool | Авто-сохранение пользовательских настроек дин-списка (`<AutoSaveUserSettings>`, после `MainTable`). **Умолчание `true`** — указывать только для отключения (`false`) |
 | `query` | string | Текст запроса (`ManualQuery=true`). Поддерживает `@file.sql` (путь относительно JSON) |
 | `dynamicDataRead` | bool | Динамическое считывание. **Умолчание `true`** — указывать только для отключения (`false`) |
 | `autoFillAvailableFields` | bool | Автозаполнение доступных полей (`<AutoFillAvailableFields>`). **Умолчание `true`** — указывать только для отключения (`false`; тогда поля берутся из явного запроса, не авто). Эмитится первым в `<Settings>` |

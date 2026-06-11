@@ -1,4 +1,4 @@
-﻿# form-compile v1.109 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.110 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -5206,6 +5206,8 @@ function Emit-Attributes {
 			# Schema-параметры дин-списка (DataCompositionSchemaParameter) — после Field*, до MainTable.
 			Emit-DLParameters -params $st.parameters -indent $si
 			if ($st.mainTable) { X "$si<MainTable>$(Normalize-MetaTypeRef "$($st.mainTable)")</MainTable>" }
+			# AutoSaveUserSettings — после MainTable (дефолт true; эмитим только при заданном ключе = отклонении).
+			if ($null -ne $st.autoSaveUserSettings) { X "$si<AutoSaveUserSettings>$(if ($st.autoSaveUserSettings){'true'}else{'false'})</AutoSaveUserSettings>" }
 			# ListSettings: filter/order/conditionalAppearance (skd-грамматика) + каноничные блок-GUID.
 			# Нет items → контейнеры всё равно эмитятся (blockMeta) = каноничный пустой скелет платформы.
 			$lsi = "$si`t"
