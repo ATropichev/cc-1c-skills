@@ -77,7 +77,8 @@
       { "filter": ["ЧисловоеПоле = 1"], "appearance": { "Текст": { "field": "ОбычноеПоле" } } },
       { "filter": [{ "field": "ДатаПоля", "op": "=", "value": "3999-12-31T23:59:59" }], "appearance": { "ЦветТекста": "web:Gray" } },
       { "filter": ["ДатаПоля > 2020-01-01T00:00:00"], "appearance": { "ЦветТекста": "web:Olive" } },
-      { "filter": [{ "field": "ДатаПоля", "op": ">=", "value": "BeginningOfThisDay", "valueType": "v8:StandardBeginningDate" }], "appearance": { "ЦветТекста": "web:Silver" } }
+      { "filter": [{ "field": "ДатаПоля", "op": ">=", "value": "BeginningOfThisDay", "valueType": "v8:StandardBeginningDate" }], "appearance": { "ЦветТекста": "web:Silver" } },
+      { "filter": [{ "field": "ОбычноеПоле", "op": "=", "value": "_", "valueType": "dcscor:Field" }], "appearance": { "ЦветТекста": "web:Maroon" } }
     ]
   }
 }

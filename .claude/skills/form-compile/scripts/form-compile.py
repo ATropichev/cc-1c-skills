@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.121 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.122 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1483,6 +1483,11 @@ def emit_filter_item(lines, item, indent):
         if date_v is not None:
             lines.append(f'{indent}\t\t<v8:date>{esc_xml(str(date_v))}</v8:date>')
         lines.append(f'{indent}\t</dcsset:right>')
+    elif str(val) == '_':
+        # "_" — маркер пустого значения: платформа эмитит пустой self-closing <dcsset:right>
+        # (напр. <dcsset:right xsi:type="dcscor:Field"/> — сравнение с незаданным полем).
+        vt = str(item['valueType']) if item.get('valueType') else 'xs:string'
+        lines.append(f'{indent}\t<dcsset:right xsi:type="{vt}"/>')
     elif val is not None:
         vt = _value_type_for(val, item.get('valueType'))
         v_str = str(val).lower() if isinstance(val, bool) else esc_xml(str(val))
