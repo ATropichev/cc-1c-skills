@@ -1,4 +1,4 @@
-﻿# form-compile v1.115 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.116 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -1570,8 +1570,9 @@ function Emit-MLItems {
 }
 
 function Emit-MLText {
-	param([string]$tag, $text, [string]$indent)
-	X "$indent<$tag>"
+	param([string]$tag, $text, [string]$indent, [string]$xsiType)
+	$attr = if ($xsiType) { " xsi:type=`"$xsiType`"" } else { "" }
+	X "$indent<$tag$attr>"
 	Emit-MLItems -val $text -indent "$indent`t"
 	X "$indent</$tag>"
 }
@@ -1860,8 +1861,12 @@ function Emit-AppearanceValue {
 			if ($null -ne $av) { $attrParts += "$attrName=`"$(Esc-Xml "$av")`"" }
 		}
 		X "$indent`t<dcscor:value xsi:type=`"v8ui:Font`" $($attrParts -join ' ')/>"
+	} elseif ($isDict -and (_HasKey $innerVal 'field')) {
+		# Ссылка на поле (dcscor:Field) — значение параметра оформления = поле компоновки
+		X "$indent`t<dcscor:value xsi:type=`"dcscor:Field`">$(Esc-Xml "$(_Get $innerVal 'field')")</dcscor:value>"
 	} elseif ($isDict) {
-		Emit-MLText -tag "dcscor:value" -text $innerVal -indent "$indent`t"
+		# Локализуемый текст параметра оформления: платформа объявляет xsi:type на dcscor:value
+		Emit-MLText -tag "dcscor:value" -text $innerVal -indent "$indent`t" -xsiType "v8:LocalStringType"
 	} else {
 		$actualVal = "$innerVal"
 		$keyTypeMap = @{
@@ -1876,7 +1881,13 @@ function Emit-AppearanceValue {
 		if ($keyType) { X "$indent`t<dcscor:value xsi:type=`"$keyType`">$(Esc-Xml $actualVal)</dcscor:value>" }
 		elseif ($actualVal -match '^(style|web|win):') { X "$indent`t<dcscor:value xsi:type=`"v8ui:Color`">$(Esc-Xml $actualVal)</dcscor:value>" }
 		elseif ($actualVal -eq "true" -or $actualVal -eq "false") { X "$indent`t<dcscor:value xsi:type=`"xs:boolean`">$actualVal</dcscor:value>" }
-		elseif ($key -eq "Текст" -or $key -eq "Заголовок" -or $key -eq "Формат") { Emit-MLText -tag "dcscor:value" -text $actualVal -indent "$indent`t" }
+		elseif ($key -eq "Текст" -or $key -eq "Заголовок" -or $key -eq "Формат") {
+			# Текст/Заголовок/Формат: голая строка = плоский xs:string (так платформа хранит
+			# нелокализованный литерал). Локализуемый текст → объект {ru,en} (ветка isDict выше).
+			# Пустая строка → самозакрывающийся тег (как у платформы).
+			if ($actualVal -eq '') { X "$indent`t<dcscor:value xsi:type=`"xs:string`"/>" }
+			else { X "$indent`t<dcscor:value xsi:type=`"xs:string`">$(Esc-Xml $actualVal)</dcscor:value>" }
+		}
 		elseif ($actualVal -match '^-?\d+(\.\d+)?$') { X "$indent`t<dcscor:value xsi:type=`"xs:decimal`">$actualVal</dcscor:value>" }
 		elseif ($key -eq 'ЦветТекста' -or $key -eq 'ЦветФона' -or $key -eq 'ЦветГраницы') { X "$indent`t<dcscor:value xsi:type=`"v8ui:Color`">$(Esc-Xml $actualVal)</dcscor:value>" }
 		else { X "$indent`t<dcscor:value xsi:type=`"xs:string`">$(Esc-Xml $actualVal)</dcscor:value>" }

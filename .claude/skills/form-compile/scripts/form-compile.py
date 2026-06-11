@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.115 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.116 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1300,11 +1300,12 @@ def emit_ml_items(lines, indent, val):
         lines.append(f"{indent}</v8:item>")
 
 
-def emit_mltext(lines, indent, tag, text):
+def emit_mltext(lines, indent, tag, text, xsi_type=None):
+    attr = f' xsi:type="{xsi_type}"' if xsi_type else ''
     if not text:
-        lines.append(f"{indent}<{tag}/>")
+        lines.append(f"{indent}<{tag}{attr}/>")
         return
-    lines.append(f"{indent}<{tag}>")
+    lines.append(f"{indent}<{tag}{attr}>")
     emit_ml_items(lines, f"{indent}\t", text)
     lines.append(f"{indent}</{tag}>")
 
@@ -1606,8 +1607,12 @@ def emit_appearance_value(lines, key, val, indent):
                 if av is not None:
                     attr_parts.append(f'{attr_name}="{esc_xml(str(av))}"')
         lines.append(f'{indent}\t<dcscor:value xsi:type="v8ui:Font" {" ".join(attr_parts)}/>')
+    elif is_dict and _has_key(inner_val, 'field'):
+        # Ссылка на поле (dcscor:Field) — значение параметра оформления = поле компоновки
+        lines.append(f'{indent}\t<dcscor:value xsi:type="dcscor:Field">{esc_xml(str(_get(inner_val, "field")))}</dcscor:value>')
     elif is_dict:
-        emit_mltext(lines, f'{indent}\t', 'dcscor:value', inner_val)
+        # Локализуемый текст параметра оформления: платформа объявляет xsi:type на dcscor:value
+        emit_mltext(lines, f'{indent}\t', 'dcscor:value', inner_val, xsi_type='v8:LocalStringType')
     else:
         actual_val = str(inner_val)
         key_type_map = {
@@ -1626,7 +1631,12 @@ def emit_appearance_value(lines, key, val, indent):
         elif actual_val == 'true' or actual_val == 'false':
             lines.append(f'{indent}\t<dcscor:value xsi:type="xs:boolean">{actual_val}</dcscor:value>')
         elif key == 'Текст' or key == 'Заголовок' or key == 'Формат':
-            emit_mltext(lines, f'{indent}\t', 'dcscor:value', actual_val)
+            # Голая строка = плоский xs:string (нелокализованный литерал). Локализуемый → объект {ru,en}.
+            # Пустая строка → самозакрывающийся тег (как у платформы).
+            if actual_val == '':
+                lines.append(f'{indent}\t<dcscor:value xsi:type="xs:string"/>')
+            else:
+                lines.append(f'{indent}\t<dcscor:value xsi:type="xs:string">{esc_xml(actual_val)}</dcscor:value>')
         elif re.match(r'^-?\d+(\.\d+)?$', actual_val):
             lines.append(f'{indent}\t<dcscor:value xsi:type="xs:decimal">{actual_val}</dcscor:value>')
         elif key == 'ЦветТекста' or key == 'ЦветФона' or key == 'ЦветГраницы':

@@ -976,6 +976,7 @@ Forgiving-синонимы типа: XML-имя (`SpreadSheetDocumentField`) и 
 - **order** — строка `"Поле"` (asc) / `"Поле desc"` (синонимы `убыв`/`desc`, `возр`/`asc`) / `"Auto"`, либо объект `{ field, direction?, use?, viewMode? }`.
 - **filter** — shorthand `"Поле оператор значение @флаги"` (`@off`, `@user`, `@quickAccess`, `@normal`, `@inaccessible`; `_` = пусто) или объект `{ field, op, value?, use?, userSettingID? }` или группа `{ group: "And"|"Or"|"Not", items: [...] }`.
 - **conditionalAppearance** — объект `{ selection?, filter?, appearance?, presentation?, viewMode?, userSettingID?, use? }`. `appearance` — словарь «параметр: значение» платформы (`ЦветТекста`, `ЦветФона`, `Шрифт` и т.п.).
+  - Значение текстовых параметров (`Текст`/`Заголовок`/`Формат`) ведётся **по форме значения**: голая строка → плоский `xs:string` (нелокализованный литерал; `""` → самозакрывающийся тег); объект `{ru,en}` → локализуемый `LocalStringType`; объект `{field:"путь"}` → ссылка на поле компоновки (`dcscor:Field`). (В отличие от `title`/`tooltip`, где голая строка = `LocalStringType` — здесь это намеренное scoped-различие: платформа хранит обе формы, и их надо различать.)
 
 `userSettingID: "auto"` → платформа сгенерирует идентификатор пользовательской настройки. Пустые контейнеры (без правил) эмитируются автоматически.
 

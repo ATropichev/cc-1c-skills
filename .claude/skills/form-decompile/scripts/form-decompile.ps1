@@ -1,4 +1,4 @@
-﻿# form-decompile v0.91 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.92 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -407,14 +407,26 @@ function Get-LineValue {
 	return $obj
 }
 
-# Прочитать <dcscor:value> в JSON-значение: Font/Line/multilang/raw text.
+# Прочитать <dcscor:value> в JSON-значение: Font/Line/Field/multilang/raw text.
 function Read-AppearanceValueNode {
 	param($valNode)
 	if (-not $valNode) { return $null }
 	$vt = Get-LocalXsiType $valNode
-	if ($vt -eq 'LocalStringType') { return (Get-MLText $valNode) }
+	if ($vt -eq 'LocalStringType') {
+		# НЕ схлопываем одноязычный в строку: значение параметра оформления различает
+		# xs:string (плоская строка) и LocalStringType (локализуемый текст) — обе формы
+		# одноязычно дают одну строку. Всегда объект-карта языков → компилятор эмитит LocalStringType.
+		$map = [ordered]@{}
+		foreach ($it in @($valNode.SelectNodes("v8:item", $ns))) {
+			$lang = $it.SelectSingleNode("v8:lang", $ns); $content = $it.SelectSingleNode("v8:content", $ns)
+			if ($lang) { $map[$lang.InnerText] = if ($content) { $content.InnerText } else { "" } }
+		}
+		return $map
+	}
 	if ($vt -eq 'Font') { return (Get-FontValue $valNode) }
 	if ($vt -eq 'Line') { return (Get-LineValue $valNode) }
+	# dcscor:Field — значение = ссылка на поле компоновки → объект {field:путь}
+	if ($vt -eq 'Field') { return [ordered]@{ field = $valNode.InnerText } }
 	return $valNode.InnerText
 }
 
