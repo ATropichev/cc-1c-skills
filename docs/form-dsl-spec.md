@@ -84,6 +84,7 @@
 | `conversationsRepresentation` | `<ConversationsRepresentation>` | `Auto`, `Show`, `DontShow` — отображение панели обсуждений; pass-through (редкое) |
 | `collapseItemsByImportanceVariant` | `<CollapseItemsByImportanceVariant>` | `DontUse`, `Use` — сворачивание элементов по важности; pass-through (редкое) |
 | `groupList` | `<GroupList>` | Ссылка на группу списка (`2:<GUID>` или имя), pass-through verbatim (редкое) |
+| `customSettingsFolder` | `<CustomSettingsFolder>` | Группа, куда генерируются пользовательские настройки компоновщика (форма отчёта со СКД). Имя группы или `N:<GUID>`, pass-through verbatim. 1С-синоним «Группа пользовательских настроек» |
 
 Нераспознанные ключи преобразуются с автоматическим PascalCase (первая буква в верхний регистр).
 
