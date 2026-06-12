@@ -100,6 +100,50 @@
 			<Settings xsi:type="DynamicList">
 				<ManualQuery>false</ManualQuery>
 				<DynamicDataRead>true</DynamicDataRead>
+				<CalculatedField>
+					<dcssch:dataPath>Метка</dcssch:dataPath>
+					<dcssch:expression>Code + " " + Description</dcssch:expression>
+					<dcssch:title xsi:type="v8:LocalStringType">
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Метка строки</v8:content>
+						</v8:item>
+					</dcssch:title>
+					<dcssch:useRestriction>
+						<dcssch:condition>true</dcssch:condition>
+						<dcssch:group>true</dcssch:group>
+					</dcssch:useRestriction>
+					<dcssch:valueType>
+						<v8:Type>xs:string</v8:Type>
+						<v8:StringQualifiers>
+							<v8:Length>0</v8:Length>
+							<v8:AllowedLength>Variable</v8:AllowedLength>
+						</v8:StringQualifiers>
+					</dcssch:valueType>
+				</CalculatedField>
+				<CalculatedField>
+					<dcssch:dataPath>Сорт</dcssch:dataPath>
+					<dcssch:expression>Code</dcssch:expression>
+					<dcssch:title xsi:type="v8:LocalStringType">
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Сорт</v8:content>
+						</v8:item>
+					</dcssch:title>
+					<dcssch:presentationExpression>Code</dcssch:presentationExpression>
+					<dcssch:orderExpression>
+						<expression xmlns="http://v8.1c.ru/8.1/data-composition-system/common">Code</expression>
+						<orderType xmlns="http://v8.1c.ru/8.1/data-composition-system/common">Asc</orderType>
+						<autoOrder xmlns="http://v8.1c.ru/8.1/data-composition-system/common">false</autoOrder>
+					</dcssch:orderExpression>
+					<dcssch:valueType>
+						<v8:Type>xs:string</v8:Type>
+						<v8:StringQualifiers>
+							<v8:Length>10</v8:Length>
+							<v8:AllowedLength>Variable</v8:AllowedLength>
+						</v8:StringQualifiers>
+					</dcssch:valueType>
+				</CalculatedField>
 				<Parameter>
 					<dcssch:name>ВыборТовара</dcssch:name>
 					<dcssch:title xsi:type="v8:LocalStringType">

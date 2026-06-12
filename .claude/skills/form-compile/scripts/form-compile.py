@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.139 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.140 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1745,6 +1745,91 @@ def emit_list_grouping(lines, grouping, indent):
     if not levels:
         return
     emit_list_grouping_levels(lines, levels, 0, indent)
+
+
+# === Вычисляемые поля DataSet динамического списка (<CalculatedField>) ===
+# Зеркало skd calculatedFields: shorthand "Имя [Заголовок]: тип = Выражение #noField #noFilter
+# #noGroup #noOrder" или объект. Форм-специфика: dcssch:-теги + presentationExpression/orderExpression.
+_CALC_RESTRICT_MAP = {'noField': 'field', 'noFilter': 'condition', 'noCondition': 'condition',
+                      'noGroup': 'group', 'noOrder': 'order'}
+_DCS_COMMON_NS = 'http://v8.1c.ru/8.1/data-composition-system/common'
+
+
+def parse_calc_shorthand(s):
+    restrict = re.findall(r'#(noField|noFilter|noCondition|noGroup|noOrder)\b', s)
+    s = re.sub(r'\s*#(?:noField|noFilter|noCondition|noGroup|noOrder)\b', '', s)
+    eq = s.find('=')
+    lhs, rhs = (s[:eq], s[eq + 1:].strip()) if eq > 0 else (s, '')
+    title = ''
+    m = re.search(r'\[([^\]]+)\]', lhs)
+    if m:
+        title = m.group(1)
+        lhs = re.sub(r'\s*\[[^\]]+\]', '', lhs)
+    lhs = lhs.strip()
+    typ, data_path = '', lhs
+    if ':' in lhs:
+        data_path, t = lhs.split(':', 1)
+        data_path, typ = data_path.strip(), resolve_type_str(t.strip())
+    return {'dataPath': data_path, 'expression': rhs, 'type': typ, 'title': title, 'restrict': restrict}
+
+
+def emit_calc_fields(lines, calc_fields, indent):
+    if not calc_fields:
+        return
+    for cf in calc_fields:
+        if isinstance(cf, str):
+            p = parse_calc_shorthand(cf)
+            data_path, expression, title = p['dataPath'], p['expression'], p['title']
+            type_str = p['type']
+            restrict = [_CALC_RESTRICT_MAP[r] for r in p['restrict'] if r in _CALC_RESTRICT_MAP]
+            pres_expr = order_expr = None
+        else:
+            data_path = str(cf.get('dataPath') or cf.get('field') or cf.get('name', ''))
+            expression = str(cf.get('expression', ''))
+            title = cf.get('title')
+            type_str = cf.get('valueType') or cf.get('type')
+            type_str = str(type_str) if type_str else None
+            ur = cf.get('useRestriction') or cf.get('restrict')
+            if isinstance(ur, dict):
+                restrict = [k for k in ('field', 'condition', 'group', 'order') if ur.get(k)]
+            elif isinstance(ur, str):
+                restrict = [_CALC_RESTRICT_MAP.get(t.strip().lstrip('#'), t.strip().lstrip('#')) for t in ur.split() if t.strip()]
+            elif isinstance(ur, list):
+                restrict = [_CALC_RESTRICT_MAP.get(str(r), str(r)) for r in ur]
+            else:
+                restrict = []
+            pres_expr = cf.get('presentationExpression')
+            order_expr = cf.get('orderExpression')
+        ci = f'{indent}\t'
+        lines.append(f'{indent}<CalculatedField>')
+        lines.append(f'{ci}<dcssch:dataPath>{esc_xml(data_path)}</dcssch:dataPath>')
+        lines.append(f'{ci}<dcssch:expression>{esc_xml(expression)}</dcssch:expression>')
+        if title:
+            emit_mltext(lines, ci, 'dcssch:title', title, xsi_type='v8:LocalStringType')
+        if restrict:
+            lines.append(f'{ci}<dcssch:useRestriction>')
+            for r in ('field', 'condition', 'group', 'order'):
+                if r in restrict:
+                    lines.append(f'{ci}\t<dcssch:{r}>true</dcssch:{r}>')
+            lines.append(f'{ci}</dcssch:useRestriction>')
+        if pres_expr:
+            lines.append(f'{ci}<dcssch:presentationExpression>{esc_xml(str(pres_expr))}</dcssch:presentationExpression>')
+        if order_expr:
+            for oe in (order_expr if isinstance(order_expr, list) else [order_expr]):
+                if isinstance(oe, str):
+                    expr_v, otype, auto = oe, 'Asc', 'false'
+                else:
+                    expr_v = str(oe.get('expression', ''))
+                    otype = str(oe.get('orderType', 'Asc'))
+                    auto = 'true' if oe.get('autoOrder') else 'false'
+                lines.append(f'{ci}<dcssch:orderExpression>')
+                lines.append(f'{ci}\t<expression xmlns="{_DCS_COMMON_NS}">{esc_xml(expr_v)}</expression>')
+                lines.append(f'{ci}\t<orderType xmlns="{_DCS_COMMON_NS}">{otype}</orderType>')
+                lines.append(f'{ci}\t<autoOrder xmlns="{_DCS_COMMON_NS}">{auto}</autoOrder>')
+                lines.append(f'{ci}</dcssch:orderExpression>')
+        if type_str:
+            emit_dl_value_type(lines, type_str, ci)
+        lines.append(f'{indent}</CalculatedField>')
 
 
 def emit_conditional_appearance(lines, items, indent, block_view_mode=None, block_user_setting_id=None, wrap_tag='dcsset:conditionalAppearance'):
@@ -5288,7 +5373,12 @@ def emit_attributes(lines, attrs, indent, conditional_appearance=None):
                         lines.append(f'{si}\t<dcssch:title xsi:type="v8:LocalStringType">')
                         emit_ml_items(lines, f'{si}\t\t', fld['title'])
                         lines.append(f'{si}\t</dcssch:title>')
+                    # valueType поля набора (тип значения; вычисляемые/кастомные поля)
+                    if fld.get('valueType'):
+                        emit_dl_value_type(lines, fld['valueType'], f'{si}\t')
                     lines.append(f'{si}</Field>')
+            # Вычисляемые поля DataSet (<CalculatedField>) — после Field*, до Parameter*.
+            emit_calc_fields(lines, s.get('calculatedFields'), si)
             # Schema-параметры дин-списка (DataCompositionSchemaParameter) — после Field*, до MainTable.
             emit_dl_parameters(lines, s.get('parameters'), si)
             if s.get('mainTable'):

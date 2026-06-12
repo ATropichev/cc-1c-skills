@@ -1,4 +1,4 @@
-﻿# form-compile v1.139 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.140 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -2065,6 +2065,80 @@ function Emit-ListGrouping {
 	$levels = Parse-ListGrouping $grouping
 	if ($levels.Count -eq 0) { return }
 	Emit-ListGroupingLevels $levels 0 $indent
+}
+
+# === Вычисляемые поля DataSet динамического списка (<CalculatedField>) ===
+# Зеркало skd: shorthand "Имя [Заголовок]: тип = Выражение #noField #noFilter #noGroup #noOrder"
+# или объект. Форм-специфика: dcssch:-теги + presentationExpression/orderExpression (dcscommon ns).
+$script:calcRestrictMap = @{ 'noField'='field'; 'noFilter'='condition'; 'noCondition'='condition'; 'noGroup'='group'; 'noOrder'='order' }
+$script:dcsCommonNs = 'http://v8.1c.ru/8.1/data-composition-system/common'
+
+function Parse-CalcShorthand {
+	param([string]$s)
+	$restrict = @()
+	foreach ($m in [regex]::Matches($s, '#(noField|noFilter|noCondition|noGroup|noOrder)\b')) { $restrict += $m.Groups[1].Value }
+	$s = [regex]::Replace($s, '\s*#(noField|noFilter|noCondition|noGroup|noOrder)\b', '')
+	$eq = $s.IndexOf('=')
+	if ($eq -gt 0) { $lhs = $s.Substring(0, $eq); $rhs = $s.Substring($eq + 1).Trim() } else { $lhs = $s; $rhs = '' }
+	$title = ''
+	if ($lhs -match '\[([^\]]+)\]') { $title = $Matches[1]; $lhs = $lhs -replace '\s*\[[^\]]+\]', '' }
+	$lhs = $lhs.Trim()
+	$type = ''; $dataPath = $lhs
+	if ($lhs.Contains(':')) { $parts = $lhs -split ':', 2; $dataPath = $parts[0].Trim(); $type = Resolve-TypeStr ($parts[1].Trim()) }
+	return @{ dataPath = $dataPath; expression = $rhs; type = $type; title = $title; restrict = $restrict }
+}
+
+function Emit-CalcFields {
+	param($calcFields, [string]$indent)
+	if (-not $calcFields) { return }
+	foreach ($cf in $calcFields) {
+		$pres = $null; $orderExpr = $null; $restrict = @()
+		if ($cf -is [string]) {
+			$p = Parse-CalcShorthand $cf
+			$dataPath = "$($p.dataPath)"; $expression = "$($p.expression)"; $title = $p.title; $typeStr = "$($p.type)"
+			foreach ($r in $p.restrict) { if ($script:calcRestrictMap[$r]) { $restrict += $script:calcRestrictMap[$r] } }
+		} else {
+			$dataPath = if ($cf.dataPath) { "$($cf.dataPath)" } elseif ($cf.field) { "$($cf.field)" } else { "$($cf.name)" }
+			$expression = "$($cf.expression)"
+			$title = $cf.title
+			$typeStr = if ($cf.valueType) { "$($cf.valueType)" } elseif ($cf.type) { "$($cf.type)" } else { '' }
+			$ur = if ($cf.useRestriction) { $cf.useRestriction } elseif ($cf.restrict) { $cf.restrict } else { $null }
+			if ($ur -is [System.Management.Automation.PSCustomObject] -or $ur -is [hashtable]) {
+				foreach ($k in 'field','condition','group','order') { if ($ur.$k -eq $true) { $restrict += $k } }
+			} elseif ($ur -is [string]) {
+				foreach ($tok in ($ur -split '\s+')) { $t = $tok.Trim().TrimStart('#'); if ($t) { $restrict += $(if ($script:calcRestrictMap[$t]) { $script:calcRestrictMap[$t] } else { $t }) } }
+			} elseif ($ur) {
+				foreach ($r in $ur) { $rr = "$r"; $restrict += $(if ($script:calcRestrictMap[$rr]) { $script:calcRestrictMap[$rr] } else { $rr }) }
+			}
+			$pres = $cf.presentationExpression
+			$orderExpr = $cf.orderExpression
+		}
+		$ci = "$indent`t"
+		X "$indent<CalculatedField>"
+		X "$ci<dcssch:dataPath>$(Esc-Xml $dataPath)</dcssch:dataPath>"
+		X "$ci<dcssch:expression>$(Esc-Xml $expression)</dcssch:expression>"
+		if ($title) { Emit-MLText -tag 'dcssch:title' -text $title -indent $ci -xsiType 'v8:LocalStringType' }
+		if ($restrict.Count -gt 0) {
+			X "$ci<dcssch:useRestriction>"
+			foreach ($r in @('field','condition','group','order')) { if ($restrict -contains $r) { X "$ci`t<dcssch:$r>true</dcssch:$r>" } }
+			X "$ci</dcssch:useRestriction>"
+		}
+		if ($pres) { X "$ci<dcssch:presentationExpression>$(Esc-Xml "$pres")</dcssch:presentationExpression>" }
+		if ($orderExpr) {
+			$oeList = if ($orderExpr -is [System.Collections.IList]) { $orderExpr } else { @($orderExpr) }
+			foreach ($oe in $oeList) {
+				if ($oe -is [string]) { $exprV = $oe; $oType = 'Asc'; $auto = 'false' }
+				else { $exprV = "$($oe.expression)"; $oType = if ($oe.orderType) { "$($oe.orderType)" } else { 'Asc' }; $auto = if ($oe.autoOrder) { 'true' } else { 'false' } }
+				X "$ci<dcssch:orderExpression>"
+				X "$ci`t<expression xmlns=`"$($script:dcsCommonNs)`">$(Esc-Xml $exprV)</expression>"
+				X "$ci`t<orderType xmlns=`"$($script:dcsCommonNs)`">$oType</orderType>"
+				X "$ci`t<autoOrder xmlns=`"$($script:dcsCommonNs)`">$auto</autoOrder>"
+				X "$ci</dcssch:orderExpression>"
+			}
+		}
+		if ($typeStr) { Emit-DLValueType -typeStr $typeStr -indent $ci }
+		X "$indent</CalculatedField>"
+	}
 }
 
 # --- 5. Type emitter ---
@@ -5552,9 +5626,13 @@ function Emit-Attributes {
 						Emit-MLItems -val $fld.title -indent "$si`t`t"
 						X "$si`t</dcssch:title>"
 					}
+					# valueType поля набора (тип значения; вычисляемые/кастомные поля)
+					if ($fld.valueType) { Emit-DLValueType -typeStr "$($fld.valueType)" -indent "$si`t" }
 					X "$si</Field>"
 				}
 			}
+			# Вычисляемые поля DataSet (<CalculatedField>) — после Field*, до Parameter*.
+			Emit-CalcFields -calcFields $st.calculatedFields -indent $si
 			# Schema-параметры дин-списка (DataCompositionSchemaParameter) — после Field*, до MainTable.
 			Emit-DLParameters -params $st.parameters -indent $si
 			if ($st.mainTable) { X "$si<MainTable>$(Normalize-MetaTypeRef "$($st.mainTable)")</MainTable>" }

@@ -1,4 +1,4 @@
-﻿# form-decompile v0.112 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.113 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1244,6 +1244,44 @@ function Decompile-Type {
 	if ($parts.Count -eq 0) { return $null }
 	if ($parts.Count -eq 1) { return $parts[0] }
 	return ($parts -join ' | ')
+}
+
+# Вычисляемое поле DataSet динамического списка (<CalculatedField>) → объектная модель.
+# Зеркало эмиссии form-compile (Emit-CalcFields). Грамматика — как skd calculatedFields,
+# + форм-extras presentationExpression/orderExpression (в namespace dcscommon).
+function Build-CalcField {
+	param($cfNode)
+	$o = [ordered]@{}
+	$o['dataPath'] = Get-Child $cfNode 'dataPath'
+	$o['expression'] = Get-Child $cfNode 'expression'
+	$tn = $cfNode.SelectSingleNode("dcssch:title", $ns)
+	if ($tn) { $t = Get-LangText $tn; if ($null -ne $t) { $o['title'] = $t } }
+	$vt = $cfNode.SelectSingleNode("dcssch:valueType", $ns)
+	if ($vt) { $v = Decompile-Type $vt; if ($v) { $o['valueType'] = $v } }
+	$ur = $cfNode.SelectSingleNode("dcssch:useRestriction", $ns)
+	if ($ur) {
+		$r = [ordered]@{}
+		foreach ($k in 'field','condition','group','order') { if ((Get-Child $ur $k) -eq 'true') { $r[$k] = $true } }
+		if ($r.Count -gt 0) { $o['useRestriction'] = $r }
+	}
+	$pe = Get-Child $cfNode 'presentationExpression'
+	if ($null -ne $pe -and $pe -ne '') { $o['presentationExpression'] = $pe }
+	$oeNodes = @($cfNode.SelectNodes("dcssch:orderExpression", $ns))
+	if ($oeNodes.Count -gt 0) {
+		$oes = New-Object System.Collections.ArrayList
+		foreach ($oen in $oeNodes) {
+			$eo = [ordered]@{}
+			$exprN = $oen.SelectSingleNode("*[local-name()='expression']")
+			$otN = $oen.SelectSingleNode("*[local-name()='orderType']")
+			$aoN = $oen.SelectSingleNode("*[local-name()='autoOrder']")
+			$eo['expression'] = if ($exprN) { $exprN.InnerText } else { '' }
+			if ($otN -and $otN.InnerText -ne 'Asc') { $eo['orderType'] = $otN.InnerText }
+			if ($aoN -and $aoN.InnerText -eq 'true') { $eo['autoOrder'] = $true }
+			[void]$oes.Add($eo)
+		}
+		$o['orderExpression'] = @($oes)
+	}
+	return $o
 }
 
 # Schema-параметры динамического списка (<Parameter> под <Settings>) — зеркало эмиссии
@@ -2573,9 +2611,19 @@ if ($attrsNode) {
 					if ($fn.GetAttribute("type", $NS_XSI) -match 'NestedDataSet$') { $fo['nested'] = $true }
 					$ftn = $fn.SelectSingleNode("dcssch:title", $ns)
 					if ($ftn) { $t = Get-LangText $ftn; if ($null -ne $t) { $fo['title'] = $t } }
+					# valueType поля набора (тип значения; вычисляемые/кастомные поля). Грамматика типа.
+					$fvt = $fn.SelectSingleNode("dcssch:valueType", $ns)
+					if ($fvt) { $fvtVal = Decompile-Type $fvt; if ($fvtVal) { $fo['valueType'] = $fvtVal } }
 					[void]$fields.Add($fo)
 				}
 				$so['fields'] = @($fields)
+			}
+			# Вычисляемые поля DataSet (<CalculatedField>) — после Field*, до Parameter*.
+			$calcNodes = @($setNode.SelectNodes("lf:CalculatedField", $ns))
+			if ($calcNodes.Count -gt 0) {
+				$cfs = New-Object System.Collections.ArrayList
+				foreach ($cn in $calcNodes) { [void]$cfs.Add((Build-CalcField $cn)) }
+				$so['calculatedFields'] = @($cfs)
 			}
 			# Schema-параметры дин-списка (прямые <Parameter> под Settings, не в ListSettings)
 			$paramNodes = @($setNode.SelectNodes("lf:Parameter", $ns))

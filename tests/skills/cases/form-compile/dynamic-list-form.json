@@ -21,6 +21,11 @@
         "mainTable": "Catalog.Товары", "dynamicDataRead": true, "autoSaveUserSettings": false,
         "parameters": [ { "name": "ВыборТовара", "type": "CatalogRef.Товары", "valueListAllowed": true, "value": null } ],
         "grouping": "Description > Code",
+        "calculatedFields": [
+          "Метка [Метка строки]: string = Code + \" \" + Description #noFilter #noGroup",
+          { "dataPath": "Сорт", "expression": "Code", "title": "Сорт", "valueType": "string(10)",
+            "presentationExpression": "Code", "orderExpression": [ { "expression": "Code" } ] }
+        ],
         "order": [ "Description", "Code desc" ],
         "filter": [ "Артикул = _ @off @user", "Артикул like %тест%", "Description подобно %abc%",
           { "field": "Code", "op": "=", "userSettingID": "auto", "userSettingPresentation": "Код товара" },

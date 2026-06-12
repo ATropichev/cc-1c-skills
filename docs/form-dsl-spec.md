@@ -940,7 +940,8 @@ Forgiving-синонимы типа: XML-имя (`SpreadSheetDocumentField`) и 
 | `query` | string | Текст запроса (`ManualQuery=true`). Поддерживает `@file.sql` (путь относительно JSON) |
 | `dynamicDataRead` | bool | Динамическое считывание. **Умолчание `true`** — указывать только для отключения (`false`) |
 | `autoFillAvailableFields` | bool | Автозаполнение доступных полей (`<AutoFillAvailableFields>`). **Умолчание `true`** — указывать только для отключения (`false`; тогда поля берутся из явного запроса, не авто). Эмитится первым в `<Settings>` |
-| `fields` | array | Явные поля набора (редко): `{ field, dataPath?, title?, nested? }` — для переопределения заголовка. `nested: true` помечает поле-вложенный набор (`DataSetFieldNestedDataSet` = реквизит табличной части объекта; дефолт — `DataSetFieldField`). Обычно поля выводятся из запроса автоматически |
+| `fields` | array | Явные поля набора (редко): `{ field, dataPath?, title?, valueType?, nested? }` — для переопределения заголовка/типа. `valueType` — тип значения поля (грамматика типа). `nested: true` помечает поле-вложенный набор (`DataSetFieldNestedDataSet` = реквизит табличной части объекта; дефолт — `DataSetFieldField`). Обычно поля выводятся из запроса автоматически |
+| `calculatedFields` | array | Вычисляемые поля набора (см. ниже) |
 | `parameters` | array | Параметры схемы запроса (`DataCompositionSchemaParameter`) — см. ниже |
 | `order` | array | Сортировка списка (см. ниже) |
 | `filter` | array | Отбор списка (грамматика как в СКД) |
@@ -1012,6 +1013,28 @@ Forgiving-синонимы типа: XML-имя (`SpreadSheetDocumentField`) и 
 | `periodAdditionBegin` / `periodAdditionEnd` | Границы дополнения периода: ISO-дата (`xs:dateTime`) или путь к полю (`dcscor:Field`) — авто-детект |
 
 > Грамматика уровня совпадает с элементом `groupBy`/`groupFields` структуры СКД (см. [skd-dsl-spec.md](skd-dsl-spec.md)); отличие от СКД — плоская модель (нет `children`/`selection`/`order`/детальных записей, которых у группировки списка не бывает).
+
+#### calculatedFields — вычисляемые поля набора
+
+Поля, вычисляемые выражением (XML: `<CalculatedField>` в DataSet). Грамматика как в СКД (см. [skd-dsl-spec.md](skd-dsl-spec.md)).
+
+Shorthand: `"Имя [Заголовок]: тип = Выражение #noField #noFilter #noGroup #noOrder"` — всё кроме имени опционально:
+```json
+"calculatedFields": [
+  "Метка = Code + \" \" + Description",
+  "Маржа [Маржа, руб]: decimal(15,2) = Цена - Закупка #noFilter #noGroup"
+]
+```
+Флаги `#noField`/`#noFilter`(=condition)/`#noGroup`/`#noOrder` → ограничения использования (`useRestriction`).
+
+Объектная форма — для форм-специфичных `presentationExpression` / `orderExpression`:
+```json
+{ "dataPath": "Сорт", "expression": "Code", "title": "Сорт", "valueType": "string(10)",
+  "presentationExpression": "Code",
+  "orderExpression": [ { "expression": "Code", "orderType": "Asc" } ],
+  "useRestriction": { "condition": true, "group": true } }
+```
+`useRestriction` — объект `{ field?, condition?, group?, order? }` (bool) или флаг-строка `"#noFilter #noGroup"`. `orderExpression` — массив `{ expression, orderType?, autoOrder? }`. Тип — `valueType` (синоним `type`).
 
 #### order / filter / conditionalAppearance
 
