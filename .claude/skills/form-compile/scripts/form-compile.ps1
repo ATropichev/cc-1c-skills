@@ -1,4 +1,4 @@
-﻿# form-compile v1.133 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.134 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -5047,6 +5047,134 @@ function Emit-DLInputParameters {
 	X "$indent</dcssch:inputParameters>"
 }
 
+# ── dataParameters (значения параметров запроса в настройках компоновки) — порт из skd-compile ──
+# Грамматика идентична СКД: shorthand "Имя = Значение @off @user" или объект
+# {parameter, value?, valueType?, use?, nilValue?, viewMode?, userSettingID?, userSettingPresentation?}.
+function Test-EmptyValue {
+	param($v)
+	if ($null -eq $v) { return $true }
+	$s = "$v".Trim()
+	if ($s -eq "") { return $true }
+	if ($s -eq "_") { return $true }
+	if ($s.ToLowerInvariant() -eq "null") { return $true }
+	return $false
+}
+function Emit-EmptyValue {
+	param([string]$type, [string]$indent, [string]$tagPrefix = "", [bool]$valueListAllowed = $false)
+	if ($valueListAllowed) { return }
+	$t = if ($null -eq $type) { "" } else { "$type" }
+	$tBare = if ($t -match '^xs:(.+)$') { $matches[1] } else { $t }
+	$pf = $tagPrefix
+	if ($t -eq "") { X "$indent<${pf}value xsi:nil=`"true`"/>" }
+	elseif ($t -eq "StandardPeriod") {
+		X "$indent<${pf}value xsi:type=`"v8:StandardPeriod`">"
+		X "$indent`t<v8:variant xsi:type=`"v8:StandardPeriodVariant`">Custom</v8:variant>"
+		X "$indent`t<v8:startDate>0001-01-01T00:00:00</v8:startDate>"
+		X "$indent`t<v8:endDate>0001-01-01T00:00:00</v8:endDate>"
+		X "$indent</${pf}value>"
+	}
+	elseif ($tBare -match '^string') { X "$indent<${pf}value xsi:type=`"xs:string`"/>" }
+	elseif ($tBare -match '^(date|time)') { X "$indent<${pf}value xsi:type=`"xs:dateTime`">0001-01-01T00:00:00</${pf}value>" }
+	elseif ($tBare -match '^decimal') { X "$indent<${pf}value xsi:type=`"xs:decimal`">0</${pf}value>" }
+	elseif ($tBare -eq "boolean") { X "$indent<${pf}value xsi:type=`"xs:boolean`">false</${pf}value>" }
+	else { X "$indent<${pf}value xsi:nil=`"true`"/>" }
+}
+function Parse-DataParamShorthand {
+	param([string]$s)
+	$result = @{ parameter = ""; value = $null; use = $true; userSettingID = $null; viewMode = $null }
+	if ($s -match '@user') { $result.userSettingID = "auto"; $s = $s -replace '\s*@user', '' }
+	if ($s -match '@off') { $result.use = $false; $s = $s -replace '\s*@off', '' }
+	if ($s -match '@quickAccess') { $result.viewMode = "QuickAccess"; $s = $s -replace '\s*@quickAccess', '' }
+	if ($s -match '@normal') { $result.viewMode = "Normal"; $s = $s -replace '\s*@normal', '' }
+	$s = $s.Trim()
+	if ($s -match '^([^=]+)=\s*(.+)$') {
+		$result.parameter = $Matches[1].Trim()
+		$valStr = $Matches[2].Trim()
+		$periodVariants = @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear")
+		if ($periodVariants -contains $valStr) { $result.value = @{ variant = $valStr } }
+		elseif ($valStr -match '^\d{4}-\d{2}-\d{2}T') { $result.value = $valStr }
+		elseif ($valStr -eq "true" -or $valStr -eq "false") { $result.value = [bool]($valStr -eq "true") }
+		else { $result.value = $valStr }
+	} else { $result.parameter = $s }
+	return $result
+}
+function Emit-DataParameters {
+	param($items, [string]$indent, $blockViewMode = $null)
+	if (-not $items -or @($items).Count -eq 0) { return }
+	X "$indent<dcsset:dataParameters>"
+	foreach ($dp in @($items)) {
+		if ($dp -is [string]) {
+			$parsed = Parse-DataParamShorthand $dp
+			$dpObj = New-Object PSObject
+			$dpObj | Add-Member -NotePropertyName "parameter" -NotePropertyValue $parsed.parameter
+			if ($null -ne $parsed.value) { $dpObj | Add-Member -NotePropertyName "value" -NotePropertyValue $parsed.value }
+			if ($parsed.use -eq $false) { $dpObj | Add-Member -NotePropertyName "use" -NotePropertyValue $false }
+			if ($parsed.userSettingID) { $dpObj | Add-Member -NotePropertyName "userSettingID" -NotePropertyValue $parsed.userSettingID }
+			if ($parsed.viewMode) { $dpObj | Add-Member -NotePropertyName "viewMode" -NotePropertyValue $parsed.viewMode }
+			$dp = $dpObj
+		}
+		X "$indent`t<dcscor:item xsi:type=`"dcsset:SettingsParameterValue`">"
+		if ($dp.use -eq $false) { X "$indent`t`t<dcscor:use>false</dcscor:use>" }
+		X "$indent`t`t<dcscor:parameter>$(Esc-Xml "$($dp.parameter)")</dcscor:parameter>"
+		if ($dp.nilValue -eq $true) {
+			X "$indent`t`t<dcscor:value xsi:nil=`"true`"/>"
+		} elseif ((Test-EmptyValue $dp.value) -and $dp.valueType) {
+			# Явный типизированный пустой (xs:string-плейсхолдер и т.п.)
+			Emit-EmptyValue -type "$($dp.valueType)" -indent "$indent`t`t" -tagPrefix "dcscor:" -valueListAllowed $false
+		} elseif (Test-EmptyValue $dp.value) {
+			# Нет значения и нет valueType → НЕ эмитим value-узел (form дин-список: use=false плейсхолдер).
+			# (В отличие от skd-settings, где значение всегда присутствует.)
+		} elseif ($null -ne $dp.value) {
+			$vtype = "$($dp.valueType)"
+			if (($dp.value -is [PSCustomObject] -or $dp.value -is [hashtable] -or $dp.value -is [System.Collections.IDictionary]) -and ($dp.value.variant)) {
+				$_hasDate = $false; $_hasSD = $false
+				if ($dp.value -is [PSCustomObject]) { $_hasDate = [bool]$dp.value.PSObject.Properties['date']; $_hasSD = [bool]$dp.value.PSObject.Properties['startDate'] }
+				else { $_hasDate = $dp.value.Contains('date'); $_hasSD = $dp.value.Contains('startDate') }
+				$_variantStr = "$($dp.value.variant)"
+				$_isSBD = $_hasDate -or (-not $_hasSD -and $_variantStr -like 'BeginningOf*')
+				if ($_isSBD) {
+					$_d = $null
+					if ($dp.value -is [PSCustomObject] -and $dp.value.PSObject.Properties['date']) { $_d = "$($dp.value.date)" }
+					elseif (($dp.value -is [System.Collections.IDictionary]) -and $dp.value.Contains('date')) { $_d = "$($dp.value['date'])" }
+					X "$indent`t`t<dcscor:value xsi:type=`"v8:StandardBeginningDate`">"
+					X "$indent`t`t`t<v8:variant xsi:type=`"v8:StandardBeginningDateVariant`">$(Esc-Xml $_variantStr)</v8:variant>"
+					if ($_variantStr -eq 'Custom') { if (-not $_d) { $_d = '0001-01-01T00:00:00' }; X "$indent`t`t`t<v8:date>$(Esc-Xml $_d)</v8:date>" }
+					X "$indent`t`t</dcscor:value>"
+				} else {
+					$_sd = $null; $_ed = $null
+					if ($dp.value -is [PSCustomObject]) { if ($dp.value.PSObject.Properties['startDate']) { $_sd = "$($dp.value.startDate)" }; if ($dp.value.PSObject.Properties['endDate']) { $_ed = "$($dp.value.endDate)" } }
+					else { if ($dp.value.Contains('startDate')) { $_sd = "$($dp.value['startDate'])" }; if ($dp.value.Contains('endDate')) { $_ed = "$($dp.value['endDate'])" } }
+					X "$indent`t`t<dcscor:value xsi:type=`"v8:StandardPeriod`">"
+					X "$indent`t`t`t<v8:variant xsi:type=`"v8:StandardPeriodVariant`">$(Esc-Xml $_variantStr)</v8:variant>"
+					if ($_variantStr -eq 'Custom') { if (-not $_sd) { $_sd = '0001-01-01T00:00:00' }; if (-not $_ed) { $_ed = '0001-01-01T00:00:00' }; X "$indent`t`t`t<v8:startDate>$(Esc-Xml $_sd)</v8:startDate>"; X "$indent`t`t`t<v8:endDate>$(Esc-Xml $_ed)</v8:endDate>" }
+					X "$indent`t`t</dcscor:value>"
+				}
+			} elseif ($vtype -match '^[a-zA-Z]+:') {
+				$vStr = if ($dp.value -is [bool]) { "$($dp.value)".ToLower() } else { "$($dp.value)" }
+				X "$indent`t`t<dcscor:value xsi:type=`"$vtype`">$(Esc-Xml $vStr)</dcscor:value>"
+			} elseif ($vtype -eq 'boolean' -or $dp.value -is [bool]) {
+				X "$indent`t`t<dcscor:value xsi:type=`"xs:boolean`">$(Esc-Xml ("$($dp.value)".ToLower()))</dcscor:value>"
+			} elseif ($vtype -match '^date' -or "$($dp.value)" -match '^\d{4}-\d{2}-\d{2}T') {
+				X "$indent`t`t<dcscor:value xsi:type=`"xs:dateTime`">$(Esc-Xml "$($dp.value)")</dcscor:value>"
+			} elseif ($vtype -match '^decimal') {
+				X "$indent`t`t<dcscor:value xsi:type=`"xs:decimal`">$(Esc-Xml "$($dp.value)")</dcscor:value>"
+			} elseif ($vtype -match '^string') {
+				X "$indent`t`t<dcscor:value xsi:type=`"xs:string`">$(Esc-Xml "$($dp.value)")</dcscor:value>"
+			} elseif ("$($dp.value)" -match '^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.' -or "$($dp.value)" -match '^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') {
+				X "$indent`t`t<dcscor:value xsi:type=`"dcscor:DesignTimeValue`">$(Esc-Xml "$($dp.value)")</dcscor:value>"
+			} else {
+				X "$indent`t`t<dcscor:value xsi:type=`"xs:string`">$(Esc-Xml "$($dp.value)")</dcscor:value>"
+			}
+		}
+		if ($dp.viewMode) { X "$indent`t`t<dcsset:viewMode>$(Esc-Xml "$($dp.viewMode)")</dcsset:viewMode>" }
+		if ($dp.userSettingID) { $uid = if ("$($dp.userSettingID)" -eq "auto") { New-Guid-String } else { "$($dp.userSettingID)" }; X "$indent`t`t<dcsset:userSettingID>$(Esc-Xml $uid)</dcsset:userSettingID>" }
+		if ($dp.userSettingPresentation) { Emit-MLText -tag "dcsset:userSettingPresentation" -text $dp.userSettingPresentation -indent "$indent`t`t" }
+		X "$indent`t</dcscor:item>"
+	}
+	if ($null -ne $blockViewMode) { X "$indent`t<dcsset:viewMode>$(Esc-Xml "$blockViewMode")</dcsset:viewMode>" }
+	X "$indent</dcsset:dataParameters>"
+}
+
 function Emit-DLParameter {
 	param($p, $parsed, [string]$indent)
 	X "$indent<Parameter>"
@@ -5066,6 +5194,9 @@ function Emit-DLParameter {
 	$valIsArray = ($parsed.value -is [array]) -or ($parsed.value -is [System.Collections.IList] -and $parsed.value -isnot [string])
 	if ($valIsArray) {
 		foreach ($v in @($parsed.value)) { Emit-DLValue -type $parsed.type -val $v -indent $ci -valueListAllowed $false }
+	} elseif ($vla -and (Test-DLEmptyValue $parsed.value) -and $parsed.valueExplicit) {
+		# valueListAllowed + явный пустой (value:null от декомпилятора) → платформа здесь пишет nil
+		X "$ci<dcssch:value xsi:nil=`"true`"/>"
 	} else {
 		Emit-DLValue -type $parsed.type -val $parsed.value -indent $ci -valueListAllowed $vla
 	}
@@ -5114,7 +5245,7 @@ function Emit-DLParameters {
 			} elseif ((Has-DLProp $p 'valueType') -and $p.valueType) {
 				$resolvedType = Resolve-TypeStr "$($p.valueType)"
 			}
-			$parsed = @{ name = "$($p.name)"; type = $resolvedType; value = $(if (Has-DLProp $p 'value') { $p.value } else { $null }); title = $null }
+			$parsed = @{ name = "$($p.name)"; type = $resolvedType; value = $(if (Has-DLProp $p 'value') { $p.value } else { $null }); valueExplicit = (Has-DLProp $p 'value'); title = $null }
 			if ((Has-DLProp $p 'valueListAllowed') -and $p.valueListAllowed -eq $true) { $parsed.valueListAllowed = $true }
 			if ((Has-DLProp $p 'hidden') -and $p.hidden -eq $true) { $parsed.hidden = $true }
 		}
@@ -5355,6 +5486,8 @@ function Emit-Attributes {
 			} else {
 				# Полный каноничный скелет (умолчание, ~93% форм) — без изменений.
 				Emit-Filter -items $st.filter -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_FILTER_ID
+				# dataParameters — после filter, до order (XSD-порядок ListSettings)
+				if ($st.PSObject.Properties['dataParameters']) { Emit-DataParameters -items $st.dataParameters -indent $lsi }
 				Emit-Order -items $st.order -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_ORDER_ID
 				Emit-ConditionalAppearance -items $st.conditionalAppearance -indent $lsi -blockViewMode 'Normal' -blockUserSettingID $script:CANON_CA_ID
 				X "$lsi<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>"

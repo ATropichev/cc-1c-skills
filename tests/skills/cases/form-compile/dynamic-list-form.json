@@ -19,8 +19,10 @@
     "attributes": [
       { "name": "Список", "type": "DynamicList", "useAlways": ["~Артикул", "Список.Code", "Description"], "settings": {
         "mainTable": "Catalog.Товары", "dynamicDataRead": true, "autoSaveUserSettings": false,
+        "parameters": [ { "name": "ВыборТовара", "type": "CatalogRef.Товары", "valueListAllowed": true, "value": null } ],
         "order": [ "Description", "Code desc" ],
         "filter": [ "Артикул = _ @off @user", "Артикул like %тест%", "Description подобно %abc%" ],
+        "dataParameters": [ "ВыборТовара @off" ],
         "conditionalAppearance": [ { "filter": ["Артикул = _"], "appearance": { "ЦветТекста": "web:Red" } } ]
       } }
     ],

@@ -939,6 +939,7 @@ Forgiving-синонимы типа: XML-имя (`SpreadSheetDocumentField`) и 
 | `parameters` | array | Параметры схемы запроса (`DataCompositionSchemaParameter`) — см. ниже |
 | `order` | array | Сортировка списка (см. ниже) |
 | `filter` | array | Отбор списка (грамматика как в СКД) |
+| `dataParameters` | array | Значения параметров запроса в настройках (`<dcsset:dataParameters>`). **Грамматика как в СКД**: shorthand `"Имя = Значение @off @user"` или объект `{ parameter, value?, valueType?, use?, nilValue?, viewMode?, userSettingID?, userSettingPresentation? }`. В дин-списке частый паттерн — плейсхолдер отключённого параметра без значения: `"ИмяПараметра @off"` |
 | `conditionalAppearance` | array | Условное оформление списка (грамматика как в СКД) |
 
 `ManualQuery` выводится из наличия `query` — отдельным ключом не задаётся.
@@ -972,6 +973,8 @@ Forgiving-синонимы типа: XML-имя (`SpreadSheetDocumentField`) и 
 | `value` | Умолчание — пустое (`xsi:nil`), даже при заданном типе |
 
 Объектные ключи (как в СКД): `name`, `title`, `type`/`valueType`, `value`, `valueListAllowed`, `useRestriction`, `availableAsField`, `expression`, `availableValues` (`[{ value, presentation }]`), `inputParameters`, `denyIncompleteValues`, `use`.
+
+> **`value: null` при `valueListAllowed: true`** — явный маркер «эмитить `<dcssch:value xsi:nil/>`». Платформа пишет nil-значение для valueListAllowed-параметра не всегда (корпус 27 с / 47 без); по умолчанию (ключ `value` отсутствует) компилятор его НЕ эмитит. Декомпилятор ставит `value: null`, когда оригинал содержит nil-тег.
 
 #### order / filter / conditionalAppearance
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.133 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.134 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -4786,6 +4786,149 @@ def emit_dl_input_parameters(lines, ip, indent):
     lines.append(f'{indent}</dcssch:inputParameters>')
 
 
+# ── dataParameters (значения параметров запроса в настройках компоновки) — порт из skd ──
+def _test_empty_value(v):
+    if v is None:
+        return True
+    s = str(v).strip()
+    return s == '' or s == '_' or s.lower() == 'null'
+
+
+def emit_empty_value(lines, type_str, indent, tag_prefix='', value_list_allowed=False):
+    if value_list_allowed:
+        return
+    t = type_str or ''
+    t_bare = t[3:] if t.startswith('xs:') else t
+    pf = tag_prefix
+    if t == '':
+        lines.append(f'{indent}<{pf}value xsi:nil="true"/>')
+    elif t == 'StandardPeriod':
+        lines.append(f'{indent}<{pf}value xsi:type="v8:StandardPeriod">')
+        lines.append(f'{indent}\t<v8:variant xsi:type="v8:StandardPeriodVariant">Custom</v8:variant>')
+        lines.append(f'{indent}\t<v8:startDate>0001-01-01T00:00:00</v8:startDate>')
+        lines.append(f'{indent}\t<v8:endDate>0001-01-01T00:00:00</v8:endDate>')
+        lines.append(f'{indent}</{pf}value>')
+    elif re.match(r'^string', t_bare):
+        lines.append(f'{indent}<{pf}value xsi:type="xs:string"/>')
+    elif re.match(r'^(date|time)', t_bare):
+        lines.append(f'{indent}<{pf}value xsi:type="xs:dateTime">0001-01-01T00:00:00</{pf}value>')
+    elif re.match(r'^decimal', t_bare):
+        lines.append(f'{indent}<{pf}value xsi:type="xs:decimal">0</{pf}value>')
+    elif t_bare == 'boolean':
+        lines.append(f'{indent}<{pf}value xsi:type="xs:boolean">false</{pf}value>')
+    else:
+        lines.append(f'{indent}<{pf}value xsi:nil="true"/>')
+
+
+_DP_PERIOD_VARIANTS = {"Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear"}
+
+
+def parse_data_param_shorthand(s):
+    result = {'parameter': '', 'value': None, 'use': True, 'userSettingID': None, 'viewMode': None}
+    if '@user' in s:
+        result['userSettingID'] = 'auto'; s = re.sub(r'\s*@user', '', s)
+    if '@off' in s:
+        result['use'] = False; s = re.sub(r'\s*@off', '', s)
+    if '@quickAccess' in s:
+        result['viewMode'] = 'QuickAccess'; s = re.sub(r'\s*@quickAccess', '', s)
+    if '@normal' in s:
+        result['viewMode'] = 'Normal'; s = re.sub(r'\s*@normal', '', s)
+    s = s.strip()
+    m = re.match(r'^([^=]+)=\s*(.+)$', s)
+    if m:
+        result['parameter'] = m.group(1).strip()
+        val_str = m.group(2).strip()
+        if val_str in _DP_PERIOD_VARIANTS:
+            result['value'] = {'variant': val_str}
+        elif re.match(r'^\d{4}-\d{2}-\d{2}T', val_str):
+            result['value'] = val_str
+        elif val_str in ('true', 'false'):
+            result['value'] = (val_str == 'true')
+        else:
+            result['value'] = val_str
+    else:
+        result['parameter'] = s
+    return result
+
+
+def emit_data_parameters(lines, items, indent, block_view_mode=None):
+    if not items or len(items) == 0:
+        return
+    lines.append(f'{indent}<dcsset:dataParameters>')
+    for dp in items:
+        if isinstance(dp, str):
+            parsed = parse_data_param_shorthand(dp)
+            dp = {'parameter': parsed['parameter']}
+            if parsed['value'] is not None:
+                dp['value'] = parsed['value']
+            if parsed['use'] is False:
+                dp['use'] = False
+            if parsed['userSettingID']:
+                dp['userSettingID'] = parsed['userSettingID']
+            if parsed['viewMode']:
+                dp['viewMode'] = parsed['viewMode']
+        lines.append(f'{indent}\t<dcscor:item xsi:type="dcsset:SettingsParameterValue">')
+        if dp.get('use') is False:
+            lines.append(f'{indent}\t\t<dcscor:use>false</dcscor:use>')
+        lines.append(f'{indent}\t\t<dcscor:parameter>{esc_xml(str(dp.get("parameter", "")))}</dcscor:parameter>')
+        vtype = str(dp.get('valueType') or '')
+        val = dp.get('value')
+        if dp.get('nilValue') is True:
+            lines.append(f'{indent}\t\t<dcscor:value xsi:nil="true"/>')
+        elif _test_empty_value(val) and vtype:
+            emit_empty_value(lines, vtype, f'{indent}\t\t', tag_prefix='dcscor:', value_list_allowed=False)
+        elif _test_empty_value(val):
+            pass  # нет значения → не эмитим value-узел (form дин-список: use=false плейсхолдер)
+        elif val is not None:
+            if isinstance(val, dict) and val.get('variant'):
+                variant = str(val.get('variant'))
+                has_date = 'date' in val
+                has_sd = 'startDate' in val
+                is_sbd = has_date or (not has_sd and variant.startswith('BeginningOf'))
+                if is_sbd:
+                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="v8:StandardBeginningDate">')
+                    lines.append(f'{indent}\t\t\t<v8:variant xsi:type="v8:StandardBeginningDateVariant">{esc_xml(variant)}</v8:variant>')
+                    if variant == 'Custom':
+                        d = str(val.get('date') or '0001-01-01T00:00:00')
+                        lines.append(f'{indent}\t\t\t<v8:date>{esc_xml(d)}</v8:date>')
+                    lines.append(f'{indent}\t\t</dcscor:value>')
+                else:
+                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="v8:StandardPeriod">')
+                    lines.append(f'{indent}\t\t\t<v8:variant xsi:type="v8:StandardPeriodVariant">{esc_xml(variant)}</v8:variant>')
+                    if variant == 'Custom':
+                        sd = str(val.get('startDate') or '0001-01-01T00:00:00')
+                        ed = str(val.get('endDate') or '0001-01-01T00:00:00')
+                        lines.append(f'{indent}\t\t\t<v8:startDate>{esc_xml(sd)}</v8:startDate>')
+                        lines.append(f'{indent}\t\t\t<v8:endDate>{esc_xml(ed)}</v8:endDate>')
+                    lines.append(f'{indent}\t\t</dcscor:value>')
+            elif re.match(r'^[a-zA-Z]+:', vtype):
+                v_str = str(val).lower() if isinstance(val, bool) else str(val)
+                lines.append(f'{indent}\t\t<dcscor:value xsi:type="{vtype}">{esc_xml(v_str)}</dcscor:value>')
+            elif vtype == 'boolean' or isinstance(val, bool):
+                lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:boolean">{esc_xml(str(val).lower())}</dcscor:value>')
+            elif re.match(r'^date', vtype) or re.match(r'^\d{4}-\d{2}-\d{2}T', str(val)):
+                lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:dateTime">{esc_xml(str(val))}</dcscor:value>')
+            elif re.match(r'^decimal', vtype):
+                lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:decimal">{esc_xml(str(val))}</dcscor:value>')
+            elif re.match(r'^string', vtype):
+                lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:string">{esc_xml(str(val))}</dcscor:value>')
+            elif re.match(r'^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.', str(val)) or re.match(r'^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(val)):
+                lines.append(f'{indent}\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml(str(val))}</dcscor:value>')
+            else:
+                lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:string">{esc_xml(str(val))}</dcscor:value>')
+        if dp.get('viewMode'):
+            lines.append(f'{indent}\t\t<dcsset:viewMode>{esc_xml(str(dp["viewMode"]))}</dcsset:viewMode>')
+        if dp.get('userSettingID'):
+            uid = new_uuid() if str(dp['userSettingID']) == 'auto' else str(dp['userSettingID'])
+            lines.append(f'{indent}\t\t<dcsset:userSettingID>{esc_xml(uid)}</dcsset:userSettingID>')
+        if dp.get('userSettingPresentation'):
+            emit_mltext(lines, f'{indent}\t\t', 'dcsset:userSettingPresentation', dp['userSettingPresentation'])
+        lines.append(f'{indent}\t</dcscor:item>')
+    if block_view_mode is not None:
+        lines.append(f'{indent}\t<dcsset:viewMode>{esc_xml(str(block_view_mode))}</dcsset:viewMode>')
+    lines.append(f'{indent}</dcsset:dataParameters>')
+
+
 def emit_dl_parameter(lines, p, parsed, indent):
     is_obj = not isinstance(p, str)
     lines.append(f'{indent}<Parameter>')
@@ -4811,6 +4954,9 @@ def emit_dl_parameter(lines, p, parsed, indent):
     if isinstance(pv, list):
         for v in pv:
             emit_dl_value(lines, parsed.get('type', ''), v, ci, False)
+    elif vla and is_dl_empty_value(pv) and parsed.get('value_explicit'):
+        # valueListAllowed + явный пустой (value:null от декомпилятора) → платформа пишет nil
+        lines.append(f'{ci}<dcssch:value xsi:nil="true"/>')
     else:
         emit_dl_value(lines, parsed.get('type', ''), pv, ci, vla)
     # useRestriction — ВСЕГДА; дефолт true; false только при явном useRestriction:false.
@@ -4865,7 +5011,8 @@ def emit_dl_parameters(lines, params, indent):
             elif p.get('valueType'):
                 resolved_type = resolve_type_str(str(p['valueType']))
             parsed = {'name': str(p.get('name', '')), 'type': resolved_type,
-                      'value': p.get('value') if 'value' in p else None, 'title': None}
+                      'value': p.get('value') if 'value' in p else None,
+                      'value_explicit': ('value' in p), 'title': None}
             if p.get('valueListAllowed') is True:
                 parsed['valueListAllowed'] = True
             if p.get('hidden') is True:
@@ -5094,6 +5241,9 @@ def emit_attributes(lines, attrs, indent, conditional_appearance=None):
             else:
                 # Полный каноничный скелет (умолчание, ~93% форм) — без изменений.
                 emit_filter(lines, s.get('filter'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_FILTER_ID)
+                # dataParameters — после filter, до order (XSD-порядок ListSettings)
+                if 'dataParameters' in s:
+                    emit_data_parameters(lines, s.get('dataParameters'), lsi)
                 emit_order(lines, s.get('order'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_ORDER_ID)
                 emit_conditional_appearance(lines, s.get('conditionalAppearance'), lsi, block_view_mode='Normal', block_user_setting_id=CANON_CA_ID)
                 lines.append(f'{lsi}<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>')

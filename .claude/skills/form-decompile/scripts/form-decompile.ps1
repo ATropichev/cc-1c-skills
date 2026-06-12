@@ -1,4 +1,4 @@
-﻿# form-decompile v0.107 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.108 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1231,6 +1231,44 @@ function Build-DLInputParameters {
 	return @($items)
 }
 
+# dcsset:dataParameters → массив (shorthand "Имя @off" для value-less / объект для типизированного
+# значения). Грамматика зеркалит skd-compile Emit-DataParameters (form-контекст: значение опционально,
+# в отличие от skd-settings). Без «auto»-компактизации (нужна машинерия сравнения с top-level).
+function Build-FormDataParameters {
+	param($dpNode)
+	$entries = @()
+	foreach ($it in @($dpNode.SelectNodes("dcscor:item", $ns))) {
+		$pn = Get-Text $it "dcscor:parameter"
+		$use = Get-Text $it "dcscor:use"
+		$valNode = $it.SelectSingleNode("dcscor:value", $ns)
+		$usidN = $it.SelectSingleNode("dcsset:userSettingID", $ns)
+		$vmN = $it.SelectSingleNode("dcsset:viewMode", $ns)
+		$uspN = $it.SelectSingleNode("dcsset:userSettingPresentation", $ns)
+		if ($valNode -or $usidN -or $vmN -or $uspN) {
+			$obj = [ordered]@{ parameter = $pn }
+			if ($valNode) {
+				if ($valNode.GetAttribute("nil", $NS_XSI) -eq 'true') { $obj['nilValue'] = $true }
+				else {
+					$vType = $valNode.GetAttribute("type", $NS_XSI); $vVal = $valNode.InnerText
+					if ($vType -match 'decimal$' -and $vVal -match '^-?\d+$') { $obj['value'] = [int]$vVal }
+					elseif ($vType -match 'boolean$') { $obj['value'] = ($vVal -eq 'true') }
+					else { $obj['value'] = $vVal }
+					if ($vType) { $obj['valueType'] = $vType }
+				}
+			}
+			if ($use -eq 'false') { $obj['use'] = $false }
+			if ($usidN) { $obj['userSettingID'] = 'auto' }
+			if ($vmN) { $obj['viewMode'] = $vmN.InnerText }
+			if ($uspN) { $usp = Get-MLText $uspN; if ($null -ne $usp) { $obj['userSettingPresentation'] = $usp } }
+			$entries += $obj
+		} else {
+			$s = $pn; if ($use -eq 'false') { $s += ' @off' }
+			$entries += $s
+		}
+	}
+	return ,$entries
+}
+
 function Build-DLParameter {
 	param($pNode)
 	$name = Get-Child $pNode 'name'
@@ -1249,10 +1287,14 @@ function Build-DLParameter {
 	$vtNode = $pNode.SelectSingleNode("dcssch:valueType", $ns)
 	$typeVal = $null
 	if ($vtNode) { $typeVal = Decompile-Type $vtNode; if ($typeVal) { $o['type'] = $typeVal } }
-	# value — опускаем nil (дефолт)
+	# value — опускаем nil (дефолт), КРОМЕ valueListAllowed+nil: платформа пишет <value xsi:nil/>
+	# не всегда (корпус 27 с / 47 без), а компилятор при valueListAllowed по умолчанию его НЕ эмитит →
+	# явный маркер value:null, чтобы реэмитить nil. (Различается через Has-DLProp в компиляторе.)
 	$vNode = $pNode.SelectSingleNode("dcssch:value", $ns)
 	if ($vNode -and ($vNode.GetAttribute("nil", $NS_XSI) -ne 'true')) {
 		$o['value'] = Convert-TypedValue -raw $vNode.InnerText -xsiType ($vNode.GetAttribute("type", $NS_XSI))
+	} elseif ($vNode -and ((Get-Child $pNode 'valueListAllowed') -eq 'true')) {
+		$o['value'] = $null
 	}
 	# useRestriction — опускаем true (дефолт), фиксируем false
 	if ((Get-Child $pNode 'useRestriction') -eq 'false') { $o['useRestriction'] = $false }
@@ -2498,6 +2540,13 @@ if ($attrsNode) {
 				if ($caNode -and $caNode.SelectSingleNode("dcsset:item", $ns)) {
 					$ca = Build-ConditionalAppearance -caNode $caNode -loc "settings/conditionalAppearance"
 					if (@($ca).Count -gt 0) { $so['conditionalAppearance'] = @($ca) }
+				}
+				# Параметры данных компоновки (dcsset:dataParameters) — значения параметров запроса в
+				# настройках. Грамматика как у СКД (shorthand "Имя @off" / объект). См. Build-FormDataParameters.
+				$dpNode = $lsNode.SelectSingleNode("dcsset:dataParameters", $ns)
+				if ($dpNode -and $dpNode.SelectSingleNode("dcscor:item", $ns)) {
+					$dp = Build-FormDataParameters $dpNode
+					if (@($dp).Count -gt 0) { $so['dataParameters'] = @($dp) }
 				}
 				# Форма скелета ListSettings: дескриптор только для НЕ-каноничных форм (частичные/минимальные).
 				# Канон → $null (компилятор регенерит полный скелет, как раньше).
