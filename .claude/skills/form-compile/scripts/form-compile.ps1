@@ -1,4 +1,4 @@
-﻿# form-compile v1.125 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.126 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -3026,8 +3026,8 @@ $script:genericScalars = @(
 	@{ Tag='Shortcut';              Key='shortcut';              Kind='value' }
 	# Батч простых скаляров (input/radio/group/picDecoration/button): режим выбора незаполненного,
 	# равная ширина колонок, выравнивание детей, масштаб/зум картинки, форма/положение картинки кнопки.
-	# (Table HeaderHeight/FooterHeight/CurrentRowUse — НЕ здесь: строгий Table-XSD требует точной
-	#  позиции, generic-позиция ломает загрузку; отдельная задача в Emit-Table.)
+	# (Table HeaderHeight/FooterHeight/CurrentRowUse — НЕ здесь, а в Emit-Table: pass-through,
+	#  1С толерантна к порядку детей Table — в корпусе те же теги встречаются в разных позициях.)
 	@{ Tag='IncompleteChoiceMode';  Key='incompleteChoiceMode';  Kind='value' }
 	@{ Tag='EqualColumnsWidth';     Key='equalColumnsWidth';     Kind='bool'  }
 	@{ Tag='ChildrenAlign';         Key='childrenAlign';         Kind='value' }
@@ -4305,6 +4305,9 @@ function Emit-Table {
 	if ($el.multipleChoice -eq $true) { X "$inner<MultipleChoice>true</MultipleChoice>" }
 	if ($el.searchOnInput) { X "$inner<SearchOnInput>$($el.searchOnInput)</SearchOnInput>" }
 	if ($null -ne $el.markIncomplete) { X "$inner<AutoMarkIncomplete>$(if ($el.markIncomplete){'true'}else{'false'})</AutoMarkIncomplete>" }
+	# Высота шапки/подвала в строках (pass-through; 1С толерантна к порядку детей Table)
+	if ($null -ne $el.headerHeight) { X "$inner<HeaderHeight>$($el.headerHeight)</HeaderHeight>" }
+	if ($null -ne $el.footerHeight) { X "$inner<FooterHeight>$($el.footerHeight)</FooterHeight>" }
 	if ($el.useAlternationRowColor -eq $true) { X "$inner<UseAlternationRowColor>true</UseAlternationRowColor>" }
 	if ($el.selectionMode) { X "$inner<SelectionMode>$($el.selectionMode)</SelectionMode>" }
 	if ($el.rowSelectionMode) { X "$inner<RowSelectionMode>$($el.rowSelectionMode)</RowSelectionMode>" }
@@ -4315,6 +4318,8 @@ function Emit-Table {
 	if ($el.rowPictureDataPath) { X "$inner<RowPictureDataPath>$($el.rowPictureDataPath)</RowPictureDataPath>" }
 	# RowsPicture — та же конвенция, что ValuesPicture (дефолт LoadTransparent=false; abs/TransparentPixel)
 	Emit-PictureRef -val $el.rowsPicture -picTag 'RowsPicture' -indent $inner
+	# Использование текущей строки таблицы (pass-through; в корпусе соседствует с блоком дин-списка)
+	if ($el.currentRowUse) { X "$inner<CurrentRowUse>$($el.currentRowUse)</CurrentRowUse>" }
 	# Блок свойств дин-список-таблицы (помечена эвристикой 11b.4)
 	if ($el.PSObject.Properties["_dynList"] -and $el._dynList) { Emit-DynListTableBlock -el $el -indent $inner }
 	if ($el.viewStatusLocation) { X "$inner<ViewStatusLocation>$($el.viewStatusLocation)</ViewStatusLocation>" }

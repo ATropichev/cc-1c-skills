@@ -78,6 +78,7 @@
 | `horizontalAlign` | `<HorizontalAlign>` | `Left`, `Center`, `Right` — горизонтальное выравнивание формы |
 | `childrenAlign` | `<ChildrenAlign>` | Выравнивание элементов/заголовков (`ItemsLeftTitlesLeft`, `ItemsRightTitlesLeft`, `None`, …) |
 | `showTitle` | `<ShowTitle>` | `true` / `false` — показывать заголовок формы |
+| `conversationsRepresentation` | `<ConversationsRepresentation>` | `Auto`, `Show`, `DontShow` — отображение панели обсуждений; pass-through (редкое) |
 
 Нераспознанные ключи преобразуются с автоматическим PascalCase (первая буква в верхний регистр).
 
@@ -560,6 +561,9 @@ companion-панели с собственным контентом. Оба не
 | `heightInTableRows` | int | Высота в строках (`<HeightInTableRows>`) — отдельное свойство от `height`; таблица может нести оба |
 | `header` | bool | Показывать шапку |
 | `footer` | bool | Показывать подвал |
+| `headerHeight` | int | Высота шапки в строках (`<HeaderHeight>`); pass-through (редкое, ~35 форм в корпусе) |
+| `footerHeight` | int | Высота подвала в строках (`<FooterHeight>`); pass-through (редкое, ~6 форм) |
+| `currentRowUse` | string | Использование текущей строки таблицы (`<CurrentRowUse>`): `DontUse`, `Use`, `SelectionPresentation`, `SelectionPresentationAndChoice`, `Choice`; pass-through (≠ одноимённое свойство команды) |
 | `commandBarLocation` | string | `None`, `Top`, `Bottom`, `Auto` |
 | `searchStringLocation` | string | `None`, `Top`, `Bottom`, `CommandBar`, `Auto` |
 | `viewStatusLocation` | string | `None`, `Top`, `Bottom`, `Auto` |

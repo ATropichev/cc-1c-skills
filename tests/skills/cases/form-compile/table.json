@@ -16,7 +16,7 @@
   "input": {
     "title": "Просмотр данных",
     "elements": [
-      { "table": "Данные", "path": "Данные", "changeRowSet": true, "titleLocation": "top", "height": 80, "heightInTableRows": 5, "autofill": true, "multipleChoice": true, "searchOnInput": "Use", "markIncomplete": true, "settingsNamedItemDetailedRepresentation": false, "heightControlVariant": "UseHeightInTableRows", "maxRowsCount": 5, "autoMaxRowsCount": false,
+      { "table": "Данные", "path": "Данные", "changeRowSet": true, "titleLocation": "top", "height": 80, "heightInTableRows": 5, "headerHeight": 2, "footerHeight": 1, "currentRowUse": "SelectionPresentationAndChoice", "autofill": true, "multipleChoice": true, "searchOnInput": "Use", "markIncomplete": true, "settingsNamedItemDetailedRepresentation": false, "heightControlVariant": "UseHeightInTableRows", "maxRowsCount": 5, "autoMaxRowsCount": false,
         "viewStatusLocation": "None", "searchControlLocation": "None",
         "excludedCommands": ["Add", "Delete", "MoveUp", "MoveDown"],
         "commandBar": { "autofill": false, "children": [

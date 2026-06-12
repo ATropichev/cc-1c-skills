@@ -18,6 +18,9 @@
 			<MultipleChoice>true</MultipleChoice>
 			<SearchOnInput>Use</SearchOnInput>
 			<AutoMarkIncomplete>true</AutoMarkIncomplete>
+			<HeaderHeight>2</HeaderHeight>
+			<FooterHeight>1</FooterHeight>
+			<CurrentRowUse>SelectionPresentationAndChoice</CurrentRowUse>
 			<ViewStatusLocation>None</ViewStatusLocation>
 			<SearchControlLocation>None</SearchControlLocation>
 			<CommandSet>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.125 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.126 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -4029,6 +4029,11 @@ def emit_table(lines, el, name, eid, indent):
         lines.append(f'{inner}<SearchOnInput>{el["searchOnInput"]}</SearchOnInput>')
     if el.get('markIncomplete') is not None:
         lines.append(f'{inner}<AutoMarkIncomplete>{"true" if el["markIncomplete"] else "false"}</AutoMarkIncomplete>')
+    # Высота шапки/подвала в строках (pass-through; 1С толерантна к порядку детей Table)
+    if el.get('headerHeight') is not None:
+        lines.append(f'{inner}<HeaderHeight>{el["headerHeight"]}</HeaderHeight>')
+    if el.get('footerHeight') is not None:
+        lines.append(f'{inner}<FooterHeight>{el["footerHeight"]}</FooterHeight>')
     if el.get('useAlternationRowColor') is True:
         lines.append(f'{inner}<UseAlternationRowColor>true</UseAlternationRowColor>')
     if el.get('selectionMode'):
@@ -4047,6 +4052,9 @@ def emit_table(lines, el, name, eid, indent):
         lines.append(f'{inner}<RowPictureDataPath>{el["rowPictureDataPath"]}</RowPictureDataPath>')
     # RowsPicture — та же конвенция, что ValuesPicture (дефолт LoadTransparent=false; abs/TransparentPixel)
     emit_picture_ref(lines, el.get('rowsPicture'), 'RowsPicture', inner)
+    # Использование текущей строки таблицы (pass-through; в корпусе соседствует с блоком дин-списка)
+    if el.get('currentRowUse'):
+        lines.append(f'{inner}<CurrentRowUse>{el["currentRowUse"]}</CurrentRowUse>')
     # Блок свойств дин-список-таблицы (помечена эвристикой)
     if el.get('_dynList'):
         emit_dynlist_table_block(lines, el, inner)
