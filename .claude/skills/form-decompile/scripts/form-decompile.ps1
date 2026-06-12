@@ -1,4 +1,4 @@
-﻿# form-decompile v0.117 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.118 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -23,6 +23,13 @@ $xmlDoc = New-Object System.Xml.XmlDocument
 $xmlDoc.PreserveWhitespace = $false
 $xmlDoc.Load($FormPath)
 $root = $xmlDoc.DocumentElement
+
+# Второй документ с сохранением whitespace — только для восстановления ТОЧНОГО числа пробелов
+# в whitespace-only <v8:content> (декорации-распорки без width: число пробелов = ширина). Основной
+# парс (PreserveWhitespace=false) не трогаем; элементная структура обоих документов идентична →
+# навигация по индекс-пути элементов (Resolve-WS). Загрузка лениво-безопасная.
+$script:xmlDocWS = $null
+try { $script:xmlDocWS = New-Object System.Xml.XmlDocument; $script:xmlDocWS.PreserveWhitespace = $true; $script:xmlDocWS.Load($FormPath) } catch { $script:xmlDocWS = $null }
 
 # Ring 2: not a managed Form
 if ($root.LocalName -ne 'Form') {
@@ -334,19 +341,50 @@ function Get-LangText {
 # Title/ToolTip, значит исходно был пробел → возвращаем " " (как Get-MLFormattedValue).
 # Покрывает и одиночную строку (ru-only), и мультиязычную мапу (напр. декорация-разделитель
 # «Пробел» с ru+en пробелами): восстанавливаем " " в каждом языке, где content-узел есть, но пуст.
+# Точное число пробелов whitespace-only <v8:content> из PreserveWhitespace-документа (основной
+# парс стрипает его в ""). Навигация по индекс-пути элементов (структура обоих документов идентична).
+function Resolve-WS {
+	param($contentNode)
+	if (-not $contentNode -or -not $script:xmlDocWS) { return $null }
+	$idxs = New-Object System.Collections.ArrayList
+	$cur = $contentNode
+	while ($cur.ParentNode -and $cur.ParentNode.NodeType -eq [System.Xml.XmlNodeType]::Element) {
+		$i = 0; $sib = $cur.PreviousSibling
+		while ($sib) { if ($sib.NodeType -eq [System.Xml.XmlNodeType]::Element) { $i++ }; $sib = $sib.PreviousSibling }
+		[void]$idxs.Insert(0, $i)
+		$cur = $cur.ParentNode
+	}
+	$wcur = $script:xmlDocWS.DocumentElement
+	foreach ($ix in $idxs) {
+		$els = @(); foreach ($ch in $wcur.ChildNodes) { if ($ch.NodeType -eq [System.Xml.XmlNodeType]::Element) { $els += $ch } }
+		if ($ix -ge $els.Count) { return $null }
+		$wcur = $els[$ix]
+	}
+	return $wcur.InnerText
+}
+
+# Точное восстановление пробела (число): whitespace-only content → реальная строка пробелов из WS-дока.
+function Restore-WSContent {
+	param($contentNode)
+	$ws = Resolve-WS $contentNode
+	if ($ws -and $ws.Trim() -eq '') { return $ws }   # только если действительно whitespace
+	return ' '
+}
+
 function Get-LangTextWS {
 	param($node)
 	$t = Get-LangText $node
 	if ($null -eq $t) { return $null }
 	if ($t -is [string]) {
-		if ($t -eq '' -and $node.SelectSingleNode("v8:item/v8:content", $ns)) { return ' ' }
+		$cn = $node.SelectSingleNode("v8:item/v8:content", $ns)
+		if ($t -eq '' -and $cn) { return (Restore-WSContent $cn) }
 		return $t
 	}
 	foreach ($it in @($node.SelectNodes("v8:item", $ns))) {
 		$lang = $it.SelectSingleNode("v8:lang", $ns)
 		$content = $it.SelectSingleNode("v8:content", $ns)
 		if ($lang -and $content -and $t.Contains($lang.InnerText) -and $t[$lang.InnerText] -eq '') {
-			$t[$lang.InnerText] = ' '
+			$t[$lang.InnerText] = (Restore-WSContent $content)
 		}
 	}
 	return $t
