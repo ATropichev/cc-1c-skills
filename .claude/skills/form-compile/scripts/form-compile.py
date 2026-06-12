@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.136 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.137 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -3166,6 +3166,9 @@ GENERIC_SCALARS = [
     ('Zoomable', 'zoomable', 'bool'),
     ('Shape', 'shape', 'value'),
     ('PictureLocation', 'pictureLocation', 'value'),
+    # Равная ширина элементов (check/radio) / высота заголовка пункта (radio)
+    ('EqualItemsWidth', 'equalItemsWidth', 'bool'),
+    ('ItemTitleHeight', 'itemTitleHeight', 'value'),
 ]
 
 

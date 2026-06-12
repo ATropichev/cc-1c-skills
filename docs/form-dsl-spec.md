@@ -77,6 +77,9 @@
 | `showCloseButton` | `<ShowCloseButton>` | `true` / `false` — показывать кнопку закрытия |
 | `horizontalAlign` | `<HorizontalAlign>` | `Left`, `Center`, `Right` — горизонтальное выравнивание формы |
 | `childrenAlign` | `<ChildrenAlign>` | Выравнивание элементов/заголовков (`ItemsLeftTitlesLeft`, `ItemsRightTitlesLeft`, `None`, …) |
+| `childItemsWidth` | `<ChildItemsWidth>` | Ширина дочерних элементов формы (`Equal`, `LeftWide`, `LeftNarrow`, …) |
+| `verticalAlign` | `<VerticalAlign>` | Вертикальное выравнивание (`Top`/`Center`/`Bottom`) |
+| `horizontalSpacing` | `<HorizontalSpacing>` | Горизонтальный интервал между элементами (`Single`/`Double`/`None`/…) |
 | `showTitle` | `<ShowTitle>` | `true` / `false` — показывать заголовок формы |
 | `conversationsRepresentation` | `<ConversationsRepresentation>` | `Auto`, `Show`, `DontShow` — отображение панели обсуждений; pass-through (редкое) |
 | `collapseItemsByImportanceVariant` | `<CollapseItemsByImportanceVariant>` | `DontUse`, `Use` — сворачивание элементов по важности; pass-through (редкое) |
@@ -491,6 +494,8 @@ companion-панели с собственным контентом. Оба не
 | `path` | string | DataPath |
 | `radioButtonType` | string | `Auto` (по умолчанию), `RadioButtons`, `Tumbler` |
 | `columnsCount` | int | Число колонок раскладки |
+| `itemTitleHeight` | int | Высота заголовка пункта (`<ItemTitleHeight>`) |
+| `equalItemsWidth` | bool | Равная ширина пунктов (`<EqualItemsWidth>`); общий с `check` |
 | `titleLocation` | string | Расположение заголовка. **Нет ключа** → умный дефолт `None`. **`""`** → не выводить тег (платформа применит своё умолчание). Значение → как указано |
 | `choiceList` | array | Варианты выбора: массив `{ value, presentation }` |
 

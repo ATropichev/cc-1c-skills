@@ -1,4 +1,4 @@
-﻿# form-compile v1.136 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.137 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -3053,6 +3053,9 @@ $script:genericScalars = @(
 	@{ Tag='Zoomable';              Key='zoomable';              Kind='bool'  }
 	@{ Tag='Shape';                 Key='shape';                 Kind='value' }
 	@{ Tag='PictureLocation';       Key='pictureLocation';       Kind='value' }
+	# Равная ширина элементов (check/radio) / высота заголовка пункта (radio)
+	@{ Tag='EqualItemsWidth';       Key='equalItemsWidth';       Kind='bool'  }
+	@{ Tag='ItemTitleHeight';       Key='itemTitleHeight';       Kind='value' }
 )
 
 function Emit-GenericScalars {

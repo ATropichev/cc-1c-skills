@@ -1,4 +1,4 @@
-﻿# form-decompile v0.109 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.110 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1413,6 +1413,9 @@ $GENERIC_SCALARS = @(
 	@{ Tag='Zoomable'; Key='zoomable'; Kind='bool' }
 	@{ Tag='Shape'; Key='shape'; Kind='value' }
 	@{ Tag='PictureLocation'; Key='pictureLocation'; Kind='value' }
+	# Равная ширина элементов (check/radio) / высота заголовка пункта (radio)
+	@{ Tag='EqualItemsWidth'; Key='equalItemsWidth'; Kind='bool' }
+	@{ Tag='ItemTitleHeight'; Key='itemTitleHeight'; Kind='value' }
 )
 
 # Захват generic-скаляров. Специфичная обработка (если ключ уже задан) — побеждает.
@@ -2259,7 +2262,7 @@ $titleNode = $root.SelectSingleNode("lf:Title", $ns)
 if ($titleNode) { $t = Get-LangText $titleNode; if ($null -ne $t) { $dsl['title'] = $t } }
 
 # properties (прямые скаляры под <Form>, PascalCase → camelCase)
-$KNOWN_FORM_PROPS = @('AutoTitle','ReportResult','DetailsData','ReportFormType','AutoShowState','ReportResultViewMode','ViewModeApplicationOnSetReportResult','WindowOpeningMode','CommandBarLocation','SaveDataInSettings','AutoSaveDataInSettings','AutoTime','UsePostingMode','RepostOnWrite','AutoURL','AutoFillCheck','Customizable','EnterKeyBehavior','VerticalScroll','Width','Height','Group','UseForFoldersAndItems','SaveWindowSettings','ScalingMode','VerticalSpacing','VariantAppearance','ShowCloseButton','HorizontalAlign','ChildrenAlign','ShowTitle','ConversationsRepresentation','CollapseItemsByImportanceVariant','GroupList')
+$KNOWN_FORM_PROPS = @('AutoTitle','ReportResult','DetailsData','ReportFormType','AutoShowState','ReportResultViewMode','ViewModeApplicationOnSetReportResult','WindowOpeningMode','CommandBarLocation','SaveDataInSettings','AutoSaveDataInSettings','AutoTime','UsePostingMode','RepostOnWrite','AutoURL','AutoFillCheck','Customizable','EnterKeyBehavior','VerticalScroll','Width','Height','Group','UseForFoldersAndItems','SaveWindowSettings','ScalingMode','VerticalSpacing','VariantAppearance','ShowCloseButton','HorizontalAlign','ChildrenAlign','ShowTitle','ConversationsRepresentation','CollapseItemsByImportanceVariant','GroupList','ChildItemsWidth','VerticalAlign','HorizontalSpacing')
 $props = [ordered]@{}
 foreach ($pn in $KNOWN_FORM_PROPS) {
 	$v = Get-Child $root $pn

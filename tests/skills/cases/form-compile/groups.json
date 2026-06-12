@@ -15,7 +15,7 @@
   "validatePath": "DataProcessors/СГруппами/Forms/Форма/Ext/Form.xml",
   "input": {
     "title": "Группы",
-    "properties": { "showCloseButton": false, "horizontalAlign": "Left", "childrenAlign": "ItemsLeftTitlesLeft" },
+    "properties": { "showCloseButton": false, "horizontalAlign": "Left", "childrenAlign": "ItemsLeftTitlesLeft", "childItemsWidth": "Equal", "verticalAlign": "Top", "horizontalSpacing": "Double" },
     "elements": [
       { "cmdBar": "КоманднаяПанель", "autofill": true },
       { "group": "horizontal", "name": "ГруппаШапка", "behavior": "usual", "showTitle": true, "title": "Шапка", "shortcut": "Ctrl+G", "childrenAlign": "ItemsRightTitlesLeft", "horizontalStretch": true, "groupHorizontalAlign": "Right", "throughAlign": "Use", "verticalAlign": "Top", "childItemsWidth": "Equal", "horizontalSpacing": "None", "children": [

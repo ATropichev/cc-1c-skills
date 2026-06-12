@@ -35,6 +35,8 @@
         "title": "Способ курса",
         "radioButtonType": "Auto",
         "columnsCount": 1,
+        "itemTitleHeight": 1,
+        "equalItemsWidth": false,
         "choiceList": [
           { "value": "Enum.СпособыКурса.EnumValue.Авто",   "presentation": { "ru": "Автоматически", "en": "Automatic" } },
           { "value": "Enum.СпособыКурса.EnumValue.Ручной", "presentation": "вручную" },

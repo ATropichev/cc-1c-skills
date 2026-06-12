@@ -65,6 +65,8 @@
 					</xr:Value>
 				</xr:Item>
 			</ChoiceList>
+			<EqualItemsWidth>false</EqualItemsWidth>
+			<ItemTitleHeight>1</ItemTitleHeight>
 			<ContextMenu name="СпособКурсаКонтекстноеМеню" id="2"/>
 			<ExtendedTooltip name="СпособКурсаРасширеннаяПодсказка" id="3"/>
 		</RadioButtonField>

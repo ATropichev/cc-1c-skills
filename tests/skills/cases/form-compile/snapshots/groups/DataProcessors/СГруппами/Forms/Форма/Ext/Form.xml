@@ -10,6 +10,9 @@
 	<ShowCloseButton>false</ShowCloseButton>
 	<HorizontalAlign>Left</HorizontalAlign>
 	<ChildrenAlign>ItemsLeftTitlesLeft</ChildrenAlign>
+	<ChildItemsWidth>Equal</ChildItemsWidth>
+	<VerticalAlign>Top</VerticalAlign>
+	<HorizontalSpacing>Double</HorizontalSpacing>
 	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1">
 		<Autofill>false</Autofill>
 	</AutoCommandBar>
