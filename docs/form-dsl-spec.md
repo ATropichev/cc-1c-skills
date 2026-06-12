@@ -407,6 +407,8 @@ companion-панели с собственным контентом. Оба не
 | `choiceFoldersAndItems` | string | Выбор групп и элементов (`<ChoiceFoldersAndItems>`): `Items`, `Folders`, `FoldersAndItems` |
 | `fixingInTable` | string | Фиксация колонки в таблице (`<FixingInTable>`): `Left`, `Right`, `None`. Так же у `labelField` и др. полей |
 | `footerDataPath` | string | DataPath подвала колонки таблицы (`<FooterDataPath>`) |
+| `availableTypes` | string | Ограничение доступных типов поля на составном/характеристика-типе (`<AvailableTypes>`). Формат типа реквизита (§«Типы»): одиночный (`string`, `CatalogRef.Валюты`) или составной через `\|` (`string \| boolean \| decimal(10,2)`). Редкое (~18 в корпусе, только InputField) |
+| `typeDomainEnabled` | bool | Включён ли домен типов (`<TypeDomainEnabled>`); обычно `false` при заданном `availableTypes`. Захват «как есть» |
 | `choiceButtonRepresentation` | string | `ShowInInputField`, `ShowInDropList`, `ShowInDropListAndInInputField` |
 | `minValue` / `maxValue` | number/string | Мин./макс. значение (`<MinValue>`/`<MaxValue>` с обязательным `xsi:type`). **JSON-число → `xs:decimal`, строка → `xs:string`** (тип сохраняется декомпилятором через тип JSON-значения) |
 | `width` | int | Ширина |

@@ -1,4 +1,4 @@
-﻿# form-compile v1.127 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.128 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -3640,6 +3640,10 @@ function Emit-Input {
 	)) {
 		if ($null -ne $el.($p[0])) { X "$inner<$($p[1])>$(if ($el.($p[0])){'true'}else{'false'})</$($p[1])>" }
 	}
+	# Ограничение доступных типов (поле на составном типе): домен типов + явный набор.
+	# availableTypes — формат типа реквизита (§type); Emit-Type сам разбирает мультитип "a | b".
+	if ($null -ne $el.typeDomainEnabled) { X "$inner<TypeDomainEnabled>$(if ($el.typeDomainEnabled){'true'}else{'false'})</TypeDomainEnabled>" }
+	if ($el.availableTypes) { Emit-Type -typeStr $el.availableTypes -indent $inner -tag 'AvailableTypes' }
 	# InputField-специфичные value-скаляры
 	foreach ($p in @(
 		@('choiceForm','ChoiceForm'), @('choiceHistoryOnInput','ChoiceHistoryOnInput'),

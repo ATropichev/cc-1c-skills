@@ -50,7 +50,8 @@
       { "check": "Флаг", "path": "Флаг", "title": "Включено", "warningOnEdit": { "ru": "Изменение флага требует подтверждения", "en": "Confirm flag change" }, "extendedTooltip": { "width": 45 } },
       { "check": "ФлагПлатформенный", "path": "ФлагПлатформенный", "title": "Слева", "titleLocation": "" },
       { "check": "ФлагЯвный", "path": "ФлагЯвный", "title": "Сверху", "titleLocation": "top" },
-      { "check": "ФлагТумблер", "path": "ФлагТумблер", "title": "Тумблер", "checkBoxType": "switcher", "format": "БЛ=Нет; БИ=Да" }
+      { "check": "ФлагТумблер", "path": "ФлагТумблер", "title": "Тумблер", "checkBoxType": "switcher", "format": "БЛ=Нет; БИ=Да" },
+      { "input": "ПолеСоставное", "path": "ПолеСоставное", "title": "Ограничение типов", "typeDomainEnabled": false, "availableTypes": "string | boolean" }
     ],
     "attributes": [
       { "name": "Объект", "type": "DataProcessorObject.ПоляВвода", "main": true },
@@ -67,7 +68,8 @@
       { "name": "ФлагЯвный", "type": "boolean" },
       { "name": "ФлагТумблер", "type": "boolean" },
       { "name": "ЧисловоеПоле", "type": "number(10,2)" },
-      { "name": "ДатаПоля", "type": "dateTime" }
+      { "name": "ДатаПоля", "type": "dateTime" },
+      { "name": "ПолеСоставное", "type": "string | boolean" }
     ],
     "conditionalAppearance": [
       { "selection": ["ОбычноеПоле"], "filter": ["ЧисловоеПоле > 100"], "appearance": { "ЦветФона": "style:FormBackColor", "Текст": "Плоский текст" },

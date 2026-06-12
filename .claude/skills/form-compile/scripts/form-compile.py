@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.127 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.128 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -3728,6 +3728,12 @@ def emit_input(lines, el, name, eid, indent):
                      ('quickChoice', 'QuickChoice'), ('autoChoiceIncomplete', 'AutoChoiceIncomplete')):
         if el.get(key) is not None:
             lines.append(f'{inner}<{tag}>{"true" if el[key] else "false"}</{tag}>')
+    # Ограничение доступных типов (поле на составном типе): домен типов + явный набор.
+    # availableTypes — формат типа реквизита (§type); emit_type сам разбирает мультитип "a | b".
+    if el.get('typeDomainEnabled') is not None:
+        lines.append(f'{inner}<TypeDomainEnabled>{"true" if el["typeDomainEnabled"] else "false"}</TypeDomainEnabled>')
+    if el.get('availableTypes'):
+        emit_type(lines, el['availableTypes'], inner, tag='AvailableTypes')
     # InputField-специфичные value-скаляры
     for key, tag in (('choiceForm', 'ChoiceForm'), ('choiceHistoryOnInput', 'ChoiceHistoryOnInput'),
                      ('choiceFoldersAndItems', 'ChoiceFoldersAndItems'), ('footerDataPath', 'FooterDataPath')):

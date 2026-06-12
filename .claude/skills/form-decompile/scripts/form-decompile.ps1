@@ -1,4 +1,4 @@
-﻿# form-decompile v1.01 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v1.02 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1651,6 +1651,10 @@ function Decompile-Element {
 					} else { $obj[$key] = $txt }
 				}
 			}
+			# Ограничение доступных типов (поле на составном/характеристика-типе): домен типов + явный набор.
+			# availableTypes — тот же формат типа, что у реквизитов (§type), захват через Decompile-Type.
+			$tde = Get-Child $node 'TypeDomainEnabled'; if ($null -ne $tde) { $obj['typeDomainEnabled'] = (To-Bool $tde) }
+			$atNode = $node.SelectSingleNode("lf:AvailableTypes", $ns); if ($atNode) { $at = Decompile-Type $atNode; if ($at) { $obj['availableTypes'] = $at } }
 			$cbr = Get-Child $node 'ChoiceButtonRepresentation'; if ($cbr) { $obj['choiceButtonRepresentation'] = $cbr }
 			$cbp = Get-PictureRef $node 'ChoiceButtonPicture'; if ($null -ne $cbp) { $obj['choiceButtonPicture'] = $cbp }
 			if ((Get-Child $node 'TextEdit') -eq 'false') { $obj['textEdit'] = $false }
