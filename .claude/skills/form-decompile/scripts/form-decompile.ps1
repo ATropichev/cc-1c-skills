@@ -1,4 +1,4 @@
-﻿# form-decompile v0.103 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.104 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1781,6 +1781,8 @@ function Decompile-Element {
 			$fh = Get-Child $node 'FooterHeight'; if ($null -ne $fh) { $obj['footerHeight'] = [int]$fh }
 			# Использование текущей строки (Table-уровень; ≠ command-level CurrentRowUse) — pass-through
 			$cru = Get-Child $node 'CurrentRowUse'; if ($cru) { $obj['currentRowUse'] = $cru }
+			# Запрос обновления дин-списка (всегда PullFromTop в корпусе) — pass-through
+			$rr = Get-Child $node 'RefreshRequest'; if ($rr) { $obj['refreshRequest'] = $rr }
 			# CommandBarLocation: для дин-список-таблицы компилятор авто-инжектит "None" → инвертируем
 			# (нет тега → суппресс-маркер ""; "None" → опускаем = авто-дефолт; иначе → захват).
 			$cbl = Get-Child $node 'CommandBarLocation'
@@ -2207,7 +2209,7 @@ $titleNode = $root.SelectSingleNode("lf:Title", $ns)
 if ($titleNode) { $t = Get-LangText $titleNode; if ($null -ne $t) { $dsl['title'] = $t } }
 
 # properties (прямые скаляры под <Form>, PascalCase → camelCase)
-$KNOWN_FORM_PROPS = @('AutoTitle','ReportResult','DetailsData','ReportFormType','AutoShowState','ReportResultViewMode','ViewModeApplicationOnSetReportResult','WindowOpeningMode','CommandBarLocation','SaveDataInSettings','AutoSaveDataInSettings','AutoTime','UsePostingMode','RepostOnWrite','AutoURL','AutoFillCheck','Customizable','EnterKeyBehavior','VerticalScroll','Width','Height','Group','UseForFoldersAndItems','SaveWindowSettings','ScalingMode','VerticalSpacing','VariantAppearance','ShowCloseButton','HorizontalAlign','ChildrenAlign','ShowTitle','ConversationsRepresentation')
+$KNOWN_FORM_PROPS = @('AutoTitle','ReportResult','DetailsData','ReportFormType','AutoShowState','ReportResultViewMode','ViewModeApplicationOnSetReportResult','WindowOpeningMode','CommandBarLocation','SaveDataInSettings','AutoSaveDataInSettings','AutoTime','UsePostingMode','RepostOnWrite','AutoURL','AutoFillCheck','Customizable','EnterKeyBehavior','VerticalScroll','Width','Height','Group','UseForFoldersAndItems','SaveWindowSettings','ScalingMode','VerticalSpacing','VariantAppearance','ShowCloseButton','HorizontalAlign','ChildrenAlign','ShowTitle','ConversationsRepresentation','CollapseItemsByImportanceVariant','GroupList')
 $props = [ordered]@{}
 foreach ($pn in $KNOWN_FORM_PROPS) {
 	$v = Get-Child $root $pn

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.129 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.130 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -4062,6 +4062,9 @@ def emit_table(lines, el, name, eid, indent):
     # Использование текущей строки таблицы (pass-through; в корпусе соседствует с блоком дин-списка)
     if el.get('currentRowUse'):
         lines.append(f'{inner}<CurrentRowUse>{el["currentRowUse"]}</CurrentRowUse>')
+    # Запрос обновления дин-списка (pass-through; в корпусе всегда PullFromTop)
+    if el.get('refreshRequest'):
+        lines.append(f'{inner}<RefreshRequest>{el["refreshRequest"]}</RefreshRequest>')
     # Блок свойств дин-список-таблицы (помечена эвристикой)
     if el.get('_dynList'):
         emit_dynlist_table_block(lines, el, inner)

@@ -15,7 +15,7 @@
   "validatePath": "Catalogs/Товары/Forms/ФормаСписка/Ext/Form.xml",
   "input": {
     "title": "Товары",
-    "properties": { "saveWindowSettings": false },
+    "properties": { "saveWindowSettings": false, "collapseItemsByImportanceVariant": "DontUse", "groupList": "2:02023637-7868-4a5f-8576-835a76e0c9ba" },
     "attributes": [
       { "name": "Список", "type": "DynamicList", "useAlways": ["~Артикул", "Список.Code", "Description"], "settings": {
         "mainTable": "Catalog.Товары", "dynamicDataRead": true, "autoSaveUserSettings": false,
@@ -25,7 +25,7 @@
       } }
     ],
     "elements": [
-      { "table": "Список", "path": "Список",
+      { "table": "Список", "path": "Список", "refreshRequest": "PullFromTop",
         "additions": { "viewStatus": { "horizontalLocation": "left" } },
         "commandBar": [
           { "searchString": "ПоискСписка", "source": "Список", "width": 15, "horizontalStretch": true }

@@ -1,4 +1,4 @@
-﻿# form-compile v1.129 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.130 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -4326,6 +4326,8 @@ function Emit-Table {
 	Emit-PictureRef -val $el.rowsPicture -picTag 'RowsPicture' -indent $inner
 	# Использование текущей строки таблицы (pass-through; в корпусе соседствует с блоком дин-списка)
 	if ($el.currentRowUse) { X "$inner<CurrentRowUse>$($el.currentRowUse)</CurrentRowUse>" }
+	# Запрос обновления дин-списка (pass-through; в корпусе всегда PullFromTop)
+	if ($el.refreshRequest) { X "$inner<RefreshRequest>$($el.refreshRequest)</RefreshRequest>" }
 	# Блок свойств дин-список-таблицы (помечена эвристикой 11b.4)
 	if ($el.PSObject.Properties["_dynList"] -and $el._dynList) { Emit-DynListTableBlock -el $el -indent $inner }
 	if ($el.viewStatusLocation) { X "$inner<ViewStatusLocation>$($el.viewStatusLocation)</ViewStatusLocation>" }
