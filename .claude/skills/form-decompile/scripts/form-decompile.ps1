@@ -1,4 +1,4 @@
-﻿# form-decompile v0.142 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.143 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -691,6 +691,10 @@ function Build-FilterItem {
 				("$($vt.value)" -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.')
 			if ($vt.type -and $vt.type -notmatch '^xs:' -and -not $autoDetectsDTV) {
 				$valueTypeAttr = $vt.type
+			} elseif ($vt.type -eq 'xs:string' -and ($value -is [string]) -and ($value -match '^(-?\d+(\.\d+)?|\d{4}-\d{2}-\d{2}T)')) {
+				# Значение-строка "1"/"2020-..." с xsi:type="xs:string": компилятор авто-детектит число/дату
+				# (теряет xs:string). Когда авто-вывод дал бы ДРУГОЙ тип — фиксируем явный valueType.
+				$valueTypeAttr = 'xs:string'
 			}
 		}
 	} elseif ($rightNodes.Count -gt 1) {
