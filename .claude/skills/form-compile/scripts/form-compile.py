@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.158 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.159 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -3371,6 +3371,16 @@ GENERIC_SCALARS = [
     ('ItemTitleHeight', 'itemTitleHeight', 'value'),
     # Спец-режим ввода текста (input, моб.: Email/PhoneNumber/...) — листовой enum-скаляр
     ('SpecialTextInputMode', 'specialTextInputMode', 'value'),
+    # Ширина пункта (radio/check) / выбор нескольких значений из выпадающего (input)
+    ('ItemWidth', 'itemWidth', 'value'),
+    ('ShowCheckBoxesInDropList', 'showCheckBoxesInDropList', 'bool'),
+    ('MultipleValueDataPath', 'multipleValueDataPath', 'value'),
+    ('MultipleValuePresentDataPath', 'multipleValuePresentDataPath', 'value'),
+    # Оформление/картинка множественного выбора (input, редко; цвета — текст-контент)
+    ('MultipleValuesTextColor', 'multipleValuesTextColor', 'value'),
+    ('MultipleValuesBackColor', 'multipleValuesBackColor', 'value'),
+    ('MultipleValuePictureShape', 'multipleValuePictureShape', 'value'),
+    ('MultipleValuePictureDataPath', 'multipleValuePictureDataPath', 'value'),
 ]
 
 
@@ -4746,6 +4756,10 @@ def emit_popup(lines, el, name, eid, indent):
 
     emit_title(lines, el, name, inner, auto=True)
     emit_common_flags(lines, el, inner)
+
+    # Источник команд попапа (после Title/ToolTip, перед компаньоном) — как у ButtonGroup/CommandBar
+    if el.get('commandSource'):
+        lines.append(f'{inner}<CommandSource>{el["commandSource"]}</CommandSource>')
 
     emit_command_picture(lines, el.get('picture'), el.get('loadTransparent'), inner)
 

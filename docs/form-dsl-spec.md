@@ -770,7 +770,7 @@ Pages поддерживает `pagesRepresentation`: `None`, `TabsOnTop`, `Tabs
 |----------|-----|----------|
 | `buttonGroup` | string | Имя элемента |
 | `title` | string/object | Заголовок группы |
-| `commandSource` | string | Источник команд группы (`<CommandSource>`): `Form`, `FormCommandPanelGlobalCommands`, `Item.<ИмяЭлемента>`. Также у `cmdBar`. Эмитится «как есть» |
+| `commandSource` | string | Источник команд группы (`<CommandSource>`): `Form`, `FormCommandPanelGlobalCommands`, `Item.<ИмяЭлемента>`. Также у `cmdBar` и `popup`. Эмитится «как есть» |
 | `representation` | string | `Auto`, `Picture`, `Text`, `PictureAndText` |
 | `children` | array | Кнопки (`button`) внутри группы |
 

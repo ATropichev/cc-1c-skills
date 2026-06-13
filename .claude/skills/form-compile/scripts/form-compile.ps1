@@ -1,4 +1,4 @@
-﻿# form-compile v1.158 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.159 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -3253,6 +3253,16 @@ $script:genericScalars = @(
 	@{ Tag='ItemTitleHeight';       Key='itemTitleHeight';       Kind='value' }
 	# Спец-режим ввода текста (input, моб.: Email/PhoneNumber/...) — листовой enum-скаляр
 	@{ Tag='SpecialTextInputMode';  Key='specialTextInputMode';  Kind='value' }
+	# Ширина пункта (radio/check) / выбор нескольких значений из выпадающего (input)
+	@{ Tag='ItemWidth';                    Key='itemWidth';                    Kind='value' }
+	@{ Tag='ShowCheckBoxesInDropList';     Key='showCheckBoxesInDropList';     Kind='bool'  }
+	@{ Tag='MultipleValueDataPath';        Key='multipleValueDataPath';        Kind='value' }
+	@{ Tag='MultipleValuePresentDataPath'; Key='multipleValuePresentDataPath'; Kind='value' }
+	# Оформление/картинка множественного выбора (input, редко; цвета — текст-контент, не атрибуты)
+	@{ Tag='MultipleValuesTextColor';      Key='multipleValuesTextColor';      Kind='value' }
+	@{ Tag='MultipleValuesBackColor';      Key='multipleValuesBackColor';      Kind='value' }
+	@{ Tag='MultipleValuePictureShape';    Key='multipleValuePictureShape';    Kind='value' }
+	@{ Tag='MultipleValuePictureDataPath'; Key='multipleValuePictureDataPath'; Kind='value' }
 )
 
 function Emit-GenericScalars {
@@ -5048,6 +5058,9 @@ function Emit-Popup {
 
 	Emit-Title -el $el -name $name -indent $inner -auto
 	Emit-CommonFlags -el $el -indent $inner
+
+	# Источник команд попапа (после Title/ToolTip, перед компаньоном) — как у ButtonGroup/CommandBar
+	if ($el.commandSource) { X "$inner<CommandSource>$($el.commandSource)</CommandSource>" }
 
 	Emit-CommandPicture -pic $el.picture -elemLt $el.loadTransparent -indent $inner
 

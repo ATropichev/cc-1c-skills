@@ -1,4 +1,4 @@
-﻿# form-decompile v0.133 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.134 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1611,6 +1611,16 @@ $GENERIC_SCALARS = @(
 	@{ Tag='ItemTitleHeight'; Key='itemTitleHeight'; Kind='value' }
 	# Спец-режим ввода текста (input, моб.: Email/PhoneNumber/...) — листовой enum-скаляр
 	@{ Tag='SpecialTextInputMode'; Key='specialTextInputMode'; Kind='value' }
+	# Ширина пункта (radio/check) / выбор нескольких значений из выпадающего (input)
+	@{ Tag='ItemWidth'; Key='itemWidth'; Kind='value' }
+	@{ Tag='ShowCheckBoxesInDropList'; Key='showCheckBoxesInDropList'; Kind='bool' }
+	@{ Tag='MultipleValueDataPath'; Key='multipleValueDataPath'; Kind='value' }
+	@{ Tag='MultipleValuePresentDataPath'; Key='multipleValuePresentDataPath'; Kind='value' }
+	# Оформление/картинка множественного выбора (input, редко; цвета — текст-контент)
+	@{ Tag='MultipleValuesTextColor'; Key='multipleValuesTextColor'; Kind='value' }
+	@{ Tag='MultipleValuesBackColor'; Key='multipleValuesBackColor'; Kind='value' }
+	@{ Tag='MultipleValuePictureShape'; Key='multipleValuePictureShape'; Kind='value' }
+	@{ Tag='MultipleValuePictureDataPath'; Key='multipleValuePictureDataPath'; Kind='value' }
 )
 
 # Захват generic-скаляров. Специфичная обработка (если ключ уже задан) — побеждает.
@@ -2166,6 +2176,9 @@ function Decompile-Element {
 			Add-CommonProps $obj $node $name
 			Set-CommandPicture $obj $node
 			$rep = Get-Child $node 'Representation'; if ($rep) { $obj['representation'] = $rep }
+			# Источник команд попапа (Form / FormCommandPanelGlobalCommands / Item.X) — как у ButtonGroup/CommandBar
+			$cs = Get-Child $node 'CommandSource'
+			if ($cs) { if ($cs -match '^\d+:[0-9a-fA-F]{8}-') { [Console]::Error.WriteLine("form-decompile: CommandSource '$cs' ($name) — ссылка по id, не воспроизводима, опущена") } else { $obj['commandSource'] = $cs } }
 			$kids = Decompile-Children $node
 			if ($kids) { $obj['children'] = $kids }
 		}
