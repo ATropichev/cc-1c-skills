@@ -1,4 +1,4 @@
-﻿# form-compile v1.169 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.170 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -3272,6 +3272,7 @@ $script:genericScalars = @(
 	# Хвост листовых скаляров (по 1 в корпусе): автокоррекция ввода (input) / уникальность команды
 	# (button) / допуск пустого множ. значения (input) / поведение при гориз. сжатии (table)
 	@{ Tag='AutoCorrectionOnTextInput';    Key='autoCorrectionOnTextInput';    Kind='value' }
+	@{ Tag='SpellCheckingOnTextInput';     Key='spellCheckingOnTextInput';     Kind='value' }
 	@{ Tag='CommandUniqueness';            Key='commandUniqueness';            Kind='bool'  }
 	@{ Tag='AllowInputEmptyMultipleValues';Key='allowInputEmptyMultipleValues';Kind='bool'  }
 	@{ Tag='BehaviorOnHorizontalCompression'; Key='behaviorOnHorizontalCompression'; Kind='value' }
@@ -5407,7 +5408,17 @@ function Emit-DataParameters {
 		X "$indent`t<dcscor:item xsi:type=`"dcsset:SettingsParameterValue`">"
 		if ($dp.use -eq $false) { X "$indent`t`t<dcscor:use>false</dcscor:use>" }
 		X "$indent`t`t<dcscor:parameter>$(Esc-Xml "$($dp.parameter)")</dcscor:parameter>"
-		if ($dp.nilValue -eq $true) {
+		$dpValIsArr = ($dp.value -is [array]) -or ($dp.value -is [System.Collections.IList] -and $dp.value -isnot [string])
+		if ($dpValIsArr) {
+			# Список значений параметра (valueListAllowed) — отдельный <dcscor:value> на каждое.
+			$avtype = "$($dp.valueType)"
+			foreach ($v in @($dp.value)) {
+				$vStr = if ($v -is [bool]) { "$v".ToLower() } else { "$v" }
+				if ($avtype -match '^[a-zA-Z]+:') { X "$indent`t`t<dcscor:value xsi:type=`"$avtype`">$(Esc-Xml $vStr)</dcscor:value>" }
+				elseif ("$vStr" -match '^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.' -or "$vStr" -match '^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') { X "$indent`t`t<dcscor:value xsi:type=`"dcscor:DesignTimeValue`">$(Esc-Xml $vStr)</dcscor:value>" }
+				else { X "$indent`t`t<dcscor:value xsi:type=`"xs:string`">$(Esc-Xml $vStr)</dcscor:value>" }
+			}
+		} elseif ($dp.nilValue -eq $true) {
 			X "$indent`t`t<dcscor:value xsi:nil=`"true`"/>"
 		} elseif ((Test-EmptyValue $dp.value) -and $dp.valueType) {
 			# Явный типизированный пустой (xs:string-плейсхолдер и т.п.)

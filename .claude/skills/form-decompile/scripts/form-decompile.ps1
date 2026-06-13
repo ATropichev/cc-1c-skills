@@ -1,4 +1,4 @@
-﻿# form-decompile v0.145 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.146 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1441,13 +1441,18 @@ function Build-FormDataParameters {
 	foreach ($it in @($dpNode.SelectNodes("dcscor:item", $ns))) {
 		$pn = Get-Text $it "dcscor:parameter"
 		$use = Get-Text $it "dcscor:use"
-		$valNode = $it.SelectSingleNode("dcscor:value", $ns)
+		$valNodes = @($it.SelectNodes("dcscor:value", $ns))
+		$valNode = if ($valNodes.Count -ge 1) { $valNodes[0] } else { $null }
 		$usidN = $it.SelectSingleNode("dcsset:userSettingID", $ns)
 		$vmN = $it.SelectSingleNode("dcsset:viewMode", $ns)
 		$uspN = $it.SelectSingleNode("dcsset:userSettingPresentation", $ns)
 		if ($valNode -or $usidN -or $vmN -or $uspN) {
 			$obj = [ordered]@{ parameter = $pn }
-			if ($valNode) {
+			if ($valNodes.Count -gt 1) {
+				# Список значений параметра (valueListAllowed) — захватываем ВСЕ <dcscor:value> массивом
+				$obj['value'] = @($valNodes | ForEach-Object { $_.InnerText })
+				$vt0 = $valNodes[0].GetAttribute("type", $NS_XSI); if ($vt0) { $obj['valueType'] = $vt0 }
+			} elseif ($valNode) {
 				if ($valNode.GetAttribute("nil", $NS_XSI) -eq 'true') { $obj['nilValue'] = $true }
 				else {
 					$vType = $valNode.GetAttribute("type", $NS_XSI); $vVal = $valNode.InnerText
@@ -1640,6 +1645,7 @@ $GENERIC_SCALARS = @(
 	@{ Tag='MultipleValuePictureDataPath'; Key='multipleValuePictureDataPath'; Kind='value' }
 	# Хвост листовых скаляров (по 1): автокоррекция / уникальность команды / пустое множ.значение / гориз.сжатие
 	@{ Tag='AutoCorrectionOnTextInput'; Key='autoCorrectionOnTextInput'; Kind='value' }
+	@{ Tag='SpellCheckingOnTextInput'; Key='spellCheckingOnTextInput'; Kind='value' }
 	@{ Tag='CommandUniqueness'; Key='commandUniqueness'; Kind='bool' }
 	@{ Tag='AllowInputEmptyMultipleValues'; Key='allowInputEmptyMultipleValues'; Kind='bool' }
 	@{ Tag='BehaviorOnHorizontalCompression'; Key='behaviorOnHorizontalCompression'; Kind='value' }

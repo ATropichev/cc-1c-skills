@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.169 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.170 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -3393,6 +3393,7 @@ GENERIC_SCALARS = [
     ('MultipleValuePictureDataPath', 'multipleValuePictureDataPath', 'value'),
     # Хвост листовых скаляров (по 1): автокоррекция / уникальность команды / пустое множ.значение / гориз.сжатие
     ('AutoCorrectionOnTextInput', 'autoCorrectionOnTextInput', 'value'),
+    ('SpellCheckingOnTextInput', 'spellCheckingOnTextInput', 'value'),
     ('CommandUniqueness', 'commandUniqueness', 'bool'),
     ('AllowInputEmptyMultipleValues', 'allowInputEmptyMultipleValues', 'bool'),
     ('BehaviorOnHorizontalCompression', 'behaviorOnHorizontalCompression', 'value'),
@@ -5174,7 +5175,18 @@ def emit_data_parameters(lines, items, indent, block_view_mode=None):
         lines.append(f'{indent}\t\t<dcscor:parameter>{esc_xml(str(dp.get("parameter", "")))}</dcscor:parameter>')
         vtype = str(dp.get('valueType') or '')
         val = dp.get('value')
-        if dp.get('nilValue') is True:
+        if isinstance(val, list):
+            # Список значений параметра (valueListAllowed) — отдельный <dcscor:value> на каждое.
+            avtype = str(dp.get('valueType', ''))
+            for v in val:
+                v_str = ('true' if v else 'false') if isinstance(v, bool) else str(v)
+                if re.match(r'^[a-zA-Z]+:', avtype):
+                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="{avtype}">{esc_xml(v_str)}</dcscor:value>')
+                elif re.match(r'^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.', v_str) or re.match(r'^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', v_str):
+                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml(v_str)}</dcscor:value>')
+                else:
+                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:string">{esc_xml(v_str)}</dcscor:value>')
+        elif dp.get('nilValue') is True:
             lines.append(f'{indent}\t\t<dcscor:value xsi:nil="true"/>')
         elif _test_empty_value(val) and vtype:
             emit_empty_value(lines, vtype, f'{indent}\t\t', tag_prefix='dcscor:', value_list_allowed=False)
