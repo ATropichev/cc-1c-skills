@@ -1,4 +1,4 @@
-﻿# form-decompile v0.122 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.123 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -2592,7 +2592,7 @@ if ($attrsNode) {
 		$isMain = ($ao['main'] -eq $true)   # именно true; main:false (суппресс-маркер) → не-main для Title
 		$tNode = $a.SelectSingleNode("lf:Title", $ns)
 		if ($tNode) {
-			$t = Get-LangText $tNode
+			$t = Get-LangTextWS $tNode   # восстановление значимого пробела (whitespace-заголовок реквизита)
 			if ($null -ne $t) {
 				if ($isMain -or -not ($t -is [string]) -or $t -ne (Title-FromName $ao['name'])) { $ao['title'] = $t }
 			}
