@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.155 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.156 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -5198,6 +5198,12 @@ def emit_dl_parameter(lines, p, parsed, indent):
     if isinstance(pv, list):
         for v in pv:
             emit_dl_value(lines, parsed.get('type', ''), v, ci, False)
+    elif parsed.get('value_explicit') and pv is not None and str(pv) == '' and (str(parsed.get('type', '')) == '' or re.match(r'^string', str(parsed.get('type', '')))):
+        # Явный пустой СТРОКОВЫЙ параметр (value:"" от декомпилятора) → типизированный пустой
+        # <dcssch:value xsi:type="xs:string"/>, НЕ nil. Решается ФОРМОЙ value (""→typed-empty,
+        # null/отсутствие→nil), независимо от valueListAllowed; декомпилятор различает ""/null.
+        # Корпус: 26 xs:string typed-empty.
+        lines.append(f'{ci}<dcssch:value xsi:type="xs:string"/>')
     elif vla and is_dl_empty_value(pv) and parsed.get('value_explicit'):
         # valueListAllowed + явный пустой (value:null от декомпилятора) → платформа пишет nil
         lines.append(f'{ci}<dcssch:value xsi:nil="true"/>')

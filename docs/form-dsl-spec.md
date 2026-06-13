@@ -984,7 +984,7 @@ Forgiving-синонимы типа: XML-имя (`SpreadSheetDocumentField`) и 
 |-----------|-----------|
 | `title` | Авто из имени (camelCase → «Заполнена серия»); явный `title`/`[Заголовок]` — только для переопределения |
 | `useRestriction` | Эмитится всегда, **умолчание `true`**; для выключения — объект `{ "useRestriction": false }` |
-| `value` | Умолчание — пустое (`xsi:nil`), даже при заданном типе |
+| `value` | Нет ключа → `xsi:nil`. **Явная пустая строка `value: ""`** → типизированный пустой `<dcssch:value xsi:type="xs:string"/>` (НЕ nil; платформа так пишет часть пустых строковых параметров — корпус 27). Декомпилятор различает: пустой строковый тег → `""`, nil-тег → ключ опущен/`null` |
 
 Объектные ключи (как в СКД): `name`, `title`, `type`/`valueType`, `value`, `valueListAllowed`, `useRestriction`, `availableAsField`, `expression`, `availableValues` (`[{ value, presentation }]`), `inputParameters`, `denyIncompleteValues`, `use`.
 

@@ -1,4 +1,4 @@
-﻿# form-compile v1.155 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.156 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -5434,6 +5434,12 @@ function Emit-DLParameter {
 	$valIsArray = ($parsed.value -is [array]) -or ($parsed.value -is [System.Collections.IList] -and $parsed.value -isnot [string])
 	if ($valIsArray) {
 		foreach ($v in @($parsed.value)) { Emit-DLValue -type $parsed.type -val $v -indent $ci -valueListAllowed $false }
+	} elseif ($parsed.valueExplicit -and ($null -ne $parsed.value) -and ("$($parsed.value)" -eq '') -and (("$($parsed.type)" -eq '') -or ("$($parsed.type)" -match '^string'))) {
+		# Явный пустой СТРОКОВЫЙ параметр (value:"" от декомпилятора) → типизированный пустой
+		# <dcssch:value xsi:type="xs:string"/>, НЕ nil. Решается ФОРМОЙ value (""→typed-empty,
+		# null/отсутствие→nil), независимо от valueListAllowed; декомпилятор различает ""/null
+		# (Convert-TypedValue пустого xs:string → "", nil → value опущен/null). Корпус: 26 xs:string.
+		X "$ci<dcssch:value xsi:type=`"xs:string`"/>"
 	} elseif ($vla -and (Test-DLEmptyValue $parsed.value) -and $parsed.valueExplicit) {
 		# valueListAllowed + явный пустой (value:null от декомпилятора) → платформа здесь пишет nil
 		X "$ci<dcssch:value xsi:nil=`"true`"/>"
