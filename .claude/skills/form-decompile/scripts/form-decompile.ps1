@@ -1,4 +1,4 @@
-﻿# form-decompile v0.134 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.135 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1616,6 +1616,9 @@ $GENERIC_SCALARS = @(
 	@{ Tag='ShowCheckBoxesInDropList'; Key='showCheckBoxesInDropList'; Kind='bool' }
 	@{ Tag='MultipleValueDataPath'; Key='multipleValueDataPath'; Kind='value' }
 	@{ Tag='MultipleValuePresentDataPath'; Key='multipleValuePresentDataPath'; Kind='value' }
+	# Режим авто-показа кнопок открытия/очистки (input, enum)
+	@{ Tag='AutoShowOpenButtonMode'; Key='autoShowOpenButtonMode'; Kind='value' }
+	@{ Tag='AutoShowClearButtonMode'; Key='autoShowClearButtonMode'; Kind='value' }
 	# Оформление/картинка множественного выбора (input, редко; цвета — текст-контент)
 	@{ Tag='MultipleValuesTextColor'; Key='multipleValuesTextColor'; Kind='value' }
 	@{ Tag='MultipleValuesBackColor'; Key='multipleValuesBackColor'; Kind='value' }

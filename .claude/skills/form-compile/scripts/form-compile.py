@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.160 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.161 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -3377,6 +3377,9 @@ GENERIC_SCALARS = [
     ('ShowCheckBoxesInDropList', 'showCheckBoxesInDropList', 'bool'),
     ('MultipleValueDataPath', 'multipleValueDataPath', 'value'),
     ('MultipleValuePresentDataPath', 'multipleValuePresentDataPath', 'value'),
+    # Режим авто-показа кнопок открытия/очистки (input, enum)
+    ('AutoShowOpenButtonMode', 'autoShowOpenButtonMode', 'value'),
+    ('AutoShowClearButtonMode', 'autoShowClearButtonMode', 'value'),
     # Оформление/картинка множественного выбора (input, редко; цвета — текст-контент)
     ('MultipleValuesTextColor', 'multipleValuesTextColor', 'value'),
     ('MultipleValuesBackColor', 'multipleValuesBackColor', 'value'),
@@ -4562,6 +4565,9 @@ def emit_picture_decoration(lines, el, name, eid, indent):
     if el.get('hyperlink') is True:
         lines.append(f'{inner}<Hyperlink>true</Hyperlink>')
     emit_layout(lines, el, inner)
+    # EnableDrag — фактическое значение (декорация-картинка перетаскиваема; декомпилятор ловит generic-ом)
+    if el.get('enableDrag') is not None:
+        lines.append(f'{inner}<EnableDrag>{"true" if el["enableDrag"] else "false"}</EnableDrag>')
 
     # Оформление (цвета/шрифт/граница) — профиль декорации (1С толерантна к порядку appearance)
     emit_appearance(lines, el, inner, 'decoration')

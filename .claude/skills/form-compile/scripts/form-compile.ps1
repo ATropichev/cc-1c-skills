@@ -1,4 +1,4 @@
-﻿# form-compile v1.160 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.161 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -3260,6 +3260,9 @@ $script:genericScalars = @(
 	@{ Tag='ShowCheckBoxesInDropList';     Key='showCheckBoxesInDropList';     Kind='bool'  }
 	@{ Tag='MultipleValueDataPath';        Key='multipleValueDataPath';        Kind='value' }
 	@{ Tag='MultipleValuePresentDataPath'; Key='multipleValuePresentDataPath'; Kind='value' }
+	# Режим авто-показа кнопок открытия/очистки (input, enum Auto/Always/FilledOnly/…)
+	@{ Tag='AutoShowOpenButtonMode';       Key='autoShowOpenButtonMode';       Kind='value' }
+	@{ Tag='AutoShowClearButtonMode';      Key='autoShowClearButtonMode';      Kind='value' }
 	# Оформление/картинка множественного выбора (input, редко; цвета — текст-контент, не атрибуты)
 	@{ Tag='MultipleValuesTextColor';      Key='multipleValuesTextColor';      Kind='value' }
 	@{ Tag='MultipleValuesBackColor';      Key='multipleValuesBackColor';      Kind='value' }
@@ -4834,6 +4837,8 @@ function Emit-PictureDecoration {
 
 	if ($el.hyperlink -eq $true) { X "$inner<Hyperlink>true</Hyperlink>" }
 	Emit-Layout -el $el -indent $inner
+	# EnableDrag — фактическое значение (декорация-картинка перетаскиваема; декомпилятор ловит generic-ом)
+	if ($null -ne $el.enableDrag) { X "$inner<EnableDrag>$(if ($el.enableDrag){'true'}else{'false'})</EnableDrag>" }
 
 	# Оформление (цвета/шрифт/граница) — профиль декорации (1С толерантна к порядку appearance)
 	Emit-Appearance -el $el -indent $inner -profile 'decoration'
