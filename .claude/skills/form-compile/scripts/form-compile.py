@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.152 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.153 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -4574,6 +4574,12 @@ def emit_picture_field(lines, el, name, eid, indent):
         lines.append(f'{inner}<Hyperlink>true</Hyperlink>')
 
     emit_layout(lines, el, inner)
+
+    # FooterDataPath / FooterText — общие cell-свойства колонки (как у input/labelField)
+    if el.get('footerDataPath'):
+        lines.append(f'{inner}<FooterDataPath>{esc_xml(str(el["footerDataPath"]))}</FooterDataPath>')
+    if el.get('footerText') is not None:
+        emit_mltext(lines, inner, 'FooterText', el['footerText'])
 
     # ValuesPicture — picture (collection) used to render the field's value.
     # Required for a Boolean-bound PictureField to actually show an icon.

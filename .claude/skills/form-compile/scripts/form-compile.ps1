@@ -1,4 +1,4 @@
-﻿# form-compile v1.152 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.153 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -4846,6 +4846,10 @@ function Emit-PictureField {
 	if ($el.hyperlink -eq $true) { X "$inner<Hyperlink>true</Hyperlink>" }
 
 	Emit-Layout -el $el -indent $inner
+
+	# FooterDataPath / FooterText — общие cell-свойства колонки (как у input/labelField)
+	if ($el.footerDataPath) { X "$inner<FooterDataPath>$(Esc-Xml "$($el.footerDataPath)")</FooterDataPath>" }
+	if ($null -ne $el.footerText) { Emit-MLText -tag "FooterText" -text $el.footerText -indent $inner }
 
 	# ValuesPicture — picture (collection) used to render the field's value.
 	# Required for a Boolean-bound PictureField to actually show an icon.

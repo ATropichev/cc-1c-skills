@@ -1,4 +1,4 @@
-﻿# form-decompile v0.127 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.128 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -1977,6 +1977,9 @@ function Decompile-Element {
 			if ((Get-Child $node 'Hyperlink') -eq 'true') { $obj['hyperlink'] = $true }
 			$vp = Get-PictureRef $node 'ValuesPicture'; if ($null -ne $vp) { $obj['valuesPicture'] = $vp }
 			$npt = $node.SelectSingleNode("lf:NonselectedPictureText", $ns); if ($npt) { $t = Get-LangText $npt; if ($null -ne $t) { $obj['nonselectedPictureText'] = $t } }
+			# FooterDataPath / FooterText — общие cell-свойства колонки (как у input/labelField)
+			$fdp = Get-Child $node 'FooterDataPath'; if ($fdp) { $obj['footerDataPath'] = $fdp }
+			$ftxt = $node.SelectSingleNode("lf:FooterText", $ns); if ($ftxt) { $t = Get-LangText $ftxt; if ($null -ne $t) { $obj['footerText'] = $t } }
 		}
 		'CalendarField' {
 			$obj[$key] = $name
