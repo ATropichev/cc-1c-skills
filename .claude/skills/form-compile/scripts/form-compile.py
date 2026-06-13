@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.163 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.164 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -6273,9 +6273,11 @@ def main():
         if main_acb_def.get('horizontalAlign'):
             acb_halign = str(main_acb_def['horizontalAlign'])
     has_acb_children = bool(main_acb_def and isinstance(main_acb_def.get('children'), list) and len(main_acb_def['children']) > 0)
+    # DisplayImportance форменной панели (адаптивная важность) — атрибут тега
+    acb_di_attr = di_attr(main_acb_def) if main_acb_def is not None else ''
     has_inner = bool(acb_halign) or (not acb_autofill) or has_acb_children
     if has_inner:
-        lines.append(f'\t<AutoCommandBar name="{acb_name}" id="-1">')
+        lines.append(f'\t<AutoCommandBar name="{acb_name}" id="-1"{acb_di_attr}>')
         if acb_halign:
             lines.append(f'\t\t<HorizontalAlign>{acb_halign}</HorizontalAlign>')
         if not acb_autofill:
@@ -6287,7 +6289,7 @@ def main():
             lines.append('\t\t</ChildItems>')
         lines.append('\t</AutoCommandBar>')
     else:
-        lines.append(f'\t<AutoCommandBar name="{acb_name}" id="-1"/>')
+        lines.append(f'\t<AutoCommandBar name="{acb_name}" id="-1"{acb_di_attr}/>')
 
     # Events
     if defn.get('events'):

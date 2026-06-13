@@ -1,4 +1,4 @@
-﻿# form-compile v1.163 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.164 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -6364,9 +6364,10 @@ if ($script:mainAcbDef) {
 	}
 }
 $hasAcbChildren = ($script:mainAcbDef -and $script:mainAcbDef.children -and $script:mainAcbDef.children.Count -gt 0)
+$acbDIAttr = if ($script:mainAcbDef) { DI-Attr $script:mainAcbDef } else { "" }   # DisplayImportance форменной панели
 $acbHasInner = ($acbHAlign -or (-not $acbAutofill) -or $hasAcbChildren)
 if ($acbHasInner) {
-	X "`t<AutoCommandBar name=`"$acbName`" id=`"-1`">"
+	X "`t<AutoCommandBar name=`"$acbName`" id=`"-1`"$acbDIAttr>"
 	if ($acbHAlign) { X "`t`t<HorizontalAlign>$acbHAlign</HorizontalAlign>" }
 	if (-not $acbAutofill) { X "`t`t<Autofill>false</Autofill>" }
 	if ($hasAcbChildren) {
@@ -6378,7 +6379,7 @@ if ($acbHasInner) {
 	}
 	X "`t</AutoCommandBar>"
 } else {
-	X "`t<AutoCommandBar name=`"$acbName`" id=`"-1`"/>"
+	X "`t<AutoCommandBar name=`"$acbName`" id=`"-1`"$acbDIAttr/>"
 }
 
 # 12e. Events

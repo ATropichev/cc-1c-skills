@@ -1,4 +1,4 @@
-﻿# form-decompile v0.138 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.139 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 param(
@@ -2583,11 +2583,13 @@ $acb = $root.SelectSingleNode("lf:AutoCommandBar", $ns)
 if ($acb) {
 	$haln = Get-Child $acb 'HorizontalAlign'
 	$acbAutofill = Get-Child $acb 'Autofill'
+	$acbDI = $acb.GetAttribute("DisplayImportance")   # адаптивная важность форменной панели (атрибут тега)
 	$acbKids = Decompile-Children $acb
 	$acbObj = $null
-	if ($haln -or ($acbAutofill -eq 'false') -or $acbKids) {
+	if ($haln -or ($acbAutofill -eq 'false') -or $acbKids -or $acbDI) {
 		$acbObj = [ordered]@{}
 		$acbObj['autoCmdBar'] = $acb.GetAttribute("name")
+		if ($acbDI) { $acbObj['displayImportance'] = $acbDI }
 		if ($haln) { $acbObj['horizontalAlign'] = $haln }
 		if ($acbAutofill -eq 'false') { $acbObj['autofill'] = $false }
 		if ($acbKids) { $acbObj['children'] = $acbKids }
