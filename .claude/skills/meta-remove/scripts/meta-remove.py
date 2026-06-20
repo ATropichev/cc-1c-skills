@@ -137,7 +137,7 @@ def assert_edit_allowed(target_path, require):
         sys.stderr.write(
             f"[support-guard] Операция запрещена: {reason}.\n"
             f"  Цель: {rp}\n"
-            f"  Безопасные пути: доработка через расширение (cfe-*); включить редактирование объекта/корня в конфигураторе; снять с поддержки.\n"
+            f"  Безопасные пути: доработка через расширение (cfe-*); либо support-edit -Path <цель> -Set editable (включить объект) / -Path <дамп> -Capability on (вся конфа read-only) / -Set off-support (снять с поддержки).\n"
             f"  Отключить проверку: editingAllowedCheck = warn|off в .v8-project.json.\n"
         )
         sys.exit(1)

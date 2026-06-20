@@ -128,7 +128,7 @@ function Assert-EditAllowed([string]$targetPath, [string]$require) {
 		if ($mode -eq 'off') { return }
 		# Use Console.Error (not Write-Error) — under ErrorActionPreference=Stop the
 		# latter throws and would be swallowed by this function's own catch.
-		$msg = "[support-guard] Операция запрещена: $reason.`n  Цель: $rp`n  Безопасные пути: доработка через расширение (cfe-*); включить редактирование объекта/корня в конфигураторе; снять с поддержки.`n  Отключить проверку: editingAllowedCheck = warn|off в .v8-project.json."
+		$msg = "[support-guard] Операция запрещена: $reason.`n  Цель: $rp`n  Безопасные пути: доработка через расширение (cfe-*); либо support-edit -Path <цель> -Set editable (включить объект) / -Path <дамп> -Capability on (вся конфа read-only) / -Set off-support (снять с поддержки).`n  Отключить проверку: editingAllowedCheck = warn|off в .v8-project.json."
 		if ($mode -eq 'warn') { [Console]::Error.WriteLine("[support-guard] ПРЕДУПРЕЖДЕНИЕ: $reason. Цель: $rp"); return }
 		[Console]::Error.WriteLine($msg)
 		exit 1
