@@ -1,4 +1,4 @@
-﻿# meta-remove v1.2 — Remove metadata object from 1C configuration dump
+﻿# meta-remove v1.3 — Remove metadata object from 1C configuration dump
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -164,22 +164,34 @@ function Assert-EditAllowed([string]$targetPath, [string]$require) {
 				if ($null -eq $best -or $f1 -lt $best) { $best = $f1 }
 			}
 		}
-		$blocked = $false; $reason = ""
-		if ($G -eq 1) { $blocked = $true; $reason = "возможность изменения конфигурации выключена (вся конфигурация read-only)" }
+		$blocked = $false; $code = ""; $reason = ""
+		if ($G -eq 1) { $blocked = $true; $code = "capability-off"; $reason = "возможность изменения конфигурации выключена (вся конфигурация read-only)" }
 		elseif ($require -eq 'removed') {
-			if ($null -ne $best -and $best -ne 2) { $blocked = $true; $reason = "объект на поддержке (не снят с поддержки) — удаление сломает обновления" }
+			if ($null -ne $best -and $best -ne 2) { $blocked = $true; $code = "not-removed"; $reason = "объект не снят с поддержки — удаление сломает обновления" }
 		}
 		else {
-			if ($null -ne $best -and $best -eq 0) { $blocked = $true; $reason = "объект на замке (поддержка поставщика) — прямая правка сломает обновления" }
+			if ($null -ne $best -and $best -eq 0) { $blocked = $true; $code = "locked"; $reason = "объект на замке — редактирование сломает обновления" }
 		}
 		if (-not $blocked) { return }
 		$mode = Get-EditMode $cfgDir
 		if ($mode -eq 'off') { return }
 		# Use Console.Error (not Write-Error) — under ErrorActionPreference=Stop the
 		# latter throws and would be swallowed by this function's own catch.
-		$msg = "[support-guard] Операция запрещена: $reason.`n  Цель: $rp`n  Безопасные пути: доработка через расширение (cfe-*); либо support-edit -Path <цель> -Set editable (включить объект) / -Path <дамп> -Capability on (вся конфа read-only) / -Set off-support (снять с поддержки).`n  Отключить проверку: editingAllowedCheck = warn|off в .v8-project.json."
 		if ($mode -eq 'warn') { [Console]::Error.WriteLine("[support-guard] ПРЕДУПРЕЖДЕНИЕ: $reason. Цель: $rp"); return }
-		[Console]::Error.WriteLine($msg)
+		$head = "[support-guard] Редактирование отклонено: это объект типовой конфигурации на поддержке поставщика, прямое редактирование молча сломает будущие обновления."
+		$cfe = "Рекомендуемый путь: внести доработку в расширение (навыки cfe-borrow / cfe-patch-method) — состояние поддержки менять не нужно, обновления вендора сохраняются."
+		$offNote = "Снять проверку для этой базы: editingAllowedCheck = warn|off в .v8-project.json."
+		if ($code -eq "capability-off") {
+			$state = "Состояние: у всей конфигурации выключена возможность изменения (режим read-only «из коробки») — поэтому объект «$rp» редактировать нельзя."
+			$fix = "Либо снять защиту явно (навык support-edit, два шага):`n  1. support-edit -Path ""$cfgDir"" -Capability on — включить возможность изменения (объекты пока остаются на замке);`n  2. support-edit -Path ""$rp"" -Set editable — открыть этот объект для редактирования.`n  Изменение применяется в базу полной загрузкой выгрузки и обходит механизм обновлений вендора."
+		} elseif ($code -eq "not-removed") {
+			$state = "Состояние: объект «$rp» на поддержке (не снят с поддержки) — его удаление разорвёт обновления вендора."
+			$fix = "Либо сначала снять объект с поддержки, затем удалять:`n  support-edit -Path ""$rp"" -Set off-support — объект уходит из-под обновлений, после этого удаление безопасно."
+		} else {
+			$state = "Состояние: объект «$rp» на замке (возможность изменения конфигурации включена, но сам объект не редактируется)."
+			$fix = "Либо разрешить редактирование этого объекта (навык support-edit, выбрать одно):`n  support-edit -Path ""$rp"" -Set editable — редактировать и дальше получать обновления вендора (возможны конфликты слияния);`n  support-edit -Path ""$rp"" -Set off-support — снять с поддержки: обновления по объекту больше не приходят."
+		}
+		[Console]::Error.WriteLine("$head`n$state`n$cfe`n$fix`n$offNote")
 		exit 1
 	} catch { return }
 }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-remove v1.2 — Remove metadata object from 1C configuration dump
+# meta-remove v1.3 — Remove metadata object from 1C configuration dump
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -114,18 +114,22 @@ def assert_edit_allowed(target_path, require):
                 if best is None or f1 < best:
                     best = f1
         blocked = False
+        code = ""
         reason = ""
         if g == 1:
             blocked = True
+            code = "capability-off"
             reason = "возможность изменения конфигурации выключена (вся конфигурация read-only)"
         elif require == "removed":
             if best is not None and best != 2:
                 blocked = True
-                reason = "объект на поддержке (не снят с поддержки) — удаление сломает обновления"
+                code = "not-removed"
+                reason = "объект не снят с поддержки — удаление сломает обновления"
         else:
             if best is not None and best == 0:
                 blocked = True
-                reason = "объект на замке (поддержка поставщика) — прямая правка сломает обновления"
+                code = "locked"
+                reason = "объект на замке — редактирование сломает обновления"
         if not blocked:
             return
         mode = _sg_get_edit_mode(cfg_dir)
@@ -134,12 +138,31 @@ def assert_edit_allowed(target_path, require):
         if mode == "warn":
             sys.stderr.write(f"[support-guard] ПРЕДУПРЕЖДЕНИЕ: {reason}. Цель: {rp}\n")
             return
-        sys.stderr.write(
-            f"[support-guard] Операция запрещена: {reason}.\n"
-            f"  Цель: {rp}\n"
-            f"  Безопасные пути: доработка через расширение (cfe-*); либо support-edit -Path <цель> -Set editable (включить объект) / -Path <дамп> -Capability on (вся конфа read-only) / -Set off-support (снять с поддержки).\n"
-            f"  Отключить проверку: editingAllowedCheck = warn|off в .v8-project.json.\n"
-        )
+        head = "[support-guard] Редактирование отклонено: это объект типовой конфигурации на поддержке поставщика, прямое редактирование молча сломает будущие обновления."
+        cfe = "Рекомендуемый путь: внести доработку в расширение (навыки cfe-borrow / cfe-patch-method) — состояние поддержки менять не нужно, обновления вендора сохраняются."
+        off_note = "Снять проверку для этой базы: editingAllowedCheck = warn|off в .v8-project.json."
+        if code == "capability-off":
+            state = f"Состояние: у всей конфигурации выключена возможность изменения (режим read-only «из коробки») — поэтому объект «{rp}» редактировать нельзя."
+            fix = (
+                "Либо снять защиту явно (навык support-edit, два шага):\n"
+                f'  1. support-edit -Path "{cfg_dir}" -Capability on — включить возможность изменения (объекты пока остаются на замке);\n'
+                f'  2. support-edit -Path "{rp}" -Set editable — открыть этот объект для редактирования.\n'
+                "  Изменение применяется в базу полной загрузкой выгрузки и обходит механизм обновлений вендора."
+            )
+        elif code == "not-removed":
+            state = f"Состояние: объект «{rp}» на поддержке (не снят с поддержки) — его удаление разорвёт обновления вендора."
+            fix = (
+                "Либо сначала снять объект с поддержки, затем удалять:\n"
+                f'  support-edit -Path "{rp}" -Set off-support — объект уходит из-под обновлений, после этого удаление безопасно.'
+            )
+        else:
+            state = f"Состояние: объект «{rp}» на замке (возможность изменения конфигурации включена, но сам объект не редактируется)."
+            fix = (
+                "Либо разрешить редактирование этого объекта (навык support-edit, выбрать одно):\n"
+                f'  support-edit -Path "{rp}" -Set editable — редактировать и дальше получать обновления вендора (возможны конфликты слияния);\n'
+                f'  support-edit -Path "{rp}" -Set off-support — снять с поддержки: обновления по объекту больше не приходят.'
+            )
+        sys.stderr.write(head + "\n" + state + "\n" + cfe + "\n" + fix + "\n" + off_note + "\n")
         sys.exit(1)
     except SystemExit:
         raise
