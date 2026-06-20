@@ -58,6 +58,7 @@
 | `databases` | array | да | — | Список баз данных | `/db-list add` |
 | `default` | string | нет | — | `id` базы по умолчанию | `/db-list` |
 | `editingAllowedCheck` | `"deny"`/`"warn"`/`"off"` | нет | `deny` | Глобальная реакция support-guard на правку объектов на замке (см. ниже) | Руками |
+| `skillSuggester` | `"on"`/`"off"` | нет | `on` | Подсказки навыков от хука skill-suggester (только если хук включён, см. ниже) | Руками |
 | `webPath` | string | нет | `tools/apache24` | Каталог Apache HTTP Server | Руками |
 | `ffmpegPath` | string | нет | `tools/ffmpeg/bin/ffmpeg.exe` | Путь к ffmpeg | Руками |
 | `tts` | object | нет | Edge TTS, DmitryNeural | Настройки озвучки видео | Руками |
@@ -78,6 +79,7 @@
 | `branches` | string[] | нет | Git-ветки или glob-паттерны (`release/*`, `feature/*`) | Руками |
 | `configSrc` | string | нет | Каталог XML-выгрузки конфигурации | Руками |
 | `editingAllowedCheck` | `"deny"`/`"warn"`/`"off"` | нет | Override реакции support-guard для этой базы (см. ниже) | Руками |
+| `skillSuggester` | `"on"`/`"off"` | нет | Override подсказок навыков для этой базы (см. ниже) | Руками |
 | `webUrl` | string | нет | URL веб-клиента для `/web-test` | Руками |
 
 ### Support-guard и `editingAllowedCheck`
@@ -90,6 +92,14 @@
 - `off` — проверку не выполнять.
 
 Триггер проверки — наличие `ParentConfigurations.bin` (конфигурация на поддержке), а не регистрация в `.v8-project.json`. Поле лишь меняет реакцию. Берётся `databases[].editingAllowedCheck` базы, чей `configSrc` охватывает редактируемый путь; иначе — корневое `editingAllowedCheck`; иначе `deny`.
+
+### Хуки и `skillSuggester` (экспериментально)
+
+Помимо встроенной в навыки проверки (выше), есть **опциональные хуки Claude Code** (каталог `hooks/`), которые по умолчанию **выключены** и подключаются вручную (см. `hooks/README.md`):
+- **support-guard** — перехватывает правки исходников на поддержке **в обход навыков** (прямые `Edit`/`Write`); реакцию берёт из того же `editingAllowedCheck`;
+- **skill-suggester** — ненавязчиво подсказывает профильный навык, когда модель работает с исходниками напрямую.
+
+`skillSuggester` (`on`/`off`, по умолчанию `on`) включает/выключает подсказки skill-suggester. Действует только когда хук подключён; раскладка та же — `databases[].skillSuggester` для базы по `configSrc`, иначе корневое, иначе `on`.
 
 ### Разрешение базы
 
