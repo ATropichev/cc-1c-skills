@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-info v1.3 — Analyze 1C managed form structure
+# form-info v1.4 — Analyze 1C managed form structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -336,6 +336,78 @@ def build_tree(child_items_node, prefix, tree_lines, expand="", state=None):
                 build_tree(ci, prefix + continuation, tree_lines, expand, state)
 
 
+# --- Support status (Ext/ParentConfigurations.bin) ---
+# See docs/1c-support-state-spec.md. Walks up from the target path, taking the
+# uuid of the nearest element meta-xml and the config root bin. Never throws —
+# degrades to "не на поддержке".
+def get_support_status_for_path(target_path):
+    try:
+        def root_uuid(xml_path):
+            if not os.path.isfile(xml_path):
+                return None
+            try:
+                mx = etree.parse(xml_path).getroot()
+                for child in mx:
+                    if isinstance(child.tag, str) and child.get("uuid"):
+                        return child.get("uuid")
+            except Exception:
+                pass
+            return None
+        rp = os.path.abspath(target_path)
+        # The target file itself may be the element meta-xml (e.g. Subsystems/X.xml).
+        elem_uuid = root_uuid(rp)
+        bin_path = None
+        d = os.path.dirname(rp)
+        for _ in range(12):
+            if not d:
+                break
+            if not elem_uuid:
+                elem_uuid = root_uuid(d + ".xml")
+            if not bin_path:
+                cand = os.path.join(d, "Ext", "ParentConfigurations.bin")
+                if os.path.exists(cand) or os.path.exists(os.path.join(d, "Configuration.xml")):
+                    bin_path = cand
+            if elem_uuid and bin_path:
+                break
+            parent = os.path.dirname(d)
+            if parent == d:
+                break
+            d = parent
+        if not bin_path or not os.path.exists(bin_path):
+            return "не на поддержке"
+        data = open(bin_path, "rb").read()
+        if len(data) <= 32:
+            return "снято с поддержки (правки свободны)"
+        if data[:3] == b"\xef\xbb\xbf":
+            data = data[3:]
+        text = data.decode("utf-8", "replace")
+        h = re.match(r"\{6,(\d+),(\d+),", text)
+        if not h:
+            return "не на поддержке"
+        g = int(h.group(1))
+        k = int(h.group(2))
+        if k == 0:
+            return "снято с поддержки (правки свободны)"
+        if g == 1:
+            return "конфигурация read-only (возможность изменения выключена) — правки невозможны без включения"
+        if not elem_uuid:
+            return "не на поддержке"
+        best = None
+        for m in re.finditer(r"([0-2]),0," + re.escape(elem_uuid.lower()), text):
+            f1 = int(m.group(1))
+            if best is None or f1 < best:
+                best = f1
+        if best is None:
+            return "не на поддержке"
+        return {
+            0: "на замке — прямая правка сломает обновления; дорабатывай через cfe-* либо включи редактирование объекта",
+            1: "редактируется с сохранением поддержки",
+            2: "снято с поддержки (правки свободны)",
+        }.get(best, "не на поддержке")
+    except Exception:
+        return "не на поддержке"
+
+
 # --- Main ---
 
 def main():
@@ -441,6 +513,7 @@ def main():
         header += f" ({object_context})"
     header += " ==="
     lines.append(header)
+    lines.append(f"Поддержка: {get_support_status_for_path(form_path)}")
 
     # --- Form properties (Title excluded -- shown in header) ---
     prop_names = [
