@@ -64,9 +64,11 @@ export function findConfigRoot(startPath) {
 
 // Decode the bin header + per-object rules and apply the support rule for `require`
 // ('editable' — blocked if locked f1=0; 'removed' — blocked unless f1=2).
-// Returns { blocked, reason, cfgDir, targetPath }. Never throws.
+// Returns { blocked, reason, code, cfgDir, targetPath }. `code` discriminates the cause
+// ('capability-off' | 'locked' | 'not-removed') so callers can tailor the remedy.
+// Never throws.
 export function decideSupport(targetPath, require = 'editable') {
-  const result = { blocked: false, reason: '', cfgDir: null, targetPath };
+  const result = { blocked: false, reason: '', code: null, cfgDir: null, targetPath };
   try {
     let elemUuid = rootUuid(targetPath);
     // Walk up: collect elemUuid (from <dir>.xml of a sub-element) and the config root.
@@ -119,15 +121,18 @@ export function decideSupport(targetPath, require = 'editable') {
 
     if (G === 1) {
       result.blocked = true;
+      result.code = 'capability-off';
       result.reason = 'возможность изменения конфигурации выключена (вся конфигурация read-only)';
     } else if (require === 'removed') {
       if (best !== null && best !== 2) {
         result.blocked = true;
+        result.code = 'not-removed';
         result.reason = 'объект на поддержке (не снят с поддержки) — удаление сломает обновления';
       }
     } else {
       if (best !== null && best === 0) {
         result.blocked = true;
+        result.code = 'locked';
         result.reason = 'объект на замке (поддержка поставщика) — прямая правка сломает обновления';
       }
     }

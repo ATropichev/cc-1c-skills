@@ -25,14 +25,51 @@ function candidatePaths(toolInput) {
   return out;
 }
 
-function diagnostic(reason, target) {
-  return (
-    `[support-guard] Операция запрещена: ${reason}.\n` +
-    `  Цель: ${target}\n` +
-    `  Безопасные пути: доработка через расширение (cfe-*); либо support-edit -Path <цель> -Set editable ` +
-    `(включить объект) / -Path <дамп> -Capability on (вся конфа read-only) / -Set off-support (снять с поддержки).\n` +
-    `  Отключить проверку: editingAllowedCheck = warn|off в .v8-project.json.`
-  );
+// Tailored, model-actionable diagnostic per block cause (see decideSupport `code`).
+// Fills in the real target/config paths so the suggested commands are ready to run.
+function diagnostic(code, target, cfgDir) {
+  const head =
+    '[support-guard] Правка отклонена: это объект типовой конфигурации на поддержке поставщика, ' +
+    'прямая правка молча сломает будущие обновления.';
+  const cfe =
+    'Рекомендуемый путь: внести доработку в расширение (навыки cfe-borrow / cfe-patch-method) — ' +
+    'состояние поддержки менять не нужно, обновления вендора сохраняются.';
+  const offNote = 'Снять проверку для этой базы: editingAllowedCheck = warn|off в .v8-project.json.';
+  const root = cfgDir || '<каталог дампа>';
+
+  if (code === 'capability-off') {
+    return [
+      head,
+      `Состояние: у всей конфигурации выключена возможность изменения (режим read-only «из коробки») — ` +
+        `поэтому объект «${target}» править нельзя.`,
+      cfe,
+      `Либо снять защиту явно (навык support-edit, два шага):`,
+      `  1. support-edit -Path "${root}" -Capability on   — включить возможность изменения (объекты пока остаются на замке);`,
+      `  2. support-edit -Path "${target}" -Set editable   — открыть этот объект для правки.`,
+      `Изменение применяется в базу полной загрузкой выгрузки и обходит механизм обновлений вендора.`,
+      offNote,
+    ].join('\n');
+  }
+  if (code === 'not-removed') {
+    return [
+      head,
+      `Состояние: объект «${target}» на поддержке (не снят с поддержки) — его удаление разорвёт обновления вендора.`,
+      cfe,
+      `Либо сначала снять объект с поддержки, затем удалять:`,
+      `  support-edit -Path "${target}" -Set off-support   — объект уходит из-под обновлений, после этого удаление безопасно.`,
+      offNote,
+    ].join('\n');
+  }
+  // locked (G=0, f1=0)
+  return [
+    head,
+    `Состояние: объект «${target}» на замке (возможность изменения конфигурации включена, но сам объект не редактируется).`,
+    cfe,
+    `Либо разрешить правку этого объекта (навык support-edit, выбрать одно):`,
+    `  • support-edit -Path "${target}" -Set editable      — править и дальше получать обновления вендора (при обновлении возможны конфликты слияния);`,
+    `  • support-edit -Path "${target}" -Set off-support   — снять с поддержки: правки свободны, обновления по объекту больше не приходят.`,
+    offNote,
+  ].join('\n');
 }
 
 // Core decision. Returns { stdout, stderr, exitCode }. Pure (no I/O) for testability.
@@ -55,7 +92,7 @@ export function processInput(input) {
         hookSpecificOutput: {
           hookEventName: 'PreToolUse',
           permissionDecision: 'deny',
-          permissionDecisionReason: diagnostic(r.reason, target),
+          permissionDecisionReason: diagnostic(r.code, target, r.cfgDir),
         },
       };
       return { stdout: JSON.stringify(decision), stderr: '', exitCode: 0 };

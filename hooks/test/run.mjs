@@ -109,16 +109,20 @@ console.log('=== support-guard: §1A PreToolUse ===');
   const SYNTH = join(REPO, 'test-tmp', 'hooks-synth');
   const edit = (fp, cwd = REPO) => guard({ tool_name: 'Edit', cwd, tool_input: { file_path: fp } });
 
-  // deny (default): G=1 corpus + synth locked.
+  // deny (default): G=1 corpus → capability-off remedy; synth locked → editable remedy.
   if (existsSync(join(ACC, 'Configuration.xml'))) {
     const r = edit(join(ACC, 'Configuration.xml'));
     let d = null; try { d = JSON.parse(r.stdout); } catch { /* */ }
+    const reason = d?.hookSpecificOutput?.permissionDecisionReason || '';
     check('guard acc (G=1) → deny JSON', d?.hookSpecificOutput?.permissionDecision === 'deny', r.stdout);
+    check('guard G=1 reason → -Capability on remedy', /-Capability on/.test(reason) && /возможность изменения/.test(reason), reason);
   }
   const rLocked = edit(join(SYNTH, 'Catalogs', 'Locked.xml'));
   let dLocked = null; try { dLocked = JSON.parse(rLocked.stdout); } catch { /* */ }
+  const reasonLocked = dLocked?.hookSpecificOutput?.permissionDecisionReason || '';
   check('guard synth locked → deny JSON', dLocked?.hookSpecificOutput?.permissionDecision === 'deny', rLocked.stdout);
-  check('guard deny reason has safe paths', /cfe-\*/.test(dLocked?.hookSpecificOutput?.permissionDecisionReason || ''));
+  check('guard locked reason → -Set editable with real path', /-Set editable/.test(reasonLocked) && reasonLocked.includes('Locked.xml'), reasonLocked);
+  check('guard reason offers cfe + support-edit', /cfe-borrow/.test(reasonLocked) && /support-edit/.test(reasonLocked), reasonLocked);
 
   // allow: erp + synth editable + non-config file → empty stdout, exit 0.
   const rEdit = edit(join(SYNTH, 'Catalogs', 'Editable.xml'));
