@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-git v1.3 — Load Git changes into 1C database
+# db-load-git v1.4 — Load Git changes into 1C database
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -146,14 +146,19 @@ def main():
 
     # --- Filter and map to config files ---
     config_files = []
+    support_skipped = []
 
     for file in changed_files:
         file = file.strip().replace("\\", "/")
         if not file:
             continue
 
-        # Skip service files
-        if file == "ConfigDumpInfo.xml":
+        # Skip service files (not partially loadable). Support-state files are
+        # tracked to warn: support changes apply only via a full load.
+        if file.endswith("ParentConfigurations.bin"):
+            support_skipped.append(file)
+            continue
+        if file == "ConfigDumpInfo.xml" or file.endswith("/ConfigDumpInfo.xml"):
             continue
 
         full_path = os.path.join(args.ConfigDir, file)
@@ -185,6 +190,12 @@ def main():
                                     rel_path = os.path.relpath(abs_path, args.ConfigDir).replace("\\", "/")
                                     if rel_path not in config_files:
                                         config_files.append(rel_path)
+
+    if support_skipped:
+        print("[ВНИМАНИЕ] Состояние поддержки изменено в коммите, но частично не загружается (исключено):", file=sys.stderr)
+        for sf in support_skipped:
+            print(f"  - {sf}", file=sys.stderr)
+        print("  Смена состояния поддержки применяется только полной загрузкой (db-load-xml -Mode Full).", file=sys.stderr)
 
     if len(config_files) == 0:
         print("No configuration files found in changes")

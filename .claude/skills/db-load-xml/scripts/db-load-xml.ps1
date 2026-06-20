@@ -1,4 +1,4 @@
-﻿# db-load-xml v1.3 — Load 1C configuration from XML files
+﻿# db-load-xml v1.4 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -168,24 +168,35 @@ try {
         Write-Host "Executing partial configuration load..."
 
         # Build list file
-        $generatedListFile = $null
+        $rawList = @()
         if ($ListFile) {
-            # Use provided list file
             if (-not (Test-Path $ListFile)) {
                 Write-Host "Error: list file not found: $ListFile" -ForegroundColor Red
                 exit 1
             }
-            $generatedListFile = $ListFile
+            $rawList = @(Get-Content -Path $ListFile -Encoding UTF8 | ForEach-Object { $_.Trim() } | Where-Object { $_ })
         } else {
-            # Generate from -Files parameter
-            $fileList = $Files -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
-            $generatedListFile = Join-Path $tempDir "load_list.txt"
-            $utf8Bom = New-Object System.Text.UTF8Encoding($true)
-            [System.IO.File]::WriteAllLines($generatedListFile, $fileList, $utf8Bom)
-
-            Write-Host "Files to load: $($fileList.Count)"
-            foreach ($f in $fileList) { Write-Host "  $f" }
+            $rawList = @($Files -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
         }
+
+        # Support-state service files are NOT partially loadable — exclude with a hint.
+        $supportRe = 'ParentConfigurations\.bin$|(^|[\\/])ConfigDumpInfo\.xml$'
+        $supportFiles = @($rawList | Where-Object { $_ -match $supportRe })
+        $fileList = @($rawList | Where-Object { $_ -notmatch $supportRe })
+        if ($supportFiles.Count -gt 0) {
+            Write-Host "[ВНИМАНИЕ] Служебные файлы состояния поддержки исключены из частичной загрузки (частично не грузятся):" -ForegroundColor Yellow
+            foreach ($sf in $supportFiles) { Write-Host "  - $sf" -ForegroundColor Yellow }
+            Write-Host "  Смена состояния поддержки применяется только полной загрузкой: -Mode Full." -ForegroundColor Yellow
+        }
+        if ($fileList.Count -eq 0) {
+            Write-Host "Error: после исключения служебных файлов поддержки загружать нечего. Для смены поддержки используйте -Mode Full." -ForegroundColor Red
+            exit 1
+        }
+        $generatedListFile = Join-Path $tempDir "load_list.txt"
+        $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+        [System.IO.File]::WriteAllLines($generatedListFile, $fileList, $utf8Bom)
+        Write-Host "Files to load: $($fileList.Count)"
+        foreach ($f in $fileList) { Write-Host "  $f" }
 
         $arguments += "-listFile", "`"$generatedListFile`""
         $arguments += "-partial"

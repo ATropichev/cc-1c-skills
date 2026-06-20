@@ -1,4 +1,4 @@
-﻿# db-load-git v1.3 — Load Git changes into 1C database
+﻿# db-load-git v1.4 — Load Git changes into 1C database
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -216,13 +216,16 @@ Write-Host "Git changes detected: $($changedFiles.Count) files"
 
 # --- Filter and map to config files ---
 $configFiles = @()
+$supportSkipped = @()
 
 foreach ($file in $changedFiles) {
     $file = $file.Trim().Replace('\', '/')
     if ([string]::IsNullOrWhiteSpace($file)) { continue }
 
-    # Skip service files
-    if ($file -eq "ConfigDumpInfo.xml") { continue }
+    # Skip service files (not partially loadable). Support-state files are tracked
+    # to warn the user: support changes apply only via a full load.
+    if ($file -match 'ParentConfigurations\.bin$') { $supportSkipped += $file; continue }
+    if ($file -eq "ConfigDumpInfo.xml" -or $file -match '(^|/)ConfigDumpInfo\.xml$') { continue }
 
     $fullPath = Join-Path $ConfigDir $file
 
@@ -263,6 +266,12 @@ foreach ($file in $changedFiles) {
             }
         }
     }
+}
+
+if ($supportSkipped.Count -gt 0) {
+    Write-Host "[ВНИМАНИЕ] Состояние поддержки изменено в коммите, но частично не загружается (исключено):" -ForegroundColor Yellow
+    foreach ($sf in $supportSkipped) { Write-Host "  - $sf" -ForegroundColor Yellow }
+    Write-Host "  Смена состояния поддержки применяется только полной загрузкой (db-load-xml -Mode Full)." -ForegroundColor Yellow
 }
 
 if ($configFiles.Count -eq 0) {
