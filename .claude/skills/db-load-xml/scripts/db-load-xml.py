@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-xml v1.6 — Load 1C configuration from XML files
+# db-load-xml v1.7 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -136,12 +136,29 @@ def main():
             print("Error: ibcmd config import does not support -AllExtensions (use -Extension or 1cv8)", file=sys.stderr)
             sys.exit(1)
         if args.Mode == "Partial" or args.Files or args.ListFile:
-            print("Error: ibcmd config import supports full-directory import only; use 1cv8 for partial/file lists", file=sys.stderr)
-            sys.exit(1)
-        arguments = ["infobase", "config", "import", f"--db-path={args.InfoBasePath}"]
-        if args.Extension:
-            arguments.append(f"--extension={args.Extension}")
-        arguments.append(args.ConfigDir)
+            # partial: import specific files (relative to ConfigDir)
+            if args.ListFile:
+                if not os.path.isfile(args.ListFile):
+                    print(f"Error: list file not found: {args.ListFile}", file=sys.stderr)
+                    sys.exit(1)
+                with open(args.ListFile, encoding="utf-8-sig") as f:
+                    file_list = [ln.strip() for ln in f if ln.strip()]
+            elif args.Files:
+                file_list = [p.strip() for p in args.Files.split(",") if p.strip()]
+            else:
+                file_list = []
+            if not file_list:
+                print("Error: -Files or -ListFile required for partial import", file=sys.stderr)
+                sys.exit(1)
+            arguments = ["infobase", "config", "import", "files"] + file_list
+            arguments += [f"--base-dir={args.ConfigDir}", f"--db-path={args.InfoBasePath}"]
+            if args.Extension:
+                arguments.append(f"--extension={args.Extension}")
+        else:
+            arguments = ["infobase", "config", "import", f"--db-path={args.InfoBasePath}"]
+            if args.Extension:
+                arguments.append(f"--extension={args.Extension}")
+            arguments.append(args.ConfigDir)
         print(f"Running: ibcmd {' '.join(arguments)}")
         result = subprocess.run([v8path] + arguments, capture_output=True, encoding="utf-8", errors="replace")
         if result.returncode != 0:

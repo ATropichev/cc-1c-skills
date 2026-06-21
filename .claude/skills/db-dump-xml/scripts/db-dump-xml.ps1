@@ -1,4 +1,4 @@
-﻿# db-dump-xml v1.2 — Dump 1C configuration to XML files
+﻿# db-dump-xml v1.3 — Dump 1C configuration to XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -182,13 +182,20 @@ try {
             Write-Host "Error: ibcmd config export does not support -AllExtensions (use -Extension or 1cv8)" -ForegroundColor Red
             exit 1
         }
-        if ($Mode -eq "Partial" -or $Mode -eq "UpdateInfo") {
-            Write-Host "Error: ibcmd config export supports Mode Full/Changes only; use 1cv8 for $Mode" -ForegroundColor Red
+        if ($Mode -eq "UpdateInfo") {
+            Write-Host "Error: ibcmd config export does not support Mode UpdateInfo; use 1cv8" -ForegroundColor Red
             exit 1
         }
-        $arguments = @("infobase", "config", "export", "--db-path=$InfoBasePath")
-        if ($Extension) { $arguments += "--extension=$Extension" }
-        $arguments += "$ConfigDir"
+        if ($Mode -eq "Partial") {
+            $objList = @($Objects -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            $arguments = @("infobase", "config", "export", "objects") + $objList
+            $arguments += "--out=$ConfigDir", "--db-path=$InfoBasePath"
+            if ($Extension) { $arguments += "--extension=$Extension" }
+        } else {
+            $arguments = @("infobase", "config", "export", "--db-path=$InfoBasePath")
+            if ($Extension) { $arguments += "--extension=$Extension" }
+            $arguments += "$ConfigDir"
+        }
         Write-Host "Running: ibcmd $($arguments -join ' ')"
         $output = & $V8Path @arguments 2>&1
         $exitCode = $LASTEXITCODE

@@ -1,4 +1,4 @@
-﻿# db-load-xml v1.6 — Load 1C configuration from XML files
+﻿# db-load-xml v1.7 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -192,12 +192,29 @@ try {
             exit 1
         }
         if ($Mode -eq "Partial" -or $Files -or $ListFile) {
-            Write-Host "Error: ibcmd config import supports full-directory import only; use 1cv8 for partial/file lists" -ForegroundColor Red
-            exit 1
+            # partial: import specific files (relative to ConfigDir)
+            $fileList = @()
+            if ($ListFile) {
+                if (-not (Test-Path $ListFile)) {
+                    Write-Host "Error: list file not found: $ListFile" -ForegroundColor Red
+                    exit 1
+                }
+                $fileList = @(Get-Content -Path $ListFile -Encoding UTF8 | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            } elseif ($Files) {
+                $fileList = @($Files -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            }
+            if ($fileList.Count -eq 0) {
+                Write-Host "Error: -Files or -ListFile required for partial import" -ForegroundColor Red
+                exit 1
+            }
+            $arguments = @("infobase", "config", "import", "files") + $fileList
+            $arguments += "--base-dir=$ConfigDir", "--db-path=$InfoBasePath"
+            if ($Extension) { $arguments += "--extension=$Extension" }
+        } else {
+            $arguments = @("infobase", "config", "import", "--db-path=$InfoBasePath")
+            if ($Extension) { $arguments += "--extension=$Extension" }
+            $arguments += "$ConfigDir"
         }
-        $arguments = @("infobase", "config", "import", "--db-path=$InfoBasePath")
-        if ($Extension) { $arguments += "--extension=$Extension" }
-        $arguments += "$ConfigDir"
         Write-Host "Running: ibcmd $($arguments -join ' ')"
         $output = & $V8Path @arguments 2>&1
         $exitCode = $LASTEXITCODE

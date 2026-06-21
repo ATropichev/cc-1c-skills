@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-dump-xml v1.2 — Dump 1C configuration to XML files
+# db-dump-xml v1.3 — Dump 1C configuration to XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -127,13 +127,20 @@ def main():
         if args.AllExtensions:
             print("Error: ibcmd config export does not support -AllExtensions (use -Extension or 1cv8)", file=sys.stderr)
             sys.exit(1)
-        if args.Mode in ("Partial", "UpdateInfo"):
-            print(f"Error: ibcmd config export supports Mode Full/Changes only; use 1cv8 for {args.Mode}", file=sys.stderr)
+        if args.Mode == "UpdateInfo":
+            print("Error: ibcmd config export does not support Mode UpdateInfo; use 1cv8", file=sys.stderr)
             sys.exit(1)
-        arguments = ["infobase", "config", "export", f"--db-path={args.InfoBasePath}"]
-        if args.Extension:
-            arguments.append(f"--extension={args.Extension}")
-        arguments.append(args.ConfigDir)
+        if args.Mode == "Partial":
+            obj_list = [o.strip() for o in args.Objects.split(",") if o.strip()]
+            arguments = ["infobase", "config", "export", "objects"] + obj_list
+            arguments += [f"--out={args.ConfigDir}", f"--db-path={args.InfoBasePath}"]
+            if args.Extension:
+                arguments.append(f"--extension={args.Extension}")
+        else:
+            arguments = ["infobase", "config", "export", f"--db-path={args.InfoBasePath}"]
+            if args.Extension:
+                arguments.append(f"--extension={args.Extension}")
+            arguments.append(args.ConfigDir)
         print(f"Running: ibcmd {' '.join(arguments)}")
         result = subprocess.run([v8path] + arguments, capture_output=True, encoding="utf-8", errors="replace")
         if result.returncode == 0:
