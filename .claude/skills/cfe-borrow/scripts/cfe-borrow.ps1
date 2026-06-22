@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.3 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.4 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -12,6 +12,31 @@ $ErrorActionPreference = "Stop"
 
 function Info([string]$msg) { Write-Host "[INFO] $msg" }
 function Warn([string]$msg) { Write-Host "[WARN] $msg" }
+
+# Form data-binding tags (value = attribute path). A binding survives only if its root
+# attribute is borrowed into the form's <Attributes>; otherwise it must be stripped or the
+# platform rejects the form with "Неверный путь к данным" on load.
+$script:formBindingDataTags = @('DataPath','TitleDataPath','FooterDataPath','HeaderDataPath','MultipleValueDataPath','MultipleValuePresentDataPath')
+# Picture-path binding tags (value = picture index path, never a data attribute) — always stripped in the skeleton.
+$script:formBindingPictureTags = @('RowPictureDataPath','MultipleValuePictureDataPath')
+
+# Strip data-binding tags whose root attribute isn't borrowed.
+# $keepObjekt=$true (BorrowMainAttribute): keep Объект.* data bindings, strip the rest.
+# $keepObjekt=$false (default skeleton): strip all bindings. Picture-path tags are always stripped.
+function Strip-FormBindings {
+	param([string]$xml, [bool]$keepObjekt)
+	foreach ($tag in $script:formBindingDataTags) {
+		if ($keepObjekt) {
+			$xml = [regex]::Replace($xml, "\s*<$tag>(?!Объект\.)[^<]*</$tag>", '')
+		} else {
+			$xml = [regex]::Replace($xml, "\s*<$tag>[^<]*</$tag>", '')
+		}
+	}
+	foreach ($tag in $script:formBindingPictureTags) {
+		$xml = [regex]::Replace($xml, "\s*<$tag>[^<]*</$tag>", '')
+	}
+	return $xml
+}
 
 # --- 1. Resolve paths ---
 if (-not [System.IO.Path]::IsPathRooted($ExtensionPath)) {
@@ -552,13 +577,8 @@ function Borrow-Form {
 		$autoCmdXml = $autoCmdXml -replace '<Autofill>true</Autofill>', '<Autofill>false</Autofill>'
 		# Strip ExcludedCommand (references to standard commands invalid in extension)
 		$autoCmdXml = [regex]::Replace($autoCmdXml, '\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '')
-		# Strip DataPath in AutoCommandBar buttons
-		if ($BorrowMainAttr) {
-			# Keep only Объект.* DataPaths
-			$autoCmdXml = [regex]::Replace($autoCmdXml, '\s*<DataPath>(?!Объект\.)[^<]*</DataPath>', '')
-		} else {
-			$autoCmdXml = [regex]::Replace($autoCmdXml, '\s*<DataPath>[^<]*</DataPath>', '')
-		}
+		# Strip data-binding tags whose root attribute isn't borrowed
+		$autoCmdXml = Strip-FormBindings $autoCmdXml ([bool]$BorrowMainAttr)
 	}
 
 	# ChildItems: copy full tree, clean up base-config references
@@ -568,17 +588,9 @@ function Borrow-Form {
 		$childItemsXml = [regex]::Replace($childItemsXml, $nsStripPattern, '')
 		# Replace all CommandName values with 0
 		$childItemsXml = [regex]::Replace($childItemsXml, '<CommandName>[^<]*</CommandName>', '<CommandName>0</CommandName>')
-		# Strip DataPath, TitleDataPath, RowPictureDataPath
-		if ($BorrowMainAttr) {
-			# Keep only Объект.* DataPaths — strip form-attribute DataPaths (not borrowed)
-			$childItemsXml = [regex]::Replace($childItemsXml, '\s*<DataPath>(?!Объект\.)[^<]*</DataPath>', '')
-			$childItemsXml = [regex]::Replace($childItemsXml, '\s*<TitleDataPath>(?!Объект\.)[^<]*</TitleDataPath>', '')
-			$childItemsXml = [regex]::Replace($childItemsXml, '\s*<RowPictureDataPath>[^<]*</RowPictureDataPath>', '')
-		} else {
-			$childItemsXml = [regex]::Replace($childItemsXml, '\s*<DataPath>[^<]*</DataPath>', '')
-			$childItemsXml = [regex]::Replace($childItemsXml, '\s*<TitleDataPath>[^<]*</TitleDataPath>', '')
-			$childItemsXml = [regex]::Replace($childItemsXml, '\s*<RowPictureDataPath>[^<]*</RowPictureDataPath>', '')
-		}
+		# Strip data-binding tags whose root attribute isn't borrowed
+		# (DataPath/TitleDataPath/FooterDataPath/HeaderDataPath/MultipleValue*/RowPicture*)
+		$childItemsXml = Strip-FormBindings $childItemsXml ([bool]$BorrowMainAttr)
 		# Strip ExcludedCommand in nested AutoCommandBars (references to standard commands invalid in extension)
 		$childItemsXml = [regex]::Replace($childItemsXml, '\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '')
 		# Strip TypeLink blocks with human-readable DataPath (Items.XXX — can't convert to UUID)
@@ -1010,28 +1022,22 @@ function Collect-FormDataPaths {
 	$firstLevel = @{}
 	$deepPaths = @()
 
-	$matches2 = [regex]::Matches($content, '<DataPath>[^<]*\bОбъект\.(\w+(?:\.\w+)*)</DataPath>')
-	foreach ($m in $matches2) {
-		$path = $m.Groups[1].Value
-		$segments = $path.Split(".")
-		$seg0 = $segments[0]
-		if ($script:standardFields -contains $seg0) { continue }
-		$firstLevel[$seg0] = $true
-		if ($segments.Count -ge 2) {
-			$seg1 = $segments[1]
-			if ($script:standardFields -contains $seg1) { continue }
-			$deepPaths += @{ ObjectAttr = $seg0; SubAttr = $seg1 }
+	# Scan every data-binding tag (DataPath/TitleDataPath/FooterDataPath/HeaderDataPath/MultipleValue*)
+	# for Объект.* references — picture-path tags carry picture indices, not data attributes.
+	foreach ($tag in $script:formBindingDataTags) {
+		$bms = [regex]::Matches($content, "<$tag>[^<]*\bОбъект\.(\w+(?:\.\w+)*)</$tag>")
+		foreach ($m in $bms) {
+			$path = $m.Groups[1].Value
+			$segments = $path.Split(".")
+			$seg0 = $segments[0]
+			if ($script:standardFields -contains $seg0) { continue }
+			$firstLevel[$seg0] = $true
+			if ($segments.Count -ge 2) {
+				$seg1 = $segments[1]
+				if ($script:standardFields -contains $seg1) { continue }
+				$deepPaths += @{ ObjectAttr = $seg0; SubAttr = $seg1 }
+			}
 		}
-	}
-
-	# Also collect from TitleDataPath
-	$matches3 = [regex]::Matches($content, '<TitleDataPath>[^<]*\bОбъект\.(\w+(?:\.\w+)*)</TitleDataPath>')
-	foreach ($m in $matches3) {
-		$path = $m.Groups[1].Value
-		$segments = $path.Split(".")
-		$seg0 = $segments[0]
-		if ($script:standardFields -contains $seg0) { continue }
-		$firstLevel[$seg0] = $true
 	}
 
 	# Deduplicate deep paths
@@ -1142,7 +1148,8 @@ function Resolve-SourceAttributes {
 	}
 
 	# Extract extra Properties for main object enrichment (Hierarchical, CodeLength, etc.)
-	$extraProps = @{}
+	# Ordered so PS emits the same property order as the Python port (dict preserves insertion order).
+	$extraProps = [ordered]@{}
 	$propsNode = $srcEl.SelectSingleNode("md:Properties", $srcNs)
 	if ($propsNode) {
 		$propsToExtract = @("Hierarchical","FoldersOnTop","CodeLength","DescriptionLength","CodeType","CodeAllowedLength",
@@ -1375,28 +1382,45 @@ function Borrow-MainAttribute {
 	# Step 3: Build the adopted content and insert into main object XML
 	$objFile = Join-Path (Join-Path $extDir $dirName) "${objName}.xml"
 
+	# Read existing object XML (needed for dedup + enrichment)
+	$objContent = [System.IO.File]::ReadAllText($objFile, (New-Object System.Text.UTF8Encoding($true)))
+
+	# Dedup: skip attributes/TS already present in object's ChildObjects (idempotent re-borrow)
+	$existingChildNames = @{}
+	if ($objContent -match '(?s)<ChildObjects>(.*?)</ChildObjects>') {
+		foreach ($nm in [regex]::Matches($Matches[1], '<Name>(\w+)</Name>')) {
+			$existingChildNames[$nm.Groups[1].Value] = $true
+		}
+	}
+	$insertAttrs = @($srcAttrs | Where-Object { -not $existingChildNames.ContainsKey($_.Name) })
+	$insertTS = @($srcTS | Where-Object { -not $existingChildNames.ContainsKey($_.Name) })
+
 	# Generate full object XML with attributes and TS
 	$contentSb = New-Object System.Text.StringBuilder
-	foreach ($attr in $srcAttrs) {
+	foreach ($attr in $insertAttrs) {
 		$attrXml = Build-AdoptedAttributeXml $attr.Name $attr.Uuid $attr.TypeXml "`t`t`t"
 		$contentSb.AppendLine($attrXml) | Out-Null
 	}
-	foreach ($ts in $srcTS) {
+	foreach ($ts in $insertTS) {
 		$tsXml = Build-AdoptedTabularSectionXml $ts.Name $ts.Uuid $ts.GeneratedTypes $ts.Attributes "`t`t`t"
 		$contentSb.AppendLine($tsXml) | Out-Null
 	}
 	$adoptedContent = $contentSb.ToString().TrimEnd()
 
-	# Read existing object XML and inject
-	$objContent = [System.IO.File]::ReadAllText($objFile, (New-Object System.Text.UTF8Encoding($true)))
-
-	# Inject extra properties after ExtendedConfigurationObject
+	# Inject extra properties into the object's OWN Properties only — idempotent and anchored to the
+	# first ExtendedConfigurationObject (the object's). On re-borrow, adopted attributes each have their
+	# own ExtendedConfigurationObject; a global replace would push object props inside every <Attribute>.
 	if ($extraProps.Count -gt 0) {
+		$objPropsBlock = ""
+		if ($objContent -match '(?s)<Properties>(.*?)</Properties>') { $objPropsBlock = $Matches[1] }
 		$propsSb = New-Object System.Text.StringBuilder
 		foreach ($pName in $extraProps.Keys) {
+			if ($objPropsBlock -match "<$pName>") { continue }
 			$propsSb.Append("`r`n`t`t`t<${pName}>$($extraProps[$pName])</${pName}>") | Out-Null
 		}
-		$objContent = $objContent -replace '(</ExtendedConfigurationObject>)', "`$1$($propsSb.ToString())"
+		if ($propsSb.Length -gt 0) {
+			$objContent = ([regex]'</ExtendedConfigurationObject>').Replace($objContent, "</ExtendedConfigurationObject>$($propsSb.ToString())", 1)
+		}
 	}
 
 	# Replace empty ChildObjects with adopted content

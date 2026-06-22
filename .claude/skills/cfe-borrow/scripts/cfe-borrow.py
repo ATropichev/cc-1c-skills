@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.3 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.4 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -13,6 +13,36 @@ MD_NS = "http://v8.1c.ru/8.3/MDClasses"
 XR_NS = "http://v8.1c.ru/8.3/xcf/readable"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 V8_NS = "http://v8.1c.ru/8.1/data/core"
+
+# Form data-binding tags (value = attribute path). A binding survives only if its root
+# attribute is borrowed into the form's <Attributes>; otherwise it must be stripped or the
+# platform rejects the form with "Неверный путь к данным" on load.
+FORM_BINDING_DATA_TAGS = ["DataPath", "TitleDataPath", "FooterDataPath", "HeaderDataPath", "MultipleValueDataPath", "MultipleValuePresentDataPath"]
+# Picture-path binding tags (value = picture index path, never a data attribute) — always stripped in the skeleton.
+FORM_BINDING_PICTURE_TAGS = ["RowPictureDataPath", "MultipleValuePictureDataPath"]
+
+
+def strip_form_bindings(xml, keep_objekt):
+    """Strip data-binding tags whose root attribute isn't borrowed.
+    keep_objekt=True (BorrowMainAttribute): keep Объект.* data bindings, strip the rest.
+    keep_objekt=False (default skeleton): strip all bindings. Picture-path tags are always stripped."""
+    for tag in FORM_BINDING_DATA_TAGS:
+        if keep_objekt:
+            xml = re.sub(rf'\s*<{tag}>(?!Объект\.)[^<]*</{tag}>', '', xml)
+        else:
+            xml = re.sub(rf'\s*<{tag}>[^<]*</{tag}>', '', xml)
+    for tag in FORM_BINDING_PICTURE_TAGS:
+        xml = re.sub(rf'\s*<{tag}>[^<]*</{tag}>', '', xml)
+    return xml
+
+
+def decode_numeric_entities(s):
+    """lxml emits numeric character refs (&#xNNNN;) for non-ASCII in some self-closed
+    elements where the PowerShell port writes literal characters. Normalize numeric refs
+    back to literal so PS↔PY output matches. Named entities (&amp; &lt; ...) are left intact."""
+    s = re.sub(r'&#x([0-9A-Fa-f]+);', lambda m: chr(int(m.group(1), 16)), s)
+    s = re.sub(r'&#(\d+);', lambda m: chr(int(m.group(1))), s)
+    return s
 
 
 def localname(el):
@@ -644,27 +674,21 @@ def main():
         first_level = {}
         deep_paths = []
 
-        for m in re.finditer(r'<DataPath>[^<]*\b\u041e\u0431\u044a\u0435\u043a\u0442\.(\w+(?:\.\w+)*)</DataPath>', content):
-            path = m.group(1)
-            segments = path.split(".")
-            seg0 = segments[0]
-            if seg0 in STANDARD_FIELDS:
-                continue
-            first_level[seg0] = True
-            if len(segments) >= 2:
-                seg1 = segments[1]
-                if seg1 in STANDARD_FIELDS:
+        # Scan every data-binding tag (DataPath/TitleDataPath/FooterDataPath/HeaderDataPath/MultipleValue*)
+        # for Объект.* references — picture-path tags carry picture indices, not data attributes.
+        for tag in FORM_BINDING_DATA_TAGS:
+            for m in re.finditer(r'<' + tag + r'>[^<]*\bОбъект\.(\w+(?:\.\w+)*)</' + tag + r'>', content):
+                path = m.group(1)
+                segments = path.split(".")
+                seg0 = segments[0]
+                if seg0 in STANDARD_FIELDS:
                     continue
-                deep_paths.append({"ObjectAttr": seg0, "SubAttr": seg1})
-
-        # Also collect from TitleDataPath
-        for m in re.finditer(r'<TitleDataPath>[^<]*\b\u041e\u0431\u044a\u0435\u043a\u0442\.(\w+(?:\.\w+)*)</TitleDataPath>', content):
-            path = m.group(1)
-            segments = path.split(".")
-            seg0 = segments[0]
-            if seg0 in STANDARD_FIELDS:
-                continue
-            first_level[seg0] = True
+                first_level[seg0] = True
+                if len(segments) >= 2:
+                    seg1 = segments[1]
+                    if seg1 in STANDARD_FIELDS:
+                        continue
+                    deep_paths.append({"ObjectAttr": seg0, "SubAttr": seg1})
 
         # Deduplicate deep paths
         seen = set()
@@ -941,26 +965,40 @@ def main():
         # Step 3: Build the adopted content and insert into main object XML
         obj_file = os.path.join(ext_dir, dir_name, f"{obj_name}.xml")
 
-        # Generate full object XML with attributes and TS
-        content_parts = []
-        for attr in src_attrs:
-            attr_xml = build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t")
-            content_parts.append(attr_xml)
-        for ts in src_ts:
-            ts_xml = build_adopted_tabular_section_xml(ts["Name"], ts["Uuid"], ts["GeneratedTypes"], ts["Attributes"], "\t\t\t")
-            content_parts.append(ts_xml)
-        adopted_content = "\n".join(content_parts).rstrip()
-
-        # Read existing object XML and inject
+        # Read existing object XML (needed for dedup + enrichment)
         with open(obj_file, "r", encoding="utf-8-sig") as fh:
             obj_content = fh.read()
 
-        # Inject extra properties after ExtendedConfigurationObject
+        # Dedup: skip attributes/TS already present in object's ChildObjects (idempotent re-borrow)
+        existing_child_names = set()
+        m_co = re.search(r'(?s)<ChildObjects>(.*?)</ChildObjects>', obj_content)
+        if m_co:
+            for nm in re.findall(r'<Name>(\w+)</Name>', m_co.group(1)):
+                existing_child_names.add(nm)
+        insert_attrs = [a for a in src_attrs if a["Name"] not in existing_child_names]
+        insert_ts = [t for t in src_ts if t["Name"] not in existing_child_names]
+
+        # Generate full object XML with attributes and TS
+        content_parts = []
+        for attr in insert_attrs:
+            content_parts.append(build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t"))
+        for ts in insert_ts:
+            content_parts.append(build_adopted_tabular_section_xml(ts["Name"], ts["Uuid"], ts["GeneratedTypes"], ts["Attributes"], "\t\t\t"))
+        adopted_content = "\n".join(content_parts).rstrip()
+
+        # Inject extra properties into the object's OWN Properties only — idempotent and anchored to the
+        # first ExtendedConfigurationObject (the object's). On re-borrow, adopted attributes each have their
+        # own ExtendedConfigurationObject; a global replace would push object props inside every <Attribute>.
         if extra_props:
+            m_props = re.search(r'(?s)<Properties>(.*?)</Properties>', obj_content)
+            obj_props_block = m_props.group(1) if m_props else ""
             props_xml = ""
             for p_name, p_val in extra_props.items():
+                if f"<{p_name}>" in obj_props_block:
+                    continue
                 props_xml += f"\r\n\t\t\t<{p_name}>{p_val}</{p_name}>"
-            obj_content = obj_content.replace("</ExtendedConfigurationObject>", f"</ExtendedConfigurationObject>{props_xml}")
+            if props_xml:
+                obj_content = obj_content.replace("</ExtendedConfigurationObject>", f"</ExtendedConfigurationObject>{props_xml}", 1)
 
         # Replace empty ChildObjects with adopted content
         if adopted_content:
@@ -1149,25 +1187,21 @@ def main():
                 continue
             if not reached_visual:
                 # Form-level properties before AutoCommandBar (WindowOpeningMode, AutoFillCheck, etc.)
-                form_props.append(etree.tostring(fc, encoding="unicode"))
+                form_props.append(decode_numeric_entities(etree.tostring(fc, encoding="unicode")))
 
         ns_strip_pattern = re.compile(r'\s+xmlns(?::\w+)?="[^"]*"')
 
         # AutoCommandBar: keep ChildItems (buttons with CommandName->0), Autofill->false
         auto_cmd_xml = ""
         if src_auto_cmd is not None:
-            auto_cmd_xml = etree.tostring(src_auto_cmd, encoding="unicode")
+            auto_cmd_xml = decode_numeric_entities(etree.tostring(src_auto_cmd, encoding="unicode"))
             auto_cmd_xml = ns_strip_pattern.sub("", auto_cmd_xml)
             auto_cmd_xml = re.sub(r'<CommandName>[^<]*</CommandName>', '<CommandName>0</CommandName>', auto_cmd_xml)
             auto_cmd_xml = auto_cmd_xml.replace('<Autofill>true</Autofill>', '<Autofill>false</Autofill>')
             # Strip ExcludedCommand (references to standard commands invalid in extension)
             auto_cmd_xml = re.sub(r'\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '', auto_cmd_xml)
-            # Strip DataPath in AutoCommandBar buttons
-            if borrow_main_attr:
-                # Keep only Объект.* DataPaths
-                auto_cmd_xml = re.sub(r'\s*<DataPath>(?!\u041e\u0431\u044a\u0435\u043a\u0442\.)[^<]*</DataPath>', '', auto_cmd_xml)
-            else:
-                auto_cmd_xml = re.sub(r'\s*<DataPath>[^<]*</DataPath>', '', auto_cmd_xml)
+            # Strip data-binding tags whose root attribute isn't borrowed
+            auto_cmd_xml = strip_form_bindings(auto_cmd_xml, borrow_main_attr)
 
         # ChildItems: copy full tree, clean up base-config references
         child_items_xml = ""
@@ -1178,20 +1212,12 @@ def main():
                 break
 
         if src_child_items is not None:
-            child_items_xml = etree.tostring(src_child_items, encoding="unicode")
+            child_items_xml = decode_numeric_entities(etree.tostring(src_child_items, encoding="unicode"))
             child_items_xml = ns_strip_pattern.sub("", child_items_xml)
             # Replace all CommandName values with 0
             child_items_xml = re.sub(r'<CommandName>[^<]*</CommandName>', '<CommandName>0</CommandName>', child_items_xml)
-            # Strip DataPath / TitleDataPath / RowPictureDataPath
-            if borrow_main_attr:
-                # Keep only Объект.* DataPaths — strip form-attribute DataPaths (not borrowed)
-                child_items_xml = re.sub(r'\s*<DataPath>(?!\u041e\u0431\u044a\u0435\u043a\u0442\.)[^<]*</DataPath>', '', child_items_xml)
-                child_items_xml = re.sub(r'\s*<TitleDataPath>(?!\u041e\u0431\u044a\u0435\u043a\u0442\.)[^<]*</TitleDataPath>', '', child_items_xml)
-                child_items_xml = re.sub(r'\s*<RowPictureDataPath>[^<]*</RowPictureDataPath>', '', child_items_xml)
-            else:
-                child_items_xml = re.sub(r'\s*<DataPath>[^<]*</DataPath>', '', child_items_xml)
-                child_items_xml = re.sub(r'\s*<TitleDataPath>[^<]*</TitleDataPath>', '', child_items_xml)
-                child_items_xml = re.sub(r'\s*<RowPictureDataPath>[^<]*</RowPictureDataPath>', '', child_items_xml)
+            # Strip data-binding tags whose root attribute isn't borrowed
+            child_items_xml = strip_form_bindings(child_items_xml, borrow_main_attr)
             # Strip ExcludedCommand in nested AutoCommandBars (references to standard commands invalid in extension)
             child_items_xml = re.sub(r'\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '', child_items_xml)
             # Strip TypeLink blocks with human-readable DataPath (Items.XXX)
