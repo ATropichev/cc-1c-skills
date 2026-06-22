@@ -32,14 +32,16 @@ export const steps = [
     script: 'form-compile/scripts/form-compile',
     input: {
       elements: [
-        { id: 'ПутьКФайлу', type: 'input', path: 'ПутьКФайлу', title: 'Путь к файлу' },
-        { id: 'Загрузить', type: 'button', title: 'Загрузить', action: 'Загрузить' },
+        { input: 'ПутьКФайлу', path: 'ПутьКФайлу', title: 'Путь к файлу' },
+        { cmdBar: 'КоманднаяПанель', children: [
+          { button: 'Загрузить', command: 'Загрузить' },
+        ]},
       ],
       attributes: [
-        { id: 'ПутьКФайлу', type: 'String' },
+        { name: 'ПутьКФайлу', type: 'String' },
       ],
       commands: [
-        { id: 'Загрузить', title: 'Загрузить' },
+        { name: 'Загрузить', action: 'Загрузить' },
       ],
     },
     args: { '-OutputPath': '{workDir}/RoundtripТест/Forms/Форма/Ext/Form.xml', '-JsonPath': '{inputFile}' },
