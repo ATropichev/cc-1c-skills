@@ -1,0 +1,35 @@
+{
+  "v8path": "C:\\Program Files\\1cv8\\8.3.24.1691\\bin",
+  "databases": [
+    {
+      "id": "dev",
+      "name": "Разработка",
+      "type": "file",
+      "path": "C:\\Bases\\MyApp_Dev",
+      "user": "Администратор",
+      "password": "",
+      "aliases": ["dev", "разработка"],
+      "branches": ["dev", "develop", "feature/*"],
+      "configSrc": "src\\cf",
+      "webUrl": "http://localhost:8081/dev"
+    },
+    {
+      "id": "test",
+      "name": "Тестовая",
+      "type": "server",
+      "server": "srv01",
+      "ref": "MyApp_Test",
+      "user": "Администратор",
+      "password": "",
+      "aliases": ["test", "тест", "тестовая"],
+      "branches": ["main", "release/*"]
+    }
+  ],
+  "default": "dev",
+  "webPath": "C:\\tools\\apache24",
+  "ffmpegPath": "C:\\tools\\ffmpeg\\bin\\ffmpeg.exe",
+  "tts": {
+    "provider": "edge",
+    "voice": "ru-RU-DmitryNeural"
+  }
+}
