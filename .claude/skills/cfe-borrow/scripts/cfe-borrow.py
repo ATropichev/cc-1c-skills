@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.7 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.8 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -492,6 +492,13 @@ def main():
                 prop_node = props_node.find(f"{{{MD_NS}}}{prop_name}")
                 if prop_node is not None:
                     src_props[prop_name] = (prop_node.text or "").strip()
+            # DefinedType: carry the <Type> definition. A type alias is meaningless as a bare shell —
+            # the platform needs its underlying type (e.g. to know a column is a summable Number for totals).
+            if type_name == "DefinedType":
+                type_node = props_node.find(f"{{{MD_NS}}}Type")
+                if type_node is not None:
+                    type_xml = etree.tostring(type_node, encoding="unicode")
+                    src_props["__TypeXml"] = re.sub(r'\s+xmlns(?::\w+)?="[^"]*"', '', type_xml)
 
         return {"Uuid": src_uuid, "Properties": src_props, "Element": src_el}
 
@@ -562,6 +569,10 @@ def main():
             for prop_name in COMMON_MODULE_PROPS:
                 prop_val = source_props.get(prop_name, "false")
                 lines.append(f"\t\t\t<{prop_name}>{prop_val}</{prop_name}>")
+
+        # DefinedType: emit the carried <Type> definition (needed for the alias to resolve, e.g. totals)
+        if type_name == "DefinedType" and "__TypeXml" in source_props:
+            lines.append(f"\t\t\t{source_props['__TypeXml']}")
 
         lines.append("\t\t</Properties>")
 
@@ -688,7 +699,8 @@ def main():
                     seg1 = segments[1]
                     if seg1 in STANDARD_FIELDS:
                         continue
-                    deep_paths.append({"ObjectAttr": seg0, "SubAttr": seg1})
+                    seg2 = segments[2] if len(segments) >= 3 else None
+                    deep_paths.append({"ObjectAttr": seg0, "SubAttr": seg1, "SubSubAttr": seg2})
 
         # Also scan <Field>Объект.X</Field> — object attributes referenced by filter/conditional-appearance
         # fields (and dynamic lists), not via a *DataPath binding (e.g. УдалитьЮрФизЛицо). Designer borrows these too.
@@ -703,13 +715,14 @@ def main():
                 seg1 = segments[1]
                 if seg1 in STANDARD_FIELDS:
                     continue
-                deep_paths.append({"ObjectAttr": seg0, "SubAttr": seg1})
+                seg2 = segments[2] if len(segments) >= 3 else None
+                deep_paths.append({"ObjectAttr": seg0, "SubAttr": seg1, "SubSubAttr": seg2})
 
         # Deduplicate deep paths
         seen = set()
         unique_deep = []
         for dp in deep_paths:
-            key = f"{dp['ObjectAttr']}.{dp['SubAttr']}"
+            key = f"{dp['ObjectAttr']}.{dp['SubAttr']}.{dp.get('SubSubAttr')}"
             if key not in seen:
                 seen.add(key)
                 unique_deep.append(dp)
@@ -1065,78 +1078,92 @@ def main():
 
         # Step 5: Handle deep paths (Form mode only)
         if mode == "Form" and deep_paths:
-            # Filter out deep paths where ObjectAttr is a TabularSection
-            real_deep = [dp for dp in deep_paths if dp["ObjectAttr"] not in ts_names]
-
-            if real_deep:
-                info(f"  Processing {len(real_deep)} deep path(s)...")
-
-                # Group by ObjectAttr -> target catalog
-                deep_by_attr = {}
-                for dp in real_deep:
-                    if dp["ObjectAttr"] not in deep_by_attr:
-                        deep_by_attr[dp["ObjectAttr"]] = []
+            # Top-level ref deep paths: Объект.<Ref>.<Sub> — borrow the ref attribute's catalog with the sub-attribute
+            deep_by_attr = {}
+            for dp in deep_paths:
+                if dp["ObjectAttr"] in ts_names:
+                    continue
+                deep_by_attr.setdefault(dp["ObjectAttr"], [])
+                if dp["SubAttr"] not in deep_by_attr[dp["ObjectAttr"]]:
                     deep_by_attr[dp["ObjectAttr"]].append(dp["SubAttr"])
-
+            if deep_by_attr:
+                info(f"  Processing {len(deep_by_attr)} deep path attribute(s)...")
                 for attr_name, sub_attr_names in deep_by_attr.items():
-                    # Find the attribute's type to determine target catalog
-                    attr_info = None
-                    for a in src_attrs:
-                        if a["Name"] == attr_name:
-                            attr_info = a
-                            break
+                    attr_info = next((a for a in src_attrs if a["Name"] == attr_name), None)
                     if not attr_info:
                         continue
-
-                    # Extract catalog name from type: cfg:CatalogRef.XXX
                     cat_match = re.search(r'cfg:(\w+)Ref\.(\w+)', attr_info["TypeXml"])
                     if not cat_match:
                         continue
+                    borrow_deep_target_attrs(cat_match.group(1), cat_match.group(2), sub_attr_names)
 
-                    target_type_name = cat_match.group(1)
-                    target_obj_name = cat_match.group(2)
-
-                    # Ensure target is borrowed
-                    if not test_object_borrowed(target_type_name, target_obj_name):
-                        t_src = read_source_object(target_type_name, target_obj_name)
-                        t_borrowed_xml = build_borrowed_object_xml(target_type_name, target_obj_name, t_src["Uuid"], t_src["Properties"])
-                        t_target_dir = os.path.join(ext_dir, CHILD_TYPE_DIR_MAP[target_type_name])
-                        os.makedirs(t_target_dir, exist_ok=True)
-                        t_target_file = os.path.join(t_target_dir, f"{target_obj_name}.xml")
-                        save_text_bom(t_target_file, t_borrowed_xml)
-                        add_to_child_objects(target_type_name, target_obj_name)
-                        borrowed_files.append(t_target_file)
-                        info(f"  Auto-borrowed for deep path: {target_type_name}.{target_obj_name}")
-
-                    # Resolve sub-attributes in target catalog
-                    sub_names = {sn: True for sn in sub_attr_names}
-                    sub_resolved = resolve_source_attributes(target_type_name, target_obj_name, sub_names)
-
-                    if sub_resolved["Attributes"]:
-                        merge_attributes_into_object(target_type_name, target_obj_name, sub_resolved["Attributes"])
-
-                        # Collect and borrow ref types from deep attributes
-                        sub_type_xmls = [sa["TypeXml"] for sa in sub_resolved["Attributes"]]
-                        sub_ref_types = collect_reference_types(sub_type_xmls)
-                        for srt in sub_ref_types:
-                            if srt["TypeName"] not in CHILD_TYPE_DIR_MAP:
-                                continue
-                            if test_object_borrowed(srt["TypeName"], srt["ObjName"]):
-                                continue
-                            s_src_file = os.path.join(cfg_dir, CHILD_TYPE_DIR_MAP[srt["TypeName"]], f"{srt['ObjName']}.xml")
-                            if not os.path.isfile(s_src_file):
-                                continue
-                            s_src = read_source_object(srt["TypeName"], srt["ObjName"])
-                            s_borrowed_xml = build_borrowed_object_xml(srt["TypeName"], srt["ObjName"], s_src["Uuid"], s_src["Properties"])
-                            s_target_dir = os.path.join(ext_dir, CHILD_TYPE_DIR_MAP[srt["TypeName"]])
-                            os.makedirs(s_target_dir, exist_ok=True)
-                            s_target_file = os.path.join(s_target_dir, f"{srt['ObjName']}.xml")
-                            save_text_bom(s_target_file, s_borrowed_xml)
-                            add_to_child_objects(srt["TypeName"], srt["ObjName"])
-                            borrowed_files.append(s_target_file)
-                            info(f"  Auto-borrowed (deep): {srt['TypeName']}.{srt['ObjName']}")
+            # Tabular-section deep paths: Объект.<ТЧ>.<Колонка>.<Sub> — borrow the column's catalog with the sub-attribute
+            ts_deep_by_col = {}
+            for dp in deep_paths:
+                if dp["ObjectAttr"] not in ts_names:
+                    continue
+                if not dp.get("SubSubAttr"):
+                    continue
+                if dp["SubSubAttr"] in STANDARD_FIELDS:
+                    continue
+                k = (dp["ObjectAttr"], dp["SubAttr"])
+                ts_deep_by_col.setdefault(k, [])
+                if dp["SubSubAttr"] not in ts_deep_by_col[k]:
+                    ts_deep_by_col[k].append(dp["SubSubAttr"])
+            if ts_deep_by_col:
+                info(f"  Processing {len(ts_deep_by_col)} tabular-section deep path(s)...")
+                for (ts_name, col_name), sub_attr_names in ts_deep_by_col.items():
+                    ts_info = next((t for t in src_ts if t["Name"] == ts_name), None)
+                    if not ts_info:
+                        continue
+                    col_info = next((c for c in ts_info["Attributes"] if c["Name"] == col_name), None)
+                    if not col_info:
+                        continue
+                    cat_match = re.search(r'cfg:(\w+)Ref\.(\w+)', col_info["TypeXml"])
+                    if not cat_match:
+                        continue
+                    borrow_deep_target_attrs(cat_match.group(1), cat_match.group(2), sub_attr_names)
 
         info("  Main attribute borrowing complete")
+
+    def borrow_deep_target_attrs(target_type_name, target_obj_name, sub_attr_names):
+        # Borrow a deep-path target catalog together with the referenced sub-attributes, for both
+        # Объект.<Ref>.<Sub> and Объект.<ТЧ>.<Колонка>.<Sub>. Mirrors Designer: the referenced catalog
+        # is adopted WITH the sub-attributes the form shows, else the platform rejects the deep DataPath.
+        if not test_object_borrowed(target_type_name, target_obj_name):
+            t_src = read_source_object(target_type_name, target_obj_name)
+            t_borrowed_xml = build_borrowed_object_xml(target_type_name, target_obj_name, t_src["Uuid"], t_src["Properties"])
+            t_target_dir = os.path.join(ext_dir, CHILD_TYPE_DIR_MAP[target_type_name])
+            os.makedirs(t_target_dir, exist_ok=True)
+            t_target_file = os.path.join(t_target_dir, f"{target_obj_name}.xml")
+            save_text_bom(t_target_file, t_borrowed_xml)
+            add_to_child_objects(target_type_name, target_obj_name)
+            borrowed_files.append(t_target_file)
+            info(f"  Auto-borrowed for deep path: {target_type_name}.{target_obj_name}")
+
+        sub_names = {sn: True for sn in sub_attr_names}
+        sub_resolved = resolve_source_attributes(target_type_name, target_obj_name, sub_names)
+        if sub_resolved["Attributes"]:
+            merge_attributes_into_object(target_type_name, target_obj_name, sub_resolved["Attributes"])
+            sub_type_xmls = [sa["TypeXml"] for sa in sub_resolved["Attributes"]]
+            sub_ref_types = collect_reference_types(sub_type_xmls)
+            for srt in sub_ref_types:
+                if srt["TypeName"] not in CHILD_TYPE_DIR_MAP:
+                    continue
+                if test_object_borrowed(srt["TypeName"], srt["ObjName"]):
+                    continue
+                s_src_file = os.path.join(cfg_dir, CHILD_TYPE_DIR_MAP[srt["TypeName"]], f"{srt['ObjName']}.xml")
+                if not os.path.isfile(s_src_file):
+                    continue
+                s_src = read_source_object(srt["TypeName"], srt["ObjName"])
+                s_borrowed_xml = build_borrowed_object_xml(srt["TypeName"], srt["ObjName"], s_src["Uuid"], s_src["Properties"])
+                s_target_dir = os.path.join(ext_dir, CHILD_TYPE_DIR_MAP[srt["TypeName"]])
+                os.makedirs(s_target_dir, exist_ok=True)
+                s_target_file = os.path.join(s_target_dir, f"{srt['ObjName']}.xml")
+                save_text_bom(s_target_file, s_borrowed_xml)
+                add_to_child_objects(srt["TypeName"], srt["ObjName"])
+                borrowed_files.append(s_target_file)
+                info(f"  Auto-borrowed (deep): {srt['TypeName']}.{srt['ObjName']}")
 
     def borrow_form(type_name, obj_name, form_name, borrow_main_attr=False):
         dir_name = CHILD_TYPE_DIR_MAP[type_name]
