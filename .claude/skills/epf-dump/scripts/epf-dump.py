@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# epf-dump v1.3 — Dump external data processor or report (EPF/ERF) to XML sources
+# epf-dump v1.4 — Dump external data processor or report (EPF/ERF) to XML sources
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -125,6 +125,10 @@ def main():
             arguments = ["infobase", "config", "export", f"--file={args.InputFile}", args.OutputDir, f"--db-path={args.InfoBasePath}"]
             ib_data = tempfile.mkdtemp(prefix="ibcmd_data_")
             atexit.register(shutil.rmtree, ib_data, ignore_errors=True)
+            if args.UserName:
+                arguments.append(f"--user={args.UserName}")
+            if args.Password:
+                arguments.append(f"--password={args.Password}")
             arguments.append(f"--data={ib_data}")
             print(f"Running: ibcmd {' '.join(arguments)}")
             result = subprocess.run([v8path] + arguments, capture_output=True, encoding="utf-8", errors="replace")

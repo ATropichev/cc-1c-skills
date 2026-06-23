@@ -1,4 +1,4 @@
-﻿# db-dump-xml v1.5 — Dump 1C configuration to XML files
+﻿# db-dump-xml v1.6 — Dump 1C configuration to XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -193,6 +193,8 @@ try {
             if ($Extension) { $arguments += "--extension=$Extension" }
             $arguments += "$ConfigDir"
         }
+        if ($UserName) { $arguments += "--user=$UserName" }
+        if ($Password) { $arguments += "--password=$Password" }
         $arguments += "--data=$tempDir"
         Write-Host "Running: ibcmd $($arguments -join ' ')"
         $output = & $V8Path @arguments 2>&1

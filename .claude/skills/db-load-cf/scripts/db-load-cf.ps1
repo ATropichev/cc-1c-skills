@@ -1,4 +1,4 @@
-﻿# db-load-cf v1.3 — Load 1C configuration from CF file
+﻿# db-load-cf v1.4 — Load 1C configuration from CF file
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -152,6 +152,8 @@ try {
         $arguments = @("infobase", "config", "load", "--db-path=$InfoBasePath")
         if ($Extension) { $arguments += "--extension=$Extension" }
         $arguments += "$InputFile"
+        if ($UserName) { $arguments += "--user=$UserName" }
+        if ($Password) { $arguments += "--password=$Password" }
         $arguments += "--data=$tempDir"
         Write-Host "Running: ibcmd $($arguments -join ' ')"
         $output = & $V8Path @arguments 2>&1

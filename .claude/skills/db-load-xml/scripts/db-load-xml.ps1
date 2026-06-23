@@ -1,4 +1,4 @@
-﻿# db-load-xml v1.9 — Load 1C configuration from XML files
+﻿# db-load-xml v1.10 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -213,6 +213,8 @@ try {
             if ($Extension) { $arguments += "--extension=$Extension" }
             $arguments += "$ConfigDir"
         }
+        if ($UserName) { $arguments += "--user=$UserName" }
+        if ($Password) { $arguments += "--password=$Password" }
         $arguments += "--data=$tempDir"
         Write-Host "Running: ibcmd $($arguments -join ' ')"
         $output = & $V8Path @arguments 2>&1
@@ -227,6 +229,8 @@ try {
 
         if ($UpdateDB) {
             $applyArgs = @("infobase", "config", "apply", "--db-path=$InfoBasePath", "--force")
+            if ($UserName) { $applyArgs += "--user=$UserName" }
+            if ($Password) { $applyArgs += "--password=$Password" }
             $applyArgs += "--data=$tempDir"
             Write-Host "Running: ibcmd $($applyArgs -join ' ')"
             $applyOut = & $V8Path @applyArgs 2>&1

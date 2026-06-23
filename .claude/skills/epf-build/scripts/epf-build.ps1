@@ -1,4 +1,4 @@
-﻿# epf-build v1.3 — Build external data processor or report (EPF/ERF) from XML sources
+﻿# epf-build v1.4 — Build external data processor or report (EPF/ERF) from XML sources
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -157,6 +157,8 @@ try {
         # --- ibcmd branch: build EPF/ERF via config import --out ---
         $srcDir = Split-Path $SourceFile -Parent
         $arguments = @("infobase", "config", "import", "$srcDir", "--out=$OutputFile", "--db-path=$InfoBasePath")
+        if ($UserName) { $arguments += "--user=$UserName" }
+        if ($Password) { $arguments += "--password=$Password" }
         $arguments += "--data=$tempDir"
         Write-Host "Running: ibcmd $($arguments -join ' ')"
         $output = & $V8Path @arguments 2>&1

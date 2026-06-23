@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-xml v1.9 — Load 1C configuration from XML files
+# db-load-xml v1.10 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -161,6 +161,10 @@ def main():
             arguments.append(args.ConfigDir)
         ib_data = tempfile.mkdtemp(prefix="ibcmd_data_")
         atexit.register(shutil.rmtree, ib_data, ignore_errors=True)
+        if args.UserName:
+            arguments.append(f"--user={args.UserName}")
+        if args.Password:
+            arguments.append(f"--password={args.Password}")
         arguments.append(f"--data={ib_data}")
         print(f"Running: ibcmd {' '.join(arguments)}")
         result = subprocess.run([v8path] + arguments, capture_output=True, encoding="utf-8", errors="replace")
@@ -177,6 +181,10 @@ def main():
         exit_code = 0
         if args.UpdateDB:
             apply_args = ["infobase", "config", "apply", f"--db-path={args.InfoBasePath}", "--force"]
+            if args.UserName:
+                apply_args.append(f"--user={args.UserName}")
+            if args.Password:
+                apply_args.append(f"--password={args.Password}")
             apply_args.append(f"--data={ib_data}")
             print(f"Running: ibcmd {' '.join(apply_args)}")
             ar = subprocess.run([v8path] + apply_args, capture_output=True, encoding="utf-8", errors="replace")

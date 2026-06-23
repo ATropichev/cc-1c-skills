@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-dump-xml v1.5 — Dump 1C configuration to XML files
+# db-dump-xml v1.6 — Dump 1C configuration to XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -143,6 +143,10 @@ def main():
             arguments.append(args.ConfigDir)
         ib_data = tempfile.mkdtemp(prefix="ibcmd_data_")
         atexit.register(shutil.rmtree, ib_data, ignore_errors=True)
+        if args.UserName:
+            arguments.append(f"--user={args.UserName}")
+        if args.Password:
+            arguments.append(f"--password={args.Password}")
         arguments.append(f"--data={ib_data}")
         print(f"Running: ibcmd {' '.join(arguments)}")
         result = subprocess.run([v8path] + arguments, capture_output=True, encoding="utf-8", errors="replace")
