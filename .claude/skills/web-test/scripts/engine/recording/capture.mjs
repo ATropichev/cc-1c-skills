@@ -9,7 +9,7 @@ import {
   setRecorder, setLastCaptions, setLastRecordingDuration,
   resolveProjectPath, ensureConnected,
 } from '../core/state.mjs';
-import { resolveFfmpeg } from './tts.mjs';
+import { resolveFfmpeg } from './tts.mjs';
 // Imported lazily inside wait() to avoid initialization-time circular deps.
 
 /** Take a screenshot. Returns PNG buffer. */
