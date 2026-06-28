@@ -486,6 +486,20 @@ export const steps = [
     validate: { script: 'meta-validate/scripts/meta-validate', flag: '-ObjectPath', path: 'DataProcessors/МножественныйВыбор' },
   },
 
+  // Обработка БезшапочнаяТаблица — обычная редактируемая таблица значений со скрытой
+  // шапкой (<Header>false</Header>) для регресса безшапочных гридов (deriveGridColumns):
+  // чтение (readTable), заполнение строк (fillTableRow) и клик по строке. Колонки разных
+  // типов: ссылка / число / булево (чекбокс).
+  {
+    name: 'meta-compile: Обработка БезшапочнаяТаблица',
+    script: 'meta-compile/scripts/meta-compile',
+    input: {
+      type: 'DataProcessor', name: 'БезшапочнаяТаблица',
+    },
+    args: { '-JsonPath': '{inputFile}', '-OutputDir': '{workDir}' },
+    validate: { script: 'meta-validate/scripts/meta-validate', flag: '-ObjectPath', path: 'DataProcessors/БезшапочнаяТаблица' },
+  },
+
   // Отчёт ОстаткиТоваров
   {
     name: 'meta-compile: Отчёт ОстаткиТоваров',
@@ -1331,6 +1345,61 @@ export const steps = [
 `,
   },
 
+  // Обработка БезшапочнаяТаблица — форма с редактируемой безшапочной таблицей значений.
+  {
+    name: 'form-add: Форма БезшапочнаяТаблица',
+    script: 'form-add/scripts/form-add',
+    args: { '-ObjectPath': '{workDir}/DataProcessors/БезшапочнаяТаблица.xml', '-FormName': 'ФормаОбработки' },
+  },
+  {
+    name: 'form-compile: Форма БезшапочнаяТаблица',
+    script: 'form-compile/scripts/form-compile',
+    input: {
+      title: 'Безшапочная таблица',
+      events: { OnCreateAtServer: 'ПриСозданииНаСервере' },
+      attributes: [
+        { name: 'Объект', type: 'DataProcessorObject.БезшапочнаяТаблица', main: true },
+        { name: 'Таблица', type: 'ValueTable', columns: [
+          { name: 'Товар', type: 'CatalogRef.Номенклатура', title: 'Товар' },
+          { name: 'Количество', type: 'Number(15,3)', title: 'Количество' },
+          { name: 'Цена', type: 'Number(15,2)', title: 'Цена' },
+          { name: 'Активен', type: 'Boolean', title: 'Активен' },
+        ]},
+      ],
+      elements: [
+        // header:false → <Header>false</Header>; changeRowSet → строки редактируемы.
+        // Колонки: ссылка (заполнение через форму выбора) + числа + булево (чекбокс).
+        { table: 'Таблица', path: 'Таблица', header: false, changeRowSet: true, columns: [
+          { input: 'Товар', path: 'Таблица.Товар', title: 'Товар' },
+          { input: 'Количество', path: 'Таблица.Количество', title: 'Количество' },
+          { input: 'Цена', path: 'Таблица.Цена', title: 'Цена' },
+          { check: 'Активен', path: 'Таблица.Активен', title: 'Активен' },
+        ]},
+      ],
+    },
+    args: { '-JsonPath': '{inputFile}', '-OutputPath': '{workDir}/DataProcessors/БезшапочнаяТаблица/Forms/ФормаОбработки/Ext/Form.xml' },
+    validate: { script: 'form-validate/scripts/form-validate', flag: '-FormPath', path: 'DataProcessors/БезшапочнаяТаблица/Forms/ФормаОбработки/Ext/Form.xml' },
+  },
+  {
+    name: 'writeFile: БезшапочнаяТаблица form Module.bsl',
+    writeFile: 'DataProcessors/БезшапочнаяТаблица/Forms/ФормаОбработки/Ext/Form/Module.bsl',
+    content: `&НаСервере
+Процедура ПриСозданииНаСервере(Отказ, СтандартнаяОбработка)
+\tЗапрос = Новый Запрос("ВЫБРАТЬ ПЕРВЫЕ 3 Ссылка КАК Ссылка ИЗ Справочник.Номенклатура ГДЕ НЕ ЭтоГруппа УПОРЯДОЧИТЬ ПО Наименование");
+\tВыборка = Запрос.Выполнить().Выбрать();
+\tСч = 0;
+\tПока Выборка.Следующий() Цикл
+\t\tСтрока = Таблица.Добавить();
+\t\tСтрока.Товар = Выборка.Ссылка;
+\t\tСтрока.Количество = (Сч + 1) * 10;
+\t\tСтрока.Цена = (Сч + 1) * 100;
+\t\tСтрока.Активен = (Сч % 2 = 0);
+\t\tСч = Сч + 1;
+\tКонецЦикла;
+КонецПроцедуры
+`,
+  },
+
   // ── 4. DCS for report ──
   // Сначала добавляем макет ОсновнаяСхемаКомпоновкиДанных к отчёту (регистрируется
   // в Reports/ОстаткиТоваров.xml + автоматически выставляется MainDataCompositionSchema),
@@ -1393,6 +1462,7 @@ export const steps = [
         'Document.ПриходнаяНакладная',
         'Report.ОстаткиТоваров',
         'DataProcessor.МножественныйВыбор',
+        'DataProcessor.БезшапочнаяТаблица',
       ],
     },
     args: { '-DefinitionFile': '{inputFile}', '-OutputDir': '{workDir}' },
@@ -1431,6 +1501,7 @@ export const steps = [
         'Report.ОстаткиТоваров: Use View',
         'DataProcessor.ДеревоНоменклатуры: Use View',
         'DataProcessor.МножественныйВыбор: Use View',
+        'DataProcessor.БезшапочнаяТаблица: Use View',
       ],
     },
     args: { '-JsonPath': '{inputFile}', '-OutputDir': '{workDir}' },
