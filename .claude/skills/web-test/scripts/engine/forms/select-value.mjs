@@ -1,4 +1,4 @@
-// web-test forms/select-value v1.27 — Reference & composite-type value selection: selectValue (+ array multi-select), fillReferenceField, selection/type-dialog pickers.
+// web-test forms/select-value v1.28 — Reference & composite-type value selection: selectValue (+ array multi-select), fillReferenceField, selection/type-dialog pickers.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import {
@@ -651,7 +651,7 @@ const MULTI_SURFACE = {
  * Ctrl-multi-row catalog form. Composes existing API
  * (clickElement/fillTableRow/closeForm/filterList/readTable/getFormState).
  * Returns flat form state + `selected: { field, values:[…selected…], notSelected?:[{value,reason}] }`.
- * Surface name / step detail go to console (exec output) only, NOT the structured result.
+ * The detected surface is an internal detail — it is NOT exposed in the result.
  */
 async function selectValuesMulti(fieldName, values, { type } = {}) {
   ensureConnected();
@@ -705,7 +705,6 @@ async function selectValuesMulti(fieldName, values, { type } = {}) {
   } else if (await cloudDDVisible()) {
     surface = MULTI_SURFACE.cloudDropdown;
   }
-  console.log(`[selectValuesMulti] field="${fieldName}" surface=${surface} form=${formNum} values=${JSON.stringify(targets.map(t => t.str))}`);
 
   if (!surface) {
     return returnFormState({ selected: { field: fieldName, values: [], error: 'surface_unrecognized',
