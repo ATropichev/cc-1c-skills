@@ -1,6 +1,6 @@
-// web-test dom/grid v1.11 — grid resolution + table reading + edit-time helpers
+// web-test dom/grid v1.12 — grid resolution + table reading + edit-time helpers
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
-import { ROW_CLICK_POINT_FN } from './_shared.mjs';
+import { ROW_CLICK_POINT_FN, HEADERLESS_GRID_FN } from './_shared.mjs';
 
 /**
  * Resolve a specific grid by semantic name (table parameter).
@@ -94,16 +94,90 @@ export function readTableScript(formNum, { maxRows = 20, offset = 0, gridSelecto
       const m = bg.match(/[?&]gx=(\\d+)/);
       return { gx: m ? m[1] : '0' };
     }
+    ${HEADERLESS_GRID_FN}
 
     // DOM-based parsing: gridHead → columns, gridBody → gridLine rows → gridBox cells
     const head = grid.querySelector('.gridHead');
     const body = grid.querySelector('.gridBody');
-    if (!head || !body) {
-      // Fallback: innerText-based (for non-standard grids)
+    if (!body) {
+      // Fallback: innerText-based (for non-standard grids without a body)
       const gText = grid.innerText?.trim() || '';
       const lines = gText.split('\\n').filter(Boolean);
       return { name, columns: [], rows: [], total: lines.length, offset: 0, shown: 0,
                hint: 'Grid has no gridHead/gridBody structure' };
+    }
+
+    // HEADERLESS grid (body but no .gridHead) — synthesize columns by colindex.
+    // Single source: synthHeaderlessColumns. Headed path below is left untouched.
+    if (!head) {
+      const synth = synthHeaderlessColumns(grid);
+      const colNames = synth.map(c => c.name);
+      const allLines = body.querySelectorAll('.gridLine');
+      const total = allLines.length;
+      const rows = [];
+      const end = Math.min(${offset} + ${maxRows}, total);
+      for (let i = ${offset}; i < end; i++) {
+        const line = allLines[i];
+        if (!line) break;
+        const row = {};
+        const boxes = [...line.children].filter(b => b.offsetWidth > 0);
+        synth.forEach(c => {
+          const box = boxes.find(b => b.getAttribute('colindex') === c.colindex);
+          let val = '';
+          if (box) {
+            if (c.subTarget === 'checkbox') {
+              const chk = box.querySelector('.checkbox');
+              val = chk && chk.classList.contains('select') ? 'true' : 'false';
+            } else if (c.subTarget === 'title') {
+              val = (box.querySelector('.gridBoxTitle')?.innerText || '').trim().replace(/\\n/g, ' ');
+            } else if (c.subTarget === 'text') {
+              val = (box.querySelector('.gridBoxText')?.innerText || '').trim().replace(/\\n/g, ' ');
+            } else {
+              const pic = picInfo(box);
+              val = pic ? 'pic:' + pic.gx : ((box.innerText || '').trim().replace(/\\n/g, ' '));
+            }
+          }
+          row[c.name] = val;
+        });
+        // Row meta — mirrors the headed path (group/parent/tree/level/selected)
+        const imgBox = line.querySelector('.gridBoxImg');
+        if (imgBox) {
+          if (imgBox.querySelector('.gridListH')) row._kind = 'group';
+          else if (imgBox.querySelector('.gridListV')) row._kind = 'parent';
+        }
+        const treeBox = line.querySelector('.gridBoxTree');
+        if (treeBox) {
+          const treeIcon = imgBox?.querySelector('[tree="true"]');
+          if (treeIcon) { const bg = treeIcon.style.backgroundImage || ''; row._tree = bg.includes('gx=0') ? 'expanded' : 'collapsed'; }
+          row._level = imgBox ? imgBox.querySelectorAll('.dIB').length - 1 : 0;
+        }
+        if (line.classList.contains('selRow') || line.classList.contains('select')) row._selected = true;
+        rows.push(row);
+      }
+      // hasMore — mirrors the headed path
+      let hasMore;
+      const turnsBox = document.getElementById('vertButtonScroll_' + grid.id);
+      if (turnsBox && turnsBox.offsetHeight > 0) {
+        const upBtns = turnsBox.querySelectorAll('[data-home], [data-up]');
+        const dnBtns = turnsBox.querySelectorAll('[data-down], [data-end]');
+        hasMore = { above: [...upBtns].some(b => !b.classList.contains('disabled')),
+                    below: [...dnBtns].some(b => !b.classList.contains('disabled')) };
+      } else {
+        const vs = document.getElementById('vertScroll_' + grid.id);
+        if (vs && vs.classList.contains('scrollV') && vs.offsetWidth > 0) {
+          const back = vs.querySelector('[data-track-back]')?.offsetHeight ?? 0;
+          const next = vs.querySelector('[data-track-next]')?.offsetHeight ?? 0;
+          hasMore = { above: back > 0, below: next > 0 };
+        } else {
+          hasMore = { below: body.scrollHeight > body.clientHeight };
+        }
+      }
+      const isTree = !!body.querySelector('.gridBoxTree');
+      const hasGroups = rows.some(r => r._kind === 'group');
+      const result = { name, columns: colNames, rows, total, offset: ${offset}, shown: rows.length, hasMore };
+      if (isTree) result.viewMode = 'tree';
+      if (hasGroups) result.hierarchical = true;
+      return result;
     }
 
     // Extract column headers with X-coordinates for alignment
@@ -381,7 +455,13 @@ export function findGridHeadCenterCoordsScript(gridSelector) {
     const grid = ${gridResolver(gridSelector)};
     if (!grid) return null;
     const head = grid.querySelector('.gridHead');
-    if (!head) return null;
+    if (!head) {
+      // Headerless editable grid: no header to click for commit-defocus. Click the
+      // thin strip at the grid's very top edge (above the first row) so the active
+      // edit commits without landing on a .gridLine (which would re-enter edit).
+      const gr = grid.getBoundingClientRect();
+      return { x: Math.round(gr.x + gr.width / 2), y: Math.round(gr.y + 1) };
+    }
     const r = head.getBoundingClientRect();
     return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
   })()`;
@@ -429,6 +509,7 @@ export function getSelectedOrLastRowIndexScript(gridSelector) {
 export function scanGridRowsScript(formNum, search) {
   return `(() => {
     ${ROW_CLICK_POINT_FN}
+    ${HEADERLESS_GRID_FN}
     const p = 'form${formNum}_';
     const grid = document.querySelector('[id^="' + p + '"].grid, [id^="' + p + '"] .grid');
     if (!grid) return null;
@@ -454,26 +535,35 @@ export function scanGridRowsScript(formNum, search) {
     } else if (isObj) {
       // Resolve each key to a header column (fuzzy, normalised) — mirror resolveCol.
       const headLine = grid.querySelector('.gridHead .gridLine') || grid.querySelector('.gridHead');
-      const headers = [...(headLine ? headLine.children : [])]
-        .filter(c => c.offsetWidth > 0)
-        .map(c => {
-          const t = (c.querySelector('.gridBoxText') || c).innerText || '';
-          const title = c.getAttribute('title') || '';
-          const r = c.getBoundingClientRect();
-          return { name: disp(t) || disp(title), text: t, title, x: r.x, right: r.x + r.width };
-        })
-        .filter(h => h.name);
+      let headers;
+      if (headLine) {
+        headers = [...headLine.children]
+          .filter(c => c.offsetWidth > 0)
+          .map(c => {
+            const t = (c.querySelector('.gridBoxText') || c).innerText || '';
+            const title = c.getAttribute('title') || '';
+            const r = c.getBoundingClientRect();
+            return { name: disp(t) || disp(title), text: t, title, x: r.x, right: r.x + r.width };
+          })
+          .filter(h => h.name);
+      } else {
+        // Headerless: synthesized columns anchored by colindex.
+        headers = synthHeaderlessColumns(grid).map(c => ({ name: c.name, text: c.name, title: '', x: 0, right: 0, colindex: c.colindex }));
+      }
       const resolveCol = name => {
         const n = norm(name);
         const cand = h => [h.text, h.title].filter(Boolean);
         return headers.find(h => cand(h).some(t => norm(t) === n))
             || headers.find(h => cand(h).some(t => norm(t).includes(n)));
       };
-      const cellAtCol = (line, col) => visCells(line).find(b => {
-        const r = b.getBoundingClientRect();
-        const cx = r.x + r.width / 2;
-        return cx >= col.x && cx < col.right;
-      });
+      const cellAtCol = (line, col) => {
+        if (col.colindex != null) return visCells(line).find(b => b.getAttribute('colindex') === col.colindex);
+        return visCells(line).find(b => {
+          const r = b.getBoundingClientRect();
+          const cx = r.x + r.width / 2;
+          return cx >= col.x && cx < col.right;
+        });
+      };
       const keys = Object.keys(search);
       const cols = {};
       for (const k of keys) {
@@ -559,25 +649,33 @@ export function findGridCellScript(formNum, gridSelector, { row, column }) {
     if (!grid) return { error: 'no_grid' };
     const head = grid.querySelector('.gridHead');
     const body = grid.querySelector('.gridBody');
-    if (!head || !body) return { error: 'no_grid_structure' };
+    if (!body) return { error: 'no_grid_structure' };
+    ${HEADERLESS_GRID_FN}
+    const isHeadless = !head;
 
     // Header X-ranges (mirror of readTableScript logic, simplified). We also
     // remember whether each header is frozen (gridBoxFix) — frozen and scrollable
     // columns can share X coordinates after horizontal scroll, so cell matching
     // must respect the frozen/scrollable partition.
-    const headLine = head.querySelector('.gridLine') || head;
-    const headers = [...headLine.children]
-      .filter(c => c.offsetWidth > 0)
-      .map(c => {
-        const textEl = c.querySelector('.gridBoxText');
-        const text = (textEl || c).innerText?.trim().replace(/\\n/g, ' ') || '';
-        // Picture/icon columns have no header text — fall back to the title tooltip
-        // (mirrors readTable naming) so they can still be targeted for clicking.
-        const title = (c.getAttribute('title') || '').trim();
-        const r = c.getBoundingClientRect();
-        return { text, title, name: text || title, x: r.x, right: r.x + r.width, fixed: c.classList.contains('gridBoxFix') };
-      })
-      .filter(h => h.name);
+    let headers;
+    if (head) {
+      const headLine = head.querySelector('.gridLine') || head;
+      headers = [...headLine.children]
+        .filter(c => c.offsetWidth > 0)
+        .map(c => {
+          const textEl = c.querySelector('.gridBoxText');
+          const text = (textEl || c).innerText?.trim().replace(/\\n/g, ' ') || '';
+          // Picture/icon columns have no header text — fall back to the title tooltip
+          // (mirrors readTable naming) so they can still be targeted for clicking.
+          const title = (c.getAttribute('title') || '').trim();
+          const r = c.getBoundingClientRect();
+          return { text, title, name: text || title, x: r.x, right: r.x + r.width, fixed: c.classList.contains('gridBoxFix') };
+        })
+        .filter(h => h.name);
+    } else {
+      // Headerless: synthesized columns anchored by colindex (cellAtColX matches by colindex).
+      headers = synthHeaderlessColumns(grid).map(c => ({ text: c.name, title: '', name: c.name, x: 0, right: 0, fixed: false, colindex: c.colindex, subTarget: c.subTarget }));
+    }
 
     const resolveCol = (name) => {
       const suffix = ' / ' + name;
@@ -598,13 +696,20 @@ export function findGridCellScript(formNum, gridSelector, { row, column }) {
     // fixed/scrollable kind as the header. After horizontal scroll a scrollable
     // cell may have the same x as a frozen one — without this guard cellAtColX
     // would silently return the frozen cell for a scrollable header.
-    const cellAtColX = (line, c) => [...line.children]
-      .filter(b => b.offsetWidth > 0 && b.classList.contains('gridBoxFix') === c.fixed)
-      .find(b => {
-        const r = b.getBoundingClientRect();
-        const cx = r.x + r.width / 2;
-        return cx >= c.x && cx < c.right;
-      });
+    const cellAtColX = (line, c) => {
+      // Headerless columns carry colindex → match the body cell directly (robust,
+      // and returns the same box for both logical columns of a combined mark-box).
+      if (c.colindex != null) {
+        return [...line.children].find(b => b.offsetWidth > 0 && b.getAttribute('colindex') === c.colindex);
+      }
+      return [...line.children]
+        .filter(b => b.offsetWidth > 0 && b.classList.contains('gridBoxFix') === c.fixed)
+        .find(b => {
+          const r = b.getBoundingClientRect();
+          const cx = r.x + r.width / 2;
+          return cx >= c.x && cx < c.right;
+        });
+    };
     const cellText = (b) => norm(b?.querySelector('.gridBoxText')?.innerText || b?.innerText || '');
 
     const target = ${JSON.stringify(row)};
@@ -644,6 +749,20 @@ export function findGridCellScript(formNum, gridSelector, { row, column }) {
 
     const cell = cellAtColX(line, col);
     if (!cell) return { error: 'cell_not_in_dom', column: col.name, rowIdx };
+    // Headerless: click coords target the subTarget node (checkbox image / title),
+    // no frozen/scroll partition in these narrow grids → trivially visible.
+    if (isHeadless) {
+      let node = cell;
+      if (col.subTarget === 'checkbox') node = cell.querySelector('.checkbox') || cell;
+      else if (col.subTarget === 'title') node = cell.querySelector('.gridBoxTitle') || cell;
+      else if (col.subTarget === 'text') node = cell.querySelector('.gridBoxText') || cell;
+      const rr = node.getBoundingClientRect();
+      const gb = grid.getBoundingClientRect();
+      return { x: Math.round(rr.x + rr.width / 2), y: Math.round(rr.y + rr.height / 2),
+        cellX: Math.round(rr.x), cellRight: Math.round(rr.x + rr.width),
+        gridX: Math.round(gb.x), gridRight: Math.round(gb.x + gb.width), scrollableLeft: Math.round(gb.x),
+        columnText: col.name, rowIdx, isFixed: false, cellText: cellText(cell), visible: true };
+    }
     const r = cell.getBoundingClientRect();
     const gridBox = grid.getBoundingClientRect();
     // Frozen columns (.gridBoxFix) stay pinned at the left edge of the grid even

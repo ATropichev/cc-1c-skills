@@ -1,4 +1,4 @@
-// web-test dom shared v1.1 — embedded JS function constants
+// web-test dom shared v1.2 — embedded JS function constants
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * Shared function strings embedded into page.evaluate() generators.
@@ -43,6 +43,68 @@ export const ROW_CLICK_POINT_FN = `function rowClickPoint(line, body) {
   return { x: Math.round(pick.r.x + Math.min(pick.r.width / 2, 60)), y: Math.round(pick.r.y + pick.r.height / 2) };
 }`;
 
+/**
+ * Single source of truth for column derivation on HEADERLESS grids (no `.gridHead`).
+ * 1C still puts `colindex` on body cells, so anchoring works without a header.
+ * Returns ordered descriptors consumed identically by readers (readTable, getFormState)
+ * and resolvers (findCellCoords, findGridCell, scanGridRows) so a synthesized name like
+ * "Колонка1" always maps to the same physical cell on both read and write.
+ *
+ * Descriptor: { name, kind:'data'|'checkbox'|'picture', colindex, subTarget:'checkbox'|'title'|'text'|null }
+ *  - colindex   — anchor: find the cell via line.children box with matching getAttribute('colindex').
+ *  - subTarget  — node inside that box: 'checkbox' → .checkbox, 'title' → .gridBoxTitle,
+ *                 'text' → .gridBoxText, null → box itself.
+ *
+ * A COMBINED mark-box (one box holding BOTH .checkbox AND non-empty .gridBoxTitle, e.g. the
+ * value-list checkbox mark-lists) is split into TWO logical columns sharing one colindex:
+ * "(checkbox)" (subTarget:checkbox) + "КолонкаN" (subTarget:title). Data columns are numbered
+ * КолонкаN among themselves (checkbox/picture don't consume a number); duplicate
+ * "(checkbox)"/"(picture)" get a " 2", " 3" suffix.
+ */
+export const HEADERLESS_GRID_FN = `function synthHeaderlessColumns(grid) {
+  function picInfo(cell) {
+    if (!cell) return null;
+    if (cell.querySelector('.gridListH, .gridListV, [tree="true"], .gridBoxTree')) return null;
+    const dib = cell.querySelector('.gridBoxImg .dIB');
+    if (!dib) return null;
+    const bg = dib.style.backgroundImage || '';
+    if (!bg.includes('pictureCollection/picture/')) return null;
+    const m = bg.match(/[?&]gx=(\\d+)/);
+    return { gx: m ? m[1] : '0' };
+  }
+  const body = grid.querySelector('.gridBody');
+  if (!body) return [];
+  const line = body.querySelector('.gridLine');
+  if (!line) return [];
+  const cols = [];
+  let dataN = 0;
+  const uniq = (base) => {
+    if (!cols.some(c => c.name === base)) return base;
+    let n = 2; while (cols.some(c => c.name === base + ' ' + n)) n++;
+    return base + ' ' + n;
+  };
+  [...line.children].forEach(box => {
+    if (box.offsetWidth === 0) return;
+    const ci = box.getAttribute('colindex');
+    if (ci == null) return;
+    const chk = box.querySelector('.checkbox');
+    const titleEl = box.querySelector('.gridBoxTitle');
+    const textEl = box.querySelector('.gridBoxText');
+    const titleTxt = ((titleEl ? titleEl.innerText : '') || '').trim();
+    if (chk && titleTxt) {
+      cols.push({ name: uniq('(checkbox)'), kind: 'checkbox', colindex: ci, subTarget: 'checkbox' });
+      cols.push({ name: 'Колонка' + (++dataN), kind: 'data', colindex: ci, subTarget: 'title' });
+    } else if (chk) {
+      cols.push({ name: uniq('(checkbox)'), kind: 'checkbox', colindex: ci, subTarget: 'checkbox' });
+    } else if (picInfo(box)) {
+      cols.push({ name: uniq('(picture)'), kind: 'picture', colindex: ci, subTarget: null });
+    } else {
+      cols.push({ name: 'Колонка' + (++dataN), kind: 'data', colindex: ci, subTarget: textEl ? 'text' : (titleEl ? 'title' : null) });
+    }
+  });
+  return cols;
+}`;
+
 /** Detect active form number. Picks form with most visible elements, skipping form0.
  *  When modalSurface is visible — prefer the highest-numbered form (modal dialog). */
 export const DETECT_FORM_FN = HAS_VISIBLE_MODAL_FN + `
@@ -80,7 +142,8 @@ function detectForms() {
 }`;
 
 /** Read form state given prefix p. Returns { fields, buttons, tabs, texts, hyperlinks, table, iframes }. */
-export const READ_FORM_FN = `function readForm(p) {
+export const READ_FORM_FN = HEADERLESS_GRID_FN + `
+function readForm(p) {
   const result = {};
   const fields = [];
   const buttons = [];
@@ -317,6 +380,9 @@ export const READ_FORM_FN = `function readForm(p) {
             }
           }
         }
+      } else if (body) {
+        // Headerless grid — synthesize columns by colindex (single source).
+        synthHeaderlessColumns(grid).forEach(c => columns.push({ text: c.name, x: 0, right: 0, y: 0, h: 0 }));
       }
       const colNames = columns.map(c => c.text);
       const rowCount = body ? body.querySelectorAll('.gridLine').length : 0;
