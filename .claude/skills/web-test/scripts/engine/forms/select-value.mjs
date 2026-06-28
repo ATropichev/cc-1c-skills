@@ -1,4 +1,4 @@
-// web-test forms/select-value v1.26 — Reference & composite-type value selection: selectValue (+ array multi-select), fillReferenceField, selection/type-dialog pickers.
+// web-test forms/select-value v1.27 — Reference & composite-type value selection: selectValue (+ array multi-select), fillReferenceField, selection/type-dialog pickers.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import {
@@ -628,7 +628,8 @@ export async function fillReferenceField(selector, fieldName, value, formNum) {
 // surface detection and clicking (clickElement matches a button by its technical
 // name OR tooltip), so detect and click never drift apart.
 const MULTI_BTN = {
-  uncheckAll: 'СписокСнятьФлажки',   // tooltip "Снять пометки со всех строк"
+  uncheckAll: 'СнятьФлажки',   // substring of the real name "<List>СнятьФлажки" (list-name-agnostic);
+                               //   clickElement/hasButton both match by includes. tooltip "Снять пометки со всех строк"
   confirm:    'ОК',
   podbor:     'Подбор',
   choose:     'Выбрать',
