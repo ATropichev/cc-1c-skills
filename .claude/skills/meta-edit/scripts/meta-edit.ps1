@@ -1,4 +1,4 @@
-﻿# meta-edit v1.22 — Edit existing 1C metadata object XML
+﻿# meta-edit v1.23 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -1313,7 +1313,7 @@ function Build-ColumnFragment {
 	if ($references.Count -gt 0) {
 		$sb.AppendLine("$indent`t`t<References>") | Out-Null
 		foreach ($ref in $references) {
-			$sb.AppendLine("$indent`t`t`t<xr:Item xsi:type=`"xr:MDObjectRef`">$ref</xr:Item>") | Out-Null
+			$sb.AppendLine("$indent`t`t`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$ref"))</xr:Item>") | Out-Null
 		}
 		$sb.AppendLine("$indent`t`t</References>") | Out-Null
 	} else {
@@ -2416,13 +2416,56 @@ function Process-Modify($modifyDef) {
 # Section 12.5: Complex property helpers
 # ============================================================
 
+# Прощающий ввод MDObjectRef-путей: русские корни метаданных → английские + ссылочные формы
+# ("CatalogRef.Валюты"/"СправочникСсылка.Валюты" → "Catalog.Валюты"). MDObjectRef ссылается на ОБЪЕКТ
+# метаданных, а не на тип ссылки; вида метаданных, оканчивающегося на Ref, не существует → схлопывание
+# однозначно. Виды стоят на ЧЁТНЫХ позициях (0,2,4…), имена (нечётные) не трогаем. Канонические
+# английские пути неизменны (в мапе только неканонические ключи). Зеркало meta-compile.
+$script:mdRefRoots = @{
+	'справочник'='Catalog'; 'документ'='Document'; 'перечисление'='Enum'; 'константа'='Constant';
+	'регистрсведений'='InformationRegister'; 'регистрнакопления'='AccumulationRegister';
+	'регистрбухгалтерии'='AccountingRegister'; 'регистррасчета'='CalculationRegister'; 'регистррасчёта'='CalculationRegister';
+	'плансчетов'='ChartOfAccounts'; 'планвидовхарактеристик'='ChartOfCharacteristicTypes';
+	'планвидоврасчета'='ChartOfCalculationTypes'; 'планвидоврасчёта'='ChartOfCalculationTypes';
+	'планобмена'='ExchangePlan'; 'бизнеспроцесс'='BusinessProcess'; 'задача'='Task';
+	'журналдокументов'='DocumentJournal'; 'отчет'='Report'; 'отчёт'='Report'; 'обработка'='DataProcessor';
+	'табличнаячасть'='TabularSection'; 'реквизит'='Attribute'; 'измерение'='Dimension'; 'ресурс'='Resource';
+	'стандартныйреквизит'='StandardAttribute'; 'значениеперечисления'='EnumValue'; 'команда'='Command';
+	'признакучета'='AccountingFlag'; 'признакучёта'='AccountingFlag';
+	'catalogref'='Catalog'; 'documentref'='Document'; 'enumref'='Enum';
+	'chartofaccountsref'='ChartOfAccounts'; 'chartofcharacteristictypesref'='ChartOfCharacteristicTypes';
+	'chartofcalculationtypesref'='ChartOfCalculationTypes'; 'exchangeplanref'='ExchangePlan';
+	'businessprocessref'='BusinessProcess'; 'taskref'='Task';
+	'справочникссылка'='Catalog'; 'документссылка'='Document'; 'перечислениессылка'='Enum';
+	'плансчетовссылка'='ChartOfAccounts'; 'планвидовхарактеристикссылка'='ChartOfCharacteristicTypes';
+	'планвидоврасчетассылка'='ChartOfCalculationTypes'; 'планвидоврасчётассылка'='ChartOfCalculationTypes';
+	'планобменассылка'='ExchangePlan'; 'бизнеспроцессссылка'='BusinessProcess'; 'задачассылка'='Task'
+}
+# $defaultRoot — корень для ГОЛОГО имени без точки (owners: "Валюты" → "Catalog.Валюты").
+function Normalize-MDObjectRef {
+	param([string]$ref, [string]$defaultRoot)
+	if (-not $ref) { return $ref }
+	if (-not $ref.Contains('.')) {
+		if ($defaultRoot) { return "$defaultRoot.$ref" }
+		return $ref
+	}
+	$parts = $ref -split '\.'
+	for ($k = 0; $k -lt $parts.Count; $k += 2) {
+		$t = $script:mdRefRoots[$parts[$k].ToLower()]
+		if ($t) { $parts[$k] = $t }
+	}
+	return ($parts -join '.')
+}
+
+# mdref — значения списка суть MDObjectRef-пути → прогоняем через Normalize-MDObjectRef.
+# root — корень для голого имени без точки.
 $script:complexPropertyMap = @{
-	"Owners"          = @{ tag = "xr:Item"; attr = 'xsi:type="xr:MDObjectRef"' }
-	"RegisterRecords" = @{ tag = "xr:Item"; attr = 'xsi:type="xr:MDObjectRef"' }
-	"BasedOn"         = @{ tag = "xr:Item"; attr = 'xsi:type="xr:MDObjectRef"' }
+	"Owners"          = @{ tag = "xr:Item"; attr = 'xsi:type="xr:MDObjectRef"'; mdref = $true; root = 'Catalog' }
+	"RegisterRecords" = @{ tag = "xr:Item"; attr = 'xsi:type="xr:MDObjectRef"'; mdref = $true }
+	"BasedOn"         = @{ tag = "xr:Item"; attr = 'xsi:type="xr:MDObjectRef"'; mdref = $true }
 	"InputByString"   = @{ tag = "xr:Field"; attr = $null }
 	"DataLockFields"      = @{ tag = "xr:Field"; attr = $null; expand = $true }
-	"RegisteredDocuments" = @{ tag = "xr:Item"; attr = 'xsi:type="xr:MDObjectRef"' }
+	"RegisteredDocuments" = @{ tag = "xr:Item"; attr = 'xsi:type="xr:MDObjectRef"'; mdref = $true }
 }
 
 # Известные свойства объекта (union по корпусу acc+erp 8.3.24) — allowlist для modify-property.
@@ -2873,6 +2916,7 @@ function Add-ComplexPropertyItem([string]$propertyName, [string[]]$values) {
 	$mapEntry = $script:complexPropertyMap[$propertyName]
 	if (-not $mapEntry) { Warn "Unknown complex property: $propertyName"; return }
 	if ($mapEntry.expand) { $values = @($values | ForEach-Object { Expand-DataPath "$_" }) }
+	if ($mapEntry.mdref) { $values = @($values | ForEach-Object { Normalize-MDObjectRef "$_" $mapEntry.root }) }
 
 	$propEl = Find-PropertyElement $propertyName
 	if (-not $propEl) {
@@ -2922,6 +2966,7 @@ function Add-ComplexPropertyItem([string]$propertyName, [string[]]$values) {
 function Remove-ComplexPropertyItem([string]$propertyName, [string[]]$values) {
 	$mapEntry = $script:complexPropertyMap[$propertyName]
 	if ($mapEntry -and $mapEntry.expand) { $values = @($values | ForEach-Object { Expand-DataPath "$_" }) }
+	if ($mapEntry -and $mapEntry.mdref) { $values = @($values | ForEach-Object { Normalize-MDObjectRef "$_" $mapEntry.root }) }
 	$propEl = Find-PropertyElement $propertyName
 	if (-not $propEl) {
 		Warn "Property element '$propertyName' not found in Properties"
@@ -2960,6 +3005,7 @@ function Set-ComplexProperty([string]$propertyName, [string[]]$values) {
 	$mapEntry = $script:complexPropertyMap[$propertyName]
 	if (-not $mapEntry) { Warn "Unknown complex property: $propertyName"; return }
 	if ($mapEntry.expand) { $values = @($values | ForEach-Object { Expand-DataPath "$_" }) }
+	if ($mapEntry.mdref) { $values = @($values | ForEach-Object { Normalize-MDObjectRef "$_" $mapEntry.root }) }
 
 	$propEl = Find-PropertyElement $propertyName
 	if (-not $propEl) {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.22 — Edit existing 1C metadata object XML
+# meta-edit v1.23 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1288,7 +1288,7 @@ def build_column_fragment(col_def, indent):
     if references:
         lines.append(f"{indent}\t\t<References>")
         for ref in references:
-            lines.append(f'{indent}\t\t\t<xr:Item xsi:type="xr:MDObjectRef">{ref}</xr:Item>')
+            lines.append(f'{indent}\t\t\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(ref)))}</xr:Item>')
         lines.append(f"{indent}\t\t</References>")
     else:
         lines.append(f"{indent}\t\t<References/>")
@@ -2235,13 +2235,56 @@ def process_modify(modify_def):
 # Complex property helpers
 # ============================================================
 
+# Прощающий ввод MDObjectRef-путей: русские корни метаданных → английские + ссылочные формы
+# ("CatalogRef.Валюты"/"СправочникСсылка.Валюты" → "Catalog.Валюты"). MDObjectRef ссылается на ОБЪЕКТ
+# метаданных, а не на тип ссылки; вида метаданных, оканчивающегося на Ref, не существует → схлопывание
+# однозначно. Виды на ЧЁТНЫХ позициях (0,2,4…), имена (нечётные) не трогаем. Канонические английские
+# пути неизменны. Зеркало meta-compile.
+md_ref_roots = {
+    'справочник': 'Catalog', 'документ': 'Document', 'перечисление': 'Enum', 'константа': 'Constant',
+    'регистрсведений': 'InformationRegister', 'регистрнакопления': 'AccumulationRegister',
+    'регистрбухгалтерии': 'AccountingRegister', 'регистррасчета': 'CalculationRegister', 'регистррасчёта': 'CalculationRegister',
+    'плансчетов': 'ChartOfAccounts', 'планвидовхарактеристик': 'ChartOfCharacteristicTypes',
+    'планвидоврасчета': 'ChartOfCalculationTypes', 'планвидоврасчёта': 'ChartOfCalculationTypes',
+    'планобмена': 'ExchangePlan', 'бизнеспроцесс': 'BusinessProcess', 'задача': 'Task',
+    'журналдокументов': 'DocumentJournal', 'отчет': 'Report', 'отчёт': 'Report', 'обработка': 'DataProcessor',
+    'табличнаячасть': 'TabularSection', 'реквизит': 'Attribute', 'измерение': 'Dimension', 'ресурс': 'Resource',
+    'стандартныйреквизит': 'StandardAttribute', 'значениеперечисления': 'EnumValue', 'команда': 'Command',
+    'признакучета': 'AccountingFlag', 'признакучёта': 'AccountingFlag',
+    'catalogref': 'Catalog', 'documentref': 'Document', 'enumref': 'Enum',
+    'chartofaccountsref': 'ChartOfAccounts', 'chartofcharacteristictypesref': 'ChartOfCharacteristicTypes',
+    'chartofcalculationtypesref': 'ChartOfCalculationTypes', 'exchangeplanref': 'ExchangePlan',
+    'businessprocessref': 'BusinessProcess', 'taskref': 'Task',
+    'справочникссылка': 'Catalog', 'документссылка': 'Document', 'перечислениессылка': 'Enum',
+    'плансчетовссылка': 'ChartOfAccounts', 'планвидовхарактеристикссылка': 'ChartOfCharacteristicTypes',
+    'планвидоврасчетассылка': 'ChartOfCalculationTypes', 'планвидоврасчётассылка': 'ChartOfCalculationTypes',
+    'планобменассылка': 'ExchangePlan', 'бизнеспроцессссылка': 'BusinessProcess', 'задачассылка': 'Task',
+}
+
+
+def normalize_md_object_ref(ref, default_root=None):
+    """default_root — корень для ГОЛОГО имени без точки (owners: "Валюты" → "Catalog.Валюты")."""
+    if not ref:
+        return ref
+    if '.' not in ref:
+        return f'{default_root}.{ref}' if default_root else ref
+    parts = ref.split('.')
+    for k in range(0, len(parts), 2):
+        t = md_ref_roots.get(parts[k].lower())
+        if t:
+            parts[k] = t
+    return '.'.join(parts)
+
+
+# mdref — значения списка суть MDObjectRef-пути → прогоняем через normalize_md_object_ref.
+# root — корень для голого имени без точки.
 complex_property_map = {
-    "Owners": {"tag": "xr:Item", "attr": 'xsi:type="xr:MDObjectRef"'},
-    "RegisterRecords": {"tag": "xr:Item", "attr": 'xsi:type="xr:MDObjectRef"'},
-    "BasedOn": {"tag": "xr:Item", "attr": 'xsi:type="xr:MDObjectRef"'},
+    "Owners": {"tag": "xr:Item", "attr": 'xsi:type="xr:MDObjectRef"', "mdref": True, "root": "Catalog"},
+    "RegisterRecords": {"tag": "xr:Item", "attr": 'xsi:type="xr:MDObjectRef"', "mdref": True},
+    "BasedOn": {"tag": "xr:Item", "attr": 'xsi:type="xr:MDObjectRef"', "mdref": True},
     "InputByString": {"tag": "xr:Field", "attr": None},
     "DataLockFields": {"tag": "xr:Field", "attr": None, "expand": True},
-    "RegisteredDocuments": {"tag": "xr:Item", "attr": 'xsi:type="xr:MDObjectRef"'},
+    "RegisteredDocuments": {"tag": "xr:Item", "attr": 'xsi:type="xr:MDObjectRef"', "mdref": True},
 }
 
 # Известные свойства объекта (union по корпусу acc+erp 8.3.24) — allowlist для modify-property.
@@ -2777,6 +2820,8 @@ def add_complex_property_item(property_name, values):
         return
     if map_entry.get("expand"):
         values = [expand_data_path(str(v)) for v in values]
+    if map_entry.get("mdref"):
+        values = [normalize_md_object_ref(str(v), map_entry.get("root")) for v in values]
 
     prop_el = find_property_element(property_name)
     if prop_el is None:
@@ -2819,6 +2864,8 @@ def remove_complex_property_item(property_name, values):
     map_entry = complex_property_map.get(property_name)
     if map_entry and map_entry.get("expand"):
         values = [expand_data_path(str(v)) for v in values]
+    if map_entry and map_entry.get("mdref"):
+        values = [normalize_md_object_ref(str(v), map_entry.get("root")) for v in values]
     prop_el = find_property_element(property_name)
     if prop_el is None:
         warn(f"Property element '{property_name}' not found in Properties")
@@ -2851,6 +2898,8 @@ def set_complex_property(property_name, values):
         return
     if map_entry.get("expand"):
         values = [expand_data_path(str(v)) for v in values]
+    if map_entry.get("mdref"):
+        values = [normalize_md_object_ref(str(v), map_entry.get("root")) for v in values]
 
     prop_el = find_property_element(property_name)
     if prop_el is None:
