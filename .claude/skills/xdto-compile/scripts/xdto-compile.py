@@ -1,0 +1,780 @@
+# xdto-compile v1.0 — Build a 1C XDTO package from an XML Schema (XSD) (Python port)
+# Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+import argparse
+import json
+import os
+import re
+import sys
+import uuid
+
+from lxml import etree
+
+sys.stdout.reconfigure(encoding="utf-8")
+sys.stderr.reconfigure(encoding="utf-8")
+
+XDTO_NS = "http://v8.1c.ru/8.1/xdto"
+XS_NS = "http://www.w3.org/2001/XMLSchema"
+XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
+MD_NS = "http://v8.1c.ru/8.3/MDClasses"
+
+parser = argparse.ArgumentParser(allow_abbrev=False)
+parser.add_argument("-XsdPath", "-Path", default="")
+parser.add_argument("-Xsd", default="")
+parser.add_argument("-OutputDir", required=True)
+parser.add_argument("-Name", default="")
+parser.add_argument("-Synonym", default="")
+parser.add_argument("-Comment", default="")
+parser.add_argument("-Force", action="store_true")
+args = parser.parse_args()
+
+# ── support guard (Ext/ParentConfigurations.bin) ─────────────
+# См. docs/1c-support-state-spec.md. Блокирует правку объектов поставщика
+# «на замке». Триггер — наличие bin; реакция из .v8-project.json
+# editingAllowedCheck (deny|warn|off, по умолчанию deny).
+
+
+def find_v8_project(start_dir):
+    d = os.path.abspath(start_dir)
+    for _ in range(20):
+        pj = os.path.join(d, ".v8-project.json")
+        if os.path.exists(pj):
+            return pj
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return None
+
+
+def get_edit_mode(cfg_dir):
+    try:
+        pj = find_v8_project(cfg_dir)
+        if pj:
+            with open(pj, encoding="utf-8-sig") as f:
+                cfg = json.load(f)
+            return str(cfg.get("editingAllowedCheck") or "deny")
+    except Exception:  # noqa: BLE001
+        pass
+    return "deny"
+
+
+def is_external_object_root(xml_path):
+    try:
+        root = etree.parse(xml_path).getroot()
+        for el in root:
+            if isinstance(el.tag, str):
+                return etree.QName(el).localname in ("ExternalDataProcessor", "ExternalReport")
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
+
+def assert_edit_allowed(target_path):
+    d = os.path.abspath(target_path)
+    for _ in range(20):
+        # Автономный объект (внешняя обработка/отчёт) — граница климба
+        try:
+            for f in os.listdir(d):
+                if f.endswith(".xml") and is_external_object_root(os.path.join(d, f)):
+                    return
+        except OSError:
+            pass
+        cfg_xml = os.path.join(d, "Configuration.xml")
+        support_bin = os.path.join(d, "Ext", "ParentConfigurations.bin")
+        if os.path.exists(cfg_xml):
+            if os.path.exists(support_bin):
+                mode = get_edit_mode(d)
+                if mode == "off":
+                    return
+                msg = ("Конфигурация находится на поддержке (Ext/ParentConfigurations.bin). "
+                       "Правка может быть запрещена.")
+                if mode == "warn":
+                    print(f"WARNING: {msg}", file=sys.stderr)
+                    return
+                print(f"{msg} Снимите с поддержки (/support-edit) или задайте "
+                      "editingAllowedCheck в .v8-project.json.", file=sys.stderr)
+                sys.exit(1)
+            return
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+
+
+# ── load the schema ──────────────────────────────────────────
+
+if args.Xsd:
+    xsd_bytes = args.Xsd.encode("utf-8")
+    default_name = "Package"
+elif args.XsdPath:
+    if not os.path.isfile(args.XsdPath):
+        print(f"Файл XSD не найден: {args.XsdPath}", file=sys.stderr)
+        sys.exit(1)
+    with open(args.XsdPath, "rb") as f:
+        xsd_bytes = f.read()
+    default_name = os.path.splitext(os.path.basename(args.XsdPath))[0]
+else:
+    print("Укажите -XsdPath или -Xsd", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    schema = etree.fromstring(xsd_bytes)
+except Exception as e:  # noqa: BLE001
+    print(f"Не удалось разобрать XSD: {e}", file=sys.stderr)
+    sys.exit(1)
+
+
+def local(el):
+    return etree.QName(el).localname
+
+
+if local(schema) != "schema" or etree.QName(schema).namespace != XS_NS:
+    print(f"Ожидался корневой <xs:schema> в пространстве имён {XS_NS}", file=sys.stderr)
+    sys.exit(1)
+
+target_ns = schema.get("targetNamespace") or ""
+
+# ── emit-tree primitives ─────────────────────────────────────
+
+
+class Node:
+    __slots__ = ("tag", "attrs", "children", "text", "prefix", "declare_ns")
+
+    def __init__(self, tag):
+        self.tag = tag
+        self.attrs = []       # список dict: name, value | (ns, local) | list
+        self.children = []
+        self.text = None
+        self.prefix = None
+        self.declare_ns = None
+
+
+def add_attr(node, name, value):
+    if value is None:
+        return
+    node.attrs.append({"name": name, "value": str(value)})
+
+
+def add_qattr(node, name, ns, loc):
+    if loc is None:
+        return
+    node.attrs.append({"name": name, "ns": ns, "local": loc})
+
+
+def add_qlist_attr(node, name, pairs, clark):
+    if not pairs:
+        return
+    node.attrs.append({"name": name, "list": pairs, "clark": clark})
+
+
+# Канонический порядок атрибутов — топологическая сортировка по корпусу 8.3.24
+# (acc + erp, 760 пакетов), см. docs/1c-xdto-spec.md.
+ATTR_ORDER = {
+    "package": ["targetNamespace", "elementFormQualified", "attributeFormQualified"],
+    "import": ["namespace"],
+    "objectType": ["name", "base", "open", "abstract", "mixed", "ordered", "sequenced"],
+    "property": ["name", "ref", "type", "lowerBound", "upperBound", "nillable",
+                 "fixed", "default", "form", "localName", "qualified"],
+    "valueType": ["name", "base", "variety", "itemType", "length", "memberTypes",
+                  "minExclusive", "maxExclusive", "minInclusive", "maxInclusive",
+                  "minLength", "maxLength", "totalDigits", "fractionDigits", "whiteSpace"],
+    "typeDef": ["xsi:type", "base", "mixed", "open", "ordered", "sequenced", "variety",
+                "itemType", "length", "memberTypes", "minExclusive", "maxExclusive",
+                "minInclusive", "maxInclusive", "minLength", "maxLength",
+                "totalDigits", "fractionDigits", "whiteSpace"],
+    "enumeration": ["xsi:type"],
+}
+
+
+def sort_attrs(node):
+    order = ATTR_ORDER.get(node.tag)
+    if not order:
+        return node.attrs
+    res = []
+    for n in order:
+        res.extend(a for a in node.attrs if a["name"] == n)
+    res.extend(a for a in node.attrs if a["name"] not in order)
+    return res
+
+
+def esc(s):
+    if s is None:
+        return ""
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+def esc_text(s):
+    if s is None:
+        return ""
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+# ── serializer with the dNpM prefix scheme ───────────────────
+
+out = []
+
+
+def serialize_node(node, depth, inherited):
+    indent = "\t" * (depth - 1)
+    attrs_sorted = sort_attrs(node)
+
+    # Объявляем здесь только те ns, которых ещё нет в области видимости:
+    # сериализатор платформы объявляет префикс на первом нуждающемся узле,
+    # а потомки переиспользуют — отсюда d2p1 у property внутри objectType.
+    local_ns = []
+
+    def need_prefix(ns):
+        if not ns or ns in (XS_NS, XSI_NS):
+            return
+        if ns in inherited:
+            return
+        if ns not in local_ns:
+            local_ns.append(ns)
+
+    for a in attrs_sorted:
+        if "list" in a:
+            # Нотация Кларка несёт ns в значении и префикса не требует
+            if not a["clark"]:
+                for p in a["list"]:
+                    need_prefix(p[0])
+        elif a.get("ns"):
+            need_prefix(a["ns"])
+
+    has_qualified = any(a["name"] == "qualified" for a in attrs_sorted)
+    if has_qualified:
+        need_prefix(XDTO_NS)
+    if node.declare_ns:
+        need_prefix(node.declare_ns)
+
+    prefix_of = dict(inherited)
+    ns_decls = ""
+    for i, ns in enumerate(local_ns):
+        # Осмысленный префикс из исходника (зеркало xdto:prefix) имеет приоритет
+        px = node.prefix if (i == 0 and node.prefix) else f"d{depth}p{i + 1}"
+        prefix_of[ns] = px
+        ns_decls += f' xmlns:{px}="{esc(ns)}"'
+
+    def qval(ns, loc):
+        if not ns:
+            return loc
+        if ns == XS_NS:
+            return f"xs:{loc}"
+        if ns == XSI_NS:
+            return f"xsi:{loc}"
+        return f"{prefix_of[ns]}:{loc}"
+
+    attr_text = ""
+    for a in attrs_sorted:
+        if "list" in a:
+            vals = []
+            for ns, loc in a["list"]:
+                vals.append((f"{{{ns}}}{loc}" if ns else loc) if a["clark"] else qval(ns, loc))
+            attr_text += f' {a["name"]}="{esc(" ".join(vals))}"'
+        elif a.get("ns") or a.get("local"):
+            attr_text += f' {a["name"]}="{esc(qval(a.get("ns"), a["local"]))}"'
+        elif a["name"] == "qualified":
+            attr_text += f' {prefix_of[XDTO_NS]}:qualified="{esc(a["value"])}"'
+        else:
+            attr_text += f' {a["name"]}="{esc(a["value"])}"'
+
+    tag_name = f"{prefix_of[XDTO_NS]}:{node.tag}" if has_qualified else node.tag
+
+    has_children = bool(node.children)
+    # Пустое значение пишется самозакрывающимся тегом: <enumeration/>
+    has_text = node.text is not None and node.text != ""
+
+    if not has_children and not has_text:
+        out.append(f"{indent}<{tag_name}{ns_decls}{attr_text}/>\r\n")
+        return
+    if has_text and not has_children:
+        out.append(f"{indent}<{tag_name}{ns_decls}{attr_text}>{esc_text(node.text)}</{tag_name}>\r\n")
+        return
+    out.append(f"{indent}<{tag_name}{ns_decls}{attr_text}>\r\n")
+    for c in node.children:
+        serialize_node(c, depth + 1, prefix_of)
+    out.append(f"{indent}</{tag_name}>\r\n")
+
+
+# ── XSD reading helpers ──────────────────────────────────────
+
+def MA(el, name):
+    # xdto: mirror attribute — литеральное значение для Package.bin.
+    # Ищем по namespace, а не по строке префикса.
+    return el.get(f"{{{XDTO_NS}}}{name}")
+
+
+def xchildren(el, name):
+    return [c for c in el if isinstance(c.tag, str)
+            and etree.QName(c).namespace == XS_NS and local(c) == name]
+
+
+def xfirst(el, name):
+    r = xchildren(el, name)
+    return r[0] if r else None
+
+
+def split_qname(el, qname):
+    if not qname:
+        return None
+    parts = qname.split(":")
+    if len(parts) == 2:
+        ns = el.nsmap.get(parts[0])
+        loc = parts[1]
+    else:
+        # Прощающий ввод: голое имя типа — тип целевого пространства имён
+        ns = el.nsmap.get(None) or target_ns
+        loc = parts[0]
+    return (ns, loc)
+
+
+def split_qname_list(el, lst):
+    if not lst:
+        return []
+    return [split_qname(el, q) for q in lst.split() if q]
+
+
+FACETS = ["length", "minLength", "maxLength", "totalDigits", "fractionDigits",
+          "minInclusive", "maxInclusive", "minExclusive", "maxExclusive", "whiteSpace"]
+
+
+# ── simpleType -> valueType / typeDef(ValueType) ─────────────
+
+def fill_simple_type(node, st):
+    restriction = xfirst(st, "restriction")
+    lst = xfirst(st, "list")
+    union = xfirst(st, "union")
+
+    if lst is not None:
+        it = split_qname(lst, lst.get("itemType"))
+        mv = MA(lst, "variety")
+        add_attr(node, "variety", mv if mv is not None else "List")
+        if it:
+            add_qattr(node, "itemType", it[0], it[1])
+        return
+    if union is not None:
+        mv = MA(union, "variety")
+        set_attr_value(node, "variety", mv if mv is not None else "Union")
+        members = split_qname_list(union, union.get("memberTypes"))
+        # По умолчанию нотация Кларка — так записано 125 из 135 memberTypes корпуса
+        use_clark = MA(union, "memberTypesForm") != "prefixed"
+        if members:
+            add_qlist_attr(node, "memberTypes", members, use_clark)
+        node.declare_ns = MA(union, "declareNs")
+        for anon in xchildren(union, "simpleType"):
+            # typeDef в контексте простого типа xsi:type не несёт (40 узлов корпуса)
+            td = Node("typeDef")
+            fill_simple_type(td, anon)
+            node.children.append(td)
+        return
+    if restriction is not None:
+        b = split_qname(restriction, restriction.get("base"))
+        if b:
+            add_qattr(node, "base", b[0], b[1])
+        mv = MA(restriction, "variety")
+        if mv is not None:
+            add_attr(node, "variety", mv)
+        # Анонимный базовый тип внутри xs:restriction — typeDef без xsi:type
+        anon_base = xfirst(restriction, "simpleType")
+        if anon_base is not None:
+            td = Node("typeDef")
+            fill_simple_type(td, anon_base)
+            node.children.append(td)
+        for f in FACETS:
+            for fe in xchildren(restriction, f):
+                add_attr(node, f, fe.get("value"))
+        for pe in xchildren(restriction, "pattern"):
+            pn = Node("pattern")
+            pn.text = pe.get("value")
+            node.children.append(pn)
+        for en in xchildren(restriction, "enumeration"):
+            enode = Node("enumeration")
+            mt = MA(en, "type")
+            if mt is not None:
+                q = split_qname(en, mt)
+                add_qattr(enode, "xsi:type", q[0], q[1])
+            enode.text = en.get("value")
+            node.children.append(enode)
+
+
+def set_attr_value(node, name, value):
+    for a in node.attrs:
+        if a["name"] == name:
+            a["value"] = value
+            return
+    add_attr(node, name, value)
+
+
+def get_prop_key(p):
+    for a in p.attrs:
+        if a["name"] == "name":
+            return a.get("value")
+    for a in p.attrs:
+        if a["name"] == "ref":
+            return "@" + a["local"]
+    return None
+
+
+def reorder_properties(node, names):
+    props = [c for c in node.children if c.tag == "property"]
+    if len(props) < 2:
+        return
+    by_key = {}
+    for p in props:
+        k = get_prop_key(p)
+        if k is not None and k not in by_key:
+            by_key[k] = p
+    ordered = []
+    for n in names:
+        if n in by_key:
+            ordered.append(by_key.pop(n))
+    for p in props:
+        if p not in ordered:
+            ordered.append(p)
+    others = [c for c in node.children if c.tag != "property"]
+    node.children = ordered + others
+
+
+# ── element / attribute -> property ──────────────────────────
+
+def build_property(el, is_attribute):
+    p = Node("property")
+
+    xsd_name = el.get("name")
+    mirror_name = MA(el, "name")
+    if mirror_name is not None:
+        add_attr(p, "name", mirror_name)
+        local_name = xsd_name
+    else:
+        add_attr(p, "name", xsd_name)
+        local_name = None
+
+    ref_q = split_qname(el, el.get("ref"))
+    if ref_q:
+        add_qattr(p, "ref", ref_q[0], ref_q[1])
+
+    type_q = split_qname(el, el.get("type"))
+    if type_q:
+        add_qattr(p, "type", type_q[0], type_q[1])
+
+    if is_attribute:
+        add_attr(p, "lowerBound", MA(el, "lowerBound"))
+        add_attr(p, "upperBound", MA(el, "upperBound"))
+        add_attr(p, "nillable", MA(el, "nillable"))
+    else:
+        add_attr(p, "lowerBound", el.get("minOccurs"))
+        max_occ = el.get("maxOccurs")
+        if max_occ is not None:
+            add_attr(p, "upperBound", "-1" if max_occ == "unbounded" else max_occ)
+        add_attr(p, "nillable", el.get("nillable"))
+
+    add_attr(p, "fixed", el.get("fixed"))
+    add_attr(p, "default", el.get("default"))
+
+    if is_attribute:
+        add_attr(p, "form", "Attribute")
+    else:
+        mf = MA(el, "form")
+        if mf is not None:
+            add_attr(p, "form", mf)
+    add_attr(p, "localName", local_name)
+    add_attr(p, "qualified", MA(el, "qualified"))
+    p.prefix = MA(el, "prefix")
+
+    anon_simple = xfirst(el, "simpleType")
+    anon_complex = xfirst(el, "complexType")
+    if anon_simple is not None:
+        td = Node("typeDef")
+        add_attr(td, "xsi:type", "ValueType")
+        fill_simple_type(td, anon_simple)
+        p.children.append(td)
+    elif anon_complex is not None:
+        td = Node("typeDef")
+        add_attr(td, "xsi:type", "ObjectType")
+        fill_complex_type(td, anon_complex)
+        p.children.append(td)
+    return p
+
+
+# ── complexType -> objectType / typeDef(ObjectType) ──────────
+
+def set_type_flags(node, ct, is_open, choice):
+    m_open = MA(ct, "open")
+    if m_open is not None:
+        add_attr(node, "open", m_open)
+    elif is_open:
+        add_attr(node, "open", "true")
+
+    m_ordered = MA(ct, "ordered")
+    if m_ordered is not None:
+        add_attr(node, "ordered", m_ordered)
+    elif choice is not None:
+        add_attr(node, "ordered", "false")
+
+    m_seq = MA(ct, "sequenced")
+    if m_seq is not None:
+        add_attr(node, "sequenced", m_seq)
+
+    m_abstract = MA(ct, "abstract")
+    if m_abstract is not None:
+        add_attr(node, "abstract", m_abstract)
+    elif ct.get("abstract") == "true":
+        add_attr(node, "abstract", "true")
+
+    m_mixed = MA(ct, "mixed")
+    if m_mixed is not None:
+        add_attr(node, "mixed", m_mixed)
+    elif ct.get("mixed") == "true":
+        add_attr(node, "mixed", "true")
+
+
+def fill_complex_type(node, ct):
+    body = ct
+    content = xfirst(ct, "complexContent")
+    if content is not None:
+        ext = xfirst(content, "extension")
+        if ext is not None:
+            b = split_qname(ext, ext.get("base"))
+            if b:
+                add_qattr(node, "base", b[0], b[1])
+            body = ext
+
+    # xs:simpleContent -> свойство "Text", хранящее значение самого элемента
+    simple = xfirst(ct, "simpleContent")
+    if simple is not None:
+        ext = xfirst(simple, "extension")
+        if ext is not None:
+            for a in xchildren(ext, "attribute"):
+                node.children.append(build_property(a, True))
+            tp = Node("property")
+            t_name = MA(ext, "textName")
+            add_attr(tp, "name", t_name if t_name is not None else "__content")
+            b = split_qname(ext, ext.get("base"))
+            if b:
+                add_qattr(tp, "type", b[0], b[1])
+            add_attr(tp, "lowerBound", MA(ext, "textlowerBound"))
+            add_attr(tp, "upperBound", MA(ext, "textupperBound"))
+            add_attr(tp, "nillable", MA(ext, "textnillable"))
+            add_attr(tp, "form", "Text")
+            node.children.append(tp)
+            # xs:simpleContent не отменяет флаги самого xs:complexType
+            set_type_flags(node, ct, False, None)
+            return
+
+    seq = xfirst(body, "sequence")
+    cho = xfirst(body, "choice")
+    particle = seq if seq is not None else cho
+    is_open = False
+
+    # Порядок в XDTO: сначала form="Attribute", потом остальные (96.5% типов корпуса)
+    elem_props = []
+    if particle is not None:
+        for c in particle:
+            if not isinstance(c.tag, str) or etree.QName(c).namespace != XS_NS:
+                continue
+            ln = local(c)
+            if ln == "element":
+                elem_props.append(build_property(c, False))
+            elif ln == "any":
+                is_open = True
+    for a in xchildren(body, "attribute"):
+        node.children.append(build_property(a, True))
+    node.children.extend(elem_props)
+    if xchildren(body, "anyAttribute"):
+        is_open = True
+
+    m_order = MA(ct, "order")
+    if m_order is not None:
+        reorder_properties(node, m_order.split("|"))
+
+    set_type_flags(node, ct, is_open, cho)
+
+
+# ── build the package tree ───────────────────────────────────
+
+pkg_node = Node("package")
+add_attr(pkg_node, "targetNamespace", target_ns)
+
+efq_mirror = MA(schema, "elementFormQualified")
+afq_mirror = MA(schema, "attributeFormQualified")
+efd = schema.get("elementFormDefault")
+afd = schema.get("attributeFormDefault")
+if efq_mirror is not None:
+    add_attr(pkg_node, "elementFormQualified", efq_mirror)
+elif efd is not None:
+    add_attr(pkg_node, "elementFormQualified", "true" if efd == "qualified" else "false")
+if afq_mirror is not None:
+    add_attr(pkg_node, "attributeFormQualified", afq_mirror)
+elif afd is not None:
+    add_attr(pkg_node, "attributeFormQualified", "true" if afd == "qualified" else "false")
+
+meta_name = meta_comment = None
+meta_synonym = []
+ann = xfirst(schema, "annotation")
+if ann is not None:
+    appinfo = xfirst(ann, "appinfo")
+    if appinfo is not None:
+        for pk in appinfo:
+            if not isinstance(pk.tag, str) or etree.QName(pk).namespace != XDTO_NS:
+                continue
+            for f in pk:
+                if not isinstance(f.tag, str):
+                    continue
+                ln = local(f)
+                if ln == "name":
+                    meta_name = f.text or ""
+                elif ln == "comment":
+                    meta_comment = f.text or ""
+                elif ln == "synonym":
+                    meta_synonym.append({"Lang": f.get("lang") or "", "Content": f.text or ""})
+
+for node in schema:
+    if not isinstance(node.tag, str) or etree.QName(node).namespace != XS_NS:
+        continue
+    ln = local(node)
+    if ln == "import":
+        n = Node("import")
+        add_attr(n, "namespace", node.get("namespace"))
+        pkg_node.children.append(n)
+    elif ln in ("annotation", "include"):
+        continue
+    elif ln == "element":
+        pkg_node.children.append(build_property(node, False))
+    elif ln == "attribute":
+        pkg_node.children.append(build_property(node, True))
+    elif ln == "simpleType":
+        n = Node("valueType")
+        add_attr(n, "name", node.get("name"))
+        fill_simple_type(n, node)
+        pkg_node.children.append(n)
+    elif ln == "complexType":
+        n = Node("objectType")
+        add_attr(n, "name", node.get("name"))
+        fill_complex_type(n, node)
+        pkg_node.children.append(n)
+
+# ── serialize Package.bin ────────────────────────────────────
+
+# Модель XDTO требует строгой последовательности элементов верхнего уровня:
+# import → property → valueType → objectType. Порядок объявлений в XSD произвольный,
+# поэтому пересортировываем — иначе платформа отвергает пакет с «Ошибка преобразования
+# данных XDTO». Все 760 пакетов корпуса этому порядку удовлетворяют.
+TOP_ORDER = ["import", "property", "valueType", "objectType"]
+pkg_node.children = (
+    [c for t in TOP_ORDER for c in pkg_node.children if c.tag == t]
+    + [c for c in pkg_node.children if c.tag not in TOP_ORDER]
+)
+
+root_attr_text = "".join(f' {a["name"]}="{esc(a["value"])}"' for a in sort_attrs(pkg_node))
+out.append(f'<package xmlns="{XDTO_NS}" xmlns:xs="{XS_NS}" xmlns:xsi="{XSI_NS}"{root_attr_text}>\r\n')
+for c in pkg_node.children:
+    serialize_node(c, 2, {})
+out.append("</package>")
+
+bin_text = "".join(out)
+
+# ── resolve the package name ─────────────────────────────────
+
+name = args.Name or meta_name or default_name
+name = re.sub(r"[^\wЀ-ӿ]", "_", name, flags=re.UNICODE)
+if re.match(r"^\d", name):
+    name = "_" + name
+
+assert_edit_allowed(args.OutputDir)
+
+pkg_root = os.path.join(args.OutputDir, "XDTOPackages")
+pkg_dir = os.path.join(pkg_root, name)
+ext_dir = os.path.join(pkg_dir, "Ext")
+md_file = os.path.join(pkg_root, name + ".xml")
+bin_file = os.path.join(ext_dir, "Package.bin")
+
+if os.path.exists(bin_file) and not args.Force:
+    print(f"Пакет уже существует: {bin_file}. Используйте -Force для перезаписи.", file=sys.stderr)
+    sys.exit(1)
+os.makedirs(ext_dir, exist_ok=True)
+
+with open(bin_file, "wb") as f:
+    f.write(b"\xef\xbb\xbf" + bin_text.encode("utf-8"))
+
+# ── metadata object file ─────────────────────────────────────
+
+if not args.Synonym and meta_synonym:
+    syn_items = meta_synonym
+elif args.Synonym:
+    syn_items = [{"Lang": "ru", "Content": args.Synonym}]
+else:
+    syn_items = [{"Lang": "ru", "Content": name}]
+comment = args.Comment or meta_comment or ""
+
+md_lines = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" '
+    'xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" '
+    'xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" '
+    'xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" '
+    'xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" '
+    'xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" '
+    'xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" '
+    'xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" '
+    'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17">',
+    f'\t<XDTOPackage uuid="{uuid.uuid4()}">',
+    "\t\t<Properties>",
+    f"\t\t\t<Name>{esc_text(name)}</Name>",
+    "\t\t\t<Synonym>",
+]
+for s in syn_items:
+    md_lines += [
+        "\t\t\t\t<v8:item>",
+        f'\t\t\t\t\t<v8:lang>{esc_text(s["Lang"])}</v8:lang>',
+        f'\t\t\t\t\t<v8:content>{esc_text(s["Content"])}</v8:content>',
+        "\t\t\t\t</v8:item>",
+    ]
+md_lines.append("\t\t\t</Synonym>")
+md_lines.append(f"\t\t\t<Comment>{esc_text(comment)}</Comment>" if comment else "\t\t\t<Comment/>")
+md_lines.append(f"\t\t\t<Namespace>{esc_text(target_ns)}</Namespace>")
+md_lines += ["\t\t</Properties>", "\t</XDTOPackage>", "</MetaDataObject>"]
+
+with open(md_file, "wb") as f:
+    f.write(b"\xef\xbb\xbf" + "\r\n".join(md_lines).encode("utf-8"))
+
+# ── register in Configuration.xml ────────────────────────────
+
+config_xml = os.path.join(args.OutputDir, "Configuration.xml")
+reg_result = "no-config"
+if os.path.exists(config_xml):
+    with open(config_xml, "rb") as f:
+        raw = f.read()
+    had_bom = raw.startswith(b"\xef\xbb\xbf")
+    cfg_doc = etree.parse(config_xml)
+    child_objects = cfg_doc.find(f".//{{{MD_NS}}}Configuration/{{{MD_NS}}}ChildObjects")
+    if child_objects is not None:
+        existing = child_objects.findall(f"{{{MD_NS}}}XDTOPackage")
+        if any((e.text or "") == name for e in existing):
+            reg_result = "already"
+        else:
+            new_elem = etree.SubElement(child_objects, f"{{{MD_NS}}}XDTOPackage")
+            new_elem.text = name
+            if existing:
+                last = existing[-1]
+                new_elem.tail = last.tail
+                child_objects.remove(new_elem)
+                last.addnext(new_elem)
+            else:
+                new_elem.tail = child_objects.text
+            data = etree.tostring(cfg_doc, xml_declaration=True, encoding="UTF-8")
+            if had_bom:
+                data = b"\xef\xbb\xbf" + data
+            with open(config_xml, "wb") as f:
+                f.write(data)
+            reg_result = "added"
+
+type_count = sum(1 for c in pkg_node.children if c.tag in ("objectType", "valueType"))
+print(f"✓ Пакет XDTO собран: {name}")
+print(f"  Namespace: {target_ns}")
+print(f"  Типов: {type_count}")
+print(f"  Файлы: XDTOPackages/{name}.xml, XDTOPackages/{name}/Ext/Package.bin")
+if reg_result == "added":
+    print(f"  Configuration.xml: <XDTOPackage>{name}</XDTOPackage> добавлен в ChildObjects")
+elif reg_result == "already":
+    print(f"  Configuration.xml: <XDTOPackage>{name}</XDTOPackage> уже зарегистрирован")
+else:
+    print("  Configuration.xml не найден — регистрация пропущена")

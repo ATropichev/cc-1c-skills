@@ -603,6 +603,7 @@ async function runCaseAsync(testCase, opts) {
     const isExternal = typeof setupName === 'string' && setupName.startsWith('external:');
     workspace = createWorkspace(fixturePath, isExternal);
     workDir = workspace.path;
+    copyCaseFiles(caseData, workDir, skillCasesDir);
 
     // Pre-run steps
     if (caseData.preRun) {
@@ -742,6 +743,22 @@ async function runCaseAsync(testCase, opts) {
   }
 }
 
+// Скопировать файлы из каталога кейса в workDir — для навыков, вход которых
+// не JSON, а файл (например XSD для xdto-compile). Так эталонные входы остаются
+// читаемыми файлами, а не строками внутри JSON кейса.
+function copyCaseFiles(caseData, workDir, skillCasesDir) {
+  if (!caseData.caseFiles) return;
+  for (const rel of caseData.caseFiles) {
+    const src = join(skillCasesDir, rel);
+    if (!existsSync(src)) throw new Error(`caseFiles: файл не найден: ${src}`);
+    // Путь со слэшем сохраняет структуру каталогов (напр. дерево пакета),
+    // простое имя кладётся в корень workDir
+    const dst = rel.includes('/') ? join(workDir, rel) : join(workDir, basename(rel));
+    mkdirSync(dirname(dst), { recursive: true });
+    copyFileSync(src, dst);
+  }
+}
+
 function runCase(testCase, opts) {
   const { skillConfig, caseData, snapshotDir } = testCase;
   const t0 = performance.now();
@@ -769,6 +786,7 @@ function runCase(testCase, opts) {
     const isExternal = typeof setupName === 'string' && setupName.startsWith('external:');
     workspace = createWorkspace(fixturePath, isExternal);
     workDir = workspace.path;
+    copyCaseFiles(caseData, workDir, skillCasesDir);
 
     // 2. Pre-run steps (setup prerequisites like creating objects)
     if (caseData.preRun) {

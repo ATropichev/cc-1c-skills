@@ -1,0 +1,9 @@
+{
+  "name": "минимальный пакет: один objectType, два свойства",
+  "caseFiles": ["minimal.xsd"],
+  "params": { "xsdFile": "minimal.xsd" },
+  "validatePath": "XDTOPackages/minimal",
+  "expect": {
+    "files": ["XDTOPackages/minimal.xml", "XDTOPackages/minimal/Ext/Package.bin"]
+  }
+}
