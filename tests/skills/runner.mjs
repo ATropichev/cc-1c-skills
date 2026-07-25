@@ -418,11 +418,24 @@ function listFilesRecursive(dir, base = '') {
   return result.sort();
 }
 
-function compareSnapshot(workDir, snapshotDir, snapshotConfig) {
-  if (!existsSync(snapshotDir)) return { match: true, reason: 'no snapshot (skipped)' };
+// Строгий режим: отсутствие эталона НЕ проходит молча. Кейс либо сверяется со снэпшотом,
+// либо явно объявляет `"noSnapshot": "<причина>"`. Иначе потерянный (или не созданный при
+// добавлении кейса) эталон неотличим от намеренного отсутствия — тест зелёный, а не проверяет ничего.
+function compareSnapshot(workDir, snapshotDir, snapshotConfig, caseData) {
+  const optOut = caseData?.noSnapshot;
+  const hasSnapshotDir = existsSync(snapshotDir) && listFilesRecursive(snapshotDir).length > 0;
+
+  if (optOut !== undefined && optOut !== false) {
+    // Причина обязательна: opt-out должен стоить автору формулировки, а ревьюеру — быть виден в diff'е.
+    if (typeof optOut !== 'string' || !optOut.trim()) return { match: false, badOptOut: true };
+    // Мёртвый эталон: помечен как ненужный, но лежит в репозитории — выглядит покрытием, не сверяется.
+    if (hasSnapshotDir) return { match: false, deadSnapshot: true };
+    return { match: true, reason: `no snapshot (opt-out: ${optOut})` };
+  }
+
+  if (!hasSnapshotDir) return { match: false, missingSnapshot: true };
 
   const snapshotFiles = listFilesRecursive(snapshotDir);
-  if (snapshotFiles.length === 0) return { match: true, reason: 'empty snapshot (skipped)' };
 
   const diffs = [];
 
@@ -463,7 +476,35 @@ function compareSnapshot(workDir, snapshotDir, snapshotConfig) {
   return { match: false, diffs };
 }
 
-function updateSnapshot(workDir, snapshotDir, snapshotConfig) {
+// Диагностика снэпшот-сверки — общая для обеих веток запуска (runCase / runCaseAsync),
+// чтобы сообщения и условия не разъехались.
+function snapshotErrors(cmp, caseId) {
+  if (cmp.match) return [];
+  if (cmp.badOptOut) {
+    return [`Snapshot: "noSnapshot" должен быть непустой строкой с причиной, почему эталон не нужен`];
+  }
+  if (cmp.deadSnapshot) {
+    return [`Snapshot: кейс объявил "noSnapshot", но эталон существует — он не сверяется и вводит в заблуждение.\n`
+      + `  Удалите каталог snapshots/<кейс>/ либо снимите "noSnapshot"`];
+  }
+  if (cmp.missingSnapshot) {
+    return [`Snapshot: эталон отсутствует. Создайте:\n`
+      + `  node tests/skills/runner.mjs ${caseId} --update-snapshots\n`
+      + `либо объявите в кейсе: "noSnapshot": "<почему эталон не нужен>"`];
+  }
+  const errs = [];
+  for (const d of cmp.diffs || []) {
+    if (d.type === 'missing') errs.push(`Snapshot: file missing — ${d.file}`);
+    else errs.push(`Snapshot: ${d.file}:${d.line} differs\n  expected: ${d.expected}\n  actual:   ${d.actual}`);
+  }
+  return errs;
+}
+
+function updateSnapshot(workDir, snapshotDir, snapshotConfig, caseData) {
+  // Кейс объявил, что эталон не нужен — не создаём. Иначе --update-snapshots по навыку
+  // дорисовал бы эталон и сам породил противоречие с opt-out.
+  if (caseData?.noSnapshot) return;
+
   // Remove old snapshot
   if (existsSync(snapshotDir)) rmSync(snapshotDir, { recursive: true, force: true });
 
@@ -651,15 +692,10 @@ async function runCaseAsync(testCase, opts) {
       if (errors.length === 0 && !caseData.expectError && !workspace.readOnly) {
         const snapshotConfig = { ...skillConfig.snapshot, runtime: opts.runtime };
         if (opts.updateSnapshots) {
-          updateSnapshot(workDir, snapshotDir, snapshotConfig);
+          updateSnapshot(workDir, snapshotDir, snapshotConfig, caseData);
         } else {
-          const cmp = compareSnapshot(workDir, snapshotDir, snapshotConfig);
-          if (!cmp.match && cmp.diffs) {
-            for (const d of cmp.diffs) {
-              if (d.type === 'missing') errors.push(`Snapshot: file missing — ${d.file}`);
-              else errors.push(`Snapshot: ${d.file}:${d.line} differs\n  expected: ${d.expected}\n  actual:   ${d.actual}`);
-            }
-          }
+          const cmp = compareSnapshot(workDir, snapshotDir, snapshotConfig, caseData);
+          errors.push(...snapshotErrors(cmp, testCase.id));
         }
       }
 
@@ -835,18 +871,10 @@ function runCase(testCase, opts) {
       if (errors.length === 0 && !caseData.expectError && !workspace.readOnly) {
         const snapshotConfig = { ...skillConfig.snapshot, runtime: opts.runtime };
         if (opts.updateSnapshots) {
-          updateSnapshot(workDir, snapshotDir, snapshotConfig);
+          updateSnapshot(workDir, snapshotDir, snapshotConfig, caseData);
         } else {
-          const cmp = compareSnapshot(workDir, snapshotDir, snapshotConfig);
-          if (!cmp.match && cmp.diffs) {
-            for (const d of cmp.diffs) {
-              if (d.type === 'missing') {
-                errors.push(`Snapshot: file missing — ${d.file}`);
-              } else {
-                errors.push(`Snapshot: ${d.file}:${d.line} differs\n  expected: ${d.expected}\n  actual:   ${d.actual}`);
-              }
-            }
-          }
+          const cmp = compareSnapshot(workDir, snapshotDir, snapshotConfig, caseData);
+          errors.push(...snapshotErrors(cmp, testCase.id));
         }
       }
 
