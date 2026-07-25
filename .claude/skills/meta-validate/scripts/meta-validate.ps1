@@ -1,4 +1,4 @@
-﻿# meta-validate v1.10 — Validate 1C metadata object structure (+корневой <Type>: скаляр без структуры = ошибка)
+﻿# meta-validate v1.11 — Validate 1C metadata object structure (+корневой <Type>: скаляр без структуры = ошибка)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1490,6 +1490,36 @@ if ($script:configDir) {
 		} elseif ($checkedRefs.Count -gt 0) {
 			Report-OK "16. Reference types: $($checkedRefs.Count) resolved"
 		}
+	}
+}
+
+# --- Check 17: MDObjectRef form — ссылка должна указывать на ОБЪЕКТ метаданных, а не на тип ссылки ---
+# Owners/BasedOn/RegisterRecords/RegisteredDocuments/References содержат путь вида "Catalog.Валюты".
+# "CatalogRef.Валюты" — частая ошибка (тип ссылки вместо объекта): платформа отвечает
+# «Неизвестный объект метаданных». Вида метаданных, оканчивающегося на Ref, не существует → ERROR.
+# Неизвестный первый сегмент без Ref — только WARN (список видов может быть неполон).
+
+$mdRefNodes = $xmlDoc.SelectNodes("//*[@xsi:type='xr:MDObjectRef']", $ns)
+if ($mdRefNodes -and $mdRefNodes.Count -gt 0) {
+	$knownRoots = @($validTypes) + @($structuralOnlyTypes)
+	$badRefForm = @{}      # значение -> $true (ссылочная форма, гарантированно нерабочая)
+	$unknownRoot = @{}     # значение -> корень
+	foreach ($rn in $mdRefNodes) {
+		$rv = $rn.InnerText.Trim()
+		if (-not $rv) { continue }
+		$root = $rv.Split('.')[0]
+		if ($knownRoots -ccontains $root) { continue }
+		if ($root -cmatch 'Ref$') { $badRefForm[$rv] = $true } else { $unknownRoot[$rv] = $root }
+	}
+	foreach ($bk in ($badRefForm.Keys | Sort-Object)) {
+		$fixed = $bk -replace '^([A-Za-z]+)Ref\.', '$1.'
+		Report-Error "17. MDObjectRef '$bk' — ссылка на ТИП, а не на объект метаданных; нужно '$fixed' (иначе «Неизвестный объект метаданных» при загрузке)"
+	}
+	foreach ($uk in ($unknownRoot.Keys | Sort-Object)) {
+		Report-Warn "17. MDObjectRef '$uk' — неизвестный вид метаданных '$($unknownRoot[$uk])' (опечатка?)"
+	}
+	if ($badRefForm.Count -eq 0 -and $unknownRoot.Count -eq 0) {
+		Report-OK "17. MDObjectRef form: $($mdRefNodes.Count) checked"
 	}
 }
 

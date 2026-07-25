@@ -1,4 +1,4 @@
-# meta-validate v1.10 — Validate 1C metadata object structure (Python port) (+корневой <Type>: скаляр без структуры = ошибка)
+# meta-validate v1.11 — Validate 1C metadata object structure (Python port) (+корневой <Type>: скаляр без структуры = ошибка)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1394,6 +1394,36 @@ if config_dir:
                 report_warn(f"16. Ссылочный тип '{mk}' не найден в конфигурации ({missing_refs[mk]}/) — при загрузке будет ошибка неизвестного типа")
         elif checked_refs:
             report_ok(f"16. Reference types: {len(checked_refs)} resolved")
+
+# ── Check 17: MDObjectRef form — ссылка на ОБЪЕКТ метаданных, а не на тип ссылки ──
+# Owners/BasedOn/RegisterRecords/RegisteredDocuments/References содержат путь вида "Catalog.Валюты".
+# "CatalogRef.Валюты" — частая ошибка (тип ссылки вместо объекта): платформа отвечает
+# «Неизвестный объект метаданных». Вида метаданных, оканчивающегося на Ref, не существует → ERROR.
+# Неизвестный первый сегмент без Ref — только WARN (список видов может быть неполон).
+
+md_ref_nodes = find_all(root, "//*[@xsi:type='xr:MDObjectRef']")
+if md_ref_nodes:
+    known_roots = tuple(valid_types) + tuple(structural_only_types)
+    bad_ref_form = {}    # значение -> True (ссылочная форма, гарантированно нерабочая)
+    unknown_root = {}    # значение -> корень
+    for rn in md_ref_nodes:
+        rv = inner_text(rn).strip()
+        if not rv:
+            continue
+        rroot = rv.split('.')[0]
+        if rroot in known_roots:
+            continue
+        if rroot.endswith('Ref'):
+            bad_ref_form[rv] = True
+        else:
+            unknown_root[rv] = rroot
+    for bk in sorted(bad_ref_form):
+        fixed = re.sub(r'^([A-Za-z]+)Ref\.', r'\1.', bk)
+        report_error(f"17. MDObjectRef '{bk}' — ссылка на ТИП, а не на объект метаданных; нужно '{fixed}' (иначе «Неизвестный объект метаданных» при загрузке)")
+    for uk in sorted(unknown_root):
+        report_warn(f"17. MDObjectRef '{uk}' — неизвестный вид метаданных '{unknown_root[uk]}' (опечатка?)")
+    if not bad_ref_form and not unknown_root:
+        report_ok(f"17. MDObjectRef form: {len(md_ref_nodes)} checked")
 
 # ── Final output ──────────────────────────────────────────────
 
