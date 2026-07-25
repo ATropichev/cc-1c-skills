@@ -15,7 +15,7 @@
 | `limitLevelCount` | `false` | bool (ограничивать кол-во уровней) |
 | `levelCount` | `2` | число уровней (при `limitLevelCount`) |
 | `foldersOnTop` | `true` | bool (группы сверху) |
-| `owners` | `[]` | массив ссылок-владельцев: `["CatalogRef.Контрагенты"]` |
+| `owners` | `[]` | массив владельцев: `["Catalog.Контрагенты"]` |
 | `subordinationUse` | `ToItems` | `ToItems` / `ToFolders` / `ToFoldersAndItems` (кому подчинён) |
 | `codeLength` | `9` | длина кода (0 — без кода) |
 | `codeType` | `String` | `String` / `Number` |

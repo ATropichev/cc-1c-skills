@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.66 — Compile 1C metadata object from JSON
+# meta-compile v1.67 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -822,11 +822,26 @@ md_ref_roots = {
     'табличнаячасть': 'TabularSection', 'реквизит': 'Attribute', 'измерение': 'Dimension', 'ресурс': 'Resource',
     'стандартныйреквизит': 'StandardAttribute', 'значениеперечисления': 'EnumValue', 'команда': 'Command',
     'признакучета': 'AccountingFlag', 'признакучёта': 'AccountingFlag',
+    # Ссылочные формы (тип ссылки вместо объекта метаданных): в MDObjectRef-пути нужен ОБЪЕКТ, т.е.
+    # "CatalogRef.Валюты" → "Catalog.Валюты". Вид метаданных, оканчивающийся на Ref, не существует,
+    # поэтому схлопывание однозначно. В ТИПАХ реквизитов запись CatalogRef.X верна — там мапа не применяется.
+    'catalogref': 'Catalog', 'documentref': 'Document', 'enumref': 'Enum',
+    'chartofaccountsref': 'ChartOfAccounts', 'chartofcharacteristictypesref': 'ChartOfCharacteristicTypes',
+    'chartofcalculationtypesref': 'ChartOfCalculationTypes', 'exchangeplanref': 'ExchangePlan',
+    'businessprocessref': 'BusinessProcess', 'taskref': 'Task',
+    'справочникссылка': 'Catalog', 'документссылка': 'Document', 'перечислениессылка': 'Enum',
+    'плансчетовссылка': 'ChartOfAccounts', 'планвидовхарактеристикссылка': 'ChartOfCharacteristicTypes',
+    'планвидоврасчетассылка': 'ChartOfCalculationTypes', 'планвидоврасчётассылка': 'ChartOfCalculationTypes',
+    'планобменассылка': 'ExchangePlan', 'бизнеспроцессссылка': 'BusinessProcess', 'задачассылка': 'Task',
 }
 
-def normalize_md_object_ref(ref):
-    if not ref or '.' not in ref:
+def normalize_md_object_ref(ref, default_root=None):
+    """default_root — корень для ГОЛОГО имени без точки (owners: "Валюты" → "Catalog.Валюты").
+    Без него голое имя возвращается как есть (прежнее поведение вызывающих без подстановки)."""
+    if not ref:
         return ref
+    if '.' not in ref:
+        return f'{default_root}.{ref}' if default_root else ref
     parts = ref.split('.')
     for k in range(0, len(parts), 2):
         t = md_ref_roots.get(parts[k].lower())
@@ -1587,7 +1602,7 @@ def emit_based_on(indent, items):
         return
     X(f'{indent}<BasedOn>')
     for it in arr:
-        X(f'{indent}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(str(it))}</xr:Item>')
+        X(f'{indent}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(it)))}</xr:Item>')
     X(f'{indent}</BasedOn>')
 
 # --- Параметры/связи выбора (порт из form-compile) ---
@@ -2288,8 +2303,7 @@ def emit_catalog_properties(indent):
     if owners:
         X(f'{i}<Owners>')
         for owner_ref in owners:
-            full_ref = owner_ref if '.' in str(owner_ref) else f'Catalog.{owner_ref}'
-            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{full_ref}</xr:Item>')
+            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(owner_ref), "Catalog"))}</xr:Item>')
         X(f'{i}</Owners>')
     else:
         X(f'{i}<Owners/>')
@@ -2429,7 +2443,7 @@ def emit_document_properties(indent):
     if reg_records:
         X(f'{i}<RegisterRecords>')
         for rr in reg_records:
-            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{rr}</xr:Item>')
+            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(rr)))}</xr:Item>')
         X(f'{i}</RegisterRecords>')
     else:
         X(f'{i}<RegisterRecords/>')
@@ -3483,7 +3497,7 @@ def emit_chart_of_calculation_types_properties(indent):
     if base_types:
         X(f'{i}<BaseCalculationTypes>')
         for bt in base_types:
-            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(bt)}</xr:Item>')
+            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(bt))}</xr:Item>')
         X(f'{i}</BaseCalculationTypes>')
     else:
         X(f'{i}<BaseCalculationTypes/>')

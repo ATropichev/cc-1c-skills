@@ -1,4 +1,4 @@
-﻿# meta-compile v1.66 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.67 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -786,11 +786,28 @@ $script:mdRefRoots = @{
 	'журналдокументов'='DocumentJournal'; 'отчет'='Report'; 'отчёт'='Report'; 'обработка'='DataProcessor';
 	'табличнаячасть'='TabularSection'; 'реквизит'='Attribute'; 'измерение'='Dimension'; 'ресурс'='Resource';
 	'стандартныйреквизит'='StandardAttribute'; 'значениеперечисления'='EnumValue'; 'команда'='Command';
-	'признакучета'='AccountingFlag'; 'признакучёта'='AccountingFlag'
+	'признакучета'='AccountingFlag'; 'признакучёта'='AccountingFlag';
+	# Ссылочные формы (тип ссылки вместо объекта метаданных): в MDObjectRef-пути нужен ОБЪЕКТ, т.е.
+	# "CatalogRef.Валюты" → "Catalog.Валюты". Вид метаданных, оканчивающийся на Ref, не существует,
+	# поэтому схлопывание однозначно. В ТИПАХ реквизитов запись CatalogRef.X верна — там эта мапа не применяется.
+	'catalogref'='Catalog'; 'documentref'='Document'; 'enumref'='Enum';
+	'chartofaccountsref'='ChartOfAccounts'; 'chartofcharacteristictypesref'='ChartOfCharacteristicTypes';
+	'chartofcalculationtypesref'='ChartOfCalculationTypes'; 'exchangeplanref'='ExchangePlan';
+	'businessprocessref'='BusinessProcess'; 'taskref'='Task';
+	'справочникссылка'='Catalog'; 'документссылка'='Document'; 'перечислениессылка'='Enum';
+	'плансчетовссылка'='ChartOfAccounts'; 'планвидовхарактеристикссылка'='ChartOfCharacteristicTypes';
+	'планвидоврасчетассылка'='ChartOfCalculationTypes'; 'планвидоврасчётассылка'='ChartOfCalculationTypes';
+	'планобменассылка'='ExchangePlan'; 'бизнеспроцессссылка'='BusinessProcess'; 'задачассылка'='Task'
 }
+# $defaultRoot — корень для ГОЛОГО имени без точки (напр. owners: "Валюты" → "Catalog.Валюты").
+# Без него голое имя возвращается как есть (прежнее поведение вызывающих без подстановки).
 function Normalize-MDObjectRef {
-	param([string]$ref)
-	if (-not $ref -or -not $ref.Contains('.')) { return $ref }
+	param([string]$ref, [string]$defaultRoot)
+	if (-not $ref) { return $ref }
+	if (-not $ref.Contains('.')) {
+		if ($defaultRoot) { return "$defaultRoot.$ref" }
+		return $ref
+	}
 	$parts = $ref -split '\.'
 	for ($k = 0; $k -lt $parts.Count; $k += 2) {
 		$t = $script:mdRefRoots[$parts[$k].ToLower()]
@@ -1497,7 +1514,7 @@ function Emit-BasedOn {
 	$arr = @($items | Where-Object { $_ })
 	if ($arr.Count -eq 0) { X "$indent<BasedOn/>"; return }
 	X "$indent<BasedOn>"
-	foreach ($it in $arr) { X "$indent`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml "$it")</xr:Item>" }
+	foreach ($it in $arr) { X "$indent`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$it"))</xr:Item>" }
 	X "$indent</BasedOn>"
 }
 
@@ -2258,8 +2275,7 @@ function Emit-CatalogProperties {
 	if ($def.owners -and $def.owners.Count -gt 0) {
 		X "$i<Owners>"
 		foreach ($ownerRef in $def.owners) {
-			$fullRef = if ("$ownerRef" -match '\.') { "$ownerRef" } else { "Catalog.$ownerRef" }
-			X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$fullRef</xr:Item>"
+			X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$ownerRef" 'Catalog'))</xr:Item>"
 		}
 		X "$i</Owners>"
 	} else {
@@ -2410,7 +2426,7 @@ function Emit-DocumentProperties {
 	}
 	if ($regRecords.Count -gt 0) {
 		X "$i<RegisterRecords>"
-		foreach ($rr in $regRecords) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$rr</xr:Item>" }
+		foreach ($rr in $regRecords) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$rr"))</xr:Item>" }
 		X "$i</RegisterRecords>"
 	} else {
 		X "$i<RegisterRecords/>"
@@ -3524,7 +3540,7 @@ function Emit-ChartOfCalculationTypesProperties {
 	$baseTypes = @(); if ($def.baseCalculationTypes) { $baseTypes = @($def.baseCalculationTypes | ForEach-Object { Resolve-TypePrefixSyn "$_" }) }
 	if ($baseTypes.Count -gt 0) {
 		X "$i<BaseCalculationTypes>"
-		foreach ($bt in $baseTypes) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml $bt)</xr:Item>" }
+		foreach ($bt in $baseTypes) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$bt"))</xr:Item>" }
 		X "$i</BaseCalculationTypes>"
 	} else { X "$i<BaseCalculationTypes/>" }
 	$actionPeriodUse = if ($def.actionPeriodUse -eq $true) { "true" } else { "false" }
