@@ -1,4 +1,4 @@
-﻿# meta-compile v1.67 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.68 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1321,6 +1321,12 @@ function Emit-StandardAttribute {
 	X "$indent`t<xr:MultiLine>false</xr:MultiLine>"
 	X "$indent`t<xr:FillFromFillingValue>$ffv</xr:FillFromFillingValue>"
 	X "$indent`t<xr:CreateOnInput>Auto</xr:CreateOnInput>"
+	# Формат 2.20 (8.3.27): режим приведения типов. Платформа пишет его КАЖДОМУ стандартному
+	# реквизиту; значение всегда TransformValues, кроме владельца (Owner) — там Deny.
+	if ($script:isFormat220) {
+		$trm = OvOr 'TypeReductionMode' $(if ($attrName -ceq 'Owner') { 'Deny' } else { 'TransformValues' })
+		X "$indent`t<xr:TypeReductionMode>$trm</xr:TypeReductionMode>"
+	}
 	X "$indent`t<xr:MaxValue xsi:nil=`"true`"/>"
 	Emit-MLText "$indent`t" "xr:ToolTip" $tt
 	X "$indent`t<xr:ExtendedEdit>false</xr:ExtendedEdit>"
@@ -1949,6 +1955,12 @@ function Emit-Attribute {
 			X "$indent`t`t<DataHistory>$dh</DataHistory>"
 		}
 	}
+	# Формат 2.20 (8.3.27): режим приведения типов — последним в Properties и ТОЛЬКО у измерений
+	# регистра сведений (у реквизитов/ресурсов и у прочих семейств регистров платформа его не пишет).
+	if ($script:isFormat220 -and $elemTag -eq "Dimension" -and $context -eq "register-info") {
+		$trm = if ($parsed.typeReductionMode) { "$($parsed.typeReductionMode)" } else { "TransformValues" }
+		X "$indent`t`t<TypeReductionMode>$trm</TypeReductionMode>"
+	}
 
 	X "$indent`t</Properties>"
 	X "$indent</$elemTag>"
@@ -2020,7 +2032,7 @@ function Emit-Command {
 # --- 9. TabularSection emitter ---
 
 function Emit-TabularSection {
-	param([string]$indent, [string]$tsName, $columns, [string]$objectType, [string]$objectName, $tsSynonymArg = $null, $tsTooltip = $null, $tsComment = $null, $tsLineNumber = $null, $tsFillChecking = $null, $tsUse = $null)
+	param([string]$indent, [string]$tsName, $columns, [string]$objectType, [string]$objectName, $tsSynonymArg = $null, $tsTooltip = $null, $tsComment = $null, $tsLineNumber = $null, $tsFillChecking = $null, $tsUse = $null, $tsLineNumberLength = $null)
 	$uuid = New-Guid-String
 	X "$indent<TabularSection uuid=`"$uuid`">"
 
@@ -2058,6 +2070,12 @@ function Emit-TabularSection {
 	if ($objectType -in @("Catalog", "ChartOfCharacteristicTypes")) {
 		$use = if ($tsUse) { "$tsUse" } else { "ForItem" }
 		X "$indent`t`t<Use>$use</Use>"
+	}
+	# Формат 2.20 (8.3.27): длина номера строки ТЧ (5..9 → до 999 999 999 строк вместо 99 999).
+	# Последним в Properties. Дефолт платформа берёт из режима совместимости на момент создания ТЧ.
+	if ($script:isFormat220) {
+		$lnl = if ($null -ne $tsLineNumberLength -and "$tsLineNumberLength" -ne '') { [int]$tsLineNumberLength } else { $script:lineNumberLengthDefault }
+		X "$indent`t`t<LineNumberLength>$lnl</LineNumberLength>"
 	}
 	X "$indent`t</Properties>"
 
@@ -3984,7 +4002,51 @@ function Detect-FormatVersion([string]$dir) {
 	return "2.17"
 }
 
+# Режим совместимости конфигурации — из него выводится дефолт <LineNumberLength> табличной части
+# (≤Version8_3_26 → 5, ≥Version8_3_27 → 9; платформа фиксирует значение при СОЗДАНии ТЧ).
+# NB: версия ФОРМАТА от режима совместимости не зависит (её задаёт платформа выгрузки) — это
+# независимые вещи, читаются из одного файла разными функциями.
+# Читаем префикс побольше: <CompatibilityMode> лежит ~11-12 КБ от начала (в отличие от version=
+# в первой строке), 2000 байт Detect-FormatVersion сюда не хватает.
+function Detect-CompatibilityMode([string]$dir) {
+	$d = $dir
+	while ($d) {
+		$cfgPath = Join-Path $d "Configuration.xml"
+		if (Test-Path $cfgPath) {
+			# NB: длина файла — в БАЙТАХ, а Substring режет по СИМВОЛАМ (кириллица = 2 байта),
+			# поэтому ограничиваем по длине уже декодированной строки.
+			$text = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
+			$head = $text.Substring(0, [Math]::Min(65536, $text.Length))
+			if ($head -match '<CompatibilityMode>([^<]+)</CompatibilityMode>') { return $Matches[1].Trim() }
+		}
+		$parent = Split-Path $d -Parent
+		if ($parent -eq $d) { break }
+		$d = $parent
+	}
+	return "Version8_3_24"
+}
+
+# Номер версии режима совместимости для сравнений: "Version8_3_27" → 80327, "Version8_5_1" → 80501.
+function Get-CompatModeRank([string]$mode) {
+	if ($mode -match '^Version(\d+)_(\d+)_(\d+)$') {
+		return [int]$Matches[1] * 10000 + [int]$Matches[2] * 100 + [int]$Matches[3]
+	}
+	return 0
+}
+
+# Версия формата как число для сравнений: "2.20" → 220, "2.9" → 209.
+# Строковое сравнение здесь неверно ("2.9" > "2.17" лексикографически) — известная ловушка.
+function Get-FormatRank([string]$ver) {
+	if ($ver -match '^(\d+)\.(\d+)$') { return [int]$Matches[1] * 100 + [int]$Matches[2] }
+	return 0
+}
+
 $script:formatVersion = Detect-FormatVersion $OutputDir
+$script:compatMode = Detect-CompatibilityMode $OutputDir
+# Формат 2.20+ (платформа 8.3.27) — только тогда эмитим новые свойства.
+$script:isFormat220 = (Get-FormatRank $script:formatVersion) -ge 220
+# Дефолт длины номера строки ТЧ: с режима 8.3.27 платформа заводит новые ТЧ с 9 разрядами.
+$script:lineNumberLengthDefault = if ((Get-CompatModeRank $script:compatMode) -ge 80327) { 9 } else { 5 }
 
 # --- 15. Main assembler ---
 
@@ -4064,10 +4126,10 @@ if ($objType -in $typesWithAttrTS) {
 		# Нормализуем в $tsSections[name] = @{ columns; synonym; tooltip; comment }.
 		function New-TsEntry { param($val)
 			if ($val -is [array] -or $val.GetType().Name -eq 'Object[]') {
-				return @{ columns = @($val); synonym = $null; tooltip = $null; comment = $null; lineNumber = $null; fillChecking = $null; use = $null }
+				return @{ columns = @($val); synonym = $null; tooltip = $null; comment = $null; lineNumber = $null; fillChecking = $null; use = $null; lineNumberLength = $null }
 			}
 			$cols = if ($val.attributes) { @($val.attributes) } elseif ($val.columns) { @($val.columns) } else { @() }
-			return @{ columns = $cols; synonym = $val.synonym; tooltip = $val.tooltip; comment = if ($val.comment) { "$($val.comment)" } else { $null }; lineNumber = $val.lineNumber; fillChecking = $val.fillChecking; use = $val.use }
+			return @{ columns = $cols; synonym = $val.synonym; tooltip = $val.tooltip; comment = if ($val.comment) { "$($val.comment)" } else { $null }; lineNumber = $val.lineNumber; fillChecking = $val.fillChecking; use = $val.use; lineNumberLength = $val.lineNumberLength }
 		}
 		if ($def.tabularSections -is [array] -or $def.tabularSections.GetType().Name -eq "Object[]") {
 			foreach ($ts in $def.tabularSections) { $tsSections[$ts.name] = New-TsEntry $ts }
@@ -4117,7 +4179,7 @@ if ($objType -in $typesWithAttrTS) {
 		}
 		foreach ($tsName in $tsSections.Keys) {
 			$tsE = $tsSections[$tsName]
-			Emit-TabularSection "`t`t`t" $tsName $tsE.columns $objType $objName $tsE.synonym $tsE.tooltip $tsE.comment $tsE.lineNumber $tsE.fillChecking $tsE.use
+			Emit-TabularSection "`t`t`t" $tsName $tsE.columns $objType $objName $tsE.synonym $tsE.tooltip $tsE.comment $tsE.lineNumber $tsE.fillChecking $tsE.use $tsE.lineNumberLength
 		}
 		foreach ($af in $acctFlags) {
 			Emit-Attribute "`t`t`t" $af "account-flag" "AccountingFlag"

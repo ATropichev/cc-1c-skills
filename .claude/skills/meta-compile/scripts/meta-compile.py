@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.67 — Compile 1C metadata object from JSON
+# meta-compile v1.68 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1340,6 +1340,11 @@ def emit_standard_attribute(indent, attr_name, ov=None):
     X(f'{indent}\t<xr:MultiLine>false</xr:MultiLine>')
     X(f'{indent}\t<xr:FillFromFillingValue>{ffv}</xr:FillFromFillingValue>')
     X(f'{indent}\t<xr:CreateOnInput>Auto</xr:CreateOnInput>')
+    # Формат 2.20 (8.3.27): режим приведения типов. Платформа пишет его КАЖДОМУ стандартному
+    # реквизиту; значение всегда TransformValues, кроме владельца (Owner) — там Deny.
+    if is_format_220:
+        trm = ov.get('TypeReductionMode', 'Deny' if attr_name == 'Owner' else 'TransformValues')
+        X(f'{indent}\t<xr:TypeReductionMode>{trm}</xr:TypeReductionMode>')
     X(f'{indent}\t<xr:MaxValue xsi:nil="true"/>')
     emit_mltext(f'{indent}\t', 'xr:ToolTip', tt)
     X(f'{indent}\t<xr:ExtendedEdit>false</xr:ExtendedEdit>')
@@ -2012,6 +2017,10 @@ def emit_attribute(indent, parsed, context, elem_tag='Attribute'):
         # DataHistory — not for Chart* types and non-InformationRegister register family
         if context not in ('chart', 'register-other', 'register-accum', 'register-calc', 'register-account'):
             X(f'{indent}\t\t<DataHistory>{parsed.get("dataHistory") or "Use"}</DataHistory>')
+    # Формат 2.20 (8.3.27): режим приведения типов — последним в Properties и ТОЛЬКО у измерений
+    # регистра сведений (у реквизитов/ресурсов и у прочих семейств регистров платформа его не пишет).
+    if is_format_220 and elem_tag == 'Dimension' and context == 'register-info':
+        X(f'{indent}\t\t<TypeReductionMode>{parsed.get("typeReductionMode") or "TransformValues"}</TypeReductionMode>')
     X(f'{indent}\t</Properties>')
     X(f'{indent}</{elem_tag}>')
 
@@ -2088,7 +2097,7 @@ def emit_command(indent, cmd_name, cmd):
     X(f'{indent}\t</Properties>')
     X(f'{indent}</Command>')
 
-def emit_tabular_section(indent, ts_name, columns, object_type, object_name, ts_synonym_arg=None, ts_tooltip=None, ts_comment=None, ts_line_number=None, ts_fill_checking=None, ts_use=None):
+def emit_tabular_section(indent, ts_name, columns, object_type, object_name, ts_synonym_arg=None, ts_tooltip=None, ts_comment=None, ts_line_number=None, ts_fill_checking=None, ts_use=None, ts_line_number_length=None):
     uid = new_uuid()
     X(f'{indent}<TabularSection uuid="{uid}">')
     type_prefix = f'{object_type}TabularSection'
@@ -2119,6 +2128,11 @@ def emit_tabular_section(indent, ts_name, columns, object_type, object_name, ts_
         emit_tabular_standard_attributes(f'{indent}\t\t', ts_line_number)
     if object_type in ('Catalog', 'ChartOfCharacteristicTypes'):
         X(f'{indent}\t\t<Use>{ts_use if ts_use else "ForItem"}</Use>')
+    # Формат 2.20 (8.3.27): длина номера строки ТЧ (5..9 → до 999 999 999 строк вместо 99 999).
+    # Последним в Properties. Дефолт платформа берёт из режима совместимости на момент создания ТЧ.
+    if is_format_220:
+        lnl = int(ts_line_number_length) if ts_line_number_length not in (None, '') else line_number_length_default
+        X(f'{indent}\t\t<LineNumberLength>{lnl}</LineNumberLength>')
     X(f'{indent}\t</Properties>')
     ts_context = 'processor-tabular' if object_type in ('DataProcessor', 'Report') else 'tabular'
     X(f'{indent}\t<ChildObjects>')
@@ -3887,7 +3901,44 @@ def detect_format_version(d):
         d = parent
     return "2.17"
 
+def detect_compatibility_mode(d):
+    """Режим совместимости конфигурации — из него выводится дефолт <LineNumberLength> табличной части
+    (<=Version8_3_26 → 5, >=Version8_3_27 → 9; платформа фиксирует значение при СОЗДАНИИ ТЧ).
+    NB: версия ФОРМАТА от режима совместимости не зависит (её задаёт платформа выгрузки).
+    Читаем префикс побольше: <CompatibilityMode> лежит ~11-12 КБ от начала."""
+    while d:
+        cfg_path = os.path.join(d, "Configuration.xml")
+        if os.path.isfile(cfg_path):
+            with open(cfg_path, "r", encoding="utf-8-sig") as f:
+                head = f.read(65536)
+            m = re.search(r'<CompatibilityMode>([^<]+)</CompatibilityMode>', head)
+            if m:
+                return m.group(1).strip()
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return "Version8_3_24"
+
+
+def compat_mode_rank(mode):
+    """"Version8_3_27" → 80327, "Version8_5_1" → 80501."""
+    m = re.match(r'^Version(\d+)_(\d+)_(\d+)$', mode or '')
+    return int(m.group(1)) * 10000 + int(m.group(2)) * 100 + int(m.group(3)) if m else 0
+
+
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
 format_version = detect_format_version(output_dir)
+compat_mode = detect_compatibility_mode(output_dir)
+# Формат 2.20+ (платформа 8.3.27) — только тогда эмитим новые свойства.
+is_format_220 = format_rank(format_version) >= 220
+# Дефолт длины номера строки ТЧ: с режима 8.3.27 платформа заводит новые ТЧ с 9 разрядами.
+line_number_length_default = 9 if compat_mode_rank(compat_mode) >= 80327 else 5
 
 # ---------------------------------------------------------------------------
 # 15. Main assembler
@@ -3980,10 +4031,10 @@ if obj_type in types_with_attr_ts:
         # Значение ТЧ: массив колонок (синоним авто) ЛИБО объект {attributes/columns, synonym, tooltip, comment}.
         def new_ts_entry(val):
             if isinstance(val, list):
-                return {'columns': val, 'synonym': None, 'tooltip': None, 'comment': None, 'lineNumber': None, 'fillChecking': None, 'use': None}
+                return {'columns': val, 'synonym': None, 'tooltip': None, 'comment': None, 'lineNumber': None, 'fillChecking': None, 'use': None, 'lineNumberLength': None}
             cols = _as_list(val.get('attributes') or val.get('columns') or [])
             return {'columns': cols, 'synonym': val.get('synonym'), 'tooltip': val.get('tooltip'),
-                    'comment': str(val['comment']) if val.get('comment') else None, 'lineNumber': val.get('lineNumber'), 'fillChecking': val.get('fillChecking'), 'use': val.get('use')}
+                    'comment': str(val['comment']) if val.get('comment') else None, 'lineNumber': val.get('lineNumber'), 'fillChecking': val.get('fillChecking'), 'use': val.get('use'), 'lineNumberLength': val.get('lineNumberLength')}
         if isinstance(ts_data, list):
             for ts in ts_data:
                 ts_sections[ts['name']] = new_ts_entry(ts)
@@ -4035,7 +4086,7 @@ if obj_type in types_with_attr_ts:
             emit_attribute('\t\t\t', a, context)
         for ts_name in ts_order:
             e = ts_sections[ts_name]
-            emit_tabular_section('\t\t\t', ts_name, e['columns'], obj_type, obj_name, e['synonym'], e['tooltip'], e['comment'], e.get('lineNumber'), e.get('fillChecking'), e.get('use'))
+            emit_tabular_section('\t\t\t', ts_name, e['columns'], obj_type, obj_name, e['synonym'], e['tooltip'], e['comment'], e.get('lineNumber'), e.get('fillChecking'), e.get('use'), e.get('lineNumberLength'))
         for af in acct_flags:
             emit_attribute('\t\t\t', af, 'account-flag', 'AccountingFlag')
         for edf in ext_dim_flags:

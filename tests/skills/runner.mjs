@@ -122,17 +122,25 @@ function ensureSetup(setupName, runtime, skillCasesDir) {
     return extPath;
   }
 
-  if (setupName === 'empty-config') {
-    const cached = join(CACHE, 'empty-config');
+  // Пустые конфигурации-фикстуры. Версия формата и режим совместимости — независимые оси:
+  // формат задаёт платформа выгрузки, а режим влияет на дефолт <LineNumberLength> у ТЧ
+  // (<=8_3_26 → 5, >=8_3_27 → 9). Отсюда две 2.20-фикстуры с разными режимами.
+  const EMPTY_CONFIGS = {
+    'empty-config': [],
+    'empty-config-220': ['-FormatVersion', '2.20', '-CompatibilityMode', 'Version8_3_27'],
+    'empty-config-220-compat24': ['-FormatVersion', '2.20', '-CompatibilityMode', 'Version8_3_24'],
+  };
+  if (EMPTY_CONFIGS[setupName]) {
+    const cached = join(CACHE, setupName);
     if (existsSync(cached)) return cached;
 
     mkdirSync(cached, { recursive: true });
     const script = resolveScript('cf-init/scripts/cf-init', runtime);
     try {
-      execSkillRaw(runtime, script, ['-Name', 'TestConfig', '-OutputDir', cached]);
+      execSkillRaw(runtime, script, ['-Name', 'TestConfig', '-OutputDir', cached, ...EMPTY_CONFIGS[setupName]]);
     } catch (e) {
       rmSync(cached, { recursive: true, force: true });
-      throw new Error(`Failed to create empty-config fixture: ${e.message}`);
+      throw new Error(`Failed to create ${setupName} fixture: ${e.message}`);
     }
     return cached;
   }

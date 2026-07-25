@@ -1,4 +1,4 @@
-﻿# meta-decompile v0.54 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+﻿# meta-decompile v0.55 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Поддержаны: Catalog, ExchangePlan, ChartOfCharacteristicTypes, ChartOfAccounts, ChartOfCalculationTypes, Document,
@@ -323,6 +323,9 @@ function Attr-ToDsl {
 	$v = & $en 'MainFilter'; if ($v -eq 'true') { $extra['mainFilter'] = $true }
 	$v = & $en 'DenyIncompleteValues'; if ($v -eq 'true') { $extra['denyIncompleteValues'] = $true }
 	$v = & $en 'UseInTotals'; if ($v -eq 'false') { $extra['useInTotals'] = $false }  # дефолт true → захват при false
+	# Формат 2.20: режим приведения типов измерения РС. Дефолт TransformValues (его компилятор
+	# эмитит сам) → захватываем только отклонение.
+	$v = & $en 'TypeReductionMode'; if ($v -and $v -ne 'TransformValues') { $extra['typeReductionMode'] = $v }
 	$v = & $en 'BaseDimension'; if ($v -eq 'true') { $extra['baseDimension'] = $true }
 	$v = & $en 'ScheduleLink'; if ($v) { $extra['scheduleLink'] = $v }  # ссылка на измерение графика (пустой → пропуск)
 	$v = & $en 'Balance'; if ($v -eq 'true') { $extra['balance'] = $true }
@@ -1092,6 +1095,13 @@ if ($saNode) {
 				$ov['linkByType'] = [ordered]@{ dataPath = $saLbtDp.InnerText; linkItem = $li }
 			}
 		}
+		# Формат 2.20: режим приведения типов. Компилятор выводит его сам (TransformValues, у Owner —
+		# Deny), поэтому захватываем только отклонение от этого правила.
+		$saTrmN = $sa.SelectSingleNode('xr:TypeReductionMode', $nsm)
+		if ($saTrmN -and $saTrmN.InnerText) {
+			$saTrmDef = if ($an -ceq 'Owner') { 'Deny' } else { 'TransformValues' }
+			if ($saTrmN.InnerText -ne $saTrmDef) { $ov['TypeReductionMode'] = $saTrmN.InnerText }
+		}
 		# Доп./опциональный реквизит (не в фикс-списке) — эмитим по присутствию даже без отклонений.
 		if ($ov.Count -gt 0 -or ($stdFixed -notcontains $an)) { $saMap[$an] = $ov }
 	}
@@ -1262,13 +1272,20 @@ if ($childObjs) {
 					if ($lnFvT -match 'decimal$') { $lnObj['fillValue'] = if ($lnFvN.InnerText -match '^-?\d+$') { [long]$lnFvN.InnerText } else { [double]$lnFvN.InnerText } }
 				}
 			}
-			if ($tsSynCustom -or ($null -ne $tsTt) -or $tsCmt -or $tsFc -or $tsUse -or $lnObj.Count -gt 0 -or (-not $hasBlock)) {
+			# Формат 2.20: длина номера строки ТЧ. Захватываем ВСЕГДА при наличии тега, а не
+			# omit-on-default: дефолт зависит от режима совместимости конфигурации (≤8_3_26 → 5,
+			# ≥8_3_27 → 9) и фиксируется платформой при создании ТЧ, так что вывести его здесь
+			# значило бы продублировать логику компилятора с риском разойтись. Явный захват точен.
+			$tsLnlN = $tsp.SelectSingleNode('md:LineNumberLength', $nsm)
+			$tsLnl = if ($tsLnlN -and $tsLnlN.InnerText) { [int]$tsLnlN.InnerText } else { $null }
+			if ($tsSynCustom -or ($null -ne $tsTt) -or $tsCmt -or $tsFc -or $tsUse -or $lnObj.Count -gt 0 -or (-not $hasBlock) -or ($null -ne $tsLnl)) {
 				$to = [ordered]@{}
 				if ($tsSynCustom) { $to['synonym'] = $tsSyn }
 				if ($null -ne $tsTt) { $to['tooltip'] = $tsTt }
 				if ($tsCmt) { $to['comment'] = $tsCmt }
 				if ($tsFc) { $to['fillChecking'] = $tsFc }
 				if ($tsUse) { $to['use'] = $tsUse }
+				if ($null -ne $tsLnl) { $to['lineNumberLength'] = $tsLnl }
 				if (-not $hasBlock) { $to['lineNumber'] = '' } elseif ($lnObj.Count -gt 0) { $to['lineNumber'] = $lnObj }
 				$to['attributes'] = $cols
 				$tsMap[$tsName] = $to

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-decompile v0.54 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+# meta-decompile v0.55 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Зеркало meta-decompile.ps1 (КАНОН). Структура 1:1 — те же имена функций, порядок, комментарии.
@@ -456,6 +456,11 @@ def attr_to_dsl(attr_node):
     v = en('UseInTotals')
     if v == 'false':
         extra['useInTotals'] = False   # дефолт true → захват при false
+    # Формат 2.20: режим приведения типов измерения РС. Дефолт TransformValues (его компилятор
+    # эмитит сам) → захватываем только отклонение.
+    v = en('TypeReductionMode')
+    if v and v != 'TransformValues':
+        extra['typeReductionMode'] = v
     v = en('BaseDimension')
     if v == 'true':
         extra['baseDimension'] = True
@@ -1587,6 +1592,13 @@ def build_dsl():
                     li = int(_text(sa_lbt_li)) if (sa_lbt_li is not None and _text(sa_lbt_li)) else 0
                     ov['linkByType'] = {'dataPath': _text(sa_lbt_dp), 'linkItem': li}
             # Доп./опциональный реквизит (не в фикс-списке) — эмитим по присутствию даже без отклонений.
+            # Формат 2.20: режим приведения типов. Компилятор выводит его сам (TransformValues,
+            # у Owner — Deny), поэтому захватываем только отклонение от этого правила.
+            sa_trm_n = _single(sa, 'xr:TypeReductionMode')
+            if sa_trm_n is not None and (sa_trm_n.text or '').strip():
+                sa_trm_def = 'Deny' if an == 'Owner' else 'TransformValues'
+                if sa_trm_n.text.strip() != sa_trm_def:
+                    ov['TypeReductionMode'] = sa_trm_n.text.strip()
             if len(ov) > 0 or (an not in std_fixed):
                 sa_map[an] = ov
         if len(sa_map) > 0 or (obj_type in std_conditional_types):
@@ -1782,7 +1794,13 @@ def build_dsl():
                         ln_fv_t = _attr(ln_fv_n, 'type', NS_XSI)
                         if re.search(r'decimal$', ln_fv_t, re.I):
                             ln_obj['fillValue'] = int(_text(ln_fv_n)) if re.match(r'^-?\d+$', _text(ln_fv_n)) else float(_text(ln_fv_n))
-                if ts_syn_custom or (ts_tt is not None) or ts_cmt or ts_fc or ts_use or len(ln_obj) > 0 or (not has_block):
+                # Формат 2.20: длина номера строки ТЧ. Захватываем ВСЕГДА при наличии тега, а не
+                # omit-on-default: дефолт зависит от режима совместимости конфигурации (<=8_3_26 → 5,
+                # >=8_3_27 → 9) и фиксируется платформой при создании ТЧ, так что вывести его здесь
+                # значило бы продублировать логику компилятора с риском разойтись. Явный захват точен.
+                ts_lnl_n = _single(tsp, 'md:LineNumberLength')
+                ts_lnl = int(ts_lnl_n.text) if ts_lnl_n is not None and (ts_lnl_n.text or '').strip() else None
+                if ts_syn_custom or (ts_tt is not None) or ts_cmt or ts_fc or ts_use or len(ln_obj) > 0 or (not has_block) or (ts_lnl is not None):
                     to = {}
                     if ts_syn_custom:
                         to['synonym'] = ts_syn
@@ -1794,6 +1812,8 @@ def build_dsl():
                         to['fillChecking'] = ts_fc
                     if ts_use:
                         to['use'] = ts_use
+                    if ts_lnl is not None:
+                        to['lineNumberLength'] = ts_lnl
                     if not has_block:
                         to['lineNumber'] = ''
                     elif len(ln_obj) > 0:
