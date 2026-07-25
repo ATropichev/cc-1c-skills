@@ -1,4 +1,4 @@
-# meta-validate v1.11 — Validate 1C metadata object structure (Python port) (+корневой <Type>: скаляр без структуры = ошибка)
+# meta-validate v1.12 — Validate 1C metadata object structure (Python port) (+корневой <Type>: скаляр без структуры = ошибка)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1394,6 +1394,39 @@ if config_dir:
                 report_warn(f"16. Ссылочный тип '{mk}' не найден в конфигурации ({missing_refs[mk]}/) — при загрузке будет ошибка неизвестного типа")
         elif checked_refs:
             report_ok(f"16. Reference types: {len(checked_refs)} resolved")
+
+# ── Check 18: свойства, появившиеся в новых версиях формата ──
+# Реестр «тег → минимальная версия формата». Служит двум целям: (1) поймать свойство в файле со
+# слишком старым штампом — при сборке на старой платформе оно будет молча отброшено (платформа
+# рапортует успех, а свойство теряется); (2) подсказать, что конструкция требует более нового
+# формата. Расширяется одной строкой на свойство — задел под 2.21 (8.5) и последующие.
+versioned_props = {
+    "TypeReductionMode": "2.20",   # режим приведения типов (стандартные реквизиты, измерения РС)
+    "LineNumberLength": "2.20",    # длина номера строки ТЧ (5..9)
+}
+
+
+def format_rank(v):
+    """"2.20" → 220. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', v or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
+file_rank = format_rank(version)
+if file_rank > 0:
+    for vp in sorted(versioned_props):
+        nodes = find_all(root, f"//md:{vp} | //xr:{vp}")
+        if nodes and file_rank < format_rank(versioned_props[vp]):
+            report_error(f"18. <{vp}> появился в формате {versioned_props[vp]}, а файл объявлен как {version} — на платформе этой версии свойство будет отброшено при загрузке")
+
+# ── Check 19: LineNumberLength — допустимый диапазон 5..9 ──
+# Длина номера строки ТЧ: 5 (до 99 999 строк) … 9 (до 999 999 999). Границы — из документации 1С.
+for lnl in find_all(root, "//md:LineNumberLength"):
+    raw = inner_text(lnl).strip()
+    if not re.match(r'^\d+$', raw):
+        report_error(f"19. LineNumberLength='{raw}' — должно быть целое число 5..9")
+    elif int(raw) < 5 or int(raw) > 9:
+        report_error(f"19. LineNumberLength={raw} вне допустимого диапазона 5..9")
 
 # ── Check 17: MDObjectRef form — ссылка на ОБЪЕКТ метаданных, а не на тип ссылки ──
 # Owners/BasedOn/RegisterRecords/RegisteredDocuments/References содержат путь вида "Catalog.Валюты".

@@ -1,4 +1,4 @@
-﻿# meta-validate v1.11 — Validate 1C metadata object structure (+корневой <Type>: скаляр без структуры = ошибка)
+﻿# meta-validate v1.12 — Validate 1C metadata object structure (+корневой <Type>: скаляр без структуры = ошибка)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1490,6 +1490,41 @@ if ($script:configDir) {
 		} elseif ($checkedRefs.Count -gt 0) {
 			Report-OK "16. Reference types: $($checkedRefs.Count) resolved"
 		}
+	}
+}
+
+# --- Check 18: свойства, появившиеся в новых версиях формата ---
+# Реестр «тег → минимальная версия формата». Служит двум целям: (1) поймать свойство в файле со
+# слишком старым штампом — при сборке на старой платформе оно будет молча отброшено (платформа
+# рапортует успех, а свойство теряется); (2) подсказать, что конструкция требует более нового
+# формата. Расширяется одной строкой на свойство — задел под 2.21 (8.5) и последующие.
+$versionedProps = @{
+	"TypeReductionMode" = "2.20"   # режим приведения типов (стандартные реквизиты, измерения РС)
+	"LineNumberLength"  = "2.20"   # длина номера строки ТЧ (5..9)
+}
+# Версия формата как число: "2.20" → 220. Строковое сравнение неверно ("2.9" > "2.17").
+function Get-FormatRank([string]$v) {
+	if ($v -match '^(\d+)\.(\d+)$') { return [int]$Matches[1] * 100 + [int]$Matches[2] }
+	return 0
+}
+$fileRank = Get-FormatRank $version
+if ($fileRank -gt 0) {
+	foreach ($vp in ($versionedProps.Keys | Sort-Object)) {
+		$nodes = $xmlDoc.SelectNodes("//md:$vp | //xr:$vp", $ns)
+		if ($nodes -and $nodes.Count -gt 0 -and $fileRank -lt (Get-FormatRank $versionedProps[$vp])) {
+			Report-Error "18. <$vp> появился в формате $($versionedProps[$vp]), а файл объявлен как $version — на платформе этой версии свойство будет отброшено при загрузке"
+		}
+	}
+}
+
+# --- Check 19: LineNumberLength — допустимый диапазон 5..9 ---
+# Длина номера строки ТЧ: 5 (до 99 999 строк) … 9 (до 999 999 999). Границы — из документации 1С.
+foreach ($lnl in @($xmlDoc.SelectNodes("//md:LineNumberLength", $ns))) {
+	$raw = $lnl.InnerText.Trim()
+	if ($raw -notmatch '^\d+$') {
+		Report-Error "19. LineNumberLength='$raw' — должно быть целое число 5..9"
+	} elseif ([int]$raw -lt 5 -or [int]$raw -gt 9) {
+		Report-Error "19. LineNumberLength=$raw вне допустимого диапазона 5..9"
 	}
 }
 
