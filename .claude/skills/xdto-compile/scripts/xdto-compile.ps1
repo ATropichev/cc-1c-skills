@@ -265,6 +265,13 @@ function Serialize-Node($node, [int]$depth, $inherited) {
 
 # --- XSD reading helpers ---
 
+# Предупреждения о том, что XSD выражает, а модель XDTO — нет. Молча ронять
+# такие конструкции нельзя: пакет соберётся, а половина свойств исчезнет.
+$script:warnings = New-Object System.Collections.ArrayList
+function Warn([string]$msg) {
+	if (-not $script:warnings.Contains($msg)) { [void]$script:warnings.Add($msg) }
+}
+
 function XA([System.Xml.XmlElement]$el, [string]$name) {
 	if ($el.HasAttribute($name)) { return $el.GetAttribute($name) }
 	return $null
@@ -471,6 +478,63 @@ function Build-Property([System.Xml.XmlElement]$el, [bool]$isAttribute) {
 
 # --- complexType -> objectType / typeDef(ObjectType) ---
 
+# Разрешение xs:group / xs:attributeGroup по ссылке
+$script:GROUPS = @{}
+$script:ATTR_GROUPS = @{}
+function Resolve-Group([System.Xml.XmlElement]$el, [string]$kind) {
+	$ref = XA $el "ref"
+	if (-not $ref) { return $null }
+	$q = Split-QName $el $ref
+	if (-not $q) { return $null }
+	$map = if ($kind -eq "group") { $script:GROUPS } else { $script:ATTR_GROUPS }
+	if ($map.ContainsKey($q.Local)) { return $map[$q.Local] }
+	return $null
+}
+
+# Модель XDTO знает только плоский список свойств: вложенные частицы уплощаются.
+# Каждое уплощение — предупреждение, потому что меняется смысл схемы.
+function Collect-Particle([System.Xml.XmlElement]$particle, $elemList, [ref]$isOpen, [string]$typeName, [int]$depth) {
+	if ($depth -gt 20) { return }
+	foreach ($c in $particle.ChildNodes) {
+		if ($c.NodeType -ne [System.Xml.XmlNodeType]::Element -or $c.NamespaceURI -ne $XS_NS) { continue }
+		switch ($c.get_LocalName()) {
+			"element" { [void]$elemList.Add((Build-Property $c $false)) }
+			"any"     { $isOpen.Value = $true }
+			"sequence" {
+				Warn "$typeName : вложенная xs:sequence уплощена — модель XDTO хранит плоский список свойств"
+				Collect-Particle $c $elemList $isOpen $typeName ($depth + 1)
+			}
+			"choice" {
+				Warn "$typeName : вложенная xs:choice уплощена в последовательность — выбор одного из вариантов не сохранён"
+				Collect-Particle $c $elemList $isOpen $typeName ($depth + 1)
+			}
+			"all" {
+				Warn "$typeName : xs:all трактуется как последовательность"
+				Collect-Particle $c $elemList $isOpen $typeName ($depth + 1)
+			}
+			"group" {
+				$g = Resolve-Group $c "group"
+				if ($g) {
+					foreach ($gc in $g.ChildNodes) {
+						if ($gc.NodeType -eq [System.Xml.XmlNodeType]::Element -and $gc.NamespaceURI -eq $XS_NS -and
+						    @("sequence", "choice", "all") -contains $gc.get_LocalName()) {
+							Collect-Particle $gc $elemList $isOpen $typeName ($depth + 1)
+						}
+					}
+				} else {
+					Warn "$typeName : не найдена группа $(XA $c 'ref') — её свойства в пакет не попали"
+				}
+			}
+		}
+		# Кратность на самой частице модель выразить не может
+		if (@("sequence", "choice", "all", "group") -contains $c.get_LocalName()) {
+			if ((XA $c "maxOccurs") -or (XA $c "minOccurs")) {
+				Warn "$typeName : кратность на вложенной частице (<xs:$($c.get_LocalName()) minOccurs/maxOccurs>) не выражается в модели XDTO"
+			}
+		}
+	}
+}
+
 # open / ordered / sequenced / abstract / mixed: выводим где выводимо,
 # остальное приходит зеркалом xdto:
 function Set-TypeFlags($node, [System.Xml.XmlElement]$ct, $isOpen, $choice) {
@@ -532,22 +596,48 @@ function Fill-ComplexType($node, [System.Xml.XmlElement]$ct) {
 	# Particle: xs:sequence (ordered) or xs:choice (ordered="false")
 	$seq = XFirst $body "sequence"
 	$cho = XFirst $body "choice"
-	$particle = if ($seq) { $seq } else { $cho }
+	$all = XFirst $body "all"
+	$grp = XFirst $body "group"
+	$particle = if ($seq) { $seq } elseif ($cho) { $cho } elseif ($all) { $all } else { $grp }
 	$isOpen = $false
 
 	# Порядок в XDTO: сначала form="Attribute", потом остальные (верно для 96.5%
 	# типов корпуса). Отклонения приходят зеркалом xdto:order.
 	$elemProps = New-Object System.Collections.ArrayList
+	$typeName = if ($ct.HasAttribute("name")) { $ct.GetAttribute("name") } else { "(анонимный тип)" }
 	if ($particle) {
-		foreach ($c in $particle.ChildNodes) {
-			if ($c.NodeType -ne [System.Xml.XmlNodeType]::Element -or $c.NamespaceURI -ne $XS_NS) { continue }
-			switch ($c.get_LocalName()) {
-				"element" { [void]$elemProps.Add((Build-Property $c $false)) }
-				"any"     { $isOpen = $true }
-			}
+		$openRef = [ref]$isOpen
+		if ($all) {
+			Warn "$typeName : xs:all трактуется как последовательность"
 		}
+		if ($grp -and -not $seq -and -not $cho -and -not $all) {
+			# Корневая частица задана ссылкой на группу — раскрываем её содержимое
+			$g = Resolve-Group $grp "group"
+			if ($g) {
+				foreach ($gc in $g.ChildNodes) {
+					if ($gc.NodeType -eq [System.Xml.XmlNodeType]::Element -and $gc.NamespaceURI -eq $XS_NS -and
+					    @("sequence", "choice", "all") -contains $gc.get_LocalName()) {
+						Collect-Particle $gc $elemProps $openRef $typeName 1
+					}
+				}
+			} else {
+				Warn "$typeName : не найдена группа $(XA $grp 'ref') — её свойства в пакет не попали"
+			}
+		} else {
+			Collect-Particle $particle $elemProps $openRef $typeName 0
+		}
+		$isOpen = $openRef.Value
 	}
 	foreach ($a in (XChildren $body "attribute")) { Add-Child $node (Build-Property $a $true) }
+	# xs:attributeGroup раскрываем по ссылке
+	foreach ($ag in (XChildren $body "attributeGroup")) {
+		$g = Resolve-Group $ag "attributeGroup"
+		if ($g) {
+			foreach ($a in (XChildren $g "attribute")) { Add-Child $node (Build-Property $a $true) }
+		} else {
+			Warn "Не найдена группа атрибутов $(XA $ag 'ref') — её атрибуты в пакет не попали"
+		}
+	}
 	foreach ($e in $elemProps) { Add-Child $node $e }
 	if ((XChildren $body "anyAttribute").Count -gt 0) { $isOpen = $true }
 
@@ -591,10 +681,37 @@ if ($ann) {
 	}
 }
 
+# Реестр глобальных групп — нужен до обхода, чтобы раскрывать ссылки
+foreach ($node in $schema.ChildNodes) {
+	if ($node.NodeType -ne [System.Xml.XmlNodeType]::Element -or $node.NamespaceURI -ne $XS_NS) { continue }
+	$nm = XA $node "name"
+	if ($node.get_LocalName() -eq "group" -and $nm) { $script:GROUPS[$nm] = $node }
+	if ($node.get_LocalName() -eq "attributeGroup" -and $nm) { $script:ATTR_GROUPS[$nm] = $node }
+}
+
+# Конструкции XSD, которым в модели XDTO нет соответствия
+foreach ($sg in $schema.SelectNodes("//*[local-name()='element'][@substitutionGroup]")) {
+	Warn "Подстановочные группы (substitutionGroup) не поддерживаются моделью XDTO — объявление $($sg.GetAttribute('name')) сохранено как обычное"
+}
+foreach ($idc in @("key", "keyref", "unique")) {
+	if ($schema.SelectNodes("//*[local-name()='$idc']").Count -gt 0) {
+		Warn "Ограничения целостности (xs:$idc) в модели XDTO не хранятся — отброшены"
+	}
+}
+if ($schema.SelectNodes("//*[local-name()='redefine']").Count -gt 0) {
+	Warn "xs:redefine не поддерживается — переопределения проигнорированы"
+}
+if ($schema.SelectNodes("//*[local-name()='include']").Count -gt 0) {
+	Warn "xs:include проигнорирован: модель XDTO разрешает зависимости только по namespace. Соберите включаемую схему отдельным пакетом и добавьте <xs:import>"
+}
+
 foreach ($node in $schema.ChildNodes) {
 	if ($node.NodeType -ne [System.Xml.XmlNodeType]::Element -or $node.NamespaceURI -ne $XS_NS) { continue }
 	switch ($node.get_LocalName()) {
 		"annotation" { }
+		"group" { }
+		"attributeGroup" { }
+		"notation" { }
 		"import" {
 			$n = New-Node "import"
 			Add-Attr $n "namespace" (XA $node "namespace")
@@ -765,6 +882,12 @@ Write-Host "✓ Пакет XDTO собран: $Name"
 Write-Host "  Namespace: $targetNs"
 Write-Host "  Типов: $typeCount"
 Write-Host "  Файлы: XDTOPackages/$Name.xml, XDTOPackages/$Name/Ext/Package.bin"
+if ($script:warnings.Count -gt 0) {
+	Write-Host ""
+	Write-Host "Предупреждения ($($script:warnings.Count)) — конструкции XSD без точного соответствия в модели XDTO:"
+	foreach ($w in $script:warnings) { Write-Host "  ! $w" }
+	Write-Host ""
+}
 switch ($regResult) {
 	"added"     { Write-Host "  Configuration.xml: <XDTOPackage>$Name</XDTOPackage> добавлен в ChildObjects" }
 	"already"   { Write-Host "  Configuration.xml: <XDTOPackage>$Name</XDTOPackage> уже зарегистрирован" }

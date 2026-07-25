@@ -140,17 +140,39 @@ if (-not ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -a
 
 $imports = New-Object System.Collections.ArrayList
 $localTypes = New-Object System.Collections.Generic.HashSet[string]
+$objectTypeNames = New-Object System.Collections.Generic.HashSet[string]
+$valueTypeNames = New-Object System.Collections.Generic.HashSet[string]
 $globalProps = New-Object System.Collections.Generic.HashSet[string]
+$topSequence = New-Object System.Collections.ArrayList
 
 foreach ($n in $pkg.ChildNodes) {
 	if ($n.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
+	[void]$topSequence.Add($n.get_LocalName())
 	switch ($n.get_LocalName()) {
 		"import"     { [void]$imports.Add($n.GetAttribute("namespace")) }
-		"objectType" { [void]$localTypes.Add($n.GetAttribute("name")) }
-		"valueType"  { [void]$localTypes.Add($n.GetAttribute("name")) }
+		"objectType" { [void]$localTypes.Add($n.GetAttribute("name")); [void]$objectTypeNames.Add($n.GetAttribute("name")) }
+		"valueType"  { [void]$localTypes.Add($n.GetAttribute("name")); [void]$valueTypeNames.Add($n.GetAttribute("name")) }
 		"property"   { if ($n.HasAttribute("name")) { [void]$globalProps.Add($n.GetAttribute("name")) } }
 	}
 }
+
+# --- Порядок элементов верхнего уровня ---
+# Модель требует import -> property -> valueType -> objectType. Нарушение платформа
+# не прощает: db-update падает с «Ошибка преобразования данных XDTO».
+$TOP_ORDER = @("import", "property", "valueType", "objectType")
+$prevRank = -1
+$orderOk = $true
+foreach ($t in $topSequence) {
+	$rank = [array]::IndexOf($TOP_ORDER, $t)
+	if ($rank -lt 0) { continue }
+	if ($rank -lt $prevRank) {
+		Report-Error "Нарушен порядок элементов верхнего уровня: <$t> после <$($TOP_ORDER[$prevRank])>. Модель требует import -> property -> valueType -> objectType; платформа отвергнет пакет при обновлении конфигурации"
+		$orderOk = $false
+		break
+	}
+	$prevRank = $rank
+}
+if ($orderOk) { Report-OK "Порядок элементов верхнего уровня корректен" }
 
 # --- 4. Duplicate type names ---
 
@@ -249,12 +271,15 @@ if ($anyTypeProps.Count -gt 0 -and $imports.Count -gt 0) {
 
 # --- 7. Unused imports ---
 
-foreach ($imp in $imports) {
-	if (-not $usedNamespaces.Contains($imp)) {
-		Report-Warn "<import namespace=`"$imp`"/> объявлен, но ни один тип из этого пространства имён не используется"
-	}
+# Сам по себе неиспользуемый импорт безвреден и встречается в четверти пакетов
+# типовых конфигураций. Сигналом он становится только вместе с anyType — тогда это
+# почти наверняка неразрешённая зависимость.
+$unused = @()
+foreach ($imp in $imports) { if (-not $usedNamespaces.Contains($imp)) { $unused += $imp } }
+if ($unused.Count -gt 0 -and $anyTypeProps.Count -gt 0) {
+	Report-Warn "Импорт(ы) без единого использованного типа: $($unused -join ', ') — вместе с anyType это признак неразрешённой зависимости"
 }
-if ($imports.Count -gt 0 -and $script:warnings -eq 0) { Report-OK "$($imports.Count) импорт(ов) — все используются" }
+if ($imports.Count -gt 0 -and $unused.Count -eq 0) { Report-OK "$($imports.Count) импорт(ов) — все используются" }
 
 # --- 8. nillable on attribute-form properties ---
 
@@ -279,7 +304,8 @@ foreach ($t in $pkg.SelectNodes("//*[local-name()='valueType' or local-name()='t
 
 	$len = $t.GetAttribute("length")
 	if ($len -and ($t.HasAttribute("minLength") -or $t.HasAttribute("maxLength"))) {
-		Report-Error "$nm : length несовместим с minLength/maxLength"
+		# Спецификация XSD это запрещает, но платформа такие типы хранит — предупреждение, не ошибка
+		Report-Warn "$nm : length задан вместе с minLength/maxLength — спецификация XSD считает их взаимоисключающими"
 	}
 	$minL = $t.GetAttribute("minLength"); $maxL = $t.GetAttribute("maxLength")
 	if ($minL -and $maxL -and ([int]$minL -gt [int]$maxL)) {
@@ -327,6 +353,99 @@ foreach ($p in $pkg.SelectNodes("//*[local-name()='property']")) {
 	if ($script:stopped) { break }
 }
 if (-not $script:stopped) { Report-OK "Свойства: form и кратности корректны" }
+
+# --- 10b. Structural consistency ---
+
+$structOk = $true
+foreach ($t in $pkg.SelectNodes("//*[local-name()='objectType' or local-name()='typeDef']")) {
+	if ($t.get_LocalName() -eq "typeDef" -and $t.GetAttribute("type", $XSI_NS) -ne "ObjectType") { continue }
+	$tn = if ($t.HasAttribute("name")) { $t.GetAttribute("name") } else { "(анонимный тип)" }
+	$propNames = @{}
+	foreach ($c in $t.ChildNodes) {
+		if ($c.NodeType -ne [System.Xml.XmlNodeType]::Element -or $c.get_LocalName() -ne "property") { continue }
+		$pn = $c.GetAttribute("name")
+		if ($pn) {
+			if ($propNames.ContainsKey($pn)) {
+				Report-Error "$tn : дублирующееся имя свойства `"$pn`""
+				$structOk = $false
+			}
+			$propNames[$pn] = $true
+		}
+	}
+	if ($script:stopped) { break }
+}
+
+foreach ($p in $pkg.SelectNodes("//*[local-name()='property']")) {
+	$pn = if ($p.HasAttribute("name")) { $p.GetAttribute("name") } else { $p.GetAttribute("ref") }
+	if ($p.HasAttribute("name") -and $p.HasAttribute("ref")) {
+		Report-Error "Свойство `"$pn`": заданы одновременно name и ref — допустимо только одно"
+		$structOk = $false
+	}
+	$inlineTypeDef = $null
+	foreach ($c in $p.ChildNodes) {
+		if ($c.NodeType -eq [System.Xml.XmlNodeType]::Element -and $c.get_LocalName() -eq "typeDef") { $inlineTypeDef = $c; break }
+	}
+	if ($inlineTypeDef -and $p.HasAttribute("type")) {
+		Report-Error "Свойство `"$pn`": заданы одновременно type и вложенный <typeDef> — допустимо только одно"
+		$structOk = $false
+	}
+	if ($inlineTypeDef -and -not $inlineTypeDef.HasAttribute("type", $XSI_NS)) {
+		Report-Error "Свойство `"$pn`": у вложенного <typeDef> не задан xsi:type (ValueType или ObjectType)"
+		$structOk = $false
+	}
+	if ($script:stopped) { break }
+}
+
+# Анонимный тип внутри valueType задаёт базовый тип и xsi:type не несёт
+foreach ($vt in $pkg.SelectNodes("//*[local-name()='valueType']")) {
+	foreach ($c in $vt.ChildNodes) {
+		if ($c.NodeType -ne [System.Xml.XmlNodeType]::Element -or $c.get_LocalName() -ne "typeDef") { continue }
+		if ($c.HasAttribute("type", $XSI_NS)) {
+			Report-Warn "$($vt.GetAttribute('name')) : у <typeDef> внутри <valueType> задан xsi:type — платформа его здесь не пишет"
+		}
+	}
+}
+
+# Род базового типа должен совпадать
+foreach ($t in $pkg.SelectNodes("//*[local-name()='objectType'][@base]")) {
+	$b = $t.GetAttribute("base")
+	$parts = $b.Split(":")
+	if ($parts.Count -ne 2) { continue }
+	$bns = $t.GetNamespaceOfPrefix($parts[0])
+	if ($bns -ne $targetNs) { continue }
+	if ($valueTypeNames.Contains($parts[1])) {
+		Report-Error "$($t.GetAttribute('name')) : base=`"$b`" ссылается на valueType, а objectType может наследоваться только от objectType"
+		$structOk = $false
+	}
+}
+foreach ($t in $pkg.SelectNodes("//*[local-name()='valueType'][@base]")) {
+	$b = $t.GetAttribute("base")
+	$parts = $b.Split(":")
+	if ($parts.Count -ne 2) { continue }
+	$bns = $t.GetNamespaceOfPrefix($parts[0])
+	if ($bns -ne $targetNs) { continue }
+	if ($objectTypeNames.Contains($parts[1])) {
+		Report-Error "$($t.GetAttribute('name')) : base=`"$b`" ссылается на objectType, а valueType может строиться только на простом типе"
+		$structOk = $false
+	}
+}
+
+# Union без состава
+foreach ($t in $pkg.SelectNodes("//*[local-name()='valueType' or local-name()='typeDef'][@variety='Union']")) {
+	if ($t.HasAttribute("memberTypes")) { continue }
+	$hasMember = $false
+	foreach ($c in $t.ChildNodes) {
+		if ($c.NodeType -eq [System.Xml.XmlNodeType]::Element -and $c.get_LocalName() -eq "typeDef") { $hasMember = $true; break }
+	}
+	if (-not $hasMember) {
+		$tn = if ($t.HasAttribute("name")) { $t.GetAttribute("name") } else { "(анонимный тип)" }
+		Report-Warn "$tn : variety=`"Union`" без memberTypes и без вложенных типов — состав объединения пуст"
+	}
+}
+
+if ($structOk -and -not $script:stopped) { Report-OK "Структура типов и свойств согласована" }
+
+if ($script:stopped) { & $finalize; exit 1 }
 
 # --- 11. Metadata object ---
 
@@ -386,7 +505,7 @@ if (Test-Path $configXml) {
 			} catch {}
 		}
 		if ($clash.Count -gt 0) {
-			Report-Error "targetNamespace `"$targetNs`" уже занят пакет(ами): $($clash -join ', '). Платформа не допускает два пакета с одним пространством имён"
+			Report-Warn "targetNamespace `"$targetNs`" объявлен также в пакет(ах): $($clash -join ', '). Платформа это допускает, но <import> на это пространство имён становится неоднозначным"
 		} else {
 			Report-OK "targetNamespace уникален в конфигурации"
 		}

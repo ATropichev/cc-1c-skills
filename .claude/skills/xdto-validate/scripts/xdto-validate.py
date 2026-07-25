@@ -145,18 +145,46 @@ else:
 
 imports = []
 local_types = set()
+object_type_names = set()
+value_type_names = set()
 global_props = set()
+top_sequence = []
 
 for n in pkg:
     if not isinstance(n.tag, str):
         continue
     ln = local(n)
+    top_sequence.append(ln)
     if ln == "import":
         imports.append(n.get("namespace"))
-    elif ln in ("objectType", "valueType"):
+    elif ln == "objectType":
         local_types.add(n.get("name"))
+        object_type_names.add(n.get("name"))
+    elif ln == "valueType":
+        local_types.add(n.get("name"))
+        value_type_names.add(n.get("name"))
     elif ln == "property" and n.get("name"):
         global_props.add(n.get("name"))
+
+# ── порядок элементов верхнего уровня ────────────────────────
+# Модель требует import -> property -> valueType -> objectType. Нарушение платформа
+# не прощает: db-update падает с «Ошибка преобразования данных XDTO».
+TOP_ORDER = ["import", "property", "valueType", "objectType"]
+prev_rank = -1
+order_ok = True
+for t in top_sequence:
+    if t not in TOP_ORDER:
+        continue
+    rank = TOP_ORDER.index(t)
+    if rank < prev_rank:
+        report_error(f"Нарушен порядок элементов верхнего уровня: <{t}> после <{TOP_ORDER[prev_rank]}>. "
+                     "Модель требует import -> property -> valueType -> objectType; "
+                     "платформа отвергнет пакет при обновлении конфигурации")
+        order_ok = False
+        break
+    prev_rank = rank
+if order_ok:
+    report_ok("Порядок элементов верхнего уровня корректен")
 
 # ── 4. duplicate type names ──────────────────────────────────
 
@@ -254,10 +282,13 @@ if any_type_props and imports:
 
 # ── 7. unused imports ────────────────────────────────────────
 
-for imp in imports:
-    if imp not in used_namespaces:
-        report_warn(f'<import namespace="{imp}"/> объявлен, но ни один тип из этого пространства имён не используется')
-if imports and state["warnings"] == 0:
+# Сам по себе неиспользуемый импорт безвреден и встречается в четверти пакетов
+# типовых конфигураций. Сигналом он становится только вместе с anyType.
+unused = [i for i in imports if i not in used_namespaces]
+if unused and any_type_props:
+    report_warn(f'Импорт(ы) без единого использованного типа: {", ".join(unused)} — '
+                "вместе с anyType это признак неразрешённой зависимости")
+if imports and not unused:
     report_ok(f"{len(imports)} импорт(ов) — все используются")
 
 # ── 8. nillable on attribute-form properties ─────────────────
@@ -283,7 +314,9 @@ for t in pkg.iter():
     nm = t.get("name") or "(анонимный тип)"
 
     if t.get("length") and (t.get("minLength") or t.get("maxLength")):
-        report_error(f"{nm} : length несовместим с minLength/maxLength")
+        # Спецификация XSD это запрещает, но платформа такие типы хранит — предупреждение, не ошибка
+        report_warn(f"{nm} : length задан вместе с minLength/maxLength — "
+                    "спецификация XSD считает их взаимоисключающими")
     min_l, max_l = t.get("minLength"), t.get("maxLength")
     if min_l and max_l and int(min_l) > int(max_l):
         report_error(f"{nm} : minLength ({min_l}) больше maxLength ({max_l})")
@@ -327,6 +360,92 @@ for p in pkg.iter():
         break
 if not state["stopped"]:
     report_ok("Свойства: form и кратности корректны")
+
+# ── 10b. structural consistency ──────────────────────────────
+
+struct_ok = True
+for t in pkg.iter():
+    if not isinstance(t.tag, str) or local(t) not in ("objectType", "typeDef"):
+        continue
+    if local(t) == "typeDef" and t.get(f"{{{XSI_NS}}}type") != "ObjectType":
+        continue
+    tn = t.get("name") or "(анонимный тип)"
+    prop_names = set()
+    for c in t:
+        if not isinstance(c.tag, str) or local(c) != "property":
+            continue
+        pn = c.get("name")
+        if pn:
+            if pn in prop_names:
+                report_error(f'{tn} : дублирующееся имя свойства "{pn}"')
+                struct_ok = False
+            prop_names.add(pn)
+    if state["stopped"]:
+        break
+
+for p_ in pkg.iter():
+    if not isinstance(p_.tag, str) or local(p_) != "property":
+        continue
+    pn = p_.get("name") or p_.get("ref")
+    if p_.get("name") is not None and p_.get("ref") is not None:
+        report_error(f'Свойство "{pn}": заданы одновременно name и ref — допустимо только одно')
+        struct_ok = False
+    inline = next((c for c in p_ if isinstance(c.tag, str) and local(c) == "typeDef"), None)
+    if inline is not None and p_.get("type") is not None:
+        report_error(f'Свойство "{pn}": заданы одновременно type и вложенный <typeDef> — допустимо только одно')
+        struct_ok = False
+    if inline is not None and inline.get(f"{{{XSI_NS}}}type") is None:
+        report_error(f'Свойство "{pn}": у вложенного <typeDef> не задан xsi:type (ValueType или ObjectType)')
+        struct_ok = False
+    if state["stopped"]:
+        break
+
+# Анонимный тип внутри valueType задаёт базовый тип и xsi:type не несёт
+for vt in pkg.iter():
+    if not isinstance(vt.tag, str) or local(vt) != "valueType":
+        continue
+    for c in vt:
+        if isinstance(c.tag, str) and local(c) == "typeDef" and c.get(f"{{{XSI_NS}}}type") is not None:
+            report_warn(f'{vt.get("name")} : у <typeDef> внутри <valueType> задан xsi:type — '
+                        "платформа его здесь не пишет")
+
+# Род базового типа должен совпадать
+for t in pkg.iter():
+    if not isinstance(t.tag, str) or t.get("base") is None:
+        continue
+    kind = local(t)
+    if kind not in ("objectType", "valueType"):
+        continue
+    parts = t.get("base").split(":")
+    if len(parts) != 2:
+        continue
+    if t.nsmap.get(parts[0]) != target_ns:
+        continue
+    if kind == "objectType" and parts[1] in value_type_names:
+        report_error(f'{t.get("name")} : base="{t.get("base")}" ссылается на valueType, '
+                     "а objectType может наследоваться только от objectType")
+        struct_ok = False
+    if kind == "valueType" and parts[1] in object_type_names:
+        report_error(f'{t.get("name")} : base="{t.get("base")}" ссылается на objectType, '
+                     "а valueType может строиться только на простом типе")
+        struct_ok = False
+
+# Union без состава
+for t in pkg.iter():
+    if not isinstance(t.tag, str) or local(t) not in ("valueType", "typeDef"):
+        continue
+    if t.get("variety") != "Union" or t.get("memberTypes") is not None:
+        continue
+    if not any(isinstance(c.tag, str) and local(c) == "typeDef" for c in t):
+        tn = t.get("name") or "(анонимный тип)"
+        report_warn(f'{tn} : variety="Union" без memberTypes и без вложенных типов — состав объединения пуст')
+
+if struct_ok and not state["stopped"]:
+    report_ok("Структура типов и свойств согласована")
+
+if state["stopped"]:
+    finalize()
+    sys.exit(1)
 
 # ── 11. metadata object ──────────────────────────────────────
 
@@ -375,8 +494,8 @@ if os.path.exists(config_xml):
             except Exception:  # noqa: BLE001
                 pass
         if clash:
-            report_error(f'targetNamespace "{target_ns}" уже занят пакет(ами): {", ".join(clash)}. '
-                         "Платформа не допускает два пакета с одним пространством имён")
+            report_warn(f'targetNamespace "{target_ns}" объявлен также в пакет(ах): {", ".join(clash)}. '
+                        "Платформа это допускает, но <import> на это пространство имён становится неоднозначным")
         else:
             report_ok("targetNamespace уникален в конфигурации")
 else:

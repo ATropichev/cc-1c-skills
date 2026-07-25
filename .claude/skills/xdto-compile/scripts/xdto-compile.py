@@ -297,6 +297,20 @@ def serialize_node(node, depth, inherited):
 
 # ── XSD reading helpers ──────────────────────────────────────
 
+# Предупреждения о том, что XSD выражает, а модель XDTO — нет. Молча ронять
+# такие конструкции нельзя: пакет соберётся, а половина свойств исчезнет.
+warnings_list = []
+
+
+def warn(msg):
+    if msg not in warnings_list:
+        warnings_list.append(msg)
+
+
+GROUPS = {}
+ATTR_GROUPS = {}
+
+
 def MA(el, name):
     # xdto: mirror attribute — литеральное значение для Package.bin.
     # Ищем по namespace, а не по строке префикса.
@@ -497,6 +511,54 @@ def build_property(el, is_attribute):
 
 # ── complexType -> objectType / typeDef(ObjectType) ──────────
 
+def resolve_group(el, kind):
+    ref = el.get("ref")
+    if not ref:
+        return None
+    q = split_qname(el, ref)
+    if not q:
+        return None
+    m = GROUPS if kind == "group" else ATTR_GROUPS
+    return m.get(q[1])
+
+
+# Модель XDTO знает только плоский список свойств: вложенные частицы уплощаются.
+# Каждое уплощение — предупреждение, потому что меняется смысл схемы.
+def collect_particle(particle, elem_list, open_flag, type_name, depth):
+    if depth > 20:
+        return
+    for c in particle:
+        if not isinstance(c.tag, str) or etree.QName(c).namespace != XS_NS:
+            continue
+        ln = local(c)
+        if ln == "element":
+            elem_list.append(build_property(c, False))
+        elif ln == "any":
+            open_flag[0] = True
+        elif ln == "sequence":
+            warn(type_name + " : вложенная xs:sequence уплощена — модель XDTO хранит плоский список свойств")
+            collect_particle(c, elem_list, open_flag, type_name, depth + 1)
+        elif ln == "choice":
+            warn(type_name + " : вложенная xs:choice уплощена в последовательность — выбор одного из вариантов не сохранён")
+            collect_particle(c, elem_list, open_flag, type_name, depth + 1)
+        elif ln == "all":
+            warn(type_name + " : xs:all трактуется как последовательность")
+            collect_particle(c, elem_list, open_flag, type_name, depth + 1)
+        elif ln == "group":
+            g = resolve_group(c, "group")
+            if g is not None:
+                for gc in g:
+                    if isinstance(gc.tag, str) and etree.QName(gc).namespace == XS_NS \
+                            and local(gc) in ("sequence", "choice", "all"):
+                        collect_particle(gc, elem_list, open_flag, type_name, depth + 1)
+            else:
+                warn(type_name + " : не найдена группа " + str(c.get("ref")) + " — её свойства в пакет не попали")
+        if ln in ("sequence", "choice", "all", "group"):
+            if c.get("maxOccurs") is not None or c.get("minOccurs") is not None:
+                warn(type_name + " : кратность на вложенной частице (<xs:" + ln +
+                     " minOccurs/maxOccurs>) не выражается в модели XDTO")
+
+
 def set_type_flags(node, ct, is_open, choice):
     m_open = MA(ct, "open")
     if m_open is not None:
@@ -562,22 +624,40 @@ def fill_complex_type(node, ct):
 
     seq = xfirst(body, "sequence")
     cho = xfirst(body, "choice")
-    particle = seq if seq is not None else cho
-    is_open = False
+    all_ = xfirst(body, "all")
+    grp = xfirst(body, "group")
+    particle = seq if seq is not None else (cho if cho is not None else (all_ if all_ is not None else grp))
+    open_flag = [False]
 
     # Порядок в XDTO: сначала form="Attribute", потом остальные (96.5% типов корпуса)
     elem_props = []
+    type_name = ct.get("name") or "(анонимный тип)"
     if particle is not None:
-        for c in particle:
-            if not isinstance(c.tag, str) or etree.QName(c).namespace != XS_NS:
-                continue
-            ln = local(c)
-            if ln == "element":
-                elem_props.append(build_property(c, False))
-            elif ln == "any":
-                is_open = True
+        if all_ is not None:
+            warn(type_name + " : xs:all трактуется как последовательность")
+        if grp is not None and seq is None and cho is None and all_ is None:
+            # Корневая частица задана ссылкой на группу — раскрываем её содержимое
+            g = resolve_group(grp, "group")
+            if g is not None:
+                for gc in g:
+                    if isinstance(gc.tag, str) and etree.QName(gc).namespace == XS_NS \
+                            and local(gc) in ("sequence", "choice", "all"):
+                        collect_particle(gc, elem_props, open_flag, type_name, 1)
+            else:
+                warn(type_name + " : не найдена группа " + str(grp.get("ref")) + " — её свойства в пакет не попали")
+        else:
+            collect_particle(particle, elem_props, open_flag, type_name, 0)
+    is_open = open_flag[0]
     for a in xchildren(body, "attribute"):
         node.children.append(build_property(a, True))
+    # xs:attributeGroup раскрываем по ссылке
+    for ag in xchildren(body, "attributeGroup"):
+        g = resolve_group(ag, "attributeGroup")
+        if g is not None:
+            for a in xchildren(g, "attribute"):
+                node.children.append(build_property(a, True))
+        else:
+            warn("Не найдена группа атрибутов " + str(ag.get("ref")) + " — её атрибуты в пакет не попали")
     node.children.extend(elem_props)
     if xchildren(body, "anyAttribute"):
         is_open = True
@@ -627,6 +707,30 @@ if ann is not None:
                 elif ln == "synonym":
                     meta_synonym.append({"Lang": f.get("lang") or "", "Content": f.text or ""})
 
+# Реестр глобальных групп — нужен до обхода, чтобы раскрывать ссылки
+for node in schema:
+    if not isinstance(node.tag, str) or etree.QName(node).namespace != XS_NS:
+        continue
+    nm = node.get("name")
+    if local(node) == "group" and nm:
+        GROUPS[nm] = node
+    if local(node) == "attributeGroup" and nm:
+        ATTR_GROUPS[nm] = node
+
+# Конструкции XSD, которым в модели XDTO нет соответствия
+for sg in schema.iter():
+    if isinstance(sg.tag, str) and local(sg) == "element" and sg.get("substitutionGroup"):
+        warn("Подстановочные группы (substitutionGroup) не поддерживаются моделью XDTO — объявление "
+             + str(sg.get("name")) + " сохранено как обычное")
+for idc in ("key", "keyref", "unique"):
+    if any(isinstance(e.tag, str) and local(e) == idc for e in schema.iter()):
+        warn("Ограничения целостности (xs:" + idc + ") в модели XDTO не хранятся — отброшены")
+if any(isinstance(e.tag, str) and local(e) == "redefine" for e in schema.iter()):
+    warn("xs:redefine не поддерживается — переопределения проигнорированы")
+if any(isinstance(e.tag, str) and local(e) == "include" for e in schema.iter()):
+    warn("xs:include проигнорирован: модель XDTO разрешает зависимости только по namespace. "
+         "Соберите включаемую схему отдельным пакетом и добавьте <xs:import>")
+
 for node in schema:
     if not isinstance(node.tag, str) or etree.QName(node).namespace != XS_NS:
         continue
@@ -635,7 +739,7 @@ for node in schema:
         n = Node("import")
         add_attr(n, "namespace", node.get("namespace"))
         pkg_node.children.append(n)
-    elif ln in ("annotation", "include"):
+    elif ln in ("annotation", "include", "group", "attributeGroup", "notation"):
         continue
     elif ln == "element":
         pkg_node.children.append(build_property(node, False))
@@ -772,6 +876,13 @@ print(f"✓ Пакет XDTO собран: {name}")
 print(f"  Namespace: {target_ns}")
 print(f"  Типов: {type_count}")
 print(f"  Файлы: XDTOPackages/{name}.xml, XDTOPackages/{name}/Ext/Package.bin")
+if warnings_list:
+    print("")
+    print("Предупреждения (" + str(len(warnings_list)) +
+          ") — конструкции XSD без точного соответствия в модели XDTO:")
+    for w in warnings_list:
+        print("  ! " + w)
+    print("")
 if reg_result == "added":
     print(f"  Configuration.xml: <XDTOPackage>{name}</XDTOPackage> добавлен в ChildObjects")
 elif reg_result == "already":
