@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-edit v1.10 — Edit 1C configuration root (Configuration.xml)
+# cf-edit v1.11 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -409,6 +409,10 @@ def main():
     xml_parser = etree.XMLParser(remove_blank_text=False)
     tree = etree.parse(resolved_path, xml_parser)
     xml_root = tree.getroot()
+
+    # Версия формата редактируемой конфигурации — создаваемые рядом файлы (Ext/HomePageWorkArea.xml)
+    # должны нести ту же версию, иначе в проекте окажутся файлы разных версий формата.
+    format_version = xml_root.get('version') or '2.17'
 
     add_count = 0
     remove_count = 0
@@ -959,7 +963,7 @@ def main():
             '<HomePageWorkArea xmlns="http://v8.1c.ru/8.3/xcf/extrnprops" '
             'xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" '
             'xmlns:xs="http://www.w3.org/2001/XMLSchema" '
-            'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17">\r\n'
+            f'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="{format_version}">\r\n'
             f'\t<WorkingAreaTemplate>{tmpl}</WorkingAreaTemplate>\r\n'
             f'{left_xml}\r\n'
             f'{right_xml}\r\n'

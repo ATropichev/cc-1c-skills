@@ -1,4 +1,4 @@
-﻿# cf-edit v1.10 — Edit 1C configuration root (Configuration.xml)
+﻿# cf-edit v1.11 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$ConfigPath,
@@ -166,6 +166,11 @@ Assert-EditAllowed $resolvedPath 'editable'
 $script:xmlDoc = New-Object System.Xml.XmlDocument
 $script:xmlDoc.PreserveWhitespace = $true
 $script:xmlDoc.Load($resolvedPath)
+
+# Версия формата редактируемой конфигурации — создаваемые рядом файлы (Ext/HomePageWorkArea.xml)
+# должны нести ту же версию, иначе в проекте окажутся файлы разных версий формата.
+$script:formatVersion = $script:xmlDoc.DocumentElement.GetAttribute("version")
+if (-not $script:formatVersion) { $script:formatVersion = "2.17" }
 
 $script:addCount = 0
 $script:removeCount = 0
@@ -864,7 +869,7 @@ function Do-SetHomePage($valArg) {
 
 	$hpXml = @"
 <?xml version="1.0" encoding="UTF-8"?>
-<HomePageWorkArea xmlns="http://v8.1c.ru/8.3/xcf/extrnprops" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17">
+<HomePageWorkArea xmlns="http://v8.1c.ru/8.3/xcf/extrnprops" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="$($script:formatVersion)">
 	<WorkingAreaTemplate>$tmpl</WorkingAreaTemplate>
 $leftXml
 $rightXml
