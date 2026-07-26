@@ -27,6 +27,23 @@ parser.add_argument("-Comment", default="")
 parser.add_argument("-Force", action="store_true")
 args = parser.parse_args()
 
+
+def _parse_xml(source, from_string=False):
+    """Разбор с узким отступлением для не-URI пространств имён.
+
+    Платформа допускает в targetNamespace произвольную строку (в выгрузке БП есть
+    пакет с кириллическим «ДопФайлУниверсальный»), .NET такое принимает, а libxml2
+    отвергает. Откатываемся на восстанавливающий разбор ТОЛЬКО на этой ошибке,
+    иначе по-настоящему битый XML перестал бы отличаться от корректного.
+    """
+    try:
+        return (etree.fromstring(source) if from_string else etree.parse(source))
+    except etree.XMLSyntaxError as e:
+        if "is not a valid URI" not in str(e):
+            raise
+        p = etree.XMLParser(recover=True)
+        return (etree.fromstring(source, p) if from_string else etree.parse(source, p))
+
 # ── support guard (Ext/ParentConfigurations.bin) ─────────────
 # См. docs/1c-support-state-spec.md. Блокирует правку объектов поставщика
 # «на замке». Триггер — наличие bin; реакция из .v8-project.json
@@ -60,7 +77,7 @@ def get_edit_mode(cfg_dir):
 
 def is_external_object_root(xml_path):
     try:
-        root = etree.parse(xml_path).getroot()
+        root = _parse_xml(xml_path).getroot()
         for el in root:
             if isinstance(el.tag, str):
                 return etree.QName(el).localname in ("ExternalDataProcessor", "ExternalReport")
@@ -118,7 +135,7 @@ else:
     sys.exit(1)
 
 try:
-    schema = etree.fromstring(xsd_bytes)
+    schema = _parse_xml(xsd_bytes, from_string=True)
 except Exception as e:  # noqa: BLE001
     print(f"Не удалось разобрать XSD: {e}", file=sys.stderr)
     sys.exit(1)
@@ -848,7 +865,7 @@ if os.path.exists(config_xml):
     with open(config_xml, "rb") as f:
         raw = f.read()
     had_bom = raw.startswith(b"\xef\xbb\xbf")
-    cfg_doc = etree.parse(config_xml)
+    cfg_doc = _parse_xml(config_xml)
     child_objects = cfg_doc.find(f".//{{{MD_NS}}}Configuration/{{{MD_NS}}}ChildObjects")
     if child_objects is not None:
         existing = child_objects.findall(f"{{{MD_NS}}}XDTOPackage")

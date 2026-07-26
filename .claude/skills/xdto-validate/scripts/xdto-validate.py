@@ -106,6 +106,23 @@ def finalize():
             f.write("\n".join(output))
 
 
+def _parse_xml(source, from_string=False):
+    """Разбор с узким отступлением для не-URI пространств имён.
+
+    Платформа допускает в targetNamespace произвольную строку (в выгрузке БП есть
+    пакет с кириллическим «ДопФайлУниверсальный»), .NET такое принимает, а libxml2
+    отвергает. Откатываемся на восстанавливающий разбор ТОЛЬКО на этой ошибке,
+    иначе по-настоящему битый XML перестал бы отличаться от корректного.
+    """
+    try:
+        return (etree.fromstring(source) if from_string else etree.parse(source))
+    except etree.XMLSyntaxError as e:
+        if "is not a valid URI" not in str(e):
+            raise
+        p = etree.XMLParser(recover=True)
+        return (etree.fromstring(source, p) if from_string else etree.parse(source, p))
+
+
 def local(el):
     return etree.QName(el).localname
 
@@ -113,7 +130,7 @@ def local(el):
 # ── 1. well-formedness ───────────────────────────────────────
 
 try:
-    doc = etree.parse(bin_path)
+    doc = _parse_xml(bin_path)
 except Exception as e:  # noqa: BLE001
     report_error(f"Package.bin не является корректным XML: {e}")
     finalize()
@@ -450,7 +467,7 @@ if state["stopped"]:
 # ── 11. metadata object ──────────────────────────────────────
 
 if md_path:
-    md = etree.parse(md_path)
+    md = _parse_xml(md_path)
     md_name = md.find(f".//{{{MD_NS}}}XDTOPackage/{{{MD_NS}}}Properties/{{{MD_NS}}}Name")
     md_ns = md.find(f".//{{{MD_NS}}}XDTOPackage/{{{MD_NS}}}Properties/{{{MD_NS}}}Namespace")
     if md_name is None:
@@ -470,7 +487,7 @@ else:
 
 config_xml = os.path.join(config_dir, "Configuration.xml")
 if os.path.exists(config_xml):
-    cfg = etree.parse(config_xml)
+    cfg = _parse_xml(config_xml)
     registered = any((e.text or "") == file_name
                      for e in cfg.iterfind(f".//{{{MD_NS}}}Configuration/{{{MD_NS}}}ChildObjects/{{{MD_NS}}}XDTOPackage"))
     if registered:
@@ -489,7 +506,7 @@ if os.path.exists(config_xml):
             if not os.path.exists(ob):
                 continue
             try:
-                if etree.parse(ob).getroot().get("targetNamespace") == target_ns:
+                if _parse_xml(ob).getroot().get("targetNamespace") == target_ns:
                     clash.append(other)
             except Exception:  # noqa: BLE001
                 pass

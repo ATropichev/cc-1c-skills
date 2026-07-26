@@ -22,6 +22,23 @@ parser.add_argument("-PackagePath", "-Path", required=True)
 parser.add_argument("-OutFile", default="")
 args = parser.parse_args()
 
+
+def _parse_xml(source, from_string=False):
+    """Разбор с узким отступлением для не-URI пространств имён.
+
+    Платформа допускает в targetNamespace произвольную строку (в выгрузке БП есть
+    пакет с кириллическим «ДопФайлУниверсальный»), .NET такое принимает, а libxml2
+    отвергает. Откатываемся на восстанавливающий разбор ТОЛЬКО на этой ошибке,
+    иначе по-настоящему битый XML перестал бы отличаться от корректного.
+    """
+    try:
+        return (etree.fromstring(source) if from_string else etree.parse(source))
+    except etree.XMLSyntaxError as e:
+        if "is not a valid URI" not in str(e):
+            raise
+        p = etree.XMLParser(recover=True)
+        return (etree.fromstring(source, p) if from_string else etree.parse(source, p))
+
 # ── resolve paths ────────────────────────────────────────────
 
 package_path = args.PackagePath
@@ -53,7 +70,7 @@ if not bin_path:
     print(f"Не найден Ext/Package.bin для пути: {package_path}", file=sys.stderr)
     sys.exit(1)
 
-doc = etree.parse(bin_path)
+doc = _parse_xml(bin_path)
 pkg = doc.getroot()
 
 
@@ -460,7 +477,7 @@ def complex_type_attrs(el):
 
 meta = None
 if md_path and os.path.exists(md_path):
-    md = etree.parse(md_path)
+    md = _parse_xml(md_path)
     props_el = md.find(f".//{{{MD_NS}}}XDTOPackage/{{{MD_NS}}}Properties")
     if props_el is not None:
         meta = {"Name": None, "Comment": None, "Synonym": []}
