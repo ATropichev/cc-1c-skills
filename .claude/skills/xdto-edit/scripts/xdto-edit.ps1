@@ -127,6 +127,27 @@ $decompileScript = Join-Path (Join-Path $PSScriptRoot "..\..\xdto-decompile") "s
 $compileScript   = Join-Path (Join-Path $PSScriptRoot "..\..\xdto-compile") "scripts\xdto-compile.ps1"
 $validateScript  = Join-Path (Join-Path $PSScriptRoot "..\..\xdto-validate") "scripts\xdto-validate.ps1"
 
+# Исключение из автономности навыков, сделанное осознанно: конвертер XSD ↔ модель
+# нельзя скопировать буквально (xdto-compile — скрипт со сквозным потоком, не библиотека),
+# а вторая его реализация разошлась бы с первой. Обещание «правка не меняет ни байта
+# в нетронутом» держится именно на том, что код тот же самый.
+# Проверяем комплектность заранее, чтобы не падать на середине правки.
+function Assert-SiblingsPresent([string]$operation) {
+	$needed = @{}
+	if (@("rename", "set-synonym", "set-comment") -notcontains $operation) {
+		$needed["xdto-decompile"] = $decompileScript
+		$needed["xdto-compile"]   = $compileScript
+	}
+	$missing = @()
+	foreach ($k in $needed.Keys) { if (-not (Test-Path $needed[$k])) { $missing += $k } }
+	if ($missing.Count -gt 0) {
+		throw ("Навык неработоспособен: рядом нет " + ($missing -join ", ") + ".`n" +
+		       "Операция `"$operation`" выполняется через них, поэтому обойтись без них нельзя.`n" +
+		       "Навыки устанавливаются комплектом — скопируйте каталог .claude/skills целиком, " +
+		       "а не отдельные подкаталоги.")
+	}
+}
+
 function Invoke-Sibling([string]$script, [string[]]$argList, [string]$what) {
 	if (-not (Test-Path $script)) { throw "Не найден навык $what по пути: $script" }
 	$out = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script @argList 2>&1
@@ -443,6 +464,8 @@ function Apply-ModelOperation($schema) {
 
 $metaOps = @("rename", "set-synonym", "set-comment")
 $touchesModel = ($metaOps -notcontains $Operation)
+
+Assert-SiblingsPresent $Operation
 
 Write-Host "Пакет: $pkgName"
 

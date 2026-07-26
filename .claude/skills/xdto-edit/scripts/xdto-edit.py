@@ -153,6 +153,24 @@ COMPILE = os.path.join(SKILLS, "xdto-compile", "scripts", "xdto-compile.py")
 VALIDATE = os.path.join(SKILLS, "xdto-validate", "scripts", "xdto-validate.py")
 
 
+# Исключение из автономности навыков, сделанное осознанно: конвертер XSD <-> модель
+# нельзя скопировать буквально (xdto-compile — скрипт со сквозным потоком, не библиотека),
+# а вторая его реализация разошлась бы с первой. Обещание «правка не меняет ни байта
+# в нетронутом» держится именно на том, что код тот же самый.
+# Проверяем комплектность заранее, чтобы не падать на середине правки.
+def assert_siblings_present(operation):
+    needed = {}
+    if operation not in ("rename", "set-synonym", "set-comment"):
+        needed["xdto-decompile"] = DECOMPILE
+        needed["xdto-compile"] = COMPILE
+    missing = [k for k, v in needed.items() if not os.path.exists(v)]
+    if missing:
+        die("Навык неработоспособен: рядом нет " + ", ".join(missing) + ".\n"
+            + f'Операция "{operation}" выполняется через них, поэтому обойтись без них нельзя.\n'
+            + "Навыки устанавливаются комплектом — скопируйте каталог .claude/skills целиком, "
+              "а не отдельные подкаталоги.")
+
+
 def invoke_sibling(script, argv, what):
     if not os.path.exists(script):
         die(f"Не найден навык {what} по пути: {script}")
@@ -432,6 +450,8 @@ def apply_model_operation(schema):
 
 
 # ── dispatch ─────────────────────────────────────────────────
+
+assert_siblings_present(args.Operation)
 
 print(f"Пакет: {pkg_name}")
 old_namespace = None
