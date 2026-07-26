@@ -102,4 +102,5 @@ XSD выразительнее модели XDTO. Всё, что не перен
 3. `/xdto-validate <каталог-исходников>/XDTOPackages/<Имя>` — убедиться, что типы разрешились
 4. `/db-load-xml` + `/db-update`
 
-Правка существующего пакета: `/xdto-decompile` → правка XSD → `/xdto-compile -Force`.
+Правка существующего пакета: точечно — `/xdto-edit`; переработать схему целиком —
+`/xdto-decompile` → правка XSD → `/xdto-compile -Force`.

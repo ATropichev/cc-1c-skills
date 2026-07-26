@@ -39,6 +39,6 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/xdto-validate.ps1" 
 
 ## Типичный workflow
 
-1. `/xdto-compile` или правка через `/xdto-decompile` → `/xdto-compile -Force`
+1. `/xdto-compile`, `/xdto-edit` или переработка через `/xdto-decompile` → `/xdto-compile -Force`
 2. `/xdto-validate <путь>` — до загрузки в базу
 3. `/db-load-xml` + `/db-update`
