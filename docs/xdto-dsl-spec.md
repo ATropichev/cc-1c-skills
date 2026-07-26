@@ -51,7 +51,8 @@
 | `xs:attribute` (локальный) | `property form="Attribute"` |
 | `@minOccurs` | `@lowerBound` |
 | `@maxOccurs="unbounded"` | `@upperBound="-1"` |
-| `@nillable`, `@default`, `@fixed` | те же имена |
+| `@nillable`, `@default` | те же имена |
+| `@fixed="V"` | `@fixed="true"` + `@default="V"` — в модели признак и значение разнесены |
 | `xs:element/@ref` | `property/@ref` |
 | анонимный `xs:simpleType` в объявлении | `typeDef xsi:type="ValueType"` |
 | анонимный `xs:complexType` в объявлении | `typeDef xsi:type="ObjectType"` |
@@ -115,6 +116,7 @@
 | `xdto:order` | `xs:complexType` | исходный порядок свойств, если он не «атрибуты первыми»; имена через `\|` |
 | `xdto:textName`, `xdto:textlowerBound`, `xdto:textupperBound`, `xdto:textnillable` | `xs:extension` в `xs:simpleContent` | параметры свойства `form="Text"`, если оно названо не `__content` |
 | `xdto:elementFormQualified`, `xdto:attributeFormQualified` | `xs:schema` | записать флаги явно |
+| `xdto:fixed` | объявление | признак фиксированного значения отдельно от самого значения: в XSD `fixed="V"` совмещает их, в модели это `fixed="true"` + `default="V"`. Нужен только для `fixed="false"` при заданном `default` |
 | `xdto:type` | `xs:enumeration` | `xsi:type` литерала перечисления |
 | `xdto:prefix` | объявление | осмысленный префикс пространства имён вместо генерируемого `dNpM` (например `dcsset`) |
 | `xdto:declareNs` | `xs:union` | объявить префикс пространства имён на узле (при нотации Кларка платформа иногда его пишет, иногда нет) |
