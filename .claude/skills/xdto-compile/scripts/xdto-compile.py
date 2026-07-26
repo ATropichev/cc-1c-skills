@@ -1,4 +1,4 @@
-# xdto-compile v1.0 — Build a 1C XDTO package from an XML Schema (XSD) (Python port)
+# xdto-compile v1.1 — Build a 1C XDTO package from an XML Schema (XSD) (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -516,6 +516,10 @@ def build_property(el, is_attribute):
     if m_fixed is not None:
         add_attr(p, "fixed", m_fixed)
         add_attr(p, "default", el.get("default"))
+        if m_fixed == "true" and el.get("default") is None:
+            warn('Свойство "' + str(el.get("name")) + '": xdto:fixed="true" без default — '
+                 "платформа отвергнет пакет («Отсутствует фиксированное значение»). "
+                 'Значение задаётся атрибутом default, либо пишите XSD-форму fixed="значение"')
     elif el.get("fixed") is not None:
         add_attr(p, "fixed", "true")
         add_attr(p, "default", el.get("fixed"))

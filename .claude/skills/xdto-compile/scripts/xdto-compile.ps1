@@ -1,4 +1,4 @@
-﻿# xdto-compile v1.0 — Build a 1C XDTO package from an XML Schema (XSD)
+﻿# xdto-compile v1.1 — Build a 1C XDTO package from an XML Schema (XSD)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true, ParameterSetName='File')]
@@ -465,6 +465,9 @@ function Build-Property([System.Xml.XmlElement]$el, [bool]$isAttribute) {
 	if ($null -ne $mFixed) {
 		Add-Attr $p "fixed" $mFixed
 		Add-Attr $p "default" (XA $el "default")
+		if ($mFixed -ceq "true" -and $null -eq (XA $el "default")) {
+			Warn "Свойство `"$(XA $el 'name')`": xdto:fixed=`"true`" без default — платформа отвергнет пакет («Отсутствует фиксированное значение»). Значение задаётся атрибутом default, либо пишите XSD-форму fixed=`"значение`""
+		}
 	} elseif ($null -ne (XA $el "fixed")) {
 		Add-Attr $p "fixed" "true"
 		Add-Attr $p "default" (XA $el "fixed")

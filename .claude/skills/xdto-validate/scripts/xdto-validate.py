@@ -1,4 +1,4 @@
-# xdto-validate v1.0 — Validate a 1C XDTO package (Python port)
+# xdto-validate v1.1 — Validate a 1C XDTO package (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -385,10 +385,25 @@ for p in pkg.iter():
         report_error(f'Свойство "{p.get("name")}": lowerBound ({lb}) больше upperBound ({ub})')
     if p.get("name") is None and p.get("ref") is None:
         report_error("Свойство без name и без ref")
+    # В модели XDTO fixed — булев признак, само значение лежит в default.
+    # В XML-схеме наоборот: fixed="V" совмещает признак и значение.
+    fx = p.get("fixed")
+    if fx is not None:
+        p_name = p.get("name") if p.get("name") is not None else p.get("ref")
+        if fx not in ("true", "false"):
+            report_error(
+                f'Свойство "{p_name}": fixed="{fx}" — в модели это булев признак, '
+                "значение задаётся в default (в XML-схеме признак и значение совмещены в fixed)"
+            )
+        elif fx == "true" and p.get("default") is None:
+            report_error(
+                f"Отсутствует фиксированное значение свойства '{p_name}': "
+                'есть fixed="true", нет default'
+            )
     if state["stopped"]:
         break
 if not state["stopped"]:
-    report_ok("Свойства: form и кратности корректны")
+    report_ok("Свойства: form, кратности и фиксированные значения корректны")
 
 # ── 10b. structural consistency ──────────────────────────────
 

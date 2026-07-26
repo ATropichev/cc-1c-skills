@@ -1,4 +1,4 @@
-﻿# xdto-validate v1.0 — Validate a 1C XDTO package
+﻿# xdto-validate v1.1 — Validate a 1C XDTO package
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -363,9 +363,20 @@ foreach ($p in $pkg.SelectNodes("//*[local-name()='property']")) {
 	if (-not $p.HasAttribute("name") -and -not $p.HasAttribute("ref")) {
 		Report-Error "Свойство без name и без ref"
 	}
+	# В модели XDTO fixed — булев признак, само значение лежит в default.
+	# В XML-схеме наоборот: fixed="V" совмещает признак и значение.
+	if ($p.HasAttribute("fixed")) {
+		$fx = $p.GetAttribute("fixed")
+		$pName = if ($p.HasAttribute("name")) { $p.GetAttribute("name") } else { $p.GetAttribute("ref") }
+		if (@("true", "false") -cnotcontains $fx) {
+			Report-Error "Свойство `"$pName`": fixed=`"$fx`" — в модели это булев признак, значение задаётся в default (в XML-схеме признак и значение совмещены в fixed)"
+		} elseif ($fx -ceq "true" -and -not $p.HasAttribute("default")) {
+			Report-Error "Отсутствует фиксированное значение свойства '$pName': есть fixed=`"true`", нет default"
+		}
+	}
 	if ($script:stopped) { break }
 }
-if (-not $script:stopped) { Report-OK "Свойства: form и кратности корректны" }
+if (-not $script:stopped) { Report-OK "Свойства: form, кратности и фиксированные значения корректны" }
 
 # --- 10b. Structural consistency ---
 
