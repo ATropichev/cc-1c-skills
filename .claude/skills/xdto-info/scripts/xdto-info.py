@@ -352,12 +352,17 @@ def get_prop_rows(type_el, pkg, depth, indent, seen):
         type_text = ""
         children = None
         child_pkg = pkg
+        # Именованный вложенный тип берётся так же, как корневой; окольный путь
+        # через свойство владельца нужен только анонимному — имени у него нет
+        obj_name = None
+        obj_ns = None
 
         anon = next((c for c in p if isinstance(c.tag, str) and local(c) == "typeDef"), None)
 
         if anon is not None:
             if anon.get(f"{{{XSI_NS}}}type") == "ObjectType":
                 type_text = "объект (анонимный)"
+                obj_name = "(анонимный)"
                 children = anon   # анонимные раскрываем всегда: смотреть отдельно негде
             else:
                 res = resolve_scalar(anon, pkg)
@@ -380,6 +385,8 @@ def get_prop_rows(type_el, pkg, depth, indent, seen):
                     type_text = "объект " + q[1]
                     if target[1].Namespace != pkg.Namespace:
                         type_text += " · " + target[1].Name
+                    obj_name = q[1]
+                    obj_ns = target[1].Namespace
                     children = target[0]
                     child_pkg = target[1]
                 else:
@@ -391,7 +398,8 @@ def get_prop_rows(type_el, pkg, depth, indent, seen):
                         notes.append("значения: " + ", ".join(res["Enum"][:8]))
 
         rows.append({"Indent": indent, "Name": pname, "Type": type_text,
-                     "Flags": flags, "Notes": [n for n in notes if n]})
+                     "Flags": flags, "Notes": [n for n in notes if n],
+                     "ObjName": obj_name, "ObjNs": obj_ns})
 
         if children is not None:
             cname = children.get("name")
@@ -399,7 +407,7 @@ def get_prop_rows(type_el, pkg, depth, indent, seen):
             is_anon = not cname
             if not is_anon and key in seen:
                 rows.append({"Indent": indent + 1, "Name": "(раскрыт выше)", "Type": "",
-                             "Flags": [], "Notes": []})
+                             "Flags": [], "Notes": [], "ObjName": None, "ObjNs": None})
             elif is_anon or depth > 1:
                 next_seen = set(seen)
                 if not is_anon:
@@ -549,6 +557,11 @@ def show_type(pkg, type_name):
             O(f'Допустимые значения ({len(res["Enum"])}):')
             for v in res["Enum"]:
                 O("  " + v)
+        O("")
+        O("Создание:")
+        # Создать(<Тип>, <Значение>) принимает именно ТипЗначенияXDTO —
+        # для объектного типа эта форма неприменима
+        O(f'  Значение = ФабрикаXDTO.Создать(ФабрикаXDTO.Тип("{pkg.Namespace}", "{type_name}"), Значение);')
         return
 
     hdr = f"=== Тип XDTO: {type_name} ==="
@@ -585,12 +598,17 @@ def show_type(pkg, type_name):
     O("  Объект = ФабрикаXDTO.Создать(Тип);")
     # Рецепты для вложенных и анонимных типов: имени у анонимного нет, через
     # ФабрикаXDTO.Тип(ns, имя) его не получить — только от свойства владельца
-    nested = next((r for r in rows if r["Indent"] == 0 and r["Type"].startswith("объект ")), None)
-    if nested:
-        O(f'  Вложенный = ФабрикаXDTO.Создать(Тип.Свойства.Получить("{nested["Name"]}").Тип);')
-    if any("значение элемента" in r["Flags"] for r in rows):
-        O("  // тип со значением элемента: значение задаётся при создании")
-        O("  Узел = ФабрикаXDTO.Создать(ТипУзла, Значение);")
+    named = next((r for r in rows if r.get("ObjName") and r.get("ObjName") != "(анонимный)"), None)
+    if named:
+        O("  // вложенный именованный тип — так же, как корневой:")
+        O(f'  {named["Name"]} = ФабрикаXDTO.Создать(ФабрикаXDTO.Тип("{named["ObjNs"]}", "{named["ObjName"]}"));')
+    anon_row = next((r for r in rows if r.get("ObjName") == "(анонимный)"), None)
+    if anon_row:
+        O("  // у анонимного типа нет имени — только через свойство владельца:")
+        O(f'  {anon_row["Name"]} = ФабрикаXDTO.Создать(Тип.Свойства.Получить("{anon_row["Name"]}").Тип);')
+    text_row = next((r for r in rows if "значение элемента" in r["Flags"]), None)
+    if text_row:
+        O(f'  // собственное значение узла лежит в свойстве {text_row["Name"]}')
 
 
 def show_used_by(type_name, owner_pkg):

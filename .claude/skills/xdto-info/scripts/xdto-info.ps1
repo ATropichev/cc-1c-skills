@@ -333,6 +333,10 @@ function Get-PropRows([System.Xml.XmlElement]$type, $pkg, [int]$depth, [int]$ind
 		$typeText = ""
 		$children = $null
 		$childPkg = $pkg
+		# Именованный вложенный тип берётся так же, как корневой; окольный путь
+		# через свойство владельца нужен только анонимному — имени у него нет
+		$objName = $null
+		$objNs = $null
 
 		$anon = $null
 		foreach ($c in $p.ChildNodes) {
@@ -342,6 +346,7 @@ function Get-PropRows([System.Xml.XmlElement]$type, $pkg, [int]$depth, [int]$ind
 		if ($anon) {
 			if ($anon.GetAttribute("type", $XSI_NS) -eq "ObjectType") {
 				$typeText = "объект (анонимный)"
+				$objName = "(анонимный)"
 				$children = $anon   # анонимные раскрываем всегда: смотреть отдельно негде
 			} else {
 				$res = Resolve-Scalar $anon $pkg
@@ -363,6 +368,8 @@ function Get-PropRows([System.Xml.XmlElement]$type, $pkg, [int]$depth, [int]$ind
 				} elseif ($target.Element.get_LocalName() -eq "objectType") {
 					$typeText = "объект $($q.Local)"
 					if ($target.Package.Namespace -ne $pkg.Namespace) { $typeText += " · $($target.Package.Name)" }
+					$objName = $q.Local
+					$objNs = $target.Package.Namespace
 					$children = $target.Element
 					$childPkg = $target.Package
 				} else {
@@ -379,6 +386,7 @@ function Get-PropRows([System.Xml.XmlElement]$type, $pkg, [int]$depth, [int]$ind
 		[void]$rows.Add([pscustomobject]@{
 			Indent = $indent; Name = $pname; Type = $typeText
 			Flags = $flags; Notes = ($notes | Where-Object { $_ })
+			ObjName = $objName; ObjNs = $objNs
 		})
 
 		if ($children) {
@@ -548,6 +556,11 @@ function Show-Type($pkg, [string]$typeName) {
 			O "Допустимые значения ($($res.Enum.Count)):"
 			foreach ($v in $res.Enum) { O "  $v" }
 		}
+		O ""
+		O "Создание:"
+		# Создать(<Тип>, <Значение>) принимает именно ТипЗначенияXDTO —
+		# для объектного типа эта форма неприменима
+		O "  Значение = ФабрикаXDTO.Создать(ФабрикаXDTO.Тип(`"$($pkg.Namespace)`", `"$typeName`"), Значение);"
 		return
 	}
 
@@ -582,14 +595,19 @@ function Show-Type($pkg, [string]$typeName) {
 	O "  Объект = ФабрикаXDTO.Создать(Тип);"
 	# Рецепты для вложенных и анонимных типов: имени у анонимного нет, через
 	# ФабрикаXDTO.Тип(ns, имя) его не получить — только от свойства владельца
-	$nested = @($rows | Where-Object { $_.Indent -eq 0 -and $_.Type -like "объект *" } | Select-Object -First 1)
-	if ($nested.Count -gt 0) {
-		O "  Вложенный = ФабрикаXDTO.Создать(Тип.Свойства.Получить(`"$($nested[0].Name)`").Тип);"
+	$named = @($rows | Where-Object { $_.ObjName -and $_.ObjName -ne "(анонимный)" } | Select-Object -First 1)
+	if ($named.Count -gt 0) {
+		O "  // вложенный именованный тип — так же, как корневой:"
+		O "  $($named[0].Name) = ФабрикаXDTO.Создать(ФабрикаXDTO.Тип(`"$($named[0].ObjNs)`", `"$($named[0].ObjName)`"));"
 	}
-	$textProp = @($rows | Where-Object { $_.Flags -contains "значение элемента" } | Select-Object -First 1)
-	if ($textProp.Count -gt 0) {
-		O "  // тип со значением элемента: значение задаётся при создании"
-		O "  Узел = ФабрикаXDTO.Создать(ТипУзла, Значение);"
+	$anonRow = @($rows | Where-Object { $_.ObjName -eq "(анонимный)" } | Select-Object -First 1)
+	if ($anonRow.Count -gt 0) {
+		O "  // у анонимного типа нет имени — только через свойство владельца:"
+		O "  $($anonRow[0].Name) = ФабрикаXDTO.Создать(Тип.Свойства.Получить(`"$($anonRow[0].Name)`").Тип);"
+	}
+	$textRow = @($rows | Where-Object { $_.Flags -contains "значение элемента" } | Select-Object -First 1)
+	if ($textRow.Count -gt 0) {
+		O "  // собственное значение узла лежит в свойстве $($textRow[0].Name)"
 	}
 }
 
