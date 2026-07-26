@@ -15,7 +15,7 @@
 	<xs:complexType name="Контакт" xdto:sequenced="true">
 		<xs:sequence>
 			<xs:element name="Комментарий" type="xs:string" minOccurs="0" xdto:form="Element"/>
-			<xs:element name="Имя с пробелом" type="xs:string" xdto:name="Имя_с_пробелом" minOccurs="0"/>
+			<xs:element name="alpha-3" type="xs:string" xdto:name="alpha_3" minOccurs="0"/>
 		</xs:sequence>
 		<xs:attribute name="Представление" type="xs:string" xdto:nillable="true" xdto:lowerBound="0"/>
 	</xs:complexType>

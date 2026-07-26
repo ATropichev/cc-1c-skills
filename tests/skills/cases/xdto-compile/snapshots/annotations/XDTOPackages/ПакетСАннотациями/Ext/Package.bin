@@ -2,7 +2,7 @@
 	<objectType name="Контакт" sequenced="true">
 		<property name="Представление" type="xs:string" lowerBound="0" nillable="true" form="Attribute"/>
 		<property name="Комментарий" type="xs:string" lowerBound="0" form="Element"/>
-		<property name="Имя_с_пробелом" type="xs:string" lowerBound="0" localName="Имя с пробелом"/>
+		<property name="alpha_3" type="xs:string" lowerBound="0" localName="alpha-3"/>
 	</objectType>
 	<objectType name="ЯвныйПорядок">
 		<property name="Элемент" type="xs:string"/>

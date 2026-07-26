@@ -246,6 +246,7 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
+			<XDTOPackage>other</XDTOPackage>
 			<XDTOPackage>top_level_order</XDTOPackage>
 		</ChildObjects>
 	</Configuration>

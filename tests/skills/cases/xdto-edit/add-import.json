@@ -1,9 +1,17 @@
 {
   "name": "добавление импорта",
   "caseFiles": [
+    "common.xsd",
     "types.xsd"
   ],
   "preRun": [
+    {
+      "script": "xdto-compile/scripts/xdto-compile",
+      "args": {
+        "-XsdPath": "{workDir}/common.xsd",
+        "-OutputDir": "{workDir}"
+      }
+    },
     {
       "script": "xdto-compile/scripts/xdto-compile",
       "args": {
@@ -19,7 +27,7 @@
     "-Operation",
     "add-import",
     "-Value",
-    "urn:test:other",
+    "urn:test:common",
     "-NoValidate"
   ],
   "expect": {

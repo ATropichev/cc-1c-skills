@@ -9,6 +9,18 @@ import uuid
 
 from lxml import etree
 
+# Эти пространства имён предоставляет сама платформа — пакетов в конфигурации
+# для них нет и быть не должно (выведено по корпусу)
+PLATFORM_NS = {
+    "http://v8.1c.ru/8.1/data/core",
+    "http://v8.1c.ru/8.1/data/enterprise",
+    "http://v8.1c.ru/8.1/data/enterprise/current-config",
+    "http://v8.1c.ru/8.1/data-composition-system/settings",
+    "http://v8.1c.ru/8.3/data/ext",
+    "http://www.w3.org/2001/XMLSchema",
+}
+
+
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
@@ -498,8 +510,17 @@ def build_property(el, is_attribute):
             add_attr(p, "upperBound", "-1" if max_occ == "unbounded" else max_occ)
         add_attr(p, "nillable", el.get("nillable"))
 
-    add_attr(p, "fixed", el.get("fixed"))
-    add_attr(p, "default", el.get("default"))
+    # XSD-шный fixed="V" несёт значение, в модели это fixed="true" + default="V".
+    # Прощающий ввод: модельная форма через зеркало xdto:fixed тоже принимается.
+    m_fixed = MA(el, "fixed")
+    if m_fixed is not None:
+        add_attr(p, "fixed", m_fixed)
+        add_attr(p, "default", el.get("default"))
+    elif el.get("fixed") is not None:
+        add_attr(p, "fixed", "true")
+        add_attr(p, "default", el.get("fixed"))
+    else:
+        add_attr(p, "default", el.get("default"))
 
     if is_attribute:
         add_attr(p, "form", "Attribute")
@@ -868,6 +889,25 @@ with open(md_file, "wb") as f:
     f.write(b"\xef\xbb\xbf" + "\r\n".join(md_lines).encode("utf-8"))
 
 # ── register in Configuration.xml ────────────────────────────
+
+# Ранняя диагностика: отказ платформы при db-update дешевле поймать на сборке
+xdto_root_dir = os.path.join(args.OutputDir, "XDTOPackages")
+declared_imports = [a["value"] for c in pkg_node.children if c.tag == "import"
+                    for a in c.attrs if a["name"] == "namespace"]
+if declared_imports and os.path.isdir(xdto_root_dir):
+    known_ns = set()
+    for other in sorted(os.listdir(xdto_root_dir)):
+        ob = os.path.join(xdto_root_dir, other, "Ext", "Package.bin")
+        if not os.path.exists(ob):
+            continue
+        try:
+            known_ns.add(_parse_xml(ob).getroot().get("targetNamespace"))
+        except Exception:  # noqa: BLE001
+            pass
+    for imp in declared_imports:
+        if imp not in known_ns and imp not in PLATFORM_NS:
+            warn(f'Импорт "{imp}" не разрешается: пакета с таким namespace в конфигурации нет. '
+                 "Платформа отвергнет пакет при обновлении — соберите зависимость первой")
 
 config_xml = os.path.join(args.OutputDir, "Configuration.xml")
 reg_result = "no-config"

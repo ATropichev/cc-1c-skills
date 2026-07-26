@@ -246,6 +246,7 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
+			<XDTOPackage>other</XDTOPackage>
 			<XDTOPackage>refs</XDTOPackage>
 		</ChildObjects>
 	</Configuration>

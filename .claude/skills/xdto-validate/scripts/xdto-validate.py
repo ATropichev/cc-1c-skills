@@ -6,6 +6,18 @@ import sys
 
 from lxml import etree
 
+# Эти пространства имён предоставляет сама платформа — пакетов в конфигурации
+# для них нет и быть не должно (выведено по корпусу)
+PLATFORM_NS = {
+    "http://v8.1c.ru/8.1/data/core",
+    "http://v8.1c.ru/8.1/data/enterprise",
+    "http://v8.1c.ru/8.1/data/enterprise/current-config",
+    "http://v8.1c.ru/8.1/data-composition-system/settings",
+    "http://v8.1c.ru/8.3/data/ext",
+    "http://www.w3.org/2001/XMLSchema",
+}
+
+
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
@@ -510,6 +522,26 @@ if os.path.exists(config_xml):
                     clash.append(other)
             except Exception:  # noqa: BLE001
                 pass
+        # Платформа отвергает пакет, если импортируемого namespace нет в конфигурации:
+        # «Ошибка проверки модели XDTO: xdto-package-3.3 … не определен»
+        known_ns = {}
+        for other in sorted(os.listdir(pkg_root)):
+            ob = os.path.join(pkg_root, other, "Ext", "Package.bin")
+            if not os.path.exists(ob):
+                continue
+            try:
+                known_ns[_parse_xml(ob).getroot().get("targetNamespace")] = other
+            except Exception:  # noqa: BLE001
+                pass
+        missing_imports = [i for i in imports if i not in known_ns and i not in PLATFORM_NS]
+        if missing_imports:
+            report_error("Импортируемые пакеты не определены в конфигурации: "
+                         + ", ".join(missing_imports)
+                         + ". Платформа отвергнет пакет при обновлении конфигурации — "
+                           "соберите зависимости первыми")
+        elif imports:
+            report_ok("Все импорты разрешаются в пакеты конфигурации")
+
         if clash:
             report_warn(f'targetNamespace "{target_ns}" объявлен также в пакет(ах): {", ".join(clash)}. '
                         "Платформа это допускает, но <import> на это пространство имён становится неоднозначным")

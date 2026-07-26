@@ -8,7 +8,7 @@
 		<property name="ДоТрёх" type="xs:string" upperBound="3"/>
 		<property name="Обнуляемый" type="xs:string" lowerBound="0" nillable="true"/>
 		<property name="СУмолчанием" type="xs:string" default="нет"/>
-		<property name="Фиксированный" type="xs:string" fixed="1"/>
+		<property name="Фиксированный" type="xs:string" fixed="true" default="1"/>
 		<property name="БезТипа"/>
 	</objectType>
 </package>

@@ -15,6 +15,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Эти пространства имён предоставляет сама платформа — пакетов в конфигурации
+# для них нет и быть не должно (выведено по корпусу: импортируются, но
+# targetNamespace с таким значением ни у одного пакета нет)
+$PLATFORM_NS = @(
+		"http://v8.1c.ru/8.1/data/core",
+		"http://v8.1c.ru/8.1/data/enterprise",
+		"http://v8.1c.ru/8.1/data/enterprise/current-config",
+		"http://v8.1c.ru/8.1/data-composition-system/settings",
+		"http://v8.1c.ru/8.3/data/ext",
+		"http://www.w3.org/2001/XMLSchema"
+)
+
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $XS_NS  = "http://www.w3.org/2001/XMLSchema"
@@ -504,6 +517,27 @@ if (Test-Path $configXml) {
 				if ($od.DocumentElement.GetAttribute("targetNamespace") -eq $targetNs) { $clash += $other.Name }
 			} catch {}
 		}
+		# Платформа отвергает пакет, если импортируемого namespace нет в конфигурации:
+		# «Ошибка проверки модели XDTO: xdto-package-3.3 … не определен»
+		$knownNs = @{}
+		foreach ($other in (Get-ChildItem $pkgRoot -Directory -ErrorAction SilentlyContinue)) {
+			$ob = Join-Path (Join-Path $other.FullName "Ext") "Package.bin"
+			if (-not (Test-Path $ob)) { continue }
+			try {
+				$od = New-Object System.Xml.XmlDocument
+				$od.Load($ob)
+				$knownNs[$od.DocumentElement.GetAttribute("targetNamespace")] = $other.Name
+			} catch {}
+		}
+		$missing = @()
+		foreach ($imp in $imports) { if (-not $knownNs.ContainsKey($imp) -and $PLATFORM_NS -notcontains $imp) { $missing += $imp } }
+		if ($missing.Count -gt 0) {
+			Report-Error ("Импортируемые пакеты не определены в конфигурации: " + ($missing -join ", ") +
+			              ". Платформа отвергнет пакет при обновлении конфигурации — соберите зависимости первыми")
+		} elseif ($imports.Count -gt 0) {
+			Report-OK "Все импорты разрешаются в пакеты конфигурации"
+		}
+
 		if ($clash.Count -gt 0) {
 			Report-Warn "targetNamespace `"$targetNs`" объявлен также в пакет(ах): $($clash -join ', '). Платформа это допускает, но <import> на это пространство имён становится неоднозначным"
 		} else {

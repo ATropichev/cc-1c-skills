@@ -35,5 +35,6 @@
       "XDTOPackages/common/Ext/Package.bin",
       "XDTOPackages/common.xml"
     ]
-  }
+  },
+  "skipPlatformVerify": "смена namespace намеренно оставляет импорт зависящего пакета висящим — это документированное поведение операции"
 }

@@ -15,6 +15,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Эти пространства имён предоставляет сама платформа — пакетов в конфигурации
+# для них нет и быть не должно (выведено по корпусу: импортируются, но
+# targetNamespace с таким значением ни у одного пакета нет)
+$PLATFORM_NS = @(
+		"http://v8.1c.ru/8.1/data/core",
+		"http://v8.1c.ru/8.1/data/enterprise",
+		"http://v8.1c.ru/8.1/data/enterprise/current-config",
+		"http://v8.1c.ru/8.1/data-composition-system/settings",
+		"http://v8.1c.ru/8.3/data/ext",
+		"http://www.w3.org/2001/XMLSchema"
+)
+
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 $XDTO_NS = "http://v8.1c.ru/8.1/xdto"
@@ -446,8 +459,18 @@ function Build-Property([System.Xml.XmlElement]$el, [bool]$isAttribute) {
 		Add-Attr $p "nillable" (XA $el "nillable")
 	}
 
-	Add-Attr $p "fixed"   (XA $el "fixed")
-	Add-Attr $p "default" (XA $el "default")
+	# XSD-шный fixed="V" несёт значение, в модели это fixed="true" + default="V".
+	# Прощающий ввод: модельная форма через зеркало xdto:fixed тоже принимается.
+	$mFixed = MA $el "fixed"
+	if ($null -ne $mFixed) {
+		Add-Attr $p "fixed" $mFixed
+		Add-Attr $p "default" (XA $el "default")
+	} elseif ($null -ne (XA $el "fixed")) {
+		Add-Attr $p "fixed" "true"
+		Add-Attr $p "default" (XA $el "fixed")
+	} else {
+		Add-Attr $p "default" (XA $el "default")
+	}
 
 	if ($isAttribute) {
 		Add-Attr $p "form" "Attribute"
@@ -838,6 +861,28 @@ M "`t</XDTOPackage>"
 [System.IO.File]::WriteAllText($mdFile, $md.ToString(), $encBom)
 
 # --- Register in Configuration.xml ---
+
+# Ранняя диагностика: отказ платформы при db-update дешевле поймать на сборке
+$xdtoRootDir = Join-Path $OutputDir "XDTOPackages"
+$declaredImports = @()
+foreach ($c in $pkgNode.Children) { if ($c.Tag -eq "import") { foreach ($a in $c.Attrs) { if ($a.Name -eq "namespace") { $declaredImports += $a.Value } } } }
+if ($declaredImports.Count -gt 0 -and (Test-Path $xdtoRootDir)) {
+	$knownNs = @{}
+	foreach ($other in (Get-ChildItem $xdtoRootDir -Directory -ErrorAction SilentlyContinue)) {
+		$ob = Join-Path (Join-Path $other.FullName "Ext") "Package.bin"
+		if (-not (Test-Path $ob)) { continue }
+		try {
+			$od = New-Object System.Xml.XmlDocument
+			$od.Load($ob)
+			$knownNs[$od.DocumentElement.GetAttribute("targetNamespace")] = $true
+		} catch {}
+	}
+	foreach ($imp in $declaredImports) {
+		if (-not $knownNs.ContainsKey($imp) -and $PLATFORM_NS -notcontains $imp) {
+			Warn "Импорт `"$imp`" не разрешается: пакета с таким namespace в конфигурации нет. Платформа отвергнет пакет при обновлении — соберите зависимость первой"
+		}
+	}
+}
 
 $configXmlPath = Join-Path $OutputDir "Configuration.xml"
 $regResult = "no-config"

@@ -308,6 +308,13 @@ def emit_property(p, indent):
     nill = p.get("nillable")
     default = p.get("default")
     fixed = p.get("fixed")
+    # В модели fixed — булев флаг, значение лежит в default; в XSD наоборот:
+    # fixed="V" несёт само значение. Переводим, а не копируем.
+    def_out, fix_out, fix_mirror = default, None, ""
+    if fixed == "true" and default is not None:
+        fix_out, def_out = default, None
+    elif fixed is not None:
+        fix_mirror = mirror("fixed", fixed)
     anon = anon_type_def(p)
     qual = p.get(f"{{{XDTO_NS}}}qualified")
 
@@ -330,7 +337,8 @@ def emit_property(p, indent):
         if upper is not None:
             m += mirror("upperBound", upper)
         m += mirror_name
-        body = attrs(["name", xml_name, "ref", ref, "type", type_, "default", default, "fixed", fixed])
+        m += fix_mirror
+        body = attrs(["name", xml_name, "ref", ref, "type", type_, "default", def_out, "fixed", fix_out])
         if anon is not None:
             X(f"{indent}<xs:attribute{body}{m}>")
             X(f"{indent}\t<xs:simpleType>")
@@ -351,10 +359,11 @@ def emit_property(p, indent):
         m += mirror("qualified", qual)
     m += mirror_name
     m += mirror_prefix(p)
+    m += fix_mirror
 
     body = attrs(["name", xml_name, "ref", ref, "type", type_,
                   "minOccurs", min_occurs, "maxOccurs", max_occurs,
-                  "nillable", nill, "default", default, "fixed", fixed])
+                  "nillable", nill, "default", def_out, "fixed", fix_out])
 
     if anon is not None:
         X(f"{indent}<xs:element{body}{m}>")

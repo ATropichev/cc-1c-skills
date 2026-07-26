@@ -12,7 +12,7 @@
 	<xs:complexType name="Контакт" xdto:sequenced="true">
 		<xs:sequence>
 			<xs:element name="Комментарий" type="xs:string" minOccurs="0" xdto:form="Element"/>
-			<xs:element name="Имя с пробелом" type="xs:string" minOccurs="0" xdto:name="Имя_с_пробелом"/>
+			<xs:element name="alpha-3" type="xs:string" minOccurs="0" xdto:name="alpha_3"/>
 		</xs:sequence>
 		<xs:attribute name="Представление" type="xs:string" xdto:nillable="true" xdto:lowerBound="0"/>
 	</xs:complexType>

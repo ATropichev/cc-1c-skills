@@ -1,9 +1,26 @@
 {
   "name": "ссылки на типы: свой ns (dNpN), голое имя, чужой ns с импортом, ref",
-  "caseFiles": ["refs.xsd"],
-  "params": { "xsdFile": "refs.xsd" },
+  "caseFiles": [
+    "other.xsd",
+    "refs.xsd"
+  ],
+  "params": {
+    "xsdFile": "refs.xsd"
+  },
   "validatePath": "XDTOPackages/refs",
   "expect": {
-    "files": ["XDTOPackages/refs.xml", "XDTOPackages/refs/Ext/Package.bin"]
-  }
+    "files": [
+      "XDTOPackages/refs.xml",
+      "XDTOPackages/refs/Ext/Package.bin"
+    ]
+  },
+  "preRun": [
+    {
+      "script": "xdto-compile/scripts/xdto-compile",
+      "args": {
+        "-XsdPath": "{workDir}/other.xsd",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ]
 }

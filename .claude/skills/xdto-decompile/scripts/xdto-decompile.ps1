@@ -302,6 +302,13 @@ function Emit-Property([System.Xml.XmlElement]$p, [string]$indent, [bool]$isGlob
 	$nill  = A $p "nillable"
 	$def   = A $p "default"
 	$fix   = A $p "fixed"
+	# В модели fixed — булев флаг, значение лежит в default; в XSD наоборот:
+	# fixed="V" несёт само значение. Переводим, а не копируем.
+	$defOut = $def
+	$fixOut = $null
+	$fixMirror = ""
+	if ($fix -eq "true" -and $null -ne $def) { $fixOut = $def; $defOut = $null }
+	elseif ($null -ne $fix) { $fixMirror = Mirror "fixed" $fix }
 	$anon  = Get-AnonTypeDef $p
 	# qualified записан как атрибут в пространстве имён XDTO
 	$qual  = $p.GetAttribute("qualified", $XDTO_NS)
@@ -326,7 +333,8 @@ function Emit-Property([System.Xml.XmlElement]$p, [string]$indent, [bool]$isGlob
 		if ($null -ne $lower) { $m += Mirror "lowerBound" $lower }
 		if ($null -ne $upper) { $m += Mirror "upperBound" $upper }
 		$m += $mirrorName
-		$body = Attrs @('name', $xmlName, 'ref', $ref, 'type', $type, 'default', $def, 'fixed', $fix)
+		$m += $fixMirror
+		$body = Attrs @('name', $xmlName, 'ref', $ref, 'type', $type, 'default', $defOut, 'fixed', $fixOut)
 		if ($anon) {
 			X "$indent<xs:attribute$body$m>"
 			X "$indent`t<xs:simpleType>"
@@ -349,10 +357,11 @@ function Emit-Property([System.Xml.XmlElement]$p, [string]$indent, [bool]$isGlob
 	if ($null -ne $qual) { $m += Mirror "qualified" $qual }
 	$m += $mirrorName
 	$m += (Mirror-Prefix $p)
+	$m += $fixMirror
 
 	$body = Attrs @('name', $xmlName, 'ref', $ref, 'type', $type,
 	                'minOccurs', $minOccurs, 'maxOccurs', $maxOccurs,
-	                'nillable', $nill, 'default', $def, 'fixed', $fix)
+	                'nillable', $nill, 'default', $defOut, 'fixed', $fixOut)
 
 	if ($anon) {
 		X "$indent<xs:element$body$m>"

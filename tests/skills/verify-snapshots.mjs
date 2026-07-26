@@ -686,6 +686,15 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
   const workDir = mkdtempSync(join(tmpdir(), `verify-${skillName}-${caseName}-`));
   result.workDir = workDir;
 
+  // Кейс может осознанно исключаться из платформенной проверки — когда его
+  // результат невалиден by design (например, операция намеренно оставляет
+  // висящий импорт). Причина обязательна, молча пропускать нельзя.
+  if (caseData.skipPlatformVerify) {
+    result.skipped = true;
+    result.skipReason = String(caseData.skipPlatformVerify);
+    return result;
+  }
+
   // caseFiles — файловый вход кейса (напр. XSD для xdto-compile), как в runner.mjs
   for (const rel of caseData.caseFiles || []) {
     const src = join(CASES, skillName, rel);
@@ -1434,9 +1443,14 @@ async function main() {
   }
 
   const passed = results.filter(r => r.passed).length;
-  const failed = results.filter(r => !r.passed).length;
+  const skipped = results.filter(r => r.skipped).length;
+  const failed = results.filter(r => !r.passed && !r.skipped).length;
   console.log(`\n${'='.repeat(60)}`);
-  console.log(`Results: ${passed} passed, ${failed} failed out of ${results.length}`);
+  console.log(`Results: ${passed} passed, ${failed} failed`
+    + (skipped ? `, ${skipped} skipped` : '') + ` out of ${results.length}`);
+  for (const r of results.filter(x => x.skipped)) {
+    console.log(`  \u25cb ${r.skill}/${r.case} \u2014 ${r.skipReason}`);
+  }
 
   writeReport(results);
   process.exit(failed > 0 ? 1 : 0);
