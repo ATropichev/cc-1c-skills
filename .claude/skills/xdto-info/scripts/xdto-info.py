@@ -2,6 +2,7 @@
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
+import re
 import sys
 
 from lxml import etree
@@ -486,6 +487,31 @@ def show_package_overview(pkg):
     O("Следующий шаг: -Name <Тип> — структура типа для заполнения")
 
 
+# Легенда едет вместе с выводом, а не живёт в инструкции: показываем только те
+# обозначения, которые реально встретились, иначе она сама становится шумом.
+def write_legend(rows):
+    text = " ".join(r["Type"] + " " + ",".join(r["Flags"]) + " " + ",".join(r["Notes"]) for r in rows)
+    items = []
+    if "объект " in text:
+        items.append("объект X — присвоить вложенный объект XDTO, состав раскрывает -Depth")
+    if "←" in text:
+        items.append("← Имя — исходный тип из схемы, слева от стрелки развёрнутое значение")
+    if "список" in text:
+        items.append("список — коллекция, заполняется через .Добавить()")
+    if re.search(r"до \d", text):
+        items.append("до N — коллекция с ограничением сверху")
+    if "значение элемента" in text:
+        items.append("значение элемента — собственное значение узла XML")
+    if "·" in text:
+        items.append("· Пакет — тип объявлен в другом пакете")
+    if not items:
+        return
+    O("")
+    O("Обозначения:")
+    for i in items:
+        O("  " + i)
+
+
 def show_type(pkg, type_name):
     el = pkg.Types[type_name]
     if local(el) == "valueType":
@@ -522,6 +548,7 @@ def show_type(pkg, type_name):
     own = [r for r in rows if r["Indent"] == 0]
     O(f"Свойства ({len(own)}):")
     write_rows(rows)
+    write_legend(rows)
     O("")
     O("Создание:")
     O(f'  Тип = ФабрикаXDTO.Тип("{pkg.Namespace}", "{type_name}");')

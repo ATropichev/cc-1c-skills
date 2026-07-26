@@ -491,6 +491,23 @@ function Show-PackageOverview($pkg) {
 	O "Следующий шаг: -Name <Тип> — структура типа для заполнения"
 }
 
+# Легенда едет вместе с выводом, а не живёт в инструкции: показываем только те
+# обозначения, которые реально встретились, иначе она сама становится шумом.
+function Write-Legend($rows) {
+	$text = ($rows | ForEach-Object { $_.Type + " " + ($_.Flags -join ",") + " " + ($_.Notes -join ",") }) -join " "
+	$items = @()
+	if ($text -match "объект ")            { $items += "объект X — присвоить вложенный объект XDTO, состав раскрывает -Depth" }
+	if ($text -match "←")                  { $items += "← Имя — исходный тип из схемы, слева от стрелки развёрнутое значение" }
+	if ($text -match "список")             { $items += "список — коллекция, заполняется через .Добавить()" }
+	if ($text -match "до \d")              { $items += "до N — коллекция с ограничением сверху" }
+	if ($text -match "значение элемента")  { $items += "значение элемента — собственное значение узла XML" }
+	if ($text -match "·")                  { $items += "· Пакет — тип объявлен в другом пакете" }
+	if ($items.Count -eq 0) { return }
+	O ""
+	O "Обозначения:"
+	foreach ($i in $items) { O "  $i" }
+}
+
 function Show-Type($pkg, [string]$typeName) {
 	$el = $pkg.Types[$typeName]
 	$kind = $el.get_LocalName()
@@ -525,6 +542,7 @@ function Show-Type($pkg, [string]$typeName) {
 	$own = @($rows | Where-Object { $_.Indent -eq 0 })
 	O "Свойства ($($own.Count)):"
 	Write-Rows $rows
+	Write-Legend $rows
 	O ""
 	O "Создание:"
 	O "  Тип = ФабрикаXDTO.Тип(`"$($pkg.Namespace)`", `"$typeName`");"
