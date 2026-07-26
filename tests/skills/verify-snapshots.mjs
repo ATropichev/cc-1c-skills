@@ -9,7 +9,7 @@
 
 import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync,
-         readdirSync, statSync, cpSync } from 'fs';
+         readdirSync, statSync, cpSync, copyFileSync } from 'fs';
 import { join, resolve, dirname, basename } from 'path';
 import { tmpdir } from 'os';
 
@@ -686,6 +686,15 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
   const workDir = mkdtempSync(join(tmpdir(), `verify-${skillName}-${caseName}-`));
   result.workDir = workDir;
 
+  // caseFiles — файловый вход кейса (напр. XSD для xdto-compile), как в runner.mjs
+  for (const rel of caseData.caseFiles || []) {
+    const src = join(CASES, skillName, rel);
+    if (!existsSync(src)) throw new Error(`caseFiles: файл не найден: ${src}`);
+    const dst = rel.includes('/') ? join(workDir, rel) : join(workDir, basename(rel));
+    mkdirSync(dirname(dst), { recursive: true });
+    copyFileSync(src, dst);
+  }
+
   const log = (step, ok, detail) => {
     result.steps.push({ step, ok, detail: detail?.substring(0, 2000) });
     if (opts.verbose) {
@@ -1286,6 +1295,7 @@ const DEFAULT_SKILLS = [
   'epf-init', 'erf-init', 'template-add', 'help-add',
   'cfe-init', 'cfe-borrow', 'cfe-patch-method',
   'skd-compile', 'skd-edit', 'mxl-compile',
+  'xdto-compile', 'xdto-edit',
 ];
 
 function discoverCases(skillFilter, caseFilter) {
