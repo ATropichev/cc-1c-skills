@@ -141,10 +141,11 @@ function Assert-SiblingsPresent([string]$operation) {
 	$missing = @()
 	foreach ($k in $needed.Keys) { if (-not (Test-Path $needed[$k])) { $missing += $k } }
 	if ($missing.Count -gt 0) {
+		$skillsRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 		throw ("Навык неработоспособен: рядом нет " + ($missing -join ", ") + ".`n" +
-		       "Операция `"$operation`" выполняется через них, поэтому обойтись без них нельзя.`n" +
-		       "Навыки устанавливаются комплектом — скопируйте каталог .claude/skills целиком, " +
-		       "а не отдельные подкаталоги.")
+		       "Операция `"$operation`" выполняется через " +
+		       $(if ($missing.Count -gt 1) { "них" } else { "него" }) + ".`n" +
+		       "Ожидаются в каталоге навыков: $skillsRoot")
 	}
 }
 

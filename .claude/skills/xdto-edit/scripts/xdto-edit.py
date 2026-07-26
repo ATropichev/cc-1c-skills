@@ -166,9 +166,9 @@ def assert_siblings_present(operation):
     missing = [k for k, v in needed.items() if not os.path.exists(v)]
     if missing:
         die("Навык неработоспособен: рядом нет " + ", ".join(missing) + ".\n"
-            + f'Операция "{operation}" выполняется через них, поэтому обойтись без них нельзя.\n'
-            + "Навыки устанавливаются комплектом — скопируйте каталог .claude/skills целиком, "
-              "а не отдельные подкаталоги.")
+            + f'Операция "{operation}" выполняется через '
+            + ("них" if len(missing) > 1 else "него") + ".\n"
+            + "Ожидаются в каталоге навыков: " + SKILLS)
 
 
 def invoke_sibling(script, argv, what):
