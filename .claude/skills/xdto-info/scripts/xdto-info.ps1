@@ -10,6 +10,7 @@ param(
 	[ValidateSet("auto", "used-by")]
 	[string]$Mode = "auto",
 	[int]$Depth = 1,
+	[switch]$RequiredOnly,
 	[int]$Limit = 150,
 	[int]$Offset = 0,
 	[string]$OutFile
@@ -26,6 +27,13 @@ $MD_NS  = "http://v8.1c.ru/8.3/MDClasses"
 
 $sb = New-Object System.Text.StringBuilder
 function O([string]$line = "") { [void]$sb.AppendLine($line) }
+
+function Fail([string]$msg) {
+	# Отрицательный результат поиска — не исключение: печатаем сообщение
+	# и выходим с кодом 1, без стектрейса PowerShell
+	Write-Host $msg
+	exit 1
+}
 
 function Flush-Output {
 	$text = $sb.ToString().TrimEnd()
@@ -46,7 +54,7 @@ function Flush-Output {
 if (-not [System.IO.Path]::IsPathRooted($PackagePath)) {
 	$PackagePath = Join-Path (Get-Location).Path $PackagePath
 }
-if (-not (Test-Path $PackagePath)) { throw "Путь не найден: $PackagePath" }
+if (-not (Test-Path $PackagePath)) { Fail "Путь не найден: $PackagePath" }
 
 $configRoot = $null
 $directPkgDir = $null
@@ -70,7 +78,7 @@ if (Test-Path (Join-Path $PackagePath "Configuration.xml")) {
 		$configRoot = Split-Path (Split-Path $stem -Parent) -Parent
 	}
 }
-if (-not $configRoot -and -not $directPkgDir) { throw "Не удалось определить пакет или конфигурацию по пути: $PackagePath" }
+if (-not $configRoot -and -not $directPkgDir) { Fail "Не удалось определить пакет или конфигурацию по пути: $PackagePath" }
 
 # Sort-Object в PowerShell сортирует по культуре, sorted() в Python — по кодам.
 # Для паритета портов сортируем ординально в обоих.
@@ -130,7 +138,7 @@ if ($directPkgDir -and $packages.Count -eq 0) {
 	$p = Read-Package $directPkgDir
 	if ($p) { [void]$packages.Add($p); $byNamespace[$p.Namespace] = $p }
 }
-if ($packages.Count -eq 0) { throw "Пакеты XDTO не найдены: $PackagePath" }
+if ($packages.Count -eq 0) { Fail "Пакеты XDTO не найдены: $PackagePath" }
 
 # --- Type notation: XSD -> 1С ---------------------------------------------------
 
@@ -389,6 +397,20 @@ function Get-PropRows([System.Xml.XmlElement]$type, $pkg, [int]$depth, [int]$ind
 	return ,$rows
 }
 
+# Оставить только обязательные свойства. Ребёнок необязательного объекта тоже
+# уходит: он лежит под необязательной веткой и заполнять его не обязательно.
+function Select-Required($rows) {
+	$res = New-Object System.Collections.ArrayList
+	$cutFrom = -1
+	foreach ($r in $rows) {
+		if ($cutFrom -ge 0 -and $r.Indent -gt $cutFrom) { continue }
+		$cutFrom = -1
+		if ($r.Flags -notcontains "обязательный") { $cutFrom = $r.Indent; continue }
+		[void]$res.Add($r)
+	}
+	return ,$res
+}
+
 function Write-Rows($rows) {
 	if ($rows.Count -eq 0) { O "  (нет свойств)"; return }
 	$shown = $rows
@@ -450,7 +472,10 @@ function Show-PackageOverview($pkg) {
 			O "  $i  →  $dep"
 		}
 	}
-	if ($pkg.GlobalProps.Count -gt 0) {
+	if ($pkg.GlobalProps.Count -eq 0) {
+		O ""
+		O "Точки входа: нет — пакет не объявляет корневых элементов документа"
+	} else {
 		O ""
 		O "Точки входа ($($pkg.GlobalProps.Count)) — корневые элементы документа:"
 		foreach ($gp in $pkg.GlobalProps) {
@@ -540,13 +565,32 @@ function Show-Type($pkg, [string]$typeName) {
 	[void]$seen.Add("$($pkg.Namespace)#$typeName")
 	$rows = Get-PropRows $el $pkg $Depth 0 $seen
 	$own = @($rows | Where-Object { $_.Indent -eq 0 })
-	O "Свойства ($($own.Count)):"
+	if ($RequiredOnly) {
+		$all = $rows.Count
+		$rows = Select-Required $rows
+		$ownReq = @($rows | Where-Object { $_.Indent -eq 0 })
+		# Фильтр обязан сообщать о себе: иначе список читается как полный
+		O "Свойства: обязательных $($ownReq.Count) из $($own.Count) (-RequiredOnly; скрыто строк: $($all - $rows.Count))"
+	} else {
+		O "Свойства ($($own.Count)):"
+	}
 	Write-Rows $rows
 	Write-Legend $rows
 	O ""
 	O "Создание:"
 	O "  Тип = ФабрикаXDTO.Тип(`"$($pkg.Namespace)`", `"$typeName`");"
 	O "  Объект = ФабрикаXDTO.Создать(Тип);"
+	# Рецепты для вложенных и анонимных типов: имени у анонимного нет, через
+	# ФабрикаXDTO.Тип(ns, имя) его не получить — только от свойства владельца
+	$nested = @($rows | Where-Object { $_.Indent -eq 0 -and $_.Type -like "объект *" } | Select-Object -First 1)
+	if ($nested.Count -gt 0) {
+		O "  Вложенный = ФабрикаXDTO.Создать(Тип.Свойства.Получить(`"$($nested[0].Name)`").Тип);"
+	}
+	$textProp = @($rows | Where-Object { $_.Flags -contains "значение элемента" } | Select-Object -First 1)
+	if ($textProp.Count -gt 0) {
+		O "  // тип со значением элемента: значение задаётся при создании"
+		O "  Узел = ФабрикаXDTO.Создать(ТипУзла, Значение);"
+	}
 }
 
 function Show-UsedBy([string]$typeName, $ownerPkg) {
@@ -588,15 +632,15 @@ if ($directPkgDir) {
 }
 if (-not $selected -and $Namespace) {
 	$selected = $packages | Where-Object { $_.Namespace -eq $Namespace } | Select-Object -First 1
-	if (-not $selected) { throw "Пакет с namespace `"$Namespace`" не найден. Список: -PackagePath <корень> без параметров" }
+	if (-not $selected) { Fail "Пакет с namespace `"$Namespace`" не найден. Список: -PackagePath <корень> без параметров" }
 }
 if (-not $selected -and $Package) {
 	$selected = $packages | Where-Object { $_.Name -eq $Package } | Select-Object -First 1
-	if (-not $selected) { throw "Пакет `"$Package`" не найден. Список: -PackagePath <корень> без параметров" }
+	if (-not $selected) { Fail "Пакет `"$Package`" не найден. Список: -PackagePath <корень> без параметров" }
 }
 
 if ($Mode -eq "used-by") {
-	if (-not $Name) { throw "Режим used-by требует -Name <Тип>" }
+	if (-not $Name) { Fail "Режим used-by требует -Name <Тип>" }
 	$ownerPkg = $selected
 	if (-not $ownerPkg) { $ownerPkg = ($packages | Where-Object { $_.Types.ContainsKey($Name) } | Select-Object -First 1) }
 	Show-UsedBy $Name $ownerPkg
@@ -608,7 +652,7 @@ if ($Name) {
 	if (-not $selected) {
 		# Тип известен, пакет — нет: ищем по всей конфигурации
 		$found = @($packages | Where-Object { $_.Types.ContainsKey($Name) })
-		if ($found.Count -eq 0) { throw "Тип `"$Name`" не найден ни в одном пакете конфигурации" }
+		if ($found.Count -eq 0) { Fail "Тип `"$Name`" не найден ни в одном пакете конфигурации" }
 		if ($found.Count -gt 1) {
 			O "=== Тип `"$Name`" найден в нескольких пакетах ($($found.Count)) ==="
 			O "Уточните через -Namespace или -Package:"
@@ -620,7 +664,7 @@ if ($Name) {
 		$selected = $found[0]
 	}
 	if (-not $selected.Types.ContainsKey($Name)) {
-		throw "В пакете $($selected.Name) нет типа `"$Name`". Список типов: тот же вызов без -Name"
+		Fail "В пакете $($selected.Name) нет типа `"$Name`". Список типов: тот же вызов без -Name"
 	}
 	Show-Type $selected $Name
 	Flush-Output

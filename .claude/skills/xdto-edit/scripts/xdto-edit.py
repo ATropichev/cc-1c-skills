@@ -145,6 +145,18 @@ bin_file = os.path.join(pkg_dir, "Ext", "Package.bin")
 md_file = os.path.join(xdto_root, pkg_name + ".xml")
 config_xml = os.path.join(config_root, "Configuration.xml")
 
+# -Value "@путь" — содержимое берётся из файла. Передавать XSD-фрагмент инлайном
+# ненадёжно: вложенные кавычки схлопываются на границе процессов, и вместо понятной
+# ошибки получается сырой сбой разбора XML.
+if args.Value.startswith("@"):
+    value_file = args.Value[1:]
+    if not os.path.isabs(value_file):
+        value_file = os.path.join(os.getcwd(), value_file)
+    if not os.path.isfile(value_file):
+        die("Файл значения не найден: " + value_file)
+    with open(value_file, encoding="utf-8-sig") as f:
+        args.Value = f.read().strip()
+
 assert_edit_allowed(pkg_dir)
 
 SKILLS = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -323,7 +335,13 @@ def import_fragment(schema, xml):
         if px and px not in ns:
             ns[px] = uri
     decls = " ".join(f'xmlns:{k}="{v}"' for k, v in ns.items())
-    wrapped = etree.fromstring(f"<wrap {decls}>{xml}</wrap>".encode("utf-8"))
+    try:
+        wrapped = etree.fromstring(f"<wrap {decls}>{xml}</wrap>".encode("utf-8"))
+    except etree.XMLSyntaxError as e:
+        die("Не удалось разобрать -Value как фрагмент XML-схемы: " + str(e) + "\n"
+            + "Получено: " + xml + "\n"
+            + "Если фрагмент передан инлайном, кавычки могли схлопнуться на границе "
+              'процессов — положите его в файл и укажите -Value "@путь".')
     res = [c for c in wrapped if isinstance(c.tag, str)]
     if not res:
         die(f"Во фрагменте нет ни одного элемента: {xml}")

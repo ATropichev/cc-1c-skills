@@ -541,7 +541,7 @@ def resolve_group(el, kind):
 
 # Модель XDTO знает только плоский список свойств: вложенные частицы уплощаются.
 # Каждое уплощение — предупреждение, потому что меняется смысл схемы.
-def collect_particle(particle, elem_list, open_flag, type_name, depth):
+def collect_particle(particle, elem_list, open_flag, type_name, depth, optionalize=False):
     if depth > 20:
         return
     for c in particle:
@@ -549,25 +549,35 @@ def collect_particle(particle, elem_list, open_flag, type_name, depth):
             continue
         ln = local(c)
         if ln == "element":
-            elem_list.append(build_property(c, False))
+            prop = build_property(c, False)
+            # Ветка уплощённого xs:choice обязана стать необязательной: иначе
+            # «одно из двух» превращается в «оба сразу», и тип нельзя заполнить
+            if optionalize:
+                set_attr_value(prop, "lowerBound", "0")
+            elem_list.append(prop)
         elif ln == "any":
             open_flag[0] = True
         elif ln == "sequence":
             warn(type_name + " : вложенная xs:sequence уплощена — модель XDTO хранит плоский список свойств")
-            collect_particle(c, elem_list, open_flag, type_name, depth + 1)
+            collect_particle(c, elem_list, open_flag, type_name, depth + 1, optionalize)
         elif ln == "choice":
-            warn(type_name + " : вложенная xs:choice уплощена в последовательность — выбор одного из вариантов не сохранён")
-            collect_particle(c, elem_list, open_flag, type_name, depth + 1)
+            branches = [b.get("name") for b in c
+                        if isinstance(b.tag, str) and etree.QName(b).namespace == XS_NS and b.get("name")]
+            lst = (" (" + ", ".join(branches) + ")") if branches else ""
+            warn(type_name + " : вложенная xs:choice уплощена — ветки" + lst + " сделаны необязательными. "
+                 "Выбор одного из вариантов не сохранён: модель не запретит заполнить "
+                 "сразу несколько или ни одного")
+            collect_particle(c, elem_list, open_flag, type_name, depth + 1, True)
         elif ln == "all":
             warn(type_name + " : xs:all трактуется как последовательность")
-            collect_particle(c, elem_list, open_flag, type_name, depth + 1)
+            collect_particle(c, elem_list, open_flag, type_name, depth + 1, optionalize)
         elif ln == "group":
             g = resolve_group(c, "group")
             if g is not None:
                 for gc in g:
                     if isinstance(gc.tag, str) and etree.QName(gc).namespace == XS_NS \
                             and local(gc) in ("sequence", "choice", "all"):
-                        collect_particle(gc, elem_list, open_flag, type_name, depth + 1)
+                        collect_particle(gc, elem_list, open_flag, type_name, depth + 1, optionalize)
             else:
                 warn(type_name + " : не найдена группа " + str(c.get("ref")) + " — её свойства в пакет не попали")
         if ln in ("sequence", "choice", "all", "group"):

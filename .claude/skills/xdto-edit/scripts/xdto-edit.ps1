@@ -114,6 +114,18 @@ $binFile    = Join-Path (Join-Path $pkgDir "Ext") "Package.bin"
 $mdFile     = Join-Path $xdtoRoot "$pkgName.xml"
 $configXml  = Join-Path $configRoot "Configuration.xml"
 
+# -Value "@путь" — содержимое берётся из файла. Передавать XSD-фрагмент инлайном
+# через powershell.exe -File ненадёжно: вложенные кавычки схлопываются на границе
+# процессов, и вместо понятной ошибки получается сырой сбой разбора XML.
+if ($Value -and $Value.StartsWith("@")) {
+	$valueFile = $Value.Substring(1)
+	if (-not [System.IO.Path]::IsPathRooted($valueFile)) {
+		$valueFile = Join-Path (Get-Location).Path $valueFile
+	}
+	if (-not (Test-Path $valueFile -PathType Leaf)) { throw "Файл значения не найден: $valueFile" }
+	$Value = [System.IO.File]::ReadAllText($valueFile).Trim()
+}
+
 Assert-EditAllowed $pkgDir
 
 $encBom = New-Object System.Text.UTF8Encoding($true)
@@ -328,7 +340,13 @@ function Import-Fragment($schema, [string]$xml) {
 			$nsAttrs += " xmlns:$($a.get_LocalName())=`"$($a.Value)`""
 		}
 	}
-	$tmp.LoadXml("<wrap$nsAttrs>$xml</wrap>")
+	try { $tmp.LoadXml("<wrap$nsAttrs>$xml</wrap>") }
+	catch {
+		throw ("Не удалось разобрать -Value как фрагмент XML-схемы: " + $_.Exception.InnerException.Message + "`n" +
+			"Получено: " + $xml + "`n" +
+			"Если фрагмент передан инлайном, кавычки могли схлопнуться на границе процессов — " +
+			"положите его в файл и укажите -Value `"@путь`".")
+	}
 	$res = New-Object System.Collections.ArrayList
 	foreach ($c in $tmp.DocumentElement.ChildNodes) {
 		if ($c.NodeType -eq [System.Xml.XmlNodeType]::Element) {

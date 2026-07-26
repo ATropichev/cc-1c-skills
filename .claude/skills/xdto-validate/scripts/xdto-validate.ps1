@@ -266,7 +266,7 @@ if ($anyTypeProps.Count -gt 0 -and $imports.Count -gt 0) {
 	$names = @()
 	foreach ($p in $anyTypeProps) { if ($p.HasAttribute("name")) { $names += $p.GetAttribute("name") } }
 	$shown = ($names | Select-Object -First 5) -join ", "
-	Report-Warn "Свойств с type=`"xs:anyType`": $($anyTypeProps.Count) при объявленных импортах ($shown). Возможна тихая деградация: при импорте XML-схемы платформа заменяет неразрешённый чужой тип на anyType без ошибки"
+	Report-Warn "Свойств с type=`"xs:anyType`": $($anyTypeProps.Count) при объявленных импортах ($shown). Тип не разрешён — заполнить структурно такое свойство нельзя. Обычно это след импорта XML-схемы: платформа заменяет неразрешённый чужой тип на anyType без ошибки"
 }
 
 # --- 7. Unused imports ---

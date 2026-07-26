@@ -20,6 +20,7 @@ parser.add_argument("-Namespace", default="")
 parser.add_argument("-Name", default="")
 parser.add_argument("-Mode", default="auto", choices=["auto", "used-by"])
 parser.add_argument("-Depth", type=int, default=1)
+parser.add_argument("-RequiredOnly", action="store_true")
 parser.add_argument("-Limit", type=int, default=150)
 parser.add_argument("-Offset", type=int, default=0)
 parser.add_argument("-OutFile", default="")
@@ -48,7 +49,9 @@ def flush_output():
 
 
 def die(msg):
-    print(msg, file=sys.stderr)
+    # Отрицательный результат поиска — не исключение: сообщение и код 1,
+    # без трассировки
+    print(msg)
     sys.exit(1)
 
 
@@ -406,6 +409,22 @@ def get_prop_rows(type_el, pkg, depth, indent, seen):
     return rows
 
 
+# Оставить только обязательные свойства. Ребёнок необязательного объекта тоже
+# уходит: он лежит под необязательной веткой и заполнять его не обязательно.
+def select_required(rows):
+    res = []
+    cut_from = -1
+    for r in rows:
+        if cut_from >= 0 and r["Indent"] > cut_from:
+            continue
+        cut_from = -1
+        if "обязательный" not in r["Flags"]:
+            cut_from = r["Indent"]
+            continue
+        res.append(r)
+    return res
+
+
 def write_rows(rows):
     if not rows:
         O("  (нет свойств)")
@@ -456,7 +475,10 @@ def show_package_overview(pkg):
         for i in pkg.Imports:
             dep = by_namespace[i].Name if i in by_namespace else "(пакет не найден)"
             O(f"  {i}  →  {dep}")
-    if pkg.GlobalProps:
+    if not pkg.GlobalProps:
+        O("")
+        O("Точки входа: нет — пакет не объявляет корневых элементов документа")
+    else:
         O("")
         O(f"Точки входа ({len(pkg.GlobalProps)}) — корневые элементы документа:")
         for gp in pkg.GlobalProps:
@@ -546,13 +568,29 @@ def show_type(pkg, type_name):
     seen = {f"{pkg.Namespace}#{type_name}"}
     rows = get_prop_rows(el, pkg, DEPTH, 0, seen)
     own = [r for r in rows if r["Indent"] == 0]
-    O(f"Свойства ({len(own)}):")
+    if args.RequiredOnly:
+        total = len(rows)
+        rows = select_required(rows)
+        own_req = [r for r in rows if r["Indent"] == 0]
+        # Фильтр обязан сообщать о себе: иначе список читается как полный
+        O(f"Свойства: обязательных {len(own_req)} из {len(own)} "
+          f"(-RequiredOnly; скрыто строк: {total - len(rows)})")
+    else:
+        O(f"Свойства ({len(own)}):")
     write_rows(rows)
     write_legend(rows)
     O("")
     O("Создание:")
     O(f'  Тип = ФабрикаXDTO.Тип("{pkg.Namespace}", "{type_name}");')
     O("  Объект = ФабрикаXDTO.Создать(Тип);")
+    # Рецепты для вложенных и анонимных типов: имени у анонимного нет, через
+    # ФабрикаXDTO.Тип(ns, имя) его не получить — только от свойства владельца
+    nested = next((r for r in rows if r["Indent"] == 0 and r["Type"].startswith("объект ")), None)
+    if nested:
+        O(f'  Вложенный = ФабрикаXDTO.Создать(Тип.Свойства.Получить("{nested["Name"]}").Тип);')
+    if any("значение элемента" in r["Flags"] for r in rows):
+        O("  // тип со значением элемента: значение задаётся при создании")
+        O("  Узел = ФабрикаXDTO.Создать(ТипУзла, Значение);")
 
 
 def show_used_by(type_name, owner_pkg):

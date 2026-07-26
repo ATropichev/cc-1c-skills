@@ -493,24 +493,38 @@ function Resolve-Group([System.Xml.XmlElement]$el, [string]$kind) {
 
 # Модель XDTO знает только плоский список свойств: вложенные частицы уплощаются.
 # Каждое уплощение — предупреждение, потому что меняется смысл схемы.
-function Collect-Particle([System.Xml.XmlElement]$particle, $elemList, [ref]$isOpen, [string]$typeName, [int]$depth) {
+function Collect-Particle([System.Xml.XmlElement]$particle, $elemList, [ref]$isOpen, [string]$typeName, [int]$depth, [bool]$optionalize = $false) {
 	if ($depth -gt 20) { return }
 	foreach ($c in $particle.ChildNodes) {
 		if ($c.NodeType -ne [System.Xml.XmlNodeType]::Element -or $c.NamespaceURI -ne $XS_NS) { continue }
 		switch ($c.get_LocalName()) {
-			"element" { [void]$elemList.Add((Build-Property $c $false)) }
+			"element" {
+				$prop = Build-Property $c $false
+				# Ветка уплощённого xs:choice обязана стать необязательной: иначе
+				# «одно из двух» превращается в «оба сразу», и тип нельзя заполнить
+				if ($optionalize) { Set-AttrValue $prop "lowerBound" "0" }
+				[void]$elemList.Add($prop)
+			}
 			"any"     { $isOpen.Value = $true }
 			"sequence" {
 				Warn "$typeName : вложенная xs:sequence уплощена — модель XDTO хранит плоский список свойств"
-				Collect-Particle $c $elemList $isOpen $typeName ($depth + 1)
+				Collect-Particle $c $elemList $isOpen $typeName ($depth + 1) $optionalize
 			}
 			"choice" {
-				Warn "$typeName : вложенная xs:choice уплощена в последовательность — выбор одного из вариантов не сохранён"
-				Collect-Particle $c $elemList $isOpen $typeName ($depth + 1)
+				$branches = @()
+				foreach ($b in $c.ChildNodes) {
+					if ($b.NodeType -eq [System.Xml.XmlNodeType]::Element -and $b.NamespaceURI -eq $XS_NS -and $b.HasAttribute("name")) {
+						$branches += $b.GetAttribute("name")
+					}
+				}
+				$list = if ($branches.Count -gt 0) { " (" + ($branches -join ", ") + ")" } else { "" }
+				Warn ("$typeName : вложенная xs:choice уплощена — ветки$list сделаны необязательными. " +
+					"Выбор одного из вариантов не сохранён: модель не запретит заполнить сразу несколько или ни одного")
+				Collect-Particle $c $elemList $isOpen $typeName ($depth + 1) $true
 			}
 			"all" {
 				Warn "$typeName : xs:all трактуется как последовательность"
-				Collect-Particle $c $elemList $isOpen $typeName ($depth + 1)
+				Collect-Particle $c $elemList $isOpen $typeName ($depth + 1) $optionalize
 			}
 			"group" {
 				$g = Resolve-Group $c "group"
@@ -518,7 +532,7 @@ function Collect-Particle([System.Xml.XmlElement]$particle, $elemList, [ref]$isO
 					foreach ($gc in $g.ChildNodes) {
 						if ($gc.NodeType -eq [System.Xml.XmlNodeType]::Element -and $gc.NamespaceURI -eq $XS_NS -and
 						    @("sequence", "choice", "all") -contains $gc.get_LocalName()) {
-							Collect-Particle $gc $elemList $isOpen $typeName ($depth + 1)
+							Collect-Particle $gc $elemList $isOpen $typeName ($depth + 1) $optionalize
 						}
 					}
 				} else {

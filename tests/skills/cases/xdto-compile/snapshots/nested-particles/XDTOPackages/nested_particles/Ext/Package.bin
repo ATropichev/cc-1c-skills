@@ -2,8 +2,8 @@
 	<objectType name="Документ">
 		<property name="Версия" type="xs:string" form="Attribute"/>
 		<property name="Первый" type="xs:string"/>
-		<property name="ВариантА" type="xs:string"/>
-		<property name="ВариантБ" type="xs:string"/>
+		<property name="ВариантА" type="xs:string" lowerBound="0"/>
+		<property name="ВариантБ" type="xs:string" lowerBound="0"/>
 		<property name="ИзГруппы" type="xs:string"/>
 		<property name="Повторяемый" type="xs:string"/>
 	</objectType>

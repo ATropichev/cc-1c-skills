@@ -23,7 +23,7 @@ allowed-tools:
 | `PackagePath` | да | Каталог пакета, `Ext/Package.bin` или `<Имя>.xml`. Псевдоним — `-Path` |
 | `Operation` | да | Операция из таблицы ниже |
 | `Target` | зависит | Адрес: имя типа или путь `Тип.Свойство` |
-| `Value` | зависит | Фрагмент XSD, литерал, URI или текст |
+| `Value` | зависит | Фрагмент XSD, литерал, URI или текст. `@путь` — взять содержимое из файла |
 | `NoValidate` | нет | Не запускать `xdto-validate` после правки |
 
 ```powershell
@@ -59,6 +59,19 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/xdto-edit.ps1" -Pac
 Содержимое всегда описывается фрагментом XML-схемы — тем же языком, что и в
 `/xdto-compile`. Отдельных параметров вида `-MinOccurs` нет: чтобы поменять свойство,
 дай его новое объявление целиком через `replace-property`.
+
+Ограничение длины и прочие фасеты задаются вложенным типом:
+
+```xml
+<xs:element name="Комментарий" minOccurs="0">
+    <xs:simpleType>
+        <xs:restriction base="xs:string"><xs:maxLength value="200"/></xs:restriction>
+    </xs:simpleType>
+</xs:element>
+```
+
+Многострочный фрагмент передавай файлом: `-Value "@frag.xsd"`. Инлайн через оболочку
+надёжен только для однострочных фрагментов без вложенных кавычек.
 
 ## Адресация
 
