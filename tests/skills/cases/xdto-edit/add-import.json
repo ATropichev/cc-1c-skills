@@ -1,0 +1,30 @@
+{
+  "name": "добавление импорта",
+  "caseFiles": [
+    "types.xsd"
+  ],
+  "preRun": [
+    {
+      "script": "xdto-compile/scripts/xdto-compile",
+      "args": {
+        "-XsdPath": "{workDir}/types.xsd",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "packagePath": "XDTOPackages/types"
+  },
+  "args_extra": [
+    "-Operation",
+    "add-import",
+    "-Value",
+    "urn:test:other",
+    "-NoValidate"
+  ],
+  "expect": {
+    "files": [
+      "XDTOPackages/types/Ext/Package.bin"
+    ]
+  }
+}

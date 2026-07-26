@@ -1,0 +1,30 @@
+{
+  "name": "синоним в объекте метаданных",
+  "caseFiles": [
+    "types.xsd"
+  ],
+  "preRun": [
+    {
+      "script": "xdto-compile/scripts/xdto-compile",
+      "args": {
+        "-XsdPath": "{workDir}/types.xsd",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "packagePath": "XDTOPackages/types"
+  },
+  "args_extra": [
+    "-Operation",
+    "set-synonym",
+    "-Value",
+    "Обмен с банком",
+    "-NoValidate"
+  ],
+  "expect": {
+    "files": [
+      "XDTOPackages/types.xml"
+    ]
+  }
+}
