@@ -550,8 +550,8 @@ PictureField, привязанный к булеву/числу, рисует и
 
 ## Workflow
 
-1. **Компиляция**: `/form-compile` генерирует `Form.xml` и автоматически регистрирует `<Form>` в `ChildObjects` родительского объекта (если OutputPath следует конвенции `.../TypePlural/ObjectName/Forms/FormName/Ext/Form.xml`).
-2. **Метаданные формы** (`ФормаСписка.xml`) и `Module.bsl` создаёт `/form-add`. Если `/form-add` ещё не вызывался — вызови после `/form-compile`. Он не перезаписывает существующий Form.xml.
+1. **Каркас**: `/form-add` создаёт метаданные формы (`ФормаСписка.xml`), `Module.bsl` и регистрирует форму у объекта.
+2. **Компиляция**: `/form-compile` наполняет `Form.xml` элементами.
 3. **Проверка**: `/form-validate`, `/form-info`.
 
 ## Верификация
