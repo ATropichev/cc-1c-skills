@@ -71,6 +71,52 @@ export default async function({ navigateSection, openCommand, navigateLink, getF
     await closeForm();
   });
 
+  await step('свёрнутая группа С ТАБЛИЦЕЙ: collapsed против факта видимости грида', async () => {
+    // Багрепорт 2026-07-23. Два дефекта на этой группе (у остальных содержимое — декорации):
+    //  1) 1С кладёт первым сиблингом за #title_div служебную обёртку <дочерний>#group_div
+    //     (logicGroupContainer, display:block, height:0), а контент идёт дальше по сиблингам →
+    //     чтение display первого сиблинга давало collapsed:false в ОБОИХ состояниях;
+    //  2) #title_text растягивается по ширине содержимого (173px свёрнута → 1295px развёрнута),
+    //     кликабелен только вложенный label слева → клик в центр промахивался, и свернуть
+    //     обратно было нельзя.
+    // Грид в tables[] — независимая от collapsed проверка факта.
+    const grid = (st) => (st.tables || []).some(t => t.name === 'ТаблицаВСвёрнутой');
+    const s = await navigateLink('Обработка.СтраницаНастроек');
+    assert.equal(collapsedOf(s, 'ГруппаСвёрнутаяСТаблицей'), true, 'шаг 0: collapsed:true сразу после открытия');
+    assert.equal(grid(s), false, 'шаг 0: грида нет — группа действительно свёрнута');
+
+    let r = await clickElement('Свёрнутая с таблицей', { expand: true });
+    assert.equal(r.clicked.toggled, true, 'expand:true — кликнул');
+    assert.equal(collapsedOf(r, 'ГруппаСвёрнутаяСТаблицей'), false, 'раскрыта');
+    assert.equal(grid(r), true, 'грид появился в tables[]');
+
+    r = await clickElement('Свёрнутая с таблицей', { expand: true });
+    assert.equal(r.clicked.toggled, false, 'expand:true повторно — идемпотентно (no-op)');
+
+    // Свернуть обратно: до фикса точки клика этот шаг молча не срабатывал (заголовок растянут).
+    r = await clickElement('Свёрнутая с таблицей', { expand: false });
+    assert.equal(r.clicked.toggled, true, 'expand:false — кликнул');
+    assert.equal(collapsedOf(r, 'ГруппаСвёрнутаяСТаблицей'), true, 'свёрнута обратно');
+    assert.equal(grid(r), false, 'грид пропал из tables[]');
+    await closeForm();
+  });
+
+  await step('растянутая гиперссылка: клик доходит до обработчика', async () => {
+    // Проверка соседнего с дефектом 2 случая. Ссылка растянута на всю ширину формы
+    // (horizontalStretch + autoMaxWidth:false → контейнер 1295px), но промаха тут НЕ бывает:
+    // её внутренний текстовый узел — div.ellipsis.flex-1-1-100, он тянется ВМЕСТЕ с
+    // контейнером (1293 из 1295), тогда как у заголовка группы внутри label без flex-1-1-100,
+    // шириной по тексту. Шаг стоит страховкой на случай смены вёрстки платформой.
+    // Обработчик Нажатие сообщает — без следа доставку клика не отличить от no-op.
+    const сообщения = (st) => (st.errors?.messages || []).join(' | ');
+    const s = await navigateLink('Обработка.СтраницаНастроек');
+    assert.equal(сообщения(s), '', 'до клика сообщений нет');
+    const r = await clickElement('Растянутая ссылка');
+    assert.includes(сообщения(r), 'клик по растянутой ссылке доставлен',
+      'клик по растянутой ссылке дошёл до обработчика');
+    await closeForm();
+  });
+
   await step('popup: всплывающая группа — behavior, открытие показывает содержимое', async () => {
     const s = await navigateLink('Обработка.СтраницаНастроек');
     const pg = (s.groups || []).find(g => g.name === 'ГруппаВсплывающая');

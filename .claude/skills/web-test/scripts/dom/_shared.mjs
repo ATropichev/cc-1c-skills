@@ -1,4 +1,4 @@
-// web-test dom shared v1.7 — embedded JS function constants
+// web-test dom shared v1.8 — embedded JS function constants
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * Shared function strings embedded into page.evaluate() generators.
@@ -41,6 +41,74 @@ export const ROW_CLICK_POINT_FN = `function rowClickPoint(line, body) {
   const pick = cells.find(c => !c.checkbox && c.hasText) || cells.find(c => !c.checkbox) || cells[0];
   if (!pick) return null;
   return { x: Math.round(pick.r.x + Math.min(pick.r.width / 2, 60)), y: Math.round(pick.r.y + pick.r.height / 2) };
+}`;
+
+/**
+ * Click point inside a stretched text container (group title, hyperlink decoration) —
+ * NOT the container's centre.
+ *
+ * `<base>#title_text` is a flex box; the clickable thing is the nested
+ * `<label class="ellipsis" for="<groupId>">` sized by the text and pinned left. The box
+ * stretches to the width of the group's content, so a group holding a wide table gets a
+ * title 1295px wide around a 166px label: the geometric centre lands on empty space and
+ * the click silently does nothing (measured on the stand — collapsed title 173px, expanded
+ * 1295px, which is why the FIRST toggle worked and every later one did not).
+ *
+ * Same clamp as rowClickPoint: aim near the left edge so a wide box still lands on text.
+ *
+ * @param el  container element (`.staticTextHyper` / title text)
+ * @returns `{ x, y }` rounded.
+ */
+export const TEXT_CLICK_POINT_FN = `function textClickPoint(el) {
+  const inner = el.firstElementChild;
+  const r = (inner && inner.offsetWidth > 0 ? inner : el).getBoundingClientRect();
+  return { x: Math.round(r.x + Math.min(r.width / 2, 60)), y: Math.round(r.y + r.height / 2) };
+}`;
+
+/**
+ * Collapsed state of a form group — single source of truth for getFormState().groups[]
+ * and the click-target resolver.
+ *
+ * PopUp groups: the panel `<base>#panel_div` carries the state directly.
+ *
+ * Collapsible groups: 1C lays the form out FLAT (content is not nested in the group, it
+ * follows as siblings of `<base>#title_div`, absolutely positioned). Usually the first
+ * sibling is the group's own first child, and its `display` IS the state.
+ *
+ * But when that child is itself a container (a table, a nested group), 1C inserts a
+ * bookkeeping wrapper `<childName>#group_div.logicGroupContainer` FIRST — always
+ * `display:block`, always `height:0`, and EMPTY: the real nodes
+ * (`<childName>КоманднаяПанель_div`, `<childName>_div`, …) follow it as further siblings,
+ * they are not inside it. Reading that wrapper's display reported `collapsed:false` for a
+ * group that was genuinely collapsed, so `{expand:true}` became a silent no-op.
+ *
+ * So: on hitting the wrapper, walk the following siblings while they share its id prefix
+ * (the prefix stops the walk at foreign nodes such as `separatePanelArea`, keeping the
+ * "free element between groups" case safe) and report collapsed when none of them is
+ * visible. Neither the wrapper's own geometry nor the group's `<base>_div` can serve as
+ * the signal — both are always zero-height.
+ *
+ * @param base  element id prefix without suffix, e.g. `form1_ГруппаТовары`
+ * @returns `true` collapsed, `false` expanded, `null` when the layout is unrecognised.
+ */
+export const GROUP_STATE_FN = `function groupCollapsed(base) {
+  const panelDiv = document.getElementById(base + '#panel_div');
+  if (panelDiv) return getComputedStyle(panelDiv).display === 'none';
+  const titleDiv = document.getElementById(base + '#title_div');
+  const sib = titleDiv && titleDiv.nextElementSibling;
+  if (!sib) return null;
+  const WRAP = '#group_div';
+  if (sib.id && sib.id.endsWith(WRAP) && sib.classList.contains('logicGroupContainer')) {
+    const pfx = sib.id.slice(0, -WRAP.length);
+    let seen = false;
+    for (let n = sib.nextElementSibling; n; n = n.nextElementSibling) {
+      if (!n.id || !n.id.startsWith(pfx)) break;
+      seen = true;
+      if (n.offsetWidth > 0 && n.offsetHeight > 0) return false;
+    }
+    return seen ? true : null;
+  }
+  return getComputedStyle(sib).display === 'none';
 }`;
 
 /**
@@ -365,7 +433,7 @@ function detectForms() {
 }`;
 
 /** Read form state given prefix p. Returns { fields, buttons, tabs, texts, hyperlinks, table, iframes }. */
-export const READ_FORM_FN = HEADERLESS_GRID_FN + `
+export const READ_FORM_FN = HEADERLESS_GRID_FN + GROUP_STATE_FN + `
 function readForm(p) {
   const result = {};
   const fields = [];
@@ -680,11 +748,7 @@ function readForm(p) {
   //   • рядом кнопка-каретка <base>#titleBtn (ControlRepresentation=Picture);
   //   • есть панель <base>#panel_div — это ВСПЛЫВАЮЩАЯ (popup) группа.
   // Обычные (несворачиваемые) группы не имеют ничего из этого — их не показываем.
-  // Состояние:
-  //   • popup: display панели <base>#panel_div (none → закрыта);
-  //   • collapsible: DOM у 1С плоский (контент — сиблинги под mainGroup, не вложены), но при
-  //     глубинном обходе Form.xml ПЕРВЫЙ контент-сиблинг сразу за #title_div — всегда дочерний
-  //     элемент группы (свободные соседи идут после всех детей). Его display = состояние.
+  // Состояние — groupCollapsed (GROUP_STATE_FN), общая с резолвером цели клика.
   const groups = [];
   document.querySelectorAll('[id^="' + p + '"][id$="#title_text"]').forEach(tt => {
     if (tt.offsetWidth === 0 && tt.offsetHeight === 0) return;
@@ -694,13 +758,9 @@ function readForm(p) {
     const hasBtn = !!document.getElementById(base + '#titleBtn');
     if (!isHyper && !hasBtn && !panelDiv) return; // обычная (несворачиваемая) группа
     const g = { name: base.replace(p, ''), title: nbsp(tt.innerText?.trim() || '') };
-    if (panelDiv) {
-      g.behavior = 'popup';
-      g.collapsed = getComputedStyle(panelDiv).display === 'none';
-    } else {
-      const contentSib = document.getElementById(base + '#title_div')?.nextElementSibling;
-      if (contentSib) g.collapsed = getComputedStyle(contentSib).display === 'none';
-    }
+    if (panelDiv) g.behavior = 'popup';
+    const collapsed = groupCollapsed(base);
+    if (collapsed !== null) g.collapsed = collapsed;
     groups.push(g);
   });
 

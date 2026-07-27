@@ -1,6 +1,6 @@
-// web-test dom/forms v1.12 — form detection, content read, click-target/field-button resolution
+// web-test dom/forms v1.13 — form detection, content read, click-target/field-button resolution
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
-import { DETECT_FORM_FN, READ_FORM_FN, ROW_CLICK_POINT_FN } from './_shared.mjs';
+import { DETECT_FORM_FN, READ_FORM_FN, ROW_CLICK_POINT_FN, TEXT_CLICK_POINT_FN, GROUP_STATE_FN } from './_shared.mjs';
 
 /**
  * Detect the active form number.
@@ -73,6 +73,8 @@ export function findClickTargetScript(formNum, text, { tableName, gridSelector }
   const p = `form${formNum}_`;
   return `(() => {
     ${ROW_CLICK_POINT_FN}
+    ${TEXT_CLICK_POINT_FN}
+    ${GROUP_STATE_FN}
     const norm = s => (s?.trim().replace(/\\u00a0/g, ' ') || '').replace(/ё/gi, 'е');
     const target = ${JSON.stringify(text.toLowerCase().replace(/ё/g, 'е'))};
     const p = ${JSON.stringify(p)};
@@ -107,9 +109,10 @@ export function findClickTargetScript(formNum, text, { tableName, gridSelector }
     // Сворачиваемые/всплывающие группы — заголовок как цель раскрытия/сворачивания.
     // Идентификация: <base>#title_text и один из: гиперссылка (TitleHyperlink) ЛИБО кнопка-каретка
     // <base>#titleBtn (Picture) ЛИБО панель <base>#panel_div (popup). Обычные группы пропускаем.
-    // Мишень клика: #titleBtn (вариант «картинка») иначе заголовок (у popup клик по заголовку
-    // и открывает, и закрывает). Состояние: у popup — display панели, иначе — первый контент-
-    // сиблинг за #title_div (display:none = свёрнута/закрыта).
+    // Мишень клика: #titleBtn (вариант «картинка», компактный — бьём в центр) иначе текст
+    // заголовка через textClickPoint: контейнер растягивается по ширине содержимого группы,
+    // кликабелен только вложенный label (у popup клик по заголовку и открывает, и закрывает).
+    // Состояние — groupCollapsed, общая с getFormState().groups[].
     [...document.querySelectorAll('[id^="' + p + '"][id$="#title_text"]')]
       .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0).forEach(el => {
       const base = el.id.slice(0, -('#title_text'.length));
@@ -117,12 +120,17 @@ export function findClickTargetScript(formNum, text, { tableName, gridSelector }
       const btnVisible = btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0);
       const panelDiv = document.getElementById(base + '#panel_div');
       if (!el.classList.contains('staticTextHyper') && !btnVisible && !panelDiv) return; // обычная группа
-      const tgt = btnVisible ? btn : el;
-      const r = tgt.getBoundingClientRect();
+      let pt;
+      if (btnVisible) {
+        const r = btn.getBoundingClientRect();
+        pt = { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+      } else {
+        pt = textClickPoint(el);
+      }
       const item = { id: '', kind: 'formGroup', name: norm(el.innerText) || base.replace(p, ''),
-        label: base.replace(p, ''), x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
-      const stateEl = panelDiv || (document.getElementById(base + '#title_div') || {}).nextElementSibling;
-      if (stateEl) item.collapsed = getComputedStyle(stateEl).display === 'none';
+        label: base.replace(p, ''), x: pt.x, y: pt.y };
+      const collapsed = groupCollapsed(base);
+      if (collapsed !== null) item.collapsed = collapsed;
       items.push(item);
     });
 
@@ -235,6 +243,9 @@ export function findClickTargetScript(formNum, text, { tableName, gridSelector }
     if (found) {
       const res = { id: found.id, kind: found.kind, name: found.name };
       if (found.disabled) res.disabled = true;
+      // label группы = её техническое имя: по нему обработчик клика сверяет состояние
+      // в groups[] после клика (name там техническое, а found.name — текст заголовка).
+      if (found.kind === 'formGroup') res.label = found.label;
       if (found.collapsed != null) res.collapsed = found.collapsed;
       if (found.x != null) { res.x = found.x; res.y = found.y; }
       return res;
