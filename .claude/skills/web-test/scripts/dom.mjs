@@ -14,6 +14,7 @@ export {
   closeCrossScript,
   readFormScript,
   findClickTargetScript,
+  scrollGroupIntoViewScript,
   findFieldButtonScript,
   resolveFieldsScript,
   detectNewFormScript,

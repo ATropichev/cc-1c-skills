@@ -1,4 +1,4 @@
-// web-test dom shared v1.9 — embedded JS function constants
+// web-test dom shared v1.10 — embedded JS function constants
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * Shared function strings embedded into page.evaluate() generators.
@@ -69,24 +69,39 @@ export const TEXT_CLICK_POINT_FN = `function textClickPoint(el) {
  * Collapsed state of a form group — single source of truth for getFormState().groups[]
  * and the click-target resolver.
  *
- * PopUp groups: the panel `<base>#panel_div` carries the state directly.
+ * 1C lays the form out FLAT: a group's content is not nested inside it but follows as
+ * absolutely-positioned siblings of `<base>#title_div`. Anything derived from "the first
+ * sibling" is unreliable — measured on live forms:
+ *   • before a container child comes an empty `.logicGroupContainer` (height 0), spelled
+ *     `<child>#group_div` for a table but `<child>_div` for a nested group;
+ *   • that wrapper's own display FLIPS between runs (block before the first toggle, none
+ *     after) — this is the "readings synced after the first toggle" from the bug report;
+ *   • a group's leading nodes can stay `display:none` by their own logic (a table whose
+ *     command bar is hidden) while the visible content sits further down the chain.
+ * Neither the wrappers' geometry nor the group's own `<base>_div` can serve as the signal:
+ * all of them are always zero-height.
  *
- * Collapsible groups: 1C lays the form out FLAT (content is not nested in the group, it
- * follows as siblings of `<base>#title_div`, absolutely positioned). Usually the first
- * sibling is the group's own first child, and its `display` IS the state.
- *
- * But when that child is itself a container (a table, a nested group), 1C inserts a
- * bookkeeping wrapper `<childName>#group_div.logicGroupContainer` FIRST — always
- * `display:block`, always `height:0`, and EMPTY: the real nodes
- * (`<childName>КоманднаяПанель_div`, `<childName>_div`, …) follow it as further siblings,
- * they are not inside it. Reading that wrapper's display reported `collapsed:false` for a
- * group that was genuinely collapsed, so `{expand:true}` became a silent no-op.
- *
- * So: on hitting the wrapper, walk the following siblings while they share its id prefix
- * (the prefix stops the walk at foreign nodes such as `separatePanelArea`, keeping the
- * "free element between groups" case safe) and report collapsed when none of them is
- * visible. Neither the wrapper's own geometry nor the group's `<base>_div` can serve as
- * the signal — both are always zero-height.
+ * Signals, in order:
+ *   1. PopUp — the panel `<base>#panel_div` carries the state directly.
+ *   2. Caret (`ControlRepresentation=Picture`) — `<base>#titleBtn img` is the `hideshow`
+ *      sprite, frame `gx`: 0 collapsed, non-zero expanded. Note the polarity is OPPOSITE
+ *      to tree nodes in dom/grid.mjs (gx=0 = expanded there) — different sprite.
+ *   3. Otherwise (`TitleHyperlink`, which has no caret, no aria-expanded and no state class
+ *      on the title): ownership by INDENT. A group's children sit deeper than its title
+ *      (`#title_div` at left:12px → children at 22px), while a free element between groups
+ *      sits at the title's own level. So walk the siblings, skip hidden nodes and wrappers
+ *      (they are not positioned — left comes back `auto`), and the first VISIBLE node
+ *      decides: deeper than the title ⇒ own content ⇒ expanded; same level or shallower
+ *      ⇒ that's already someone else, stop. Nothing own and visible ⇒ collapsed, which is
+ *      sound because a group with every element hidden is not rendered by the platform at all.
+ *      The baseline is the leftmost part of the title BLOCK, not `#title_div` alone: with a
+ *      caret the text is pushed right by its width (measured live: caret box 12px, title
+ *      33px, own children 22px), so anchoring on the title alone would read the group's own
+ *      child as foreign. Only matters if a caret is present but signal 2 did not fire.
+ *      The walk is capped: a group's own nodes sit right after its title, whereas the LAST
+ *      collapsed group on a form has no boundary behind it at all — measured live, the first
+ *      node with height came 107 siblings later, deep inside an unrelated branch, and would
+ *      have been mistaken for the group's content.
  *
  * @param base  element id prefix without suffix, e.g. `form1_ГруппаТовары`
  * @returns `true` collapsed, `false` expanded, `null` when the layout is unrecognised.
@@ -94,21 +109,28 @@ export const TEXT_CLICK_POINT_FN = `function textClickPoint(el) {
 export const GROUP_STATE_FN = `function groupCollapsed(base) {
   const panelDiv = document.getElementById(base + '#panel_div');
   if (panelDiv) return getComputedStyle(panelDiv).display === 'none';
-  const titleDiv = document.getElementById(base + '#title_div');
-  const sib = titleDiv && titleDiv.nextElementSibling;
-  if (!sib) return null;
-  const WRAP = '#group_div';
-  if (sib.id && sib.id.endsWith(WRAP) && sib.classList.contains('logicGroupContainer')) {
-    const pfx = sib.id.slice(0, -WRAP.length);
-    let seen = false;
-    for (let n = sib.nextElementSibling; n; n = n.nextElementSibling) {
-      if (!n.id || !n.id.startsWith(pfx)) break;
-      seen = true;
-      if (n.offsetWidth > 0 && n.offsetHeight > 0) return false;
-    }
-    return seen ? true : null;
+  const caret = document.querySelector('[id="' + base + '#titleBtn"] img');
+  const src = caret ? (caret.getAttribute('src') || '') : '';
+  if (src.indexOf('hideshow') !== -1) {
+    const gx = src.match(/[?&]gx=(\\d+)/);
+    if (gx) return gx[1] === '0';
   }
-  return getComputedStyle(sib).display === 'none';
+  const titleDiv = document.getElementById(base + '#title_div');
+  if (!titleDiv) return null;
+  let titleLeft = parseFloat(getComputedStyle(titleDiv).left);
+  const caretDiv = document.getElementById(base + '#titleBtn_div');
+  const caretLeft = caretDiv ? parseFloat(getComputedStyle(caretDiv).left) : NaN;
+  if (!isNaN(caretLeft) && (isNaN(titleLeft) || caretLeft < titleLeft)) titleLeft = caretLeft;
+  if (isNaN(titleLeft)) return null;
+  let candidates = false, scanned = 0;
+  for (let n = titleDiv.nextElementSibling; n && scanned < 20; n = n.nextElementSibling, scanned++) {
+    if (n.offsetWidth === 0 && n.offsetHeight === 0) { candidates = true; continue; }
+    const left = parseFloat(getComputedStyle(n).left);
+    if (isNaN(left)) { candidates = true; continue; }
+    if (left > titleLeft) return false;
+    break;
+  }
+  return candidates ? true : null;
 }`;
 
 /**

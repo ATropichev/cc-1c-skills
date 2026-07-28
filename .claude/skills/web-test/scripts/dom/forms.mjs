@@ -325,6 +325,39 @@ export function findClickTargetScript(formNum, text, { tableName, gridSelector }
 }
 
 /**
+ * Scroll a collapsible group's title into view and return the FRESH click point for it.
+ *
+ * A group's title is clicked by coordinates (its click target is a nested label, not the
+ * element with the id), and `mouse.click` outside the viewport lands nowhere — the toggle
+ * silently did nothing. Seen live: the second «Показать детализацию» on a long form sat at
+ * y=848 with a viewport of 834. Playwright's own auto-scroll does not apply here because
+ * that path is selector-based, not coordinate-based.
+ *
+ * Same target choice as findClickTargetScript: the caret `#titleBtn` when visible (compact,
+ * aim at its centre), otherwise the title text via textClickPoint.
+ *
+ * @returns `{ x, y }` after scrolling, or `null` when the group is not on the form.
+ */
+export function scrollGroupIntoViewScript(formNum, groupName) {
+  const p = `form${formNum}_`;
+  return `(() => {
+    ${TEXT_CLICK_POINT_FN}
+    const base = ${JSON.stringify(p)} + ${JSON.stringify(groupName)};
+    const tt = document.getElementById(base + '#title_text');
+    const btn = document.getElementById(base + '#titleBtn');
+    const btnVisible = btn && (btn.offsetWidth > 0 || btn.offsetHeight > 0);
+    const anchor = btnVisible ? btn : tt;
+    if (!anchor) return null;
+    anchor.scrollIntoView({ block: 'center' });
+    if (btnVisible) {
+      const r = btn.getBoundingClientRect();
+      return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) };
+    }
+    return textClickPoint(tt);
+  })()`;
+}
+
+/**
  * Find a field's action button (DLB, OB, CLR, CB) by fuzzy field name.
  * Returns { fieldName, buttonId, buttonType } or { error, available }.
  */

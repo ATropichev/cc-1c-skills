@@ -149,10 +149,17 @@ Returns current form structure. This is the primary way to understand what's on 
 **navigation** — form navigation panel links (for objects with subordinate catalogs): `[{ name, active? }]`. Clickable via `clickElement()`. Only present when the form has a navigation panel (e.g. "Основное", "Объекты метаданных", "Подсистемы").
 
 **groups** — collapsible and pop-up form groups: `[{ name, title, collapsed, behavior? }]`. `collapsed: true` means the group's content is hidden — part of the form is not shown until you expand it (common on settings pages like "Администрирование → Интернет-поддержка и сервисы"). `behavior: 'popup'` marks a pop-up group (content shows in a floating panel); absent for ordinary collapsible groups. Expand/collapse (or open/close a pop-up) by the group title with `clickElement`, same vocabulary as tree nodes: `{ expand: true }` reveals (idempotent), `{ expand: false }` hides, `{ toggle: true }` flips. After expanding, the group's content becomes readable in the next `getFormState()` (its fields/hyperlinks/texts appear). Plain (non-collapsible) groups are not listed.
+A group's title is not a stable key: the same caption repeats across blocks of a form, and a
+group may swap it when expanded ("Показать детализацию" ↔ "Скрыть детализацию"), after which a
+click by the old caption fails with "not found". The click result therefore reports `group` (the
+group's technical name, which never changes and is accepted by `clickElement`) and `title` (its
+caption right now) — use `group` when you plan to click the same group again.
 ```js
 const form = await getFormState();
 // form.groups = [{ name: "ГруппаНовости", title: "Новости", collapsed: true }, ...]
-await clickElement('Новости', { expand: true });   // reveal the group's content
+const r = await clickElement('Новости', { expand: true });   // reveal the group's content
+// r.clicked = { kind: 'formGroup', name: 'Новости', group: 'ГруппаНовости', title: 'Новости', toggled: true }
+await clickElement(r.clicked.group, { expand: false });      // stable key — safe to reuse
 ```
 
 **tables** — array of all visible grids: `[{ name, columns, rowCount, label? }]`. `label` is the visual group title shown on screen (e.g. "Входящие"), absent when grid has no visible title. Use `readTable()` for actual data.
