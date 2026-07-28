@@ -1,6 +1,6 @@
 export const name = 'multirow-header: резолвинг колонок на двухэтажной шапке (чтение/клик/заполнение)';
 export const tags = ['table', 'columns'];
-export const timeout = 120000;
+export const timeout = 180000;
 
 // Стенд «Многострочная шапка» воспроизводит два паттерна, снятых живьём с ERP:
 //
@@ -12,8 +12,12 @@ export const timeout = 120000;
 //  2. паттерн «Операция» — шапка только у группы «Субконто», а ячеек под ней три и своих
 //     шапок у них НЕТ. Здесь разворот в «Субконто 1/2/3» — правильное поведение, его
 //     обязана сохранить любая правка.
+//
+// Вторая часть теста — стенд «Группы колонок»: горизонтальные ГруппыКолонок («Цена», «Количество»)
+// с ОДИНАКОВЫМИ именами листьев («План»/«Факт»). Родитель здесь, в отличие от «Исполнитель»,
+// собственных ячеек не имеет — его colindex отсутствует в теле. Листья именуются «Группа / Лист».
 
-export default async function({ navigateSection, openCommand, clickElement, closeForm, readTable, fillTableRow, getPage, assert, step, log }) {
+export default async function({ navigateSection, openCommand, clickElement, closeForm, readTable, fillTableRow, getFormState, getPage, assert, step, log }) {
 
   // Куда клик попал НА САМОМ ДЕЛЕ. Результат clickElement возвращает запрошенное имя колонки
   // (эхо), а не разрешённую ячейку, — по нему промах неотличим от попадания. Нажатая ячейка
@@ -119,6 +123,75 @@ export default async function({ navigateSection, openCommand, clickElement, clos
     assert.equal(row['Субконто 2'], 'СК2 изменён', 'значение попало в «Субконто 2»');
     assert.equal(row['Субконто 1'], 'Субконто1 1', '«Субконто 1» не задета');
     assert.equal(row['Субконто 3'], 'Субконто3 1', '«Субконто 3» не задета');
+  });
+
+  await step('setup: перейти на стенд «Группы колонок»', async () => {
+    await closeForm();
+    await navigateSection('Склад');
+    await openCommand('Группы колонок');
+  });
+
+  await step('groups: листья именуются «Группа / Лист», значения не склеены', async () => {
+    const t = await readTable();
+    log(`columns=${JSON.stringify(t.columns)}`);
+    log(`row0=${JSON.stringify(t.rows[0])}`);
+
+    ['Цена / План', 'Цена / Факт', 'Цена / Откл.', 'Количество / План', 'Количество / Факт']
+      .forEach(c => assert.includes(t.columns, c, `колонка «${c}»`));
+    // Голых имён быть не должно: они одинаковы в обеих группах, и строка ключуется по имени —
+    // именно на этом значения «Цена»/«Количество» схлопывались в один ключ через ' / '.
+    assert.ok(!t.columns.includes('План'), `голой «План» быть не должно (columns=${JSON.stringify(t.columns)})`);
+    assert.ok(!t.columns.includes('Факт'), `голой «Факт» быть не должно (columns=${JSON.stringify(t.columns)})`);
+    // Заголовок группы — не колонка данных: своих ячеек у него нет.
+    assert.ok(!t.columns.includes('Цена'), 'заголовок группы «Цена» не колонка');
+    assert.ok(!t.columns.includes('Количество'), 'заголовок группы «Количество» не колонка');
+
+    const r = t.rows[0];
+    assert.equal(r['Цена / План'], 'Ц-план 1', 'Цена / План');
+    assert.equal(r['Цена / Факт'], 'Ц-факт 1', 'Цена / Факт');
+    assert.equal(r['Цена / Откл.'], 'Ц-откл 1', 'Цена / Откл.');
+    assert.equal(r['Количество / План'], 'К-план 1', 'Количество / План');
+    assert.equal(r['Количество / Факт'], 'К-факт 1', 'Количество / Факт');
+    assert.equal(r['Код'], 'К1', 'обычная колонка не задета');
+  });
+
+  await step('groups: getFormState().tables[] даёт те же имена, что readTable', async () => {
+    // У form-state своя ветка вывода колонок — она обязана совпадать с моделью readTable,
+    // иначе имя из tables[] не годится для клика.
+    const t = await readTable();
+    const f = await getFormState();
+    log(`tables=${JSON.stringify(f.tables)}`);
+    assert.deepEqual(f.tables[0].columns, t.columns, 'columns из getFormState == columns из readTable');
+  });
+
+  await step('groups: клик по полному имени попадает в нужную группу', async () => {
+    const res = await clickElement({ row: { 'Код': 'К2' }, column: 'Количество / Факт' });
+    assert.equal(res.clicked?.kind, 'gridCell', 'kind=gridCell');
+    const cell = await focusedCell();
+    log(`focused: ${JSON.stringify(cell)}`);
+    assert.equal(cell?.text, 'К-факт 2', `клик попал в «Количество / Факт» (got «${cell?.text}»)`);
+  });
+
+  await step('groups: короткое имя резолвится через суффикс «Группа / Имя»', async () => {
+    const res = await clickElement({ row: { 'Код': 'К2' }, column: 'Откл.' });
+    assert.equal(res.clicked?.kind, 'gridCell', 'kind=gridCell');
+    const cell = await focusedCell();
+    log(`focused: ${JSON.stringify(cell)}`);
+    assert.equal(cell?.text, 'Ц-откл 2', `«Откл.» нашлось как «Цена / Откл.» (got «${cell?.text}»)`);
+  });
+
+  await step('groups: fillTableRow пишет по имени из readTable', async () => {
+    // Путь записи матчит ячейку по её техническому имени и по заголовку. Заголовок листа под
+    // группой резолвился x-скáном и давал «Цена» для всех трёх листьев — имя из readTable не
+    // находилось вовсе (notFilled).
+    const r = await fillTableRow({ 'Цена / Факт': 'изменён' }, { row: { 'Код': 'К3' } });
+    log(`filled=${JSON.stringify(r.filled)} notFilled=${JSON.stringify(r.notFilled)}`);
+    assert.ok(!r.notFilled, `все поля найдены (notFilled=${JSON.stringify(r.notFilled)})`);
+    const row = (await readTable()).rows.find(x => x['Код'] === 'К3');
+    log(`after fill: ${JSON.stringify(row)}`);
+    assert.equal(row['Цена / Факт'], 'изменён', 'значение попало в «Цена / Факт»');
+    assert.equal(row['Цена / План'], 'Ц-план 3', 'сосед по группе не задет');
+    assert.equal(row['Количество / Факт'], 'К-факт 3', 'одноимённый лист соседней группы не задет');
   });
 
   await step('cleanup: закрыть форму', async () => {

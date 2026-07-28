@@ -558,6 +558,20 @@ export const steps = [
     validate: { script: 'meta-validate/scripts/meta-validate', flag: '-ObjectPath', path: 'DataProcessors/МногострочнаяШапка' },
   },
 
+  // Обработка ГруппыКолонок — грид, где шапка сгруппирована ГОРИЗОНТАЛЬНО: родительский
+  // заголовок группы («Цена», «Количество») сверху, под ним листья с ОДИНАКОВЫМИ именами
+  // («План», «Факт») в каждой группе. Отличие от МногострочнаяШапка: родитель здесь —
+  // чистый заголовок группы, своих ячеек в теле у него нет.
+  {
+    name: 'meta-compile: Обработка ГруппыКолонок',
+    script: 'meta-compile/scripts/meta-compile',
+    input: {
+      type: 'DataProcessor', name: 'ГруппыКолонок',
+    },
+    args: { '-JsonPath': '{inputFile}', '-OutputDir': '{workDir}' },
+    validate: { script: 'meta-validate/scripts/meta-validate', flag: '-ObjectPath', path: 'DataProcessors/ГруппыКолонок' },
+  },
+
   // Обработка ПроверкаДоступности — форма с парами «доступный / недоступный»
   // элементов каждого типа (кнопка командной панели, обычная кнопка, поле ввода,
   // флажок, переключатель). Недоступность задаётся декларативно (disabled:true →
@@ -1809,6 +1823,73 @@ export const steps = [
 `,
   },
 
+  // Обработка ГруппыКолонок — форма с горизонтальными группами колонок в шапке.
+  {
+    name: 'form-add: Форма ГруппыКолонок',
+    script: 'form-add/scripts/form-add',
+    args: { '-ObjectPath': '{workDir}/DataProcessors/ГруппыКолонок.xml', '-FormName': 'ФормаОбработки' },
+  },
+  {
+    name: 'form-compile: Форма ГруппыКолонок',
+    script: 'form-compile/scripts/form-compile',
+    input: {
+      title: 'Группы колонок',
+      events: { OnCreateAtServer: 'ПриСозданииНаСервере' },
+      attributes: [
+        { name: 'Объект', type: 'DataProcessorObject.ГруппыКолонок', main: true },
+        { name: 'Таблица', type: 'ValueTable', columns: [
+          { name: 'Код', type: 'String(10)', title: 'Код' },
+          { name: 'Товар', type: 'String(50)', title: 'Товар' },
+          { name: 'ЦенаПлан', type: 'String(50)', title: 'План' },
+          { name: 'ЦенаФакт', type: 'String(50)', title: 'Факт' },
+          { name: 'ЦенаОткл', type: 'String(50)', title: 'Откл.' },
+          { name: 'КолПлан', type: 'String(50)', title: 'План' },
+          { name: 'КолФакт', type: 'String(50)', title: 'Факт' },
+        ]},
+      ],
+      elements: [
+        { table: 'Таблица', path: 'Таблица', changeRowSet: true, columns: [
+          { input: 'Код', path: 'Таблица.Код', title: 'Код', width: 8 },
+          { input: 'Товар', path: 'Таблица.Товар', title: 'Товар', width: 20 },
+          // Родитель «Цена» — ЧИСТЫЙ заголовок группы (в теле своих ячеек нет), под ним три
+          // листа. Имена листьев повторяются в соседней группе — на этом readTable схлопывал
+          // значения в один ключ через ' / '.
+          { columnGroup: 'horizontal', name: 'ГруппаЦена', title: 'Цена', showInHeader: true, children: [
+            { input: 'ЦенаПлан', path: 'Таблица.ЦенаПлан', title: 'План', width: 12 },
+            { input: 'ЦенаФакт', path: 'Таблица.ЦенаФакт', title: 'Факт', width: 12 },
+            { input: 'ЦенаОткл', path: 'Таблица.ЦенаОткл', title: 'Откл.', width: 12 },
+          ]},
+          { columnGroup: 'horizontal', name: 'ГруппаКоличество', title: 'Количество', showInHeader: true, children: [
+            { input: 'КолПлан', path: 'Таблица.КолПлан', title: 'План', width: 12 },
+            { input: 'КолФакт', path: 'Таблица.КолФакт', title: 'Факт', width: 12 },
+          ]},
+        ]},
+      ],
+    },
+    args: { '-JsonPath': '{inputFile}', '-OutputPath': '{workDir}/DataProcessors/ГруппыКолонок/Forms/ФормаОбработки/Ext/Form.xml' },
+    validate: { script: 'form-validate/scripts/form-validate', flag: '-FormPath', path: 'DataProcessors/ГруппыКолонок/Forms/ФормаОбработки/Ext/Form.xml' },
+  },
+  {
+    name: 'writeFile: ГруппыКолонок form Module.bsl',
+    writeFile: 'DataProcessors/ГруппыКолонок/Forms/ФормаОбработки/Ext/Form/Module.bsl',
+    content: `&НаСервере
+Процедура ПриСозданииНаСервере(Отказ, СтандартнаяОбработка)
+\t// Значения уникальны по колонкам: промах резолвера виден сразу.
+\tДля Сч = 1 По 3 Цикл
+\t\tС = Формат(Сч, "ЧН=; ЧГ=");
+\t\tСтрока = Таблица.Добавить();
+\t\tСтрока.Код = "К" + С;
+\t\tСтрока.Товар = "Товар " + С;
+\t\tСтрока.ЦенаПлан = "Ц-план " + С;
+\t\tСтрока.ЦенаФакт = "Ц-факт " + С;
+\t\tСтрока.ЦенаОткл = "Ц-откл " + С;
+\t\tСтрока.КолПлан = "К-план " + С;
+\t\tСтрока.КолФакт = "К-факт " + С;
+\tКонецЦикла;
+КонецПроцедуры
+`,
+  },
+
   // ── 4. DCS for report ──
   // Сначала добавляем макет ОсновнаяСхемаКомпоновкиДанных к отчёту (регистрируется
   // в Reports/ОстаткиТоваров.xml + автоматически выставляется MainDataCompositionSchema),
@@ -1873,6 +1954,7 @@ export const steps = [
         'DataProcessor.МножественныйВыбор',
         'DataProcessor.БезшапочнаяТаблица',
         'DataProcessor.МногострочнаяШапка',
+        'DataProcessor.ГруппыКолонок',
       ],
     },
     args: { '-DefinitionFile': '{inputFile}', '-OutputDir': '{workDir}' },
@@ -1915,6 +1997,7 @@ export const steps = [
         'DataProcessor.МножественныйВыбор: Use View',
         'DataProcessor.БезшапочнаяТаблица: Use View',
         'DataProcessor.МногострочнаяШапка: Use View',
+        'DataProcessor.ГруппыКолонок: Use View',
         'DataProcessor.ПроверкаДоступности: Use View',
         'DataProcessor.СтраницаНастроек: Use View',
       ],

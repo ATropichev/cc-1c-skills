@@ -1,4 +1,4 @@
-// web-test dom shared v1.8 — embedded JS function constants
+// web-test dom shared v1.9 — embedded JS function constants
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * Shared function strings embedded into page.evaluate() generators.
@@ -258,6 +258,35 @@ function buildColumnModel(grid) {
     }
     columns.push(Object.assign(base, { name: name, text: '', title: title, kind: kind }));
   });
+
+  // Column GROUPS («Цена» over «План»/«Факт»/«Откл.»). 1С puts the group caption and its leaves
+  // into the SAME head line, differing by y and width. A group caption is not a column: it has no
+  // cells of its own, and leaf names repeat across groups («План» under both «Цена» and
+  // «Количество») — keyed by bare name, values of different groups collided into one key.
+  // The caption is told apart from a genuine wide column (pattern «Исполнитель» over «Срок»/
+  // «Выполнена», see 24-multirow-header) by ONE reliable fact: its colindex never appears among
+  // body cells. Geometry alone cannot tell them apart — both sit above narrower boxes.
+  // Leaves are renamed «Группа / Лист», the same convention the spreadsheet reader uses.
+  const bodyCi = new Set();
+  lines.slice(0, 5).forEach(line => {
+    [...line.children].forEach(b => {
+      if (b.offsetWidth === 0) return;
+      const ci = b.getAttribute('colindex');
+      if (ci != null) bodyCi.add(ci);
+    });
+  });
+  const covers = (g, c) => { const cx = c.x + (c.right - c.x) / 2; return c.y > g.y && cx >= g.x && cx < g.right; };
+  const groupHdrs = columns.filter(g => g.ci != null && !bodyCi.has(g.ci) && columns.some(c => c !== g && covers(g, c)));
+  if (groupHdrs.length) {
+    columns.forEach(c => {
+      if (groupHdrs.indexOf(c) >= 0) return;
+      const parents = groupHdrs.filter(g => covers(g, c)).sort((a, b) => a.y - b.y);
+      if (!parents.length) return;
+      c.name = parents.map(g => g.text).concat(c.name).join(' / ');
+      c.group = parents.map(g => g.text).join(' / ');
+    });
+    groupHdrs.forEach(g => { const at = columns.indexOf(g); if (at >= 0) columns.splice(at, 1); });
+  }
 
   const keyOf = c => Math.round(c.x) + ':' + Math.round(c.right);
   const groups = new Map();
@@ -637,7 +666,7 @@ function readForm(p) {
           const text = (textEl || box).innerText?.trim().replace(/\\n/g, ' ') || '';
           if (text) {
             const r = box.getBoundingClientRect();
-            columns.push({ text, x: r.x, right: r.x + r.width, y: r.y, h: r.height });
+            columns.push({ text, ci: box.getAttribute('colindex'), x: r.x, right: r.x + r.width, y: r.y, h: r.height });
           } else {
             // Unnamed column — check if data cells contain checkboxes
             const firstLine = body?.querySelector('.gridLine');
@@ -651,6 +680,27 @@ function readForm(p) {
             }
           }
         });
+        // Column groups → «Группа / Лист». Mirrors buildColumnModel: a group caption owns no
+        // cells, so its colindex is absent from the body; leaf names repeat across groups.
+        const dataLines = [...(body?.querySelectorAll('.gridLine') || [])].slice(0, 5);
+        if (dataLines.length && columns.length > 0) {
+          const bodyCi = new Set();
+          dataLines.forEach(line => [...line.children].forEach(b => {
+            if (b.offsetWidth === 0) return;
+            const ci = b.getAttribute('colindex');
+            if (ci != null) bodyCi.add(ci);
+          }));
+          const covers = (g, c) => { const cx = c.x + (c.right - c.x) / 2; return c.y > g.y && cx >= g.x && cx < g.right; };
+          const grpHdrs = columns.filter(g => g.ci != null && !bodyCi.has(g.ci) && columns.some(c => c !== g && covers(g, c)));
+          if (grpHdrs.length) {
+            columns.forEach(c => {
+              if (grpHdrs.indexOf(c) >= 0) return;
+              const parents = grpHdrs.filter(g => covers(g, c)).sort((a, b) => a.y - b.y);
+              if (parents.length) c.text = parents.map(g => g.text).concat(c.text).join(' / ');
+            });
+            grpHdrs.forEach(g => { const at = columns.indexOf(g); if (at >= 0) columns.splice(at, 1); });
+          }
+        }
         // Expand single merged headers with multiple data sub-rows (e.g. "Субконто Дт" → 1/2/3)
         const firstLine = body?.querySelector('.gridLine');
         if (firstLine && columns.length > 0) {

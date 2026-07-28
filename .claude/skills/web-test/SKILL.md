@@ -191,6 +191,8 @@ if (t.rows[0]['Присоединенные файлы']) { /* has an attached f
 t.rows[0]['ЭДО'] === 'pic:1';   // connected to 1С-ЭДО ('pic:0' = not)
 ```
 
+**Grouped headers.** Columns merged under a group caption are reported with that caption: `'Цена / План'`, `'Цена / Факт'` — the caption alone is not a data column. Such names also work in `clickElement({row, column})` and `fillTableRow`; a short name (`'Факт'`) resolves too, picking the leftmost match.
+
 Special row fields:
 - `_kind: 'group'` — hierarchical group row
 - `_kind: 'parent'` — parent row in hierarchy

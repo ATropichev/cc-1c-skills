@@ -1,7 +1,7 @@
-// web-test dom/grid-edit v1.3 — DOM scripts for row-fill (grid edit-time operations)
+// web-test dom/grid-edit v1.4 — DOM scripts for row-fill (grid edit-time operations)
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 //
-import { HEADERLESS_GRID_FN, COLUMN_MODEL_FN } from './_shared.mjs';
+import { COLUMN_MODEL_FN } from './_shared.mjs';
 //
 // All helpers below accept an optional `gridSelector`. When passed, they target
 // that exact grid; when null/undefined they pick the LAST visible `.grid` on
@@ -26,23 +26,16 @@ function gridResolver(gridSelector) {
  */
 export function sortFieldKeysByColindexScript(gridSelector, fieldKeys) {
   return `(() => {
-    ${HEADERLESS_GRID_FN}
+    ${COLUMN_MODEL_FN}
     const grid = ${gridResolver(gridSelector)};
     if (!grid) return null;
-    const head = grid.querySelector('.gridHead');
+    // Names come from the shared model (headed and headerless alike), so a key written the way
+    // readTable reports it — «Цена / Факт» — sorts into its real position instead of the tail.
     const cols = [];
-    if (head) {
-      const headLine = head.querySelector('.gridLine') || head;
-      [...headLine.children].forEach(box => {
-        if (box.offsetWidth === 0) return;
-        const t = ((box.querySelector('.gridBoxText') || box).innerText?.trim() || '').toLowerCase();
-        const ci = parseInt(box.getAttribute('colindex') || '-1');
-        if (t) cols.push({ text: t, colindex: ci });
-      });
-    } else {
-      // Headerless: synthesized columns (КолонкаN/(checkbox)) ordered by colindex
-      synthHeaderlessColumns(grid).forEach(c => cols.push({ text: c.name.toLowerCase(), colindex: parseInt(c.colindex) }));
-    }
+    buildColumnModel(grid).columns.forEach(c => {
+      if (!c.name) return;
+      cols.push({ text: c.name.toLowerCase(), colindex: c.ci != null ? parseInt(c.ci) : 999 });
+    });
     const keys = ${JSON.stringify(fieldKeys)};
     const mapped = keys.map(k => {
       const exact = cols.find(c => c.text === k);
@@ -233,7 +226,7 @@ export function getGridEditCheckScript() {
  */
 export function readActiveGridCellScript() {
   return `(() => {
-    ${HEADERLESS_GRID_FN}
+    ${COLUMN_MODEL_FN}
     const f = document.activeElement;
     if (!f) return { tag: 'none' };
     if (f.tagName === 'INPUT' || f.tagName === 'TEXTAREA') {
@@ -244,8 +237,22 @@ export function readActiveGridCellScript() {
         if (grid) {
           const fr = f.getBoundingClientRect();
           const head = grid.querySelector('.gridHead');
+          // Column name from the shared model — same naming as readTable, including
+          // «Группа / Колонка» under a grouped header. The editing INPUT sits in an overlay,
+          // so the cell is located by x against the first body line, then by its colindex.
+          const model = buildColumnModel(grid);
+          const bLine = grid.querySelector('.gridBody .gridLine');
+          if (bLine) for (const b of bLine.children) {
+            if (b.offsetWidth === 0) continue;
+            const br = b.getBoundingClientRect();
+            if (fr.x >= br.x && fr.x < br.x + br.width) {
+              const ci = b.getAttribute('colindex');
+              if (ci != null && model.byCi[ci]) headerText = model.byCi[ci].name;
+              break;
+            }
+          }
           const hl = head?.querySelector('.gridLine') || head;
-          if (hl) for (const h of hl.children) {
+          if (!headerText && hl) for (const h of hl.children) {
             if (h.offsetWidth === 0) continue;
             const hr = h.getBoundingClientRect();
             if (fr.x >= hr.x && fr.x < hr.x + hr.width) {
@@ -254,7 +261,7 @@ export function readActiveGridCellScript() {
               break;
             }
           }
-          if (!head) {
+          if (!headerText && !head) {
             // Headerless: the editing INPUT is rendered in an overlay (.inputs) OUTSIDE
             // the .gridBox, so walking ancestors for colindex fails. Resolve colindex by
             // matching the input's x against the body cells (same idea as the headed branch).
