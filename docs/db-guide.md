@@ -135,10 +135,14 @@ Claude вызовет `/db-run dev`.
 | `ibcmd` | `-AdditionalIbcmdArguments` | `ibcmdargs` |
 
 ```powershell
-# разово
+# разово; несколько аргументов — через запятую, как у -Objects/-Files
 powershell.exe -NoProfile -File "…/epf-build.ps1" -SourceFile "src/Обработка.xml" `
-    -OutputFile "build/Обработка.epf" -AdditionalV8Arguments '/UseHwLicenses+'
+    -OutputFile "build/Обработка.epf" -AdditionalV8Arguments "/UseHwLicenses+,/L,ru"
 ```
+
+Список пишется одной строкой через запятую: при запуске скрипта через `-File`
+PowerShell не умеет собирать массив из отдельных токенов. Значение, содержащее запятую,
+не поддерживается.
 
 Проектные аргументы применяются первыми, параметр — после них. Аргументы уходят во **все** запуски
 платформы, которые делает навык: `epf-build` без указания базы прогоняет `CREATEINFOBASE`,
