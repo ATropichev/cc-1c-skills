@@ -1,4 +1,4 @@
-﻿# db-load-git v1.17 — Load Git changes into 1C database
+﻿# db-load-git v1.18 — Load Git changes into 1C database
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -325,30 +325,73 @@ if (-not $DryRun) {
 # --- Detect engine + validate connection (skip if DryRun) ---
 $engine = "1cv8"
 if (-not $DryRun) {
-function Invoke-IbcmdProcess {
-    # Run ibcmd non-interactively: a closed stdin pipe (EOF) makes ibcmd's auth prompt
-    # fast-fail instead of hanging. Returns @{ Output; ExitCode }. cp866 decodes ibcmd's
-    # native OEM output. The 1cv8/DESIGNER branch keeps using Start-Process.
-    param([string]$Exe, [string[]]$IbArgs)
+function ConvertFrom-PlatformBytes {
+    # ibcmd writes UTF-8 (checked on 8.3.24, 8.3.27, 8.5), a crashing 1cv8 may still emit
+    # OEM text. Decode strictly as UTF-8 and fall back to cp866 on invalid bytes — guessing
+    # one of them outright mangles Cyrillic.
+    param([byte[]]$Bytes)
+    if (-not $Bytes -or $Bytes.Length -eq 0) { return '' }
+    try {
+        $strict = New-Object System.Text.UTF8Encoding($false, $true)
+        return $strict.GetString($Bytes)
+    } catch {
+        return [System.Text.Encoding]::GetEncoding(866).GetString($Bytes)
+    }
+}
+
+function Invoke-PlatformProcess {
+    # Run the platform non-interactively and capture its console output. A closed stdin pipe
+    # (EOF) makes an auth prompt fast-fail instead of hanging; capturing keeps the child's
+    # text out of our stream until we print it labelled (and out of the wrong encoding).
+    # Returns @{ Output; ExitCode }.
+    #
+    # Quoting differs by engine, so the caller says which it built:
+    #   ibcmd    — tokens are bare (--db-path=C:\a b), the whole token gets quoted here;
+    #   1cv8     — -PreQuoted: the caller already put quotes inside the token (File="C:\a b"),
+    #              which is where 1C's own parser expects them; quoting again breaks the value.
+    param([string]$Exe, [string[]]$ProcArgs, [switch]$PreQuoted)
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $Exe
-    $psi.Arguments = ($IbArgs | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' '
+    $psi.Arguments = if ($PreQuoted) {
+        $ProcArgs -join ' '
+    } else {
+        ($ProcArgs | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' '
+    }
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
-    try {
-        $psi.StandardOutputEncoding = [System.Text.Encoding]::GetEncoding(866)
-        $psi.StandardErrorEncoding = [System.Text.Encoding]::GetEncoding(866)
-    } catch {}
     $p = [System.Diagnostics.Process]::Start($psi)
     $p.StandardInput.Close()
-    $out = $p.StandardOutput.ReadToEnd()
-    $err = $p.StandardError.ReadToEnd()
+    # stderr is drained in parallel: reading the streams one after another deadlocks
+    # as soon as the other one fills its pipe buffer.
+    $errMs = New-Object System.IO.MemoryStream
+    $errTask = $p.StandardError.BaseStream.CopyToAsync($errMs)
+    $outMs = New-Object System.IO.MemoryStream
+    $p.StandardOutput.BaseStream.CopyTo($outMs)
+    $errTask.Wait()
     $p.WaitForExit()
+    $out = ConvertFrom-PlatformBytes $outMs.ToArray()
+    $err = ConvertFrom-PlatformBytes $errMs.ToArray()
     if ($err) { $out += $err }
     return [pscustomobject]@{ Output = $out; ExitCode = $p.ExitCode }
+}
+
+function Write-PlatformOutput {
+    # Print what the platform wrote to the console as its own labelled block. Silence stays
+    # silent: in batch mode 1cv8 reports through /Out and prints nothing here.
+    param([string]$Text)
+    if (-not $Text) { return }
+    $t = $Text.TrimEnd()
+    if (-not $t) { return }
+    $limit = 65536
+    if ($t.Length -gt $limit) {
+        $t = "[... обрезано, показаны последние $limit символов ...]`r`n" + $t.Substring($t.Length - $limit)
+    }
+    Write-Host "--- Вывод платформы ---"
+    Write-Host $t
+    Write-Host "--- End ---"
 }
 
 
@@ -536,16 +579,16 @@ try {
         $arguments += "--data=$tempDir"
         $arguments += $extraArgs
         Write-Host "Running: ibcmd $(Protect-Secrets ((Format-ArgsForDisplay $arguments $engine) -join ' ') @($Password, $UserName))"
-        $__ib = Invoke-IbcmdProcess $V8Path $arguments
+        $__ib = Invoke-PlatformProcess $V8Path $arguments
         $output = $__ib.Output
         $exitCode = $__ib.ExitCode
         if ($exitCode -ne 0) {
             Write-Host "Error loading changes (code: $exitCode)$(Get-ExitAnnotation $exitCode)" -ForegroundColor Red
-            if ($output) { Write-Host ($output | Out-String) }
+            Write-PlatformOutput $output
             exit $exitCode
         }
         Write-Host "Changes loaded successfully ($($configFiles.Count) files)" -ForegroundColor Green
-        if ($output) { Write-Host ($output | Out-String) }
+        Write-PlatformOutput $output
         if ($UpdateDB) {
             $applyArgs = @("infobase", "config", "apply", "--db-path=$InfoBasePath", "--force")
             if ($UserName) { $applyArgs += "--user=$UserName" }
@@ -553,7 +596,7 @@ try {
             $applyArgs += "--data=$tempDir"
             $applyArgs += $extraArgs
             Write-Host "Running: ibcmd $(Protect-Secrets ((Format-ArgsForDisplay $applyArgs $engine) -join ' ') @($Password, $UserName))"
-            $__ib = Invoke-IbcmdProcess $V8Path $applyArgs
+            $__ib = Invoke-PlatformProcess $V8Path $applyArgs
             $applyOut = $__ib.Output
             $exitCode = $__ib.ExitCode
             if ($exitCode -eq 0) {
@@ -561,7 +604,7 @@ try {
             } else {
                 Write-Host "Error updating database configuration (code: $exitCode)$(Get-ExitAnnotation $exitCode)" -ForegroundColor Red
             }
-            if ($applyOut) { Write-Host ($applyOut | Out-String) }
+            Write-PlatformOutput $applyOut
         }
         exit $exitCode
     }
@@ -613,8 +656,8 @@ try {
     Write-Host "Executing partial configuration load..."
     Write-Host "Running: 1cv8.exe $(Protect-Secrets ((Format-ArgsForDisplay $arguments $engine) -join ' ') @($Password, $UserName))"
 
-    $process = Start-Process -FilePath $V8Path -ArgumentList $arguments -NoNewWindow -Wait -PassThru
-    $exitCode = $process.ExitCode
+    $__v8 = Invoke-PlatformProcess $V8Path $arguments -PreQuoted
+    $exitCode = $__v8.ExitCode
 
     # --- Result ---
     Write-Host ""
@@ -632,6 +675,7 @@ try {
             Write-Host "--- End ---"
         }
     }
+    Write-PlatformOutput $__v8.Output
 
     exit $exitCode
 

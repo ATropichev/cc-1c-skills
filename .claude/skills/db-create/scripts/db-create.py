@@ -250,6 +250,18 @@ IBCMD_NOUSER_HINT = (
 )
 
 
+def decode_platform_bytes(data):
+    """ibcmd writes UTF-8 (checked on 8.3.24, 8.3.27, 8.5), a crashing 1cv8 may still emit
+    OEM text. Decode strictly as UTF-8 and fall back to cp866 on invalid bytes — the locale
+    code page (what text=True uses) mangles both."""
+    if not data:
+        return ""
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("cp866", errors="replace")
+
+
 def run_ibcmd(cmd, has_username=False, warn_no_user=True):
     """Run an ibcmd command non-interactively.
 
@@ -260,7 +272,67 @@ def run_ibcmd(cmd, has_username=False, warn_no_user=True):
     if warn_no_user and os.name == "nt" and not has_username:
         sys.stderr.write(IBCMD_NOUSER_HINT)
         sys.stderr.flush()
-    return subprocess.run(cmd, input="", capture_output=True, encoding="utf-8", errors="replace")
+    r = subprocess.run(cmd, input=b"", capture_output=True)
+    r.stdout = decode_platform_bytes(r.stdout)
+    r.stderr = decode_platform_bytes(r.stderr)
+    return r
+
+
+def clean_path(value, param=""):
+    """Forgive what is unambiguous in a path the caller passed: surrounding whitespace,
+    surrounding quotes that survived shell parsing, a trailing separator. A quote left
+    inside afterwards cannot be part of a real path — reject it by name instead of letting
+    1C answer with its opaque "Неверные или отсутствующие параметры соединения"."""
+    if not value:
+        return value
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        v = v[1:-1].strip()
+    if len(v) > 3 and v[-1] in "\\/":
+        v = v[:-1]
+    if '"' in v:
+        print(f"Error: {param or 'path'} contains a quote character: {value}", file=sys.stderr)
+        sys.exit(1)
+    return v
+
+
+def quote_if_needed(token):
+    """Extra arguments come from the caller unquoted; the 1cv8 command line is joined
+    verbatim, so a token with a space needs quotes of its own."""
+    if token and (" " in token or "\t" in token) and '"' not in token:
+        return f'"{token}"'
+    return token
+
+
+def run_v8(v8path, arguments):
+    """Run 1cv8 in batch mode and capture its console output.
+
+    The arguments carry their own quotes inside the value (File="C:\\a b") — that is where
+    1C's parser expects them, on Windows and on *nix alike. Windows list2cmdline would
+    escape those quotes, so there the command line is handed over ready-made.
+    """
+    if os.name == "nt":
+        cmd = '"' + v8path + '" ' + " ".join(arguments)
+    else:
+        cmd = [v8path] + arguments
+    r = subprocess.run(cmd, input=b"", capture_output=True)
+    r.stdout = decode_platform_bytes(r.stdout)
+    r.stderr = decode_platform_bytes(r.stderr)
+    return r
+
+
+def print_platform_output(result):
+    """Print what the platform wrote to the console as its own labelled block. Silence stays
+    silent: in batch mode 1cv8 reports through /Out and prints nothing here."""
+    text = ((result.stdout or "") + (result.stderr or "")).rstrip()
+    if not text:
+        return
+    limit = 65536
+    if len(text) > limit:
+        text = f"[... обрезано, показаны последние {limit} символов ...]\n" + text[-limit:]
+    print("--- Вывод платформы ---")
+    print(text)
+    print("--- End ---")
 
 
 def main():
@@ -284,6 +356,10 @@ def main():
     known_opts = {s.lower() for a in parser._actions for s in a.option_strings}
     argv, v8_extra, ibcmd_extra = extract_extra_args(sys.argv[1:], known_opts)
     args = parser.parse_args(argv)
+
+    args.V8Path = clean_path(args.V8Path, "-V8Path")
+    args.InfoBasePath = clean_path(args.InfoBasePath, "-InfoBasePath")
+    args.UseTemplate = clean_path(args.UseTemplate, "-UseTemplate")
 
     v8path = resolve_v8path(args.V8Path)
     engine = "ibcmd" if os.path.basename(v8path).lower().startswith("ibcmd") else "1cv8"
@@ -325,7 +401,7 @@ def main():
         ib_data = tempfile.mkdtemp(prefix="ibcmd_data_")
         atexit.register(shutil.rmtree, ib_data, ignore_errors=True)
         arguments.append(f"--data={ib_data}")
-        arguments.extend(extra_args)
+        arguments.extend(quote_if_needed(a) for a in extra_args)
         print(f"Running: ibcmd {' '.join(format_args_for_display(arguments, engine))}")
         result = run_ibcmd([v8path] + arguments, warn_no_user=False)
         exit_code = result.returncode
@@ -342,10 +418,7 @@ def main():
             )
         else:
             print(f"Error creating information base (code: {exit_code})", file=sys.stderr)
-        if result.stdout:
-            print(result.stdout)
-        if result.stderr:
-            print(result.stderr, file=sys.stderr)
+        print_platform_output(result)
         sys.exit(exit_code)
 
     # --- Temp dir ---
@@ -356,37 +429,33 @@ def main():
         # --- Build arguments ---
         arguments = ["CREATEINFOBASE"]
 
+        # Quotes go INSIDE the token (File="path"): that is where 1C's parser expects them.
+        # Quoting the whole token instead breaks a path with spaces — on both OSes.
         if args.InfoBaseServer and args.InfoBaseRef:
-            # No embedded quotes: subprocess quotes the whole token; 1C's argv parser
-            # strips outer quotes. Inner quotes get escaped by list2cmdline and break parsing.
-            arguments.append(f'Srvr={args.InfoBaseServer};Ref={args.InfoBaseRef}')
+            arguments.append(f'Srvr="{args.InfoBaseServer}";Ref="{args.InfoBaseRef}"')
         else:
-            arguments.append(f'File={args.InfoBasePath}')
+            arguments.append(f'File="{args.InfoBasePath}"')
 
         # --- Template ---
         if args.UseTemplate:
-            arguments.extend(["/UseTemplate", args.UseTemplate])
+            arguments.extend(["/UseTemplate", f'"{args.UseTemplate}"'])
 
         # --- Add to list ---
         if args.AddToList:
             if args.ListName:
-                arguments.extend(["/AddToList", args.ListName])
+                arguments.extend(["/AddToList", f'"{args.ListName}"'])
             else:
                 arguments.append("/AddToList")
 
         # --- Output ---
         out_file = os.path.join(temp_dir, "create_log.txt")
-        arguments.extend(["/Out", out_file])
+        arguments.extend(["/Out", f'"{out_file}"'])
         arguments.append("/DisableStartupDialogs")
-        arguments.extend(extra_args)
+        arguments.extend(quote_if_needed(a) for a in extra_args)
 
         # --- Execute ---
         print(f"Running: 1cv8.exe {' '.join(format_args_for_display(arguments, engine))}")
-        result = subprocess.run(
-            [v8path] + arguments,
-            capture_output=True,
-            text=True,
-        )
+        result = run_v8(v8path, arguments)
         exit_code = result.returncode
 
         # --- Result ---
@@ -420,6 +489,7 @@ def main():
                     print("--- End ---")
             except Exception:
                 pass
+        print_platform_output(result)
 
         sys.exit(exit_code)
 

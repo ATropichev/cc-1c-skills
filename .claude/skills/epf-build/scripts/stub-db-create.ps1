@@ -1,4 +1,4 @@
-﻿# stub-db-create v1.5 — Create temp 1C infobase with metadata stubs for EPF/ERF build
+﻿# stub-db-create v1.6 — Create temp 1C infobase with metadata stubs for EPF/ERF build
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1380,30 +1380,73 @@ $propsXml		</Properties>$childObjLine
 }
 
 # --- 5a. Stub via ibcmd (one call: create [--import --apply]) ---
-function Invoke-IbcmdProcess {
-    # Run ibcmd non-interactively: a closed stdin pipe (EOF) makes ibcmd's auth prompt
-    # fast-fail instead of hanging. Returns @{ Output; ExitCode }. cp866 decodes ibcmd's
-    # native OEM output. The 1cv8/DESIGNER branch keeps using Start-Process.
-    param([string]$Exe, [string[]]$IbArgs)
+function ConvertFrom-PlatformBytes {
+    # ibcmd writes UTF-8 (checked on 8.3.24, 8.3.27, 8.5), a crashing 1cv8 may still emit
+    # OEM text. Decode strictly as UTF-8 and fall back to cp866 on invalid bytes — guessing
+    # one of them outright mangles Cyrillic.
+    param([byte[]]$Bytes)
+    if (-not $Bytes -or $Bytes.Length -eq 0) { return '' }
+    try {
+        $strict = New-Object System.Text.UTF8Encoding($false, $true)
+        return $strict.GetString($Bytes)
+    } catch {
+        return [System.Text.Encoding]::GetEncoding(866).GetString($Bytes)
+    }
+}
+
+function Invoke-PlatformProcess {
+    # Run the platform non-interactively and capture its console output. A closed stdin pipe
+    # (EOF) makes an auth prompt fast-fail instead of hanging; capturing keeps the child's
+    # text out of our stream until we print it labelled (and out of the wrong encoding).
+    # Returns @{ Output; ExitCode }.
+    #
+    # Quoting differs by engine, so the caller says which it built:
+    #   ibcmd    — tokens are bare (--db-path=C:\a b), the whole token gets quoted here;
+    #   1cv8     — -PreQuoted: the caller already put quotes inside the token (File="C:\a b"),
+    #              which is where 1C's own parser expects them; quoting again breaks the value.
+    param([string]$Exe, [string[]]$ProcArgs, [switch]$PreQuoted)
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $Exe
-    $psi.Arguments = ($IbArgs | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' '
+    $psi.Arguments = if ($PreQuoted) {
+        $ProcArgs -join ' '
+    } else {
+        ($ProcArgs | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' '
+    }
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
-    try {
-        $psi.StandardOutputEncoding = [System.Text.Encoding]::GetEncoding(866)
-        $psi.StandardErrorEncoding = [System.Text.Encoding]::GetEncoding(866)
-    } catch {}
     $p = [System.Diagnostics.Process]::Start($psi)
     $p.StandardInput.Close()
-    $out = $p.StandardOutput.ReadToEnd()
-    $err = $p.StandardError.ReadToEnd()
+    # stderr is drained in parallel: reading the streams one after another deadlocks
+    # as soon as the other one fills its pipe buffer.
+    $errMs = New-Object System.IO.MemoryStream
+    $errTask = $p.StandardError.BaseStream.CopyToAsync($errMs)
+    $outMs = New-Object System.IO.MemoryStream
+    $p.StandardOutput.BaseStream.CopyTo($outMs)
+    $errTask.Wait()
     $p.WaitForExit()
+    $out = ConvertFrom-PlatformBytes $outMs.ToArray()
+    $err = ConvertFrom-PlatformBytes $errMs.ToArray()
     if ($err) { $out += $err }
     return [pscustomobject]@{ Output = $out; ExitCode = $p.ExitCode }
+}
+
+function Write-PlatformOutput {
+    # Print what the platform wrote to the console as its own labelled block. Silence stays
+    # silent: in batch mode 1cv8 reports through /Out and prints nothing here.
+    param([string]$Text)
+    if (-not $Text) { return }
+    $t = $Text.TrimEnd()
+    if (-not $t) { return }
+    $limit = 65536
+    if ($t.Length -gt $limit) {
+        $t = "[... обрезано, показаны последние $limit символов ...]`r`n" + $t.Substring($t.Length - $limit)
+    }
+    Write-Host "--- Вывод платформы ---"
+    Write-Host $t
+    Write-Host "--- End ---"
 }
 
 
@@ -1428,12 +1471,12 @@ if ($stubEngine -eq "ibcmd") {
 	if ($hasRefTypes) { $ibArgs += "--import=$(Join-Path $TempBasePath 'cfg')", "--apply", "--force" }
 	$ibArgs += "--data=$ibData"
 	$ibArgs += $extraArgs
-	$__ib = Invoke-IbcmdProcess $V8Path $ibArgs
+	$__ib = Invoke-PlatformProcess $V8Path $ibArgs
 	$ibOut = $__ib.Output
 	$ibRc = $__ib.ExitCode
 	Remove-Item -Path $ibData -Recurse -Force -ErrorAction SilentlyContinue
 	if ($ibRc -ne 0) {
-		if ($ibOut) { Write-Host ($ibOut | Out-String) }
+		Write-PlatformOutput $ibOut
 		Write-Error "Failed to create stub infobase (code: $ibRc)"
 		exit 1
 	}
@@ -1446,8 +1489,9 @@ if ($stubEngine -eq "ibcmd") {
 # --- 5. Create infobase ---
 Write-Host "Creating infobase: $TempBasePath"
 $createArgs = "CREATEINFOBASE File=`"$TempBasePath`" /DisableStartupDialogs" + $extraArgString
-$proc = Start-Process -FilePath $V8Path -ArgumentList $createArgs -NoNewWindow -Wait -PassThru
+$proc = Invoke-PlatformProcess $V8Path @($createArgs) -PreQuoted
 if ($proc.ExitCode -ne 0) {
+	Write-PlatformOutput $proc.Output
 	Write-Error "Failed to create infobase (code: $($proc.ExitCode))"
 	exit 1
 }
@@ -1459,9 +1503,10 @@ if ($hasRefTypes) {
 	Write-Host "Loading configuration from files..."
 	$loadLog = Join-Path $env:TEMP "stub_load_log.txt"
 	$loadArgs = "DESIGNER /F`"$TempBasePath`" /LoadConfigFromFiles `"$cfgDir`" /Out `"$loadLog`" /DisableStartupDialogs" + $extraArgString
-	$proc = Start-Process -FilePath $V8Path -ArgumentList $loadArgs -NoNewWindow -Wait -PassThru
+	$proc = Invoke-PlatformProcess $V8Path @($loadArgs) -PreQuoted
 	if ($proc.ExitCode -ne 0) {
 		if (Test-Path $loadLog) { Get-Content $loadLog -Raw -ErrorAction SilentlyContinue | Write-Host }
+		Write-PlatformOutput $proc.Output
 		Write-Error "Failed to load config (code: $($proc.ExitCode))"
 		exit 1
 	}
@@ -1470,9 +1515,10 @@ if ($hasRefTypes) {
 	Write-Host "Updating database configuration..."
 	$updateLog = Join-Path $env:TEMP "stub_update_log.txt"
 	$updateArgs = "DESIGNER /F`"$TempBasePath`" /UpdateDBCfg /Out `"$updateLog`" /DisableStartupDialogs" + $extraArgString
-	$proc = Start-Process -FilePath $V8Path -ArgumentList $updateArgs -NoNewWindow -Wait -PassThru
+	$proc = Invoke-PlatformProcess $V8Path @($updateArgs) -PreQuoted
 	if ($proc.ExitCode -ne 0) {
 		if (Test-Path $updateLog) { Get-Content $updateLog -Raw -ErrorAction SilentlyContinue | Write-Host }
+		Write-PlatformOutput $proc.Output
 		Write-Error "Failed to update DB config (code: $($proc.ExitCode))"
 		exit 1
 	}

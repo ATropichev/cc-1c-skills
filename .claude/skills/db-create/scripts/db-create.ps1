@@ -201,6 +201,29 @@ function Format-ArgsForDisplay {
     return ,$res
 }
 
+function ConvertTo-CleanPath {
+    # Forgive what is unambiguous in a path the caller passed: surrounding whitespace,
+    # surrounding quotes that survived shell parsing, a trailing separator. A quote left
+    # inside afterwards cannot be part of a real path — reject it by name instead of letting
+    # 1C answer with its opaque "Неверные или отсутствующие параметры соединения".
+    param([string]$Value, [string]$ParamName)
+    if (-not $Value) { return $Value }
+    $v = $Value.Trim()
+    if ($v.Length -ge 2 -and $v[0] -eq $v[-1] -and ($v[0] -eq '"' -or $v[0] -eq "'")) {
+        $v = $v.Substring(1, $v.Length - 2).Trim()
+    }
+    if ($v.Length -gt 3 -and ($v[-1] -eq '\' -or $v[-1] -eq '/')) { $v = $v.Substring(0, $v.Length - 1) }
+    if ($v.Contains('"')) {
+        Write-Host "Error: $ParamName contains a quote character: $Value" -ForegroundColor Red
+        exit 1
+    }
+    return $v
+}
+
+$V8Path = ConvertTo-CleanPath $V8Path '-V8Path'
+$InfoBasePath = ConvertTo-CleanPath $InfoBasePath '-InfoBasePath'
+$UseTemplate = ConvertTo-CleanPath $UseTemplate '-UseTemplate'
+
 # --- Resolve V8Path ---
 function Find-ProjectV8Path {
     $dir = (Get-Location).Path
@@ -245,30 +268,73 @@ if (-not (Test-Path $V8Path)) {
 }
 
 # --- Detect engine (ibcmd vs 1cv8) by exe name ---
-function Invoke-IbcmdProcess {
-    # Run ibcmd non-interactively: a closed stdin pipe (EOF) makes ibcmd's auth prompt
-    # fast-fail instead of hanging. Returns @{ Output; ExitCode }. cp866 decodes ibcmd's
-    # native OEM output. The 1cv8/DESIGNER branch keeps using Start-Process.
-    param([string]$Exe, [string[]]$IbArgs)
+function ConvertFrom-PlatformBytes {
+    # ibcmd writes UTF-8 (checked on 8.3.24, 8.3.27, 8.5), a crashing 1cv8 may still emit
+    # OEM text. Decode strictly as UTF-8 and fall back to cp866 on invalid bytes — guessing
+    # one of them outright mangles Cyrillic.
+    param([byte[]]$Bytes)
+    if (-not $Bytes -or $Bytes.Length -eq 0) { return '' }
+    try {
+        $strict = New-Object System.Text.UTF8Encoding($false, $true)
+        return $strict.GetString($Bytes)
+    } catch {
+        return [System.Text.Encoding]::GetEncoding(866).GetString($Bytes)
+    }
+}
+
+function Invoke-PlatformProcess {
+    # Run the platform non-interactively and capture its console output. A closed stdin pipe
+    # (EOF) makes an auth prompt fast-fail instead of hanging; capturing keeps the child's
+    # text out of our stream until we print it labelled (and out of the wrong encoding).
+    # Returns @{ Output; ExitCode }.
+    #
+    # Quoting differs by engine, so the caller says which it built:
+    #   ibcmd    — tokens are bare (--db-path=C:\a b), the whole token gets quoted here;
+    #   1cv8     — -PreQuoted: the caller already put quotes inside the token (File="C:\a b"),
+    #              which is where 1C's own parser expects them; quoting again breaks the value.
+    param([string]$Exe, [string[]]$ProcArgs, [switch]$PreQuoted)
     $psi = New-Object System.Diagnostics.ProcessStartInfo
     $psi.FileName = $Exe
-    $psi.Arguments = ($IbArgs | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' '
+    $psi.Arguments = if ($PreQuoted) {
+        $ProcArgs -join ' '
+    } else {
+        ($ProcArgs | ForEach-Object { if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ } }) -join ' '
+    }
     $psi.UseShellExecute = $false
     $psi.CreateNoWindow = $true
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
-    try {
-        $psi.StandardOutputEncoding = [System.Text.Encoding]::GetEncoding(866)
-        $psi.StandardErrorEncoding = [System.Text.Encoding]::GetEncoding(866)
-    } catch {}
     $p = [System.Diagnostics.Process]::Start($psi)
     $p.StandardInput.Close()
-    $out = $p.StandardOutput.ReadToEnd()
-    $err = $p.StandardError.ReadToEnd()
+    # stderr is drained in parallel: reading the streams one after another deadlocks
+    # as soon as the other one fills its pipe buffer.
+    $errMs = New-Object System.IO.MemoryStream
+    $errTask = $p.StandardError.BaseStream.CopyToAsync($errMs)
+    $outMs = New-Object System.IO.MemoryStream
+    $p.StandardOutput.BaseStream.CopyTo($outMs)
+    $errTask.Wait()
     $p.WaitForExit()
+    $out = ConvertFrom-PlatformBytes $outMs.ToArray()
+    $err = ConvertFrom-PlatformBytes $errMs.ToArray()
     if ($err) { $out += $err }
     return [pscustomobject]@{ Output = $out; ExitCode = $p.ExitCode }
+}
+
+function Write-PlatformOutput {
+    # Print what the platform wrote to the console as its own labelled block. Silence stays
+    # silent: in batch mode 1cv8 reports through /Out and prints nothing here.
+    param([string]$Text)
+    if (-not $Text) { return }
+    $t = $Text.TrimEnd()
+    if (-not $t) { return }
+    $limit = 65536
+    if ($t.Length -gt $limit) {
+        $t = "[... обрезано, показаны последние $limit символов ...]`r`n" + $t.Substring($t.Length - $limit)
+    }
+    Write-Host "--- Вывод платформы ---"
+    Write-Host $t
+    Write-Host "--- End ---"
 }
 
 
@@ -321,7 +387,7 @@ try {
         $arguments += "--data=$tempDir"
         $arguments += $extraArgs
         Write-Host "Running: ibcmd $((Format-ArgsForDisplay $arguments $engine) -join ' ')"
-        $__ib = Invoke-IbcmdProcess $V8Path $arguments
+        $__ib = Invoke-PlatformProcess $V8Path $arguments
         $output = $__ib.Output
         $exitCode = $__ib.ExitCode
         $ibMissing = ($exitCode -eq 0) -and -not (Test-FileIbCreated $InfoBasePath)
@@ -333,7 +399,7 @@ try {
         } else {
             Write-Host "Error creating information base (code: $exitCode)" -ForegroundColor Red
         }
-        if ($output) { Write-Host ($output | Out-String) }
+        Write-PlatformOutput $output
         exit $exitCode
     }
 
@@ -341,6 +407,8 @@ try {
     # --- Build arguments ---
     $arguments = @("CREATEINFOBASE")
 
+    # Quotes go INSIDE the token (File="path"): 1C's own parser wants them there, quoting
+    # the whole token instead breaks a path with spaces. Hence -PreQuoted on the launch.
     if ($InfoBaseServer -and $InfoBaseRef) {
         $arguments += "Srvr=`"$InfoBaseServer`";Ref=`"$InfoBaseRef`""
     } else {
@@ -369,8 +437,8 @@ try {
 
     # --- Execute ---
     Write-Host "Running: 1cv8.exe $((Format-ArgsForDisplay $arguments $engine) -join ' ')"
-    $process = Start-Process -FilePath $V8Path -ArgumentList $arguments -NoNewWindow -Wait -PassThru
-    $exitCode = $process.ExitCode
+    $__v8 = Invoke-PlatformProcess $V8Path $arguments -PreQuoted
+    $exitCode = $__v8.ExitCode
 
     # --- Result ---
     # Postcondition (file infobase only): exit 0 without a non-empty 1Cv8.1CD is a false success.
@@ -397,6 +465,7 @@ try {
             Write-Host "--- End ---"
         }
     }
+    Write-PlatformOutput $__v8.Output
 
     exit $exitCode
 

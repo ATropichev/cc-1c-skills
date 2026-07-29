@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# stub-db-create v1.5 — Create temp 1C infobase with metadata stubs for EPF/ERF build
+# stub-db-create v1.6 — Create temp 1C infobase with metadata stubs for EPF/ERF build
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -20,6 +20,75 @@ IBCMD_NOUSER_HINT = (
 )
 
 
+def decode_platform_bytes(data):
+    """ibcmd writes UTF-8 (checked on 8.3.24, 8.3.27, 8.5), a crashing 1cv8 may still emit
+    OEM text. Decode strictly as UTF-8 and fall back to cp866 on invalid bytes — the locale
+    code page (what text=True uses) mangles both."""
+    if not data:
+        return ""
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("cp866", errors="replace")
+
+
+def clean_path(value, param=""):
+    """Forgive what is unambiguous in a path the caller passed: surrounding whitespace,
+    surrounding quotes that survived shell parsing, a trailing separator. A quote left
+    inside afterwards cannot be part of a real path — reject it by name instead of letting
+    1C answer with its opaque "Неверные или отсутствующие параметры соединения"."""
+    if not value:
+        return value
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        v = v[1:-1].strip()
+    if len(v) > 3 and v[-1] in "\\/":
+        v = v[:-1]
+    if '"' in v:
+        print(f"Error: {param or 'path'} contains a quote character: {value}", file=sys.stderr)
+        sys.exit(1)
+    return v
+
+
+def quote_if_needed(token):
+    """Extra arguments come from the caller unquoted; the 1cv8 command line is joined
+    verbatim, so a token with a space needs quotes of its own."""
+    if token and (" " in token or "\t" in token) and '"' not in token:
+        return f'"{token}"'
+    return token
+
+
+def run_v8(v8path, arguments):
+    """Run 1cv8 in batch mode and capture its console output.
+
+    The arguments carry their own quotes inside the value (File="C:\\a b") — that is where
+    1C's parser expects them, on Windows and on *nix alike. Windows list2cmdline would
+    escape those quotes, so there the command line is handed over ready-made.
+    """
+    if os.name == "nt":
+        cmd = '"' + v8path + '" ' + " ".join(arguments)
+    else:
+        cmd = [v8path] + arguments
+    r = subprocess.run(cmd, input=b"", capture_output=True)
+    r.stdout = decode_platform_bytes(r.stdout)
+    r.stderr = decode_platform_bytes(r.stderr)
+    return r
+
+
+def print_platform_output(result):
+    """Print what the platform wrote to the console as its own labelled block. Silence stays
+    silent: in batch mode 1cv8 reports through /Out and prints nothing here."""
+    text = ((result.stdout or "") + (result.stderr or "")).rstrip()
+    if not text:
+        return
+    limit = 65536
+    if len(text) > limit:
+        text = f"[... обрезано, показаны последние {limit} символов ...]\n" + text[-limit:]
+    print("--- Вывод платформы ---")
+    print(text)
+    print("--- End ---")
+
+
 def run_ibcmd(cmd, has_username=False, warn_no_user=True):
     """Run an ibcmd command non-interactively.
 
@@ -30,7 +99,10 @@ def run_ibcmd(cmd, has_username=False, warn_no_user=True):
     if warn_no_user and os.name == "nt" and not has_username:
         sys.stderr.write(IBCMD_NOUSER_HINT)
         sys.stderr.flush()
-    return subprocess.run(cmd, input="", capture_output=True, encoding="utf-8", errors="replace")
+    r = subprocess.run(cmd, input=b"", capture_output=True)
+    r.stdout = decode_platform_bytes(r.stdout)
+    r.stderr = decode_platform_bytes(r.stderr)
+    return r
 
 
 # --- Additional platform arguments ---
@@ -1251,11 +1323,10 @@ def main():
 
     # Create infobase
     print(f'Creating infobase: {temp_base}')
-    result = subprocess.run(
-        [args.V8Path, 'CREATEINFOBASE', f'File={temp_base}', '/DisableStartupDialogs'] + extra_args,
-        capture_output=True, text=True,
-    )
+    result = run_v8(args.V8Path, ['CREATEINFOBASE', f'File="{temp_base}"', '/DisableStartupDialogs']
+                    + [quote_if_needed(a) for a in extra_args])
     if result.returncode != 0:
+        print_platform_output(result)
         print(f'Failed to create infobase (code: {result.returncode})', file=sys.stderr)
         sys.exit(1)
 
@@ -1263,21 +1334,18 @@ def main():
         cfg_dir = os.path.join(temp_base, 'cfg')
         # LoadConfigFromFiles
         print('Loading configuration from files...')
-        result = subprocess.run(
-            [args.V8Path, 'DESIGNER', f'/F{temp_base}', '/LoadConfigFromFiles', cfg_dir, '/DisableStartupDialogs'] + extra_args,
-            capture_output=True, text=True,
-        )
+        result = run_v8(args.V8Path, ['DESIGNER', f'/F"{temp_base}"', '/LoadConfigFromFiles', f'"{cfg_dir}"',
+                                      '/DisableStartupDialogs'] + [quote_if_needed(a) for a in extra_args])
         if result.returncode != 0:
+            print_platform_output(result)
             print(f'Failed to load config (code: {result.returncode})', file=sys.stderr)
             sys.exit(1)
 
         # UpdateDBCfg
         print('Updating database configuration...')
         update_log = os.path.join(tempfile.gettempdir(), 'stub_update_log.txt')
-        result = subprocess.run(
-            [args.V8Path, 'DESIGNER', f'/F{temp_base}', '/UpdateDBCfg', '/Out', update_log, '/DisableStartupDialogs'] + extra_args,
-            capture_output=True, text=True,
-        )
+        result = run_v8(args.V8Path, ['DESIGNER', f'/F"{temp_base}"', '/UpdateDBCfg', '/Out', f'"{update_log}"',
+                                      '/DisableStartupDialogs'] + [quote_if_needed(a) for a in extra_args])
         if result.returncode != 0:
             if os.path.isfile(update_log):
                 try:
@@ -1285,6 +1353,7 @@ def main():
                         print(f.read())
                 except Exception:
                     pass
+            print_platform_output(result)
             print(f'Failed to update DB config (code: {result.returncode})', file=sys.stderr)
             sys.exit(1)
 

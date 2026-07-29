@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-xml v1.18 — Load 1C configuration from XML files
+# db-load-xml v1.19 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -243,6 +243,85 @@ IBCMD_NOUSER_HINT = (
 )
 
 
+def decode_platform_bytes(data):
+    """ibcmd writes UTF-8 (checked on 8.3.24, 8.3.27, 8.5), a crashing 1cv8 may still emit
+    OEM text. Decode strictly as UTF-8 and fall back to cp866 on invalid bytes — the locale
+    code page (what text=True uses) mangles both."""
+    if not data:
+        return ""
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        return data.decode("cp866", errors="replace")
+
+
+def assert_infobase_exists(path):
+    """These skills work on a ready infobase. Saying so up front beats the platform's
+    "Неверные или отсутствующие параметры соединения" after a launch."""
+    if not path:
+        return
+    if not os.path.isfile(os.path.join(path, "1Cv8.1CD")):
+        print(f"Error: information base not found at {path} (no 1Cv8.1CD)", file=sys.stderr)
+        sys.exit(1)
+
+
+def clean_path(value, param=""):
+    """Forgive what is unambiguous in a path the caller passed: surrounding whitespace,
+    surrounding quotes that survived shell parsing, a trailing separator. A quote left
+    inside afterwards cannot be part of a real path — reject it by name instead of letting
+    1C answer with its opaque "Неверные или отсутствующие параметры соединения"."""
+    if not value:
+        return value
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        v = v[1:-1].strip()
+    if len(v) > 3 and v[-1] in "\\/":
+        v = v[:-1]
+    if '"' in v:
+        print(f"Error: {param or 'path'} contains a quote character: {value}", file=sys.stderr)
+        sys.exit(1)
+    return v
+
+
+def quote_if_needed(token):
+    """Extra arguments come from the caller unquoted; the 1cv8 command line is joined
+    verbatim, so a token with a space needs quotes of its own."""
+    if token and (" " in token or "\t" in token) and '"' not in token:
+        return f'"{token}"'
+    return token
+
+
+def run_v8(v8path, arguments):
+    """Run 1cv8 in batch mode and capture its console output.
+
+    The arguments carry their own quotes inside the value (File="C:\\a b") — that is where
+    1C's parser expects them, on Windows and on *nix alike. Windows list2cmdline would
+    escape those quotes, so there the command line is handed over ready-made.
+    """
+    if os.name == "nt":
+        cmd = '"' + v8path + '" ' + " ".join(arguments)
+    else:
+        cmd = [v8path] + arguments
+    r = subprocess.run(cmd, input=b"", capture_output=True)
+    r.stdout = decode_platform_bytes(r.stdout)
+    r.stderr = decode_platform_bytes(r.stderr)
+    return r
+
+
+def print_platform_output(result):
+    """Print what the platform wrote to the console as its own labelled block. Silence stays
+    silent: in batch mode 1cv8 reports through /Out and prints nothing here."""
+    text = ((result.stdout or "") + (result.stderr or "")).rstrip()
+    if not text:
+        return
+    limit = 65536
+    if len(text) > limit:
+        text = f"[... обрезано, показаны последние {limit} символов ...]\n" + text[-limit:]
+    print("--- Вывод платформы ---")
+    print(text)
+    print("--- End ---")
+
+
 def run_ibcmd(cmd, has_username=False, warn_no_user=True):
     """Run an ibcmd command non-interactively.
 
@@ -253,7 +332,10 @@ def run_ibcmd(cmd, has_username=False, warn_no_user=True):
     if warn_no_user and os.name == "nt" and not has_username:
         sys.stderr.write(IBCMD_NOUSER_HINT)
         sys.stderr.flush()
-    return subprocess.run(cmd, input="", capture_output=True, encoding="utf-8", errors="replace")
+    r = subprocess.run(cmd, input=b"", capture_output=True)
+    r.stdout = decode_platform_bytes(r.stdout)
+    r.stderr = decode_platform_bytes(r.stderr)
+    return r
 
 
 def describe_exit(code):
@@ -332,6 +414,12 @@ def main():
     known_opts = {s.lower() for a in parser._actions for s in a.option_strings}
     argv, v8_extra, ibcmd_extra = extract_extra_args(sys.argv[1:], known_opts)
     args = parser.parse_args(argv)
+
+    args.V8Path = clean_path(args.V8Path, "-V8Path")
+    args.InfoBasePath = clean_path(args.InfoBasePath, "-InfoBasePath")
+    assert_infobase_exists(args.InfoBasePath)
+    args.ConfigDir = clean_path(args.ConfigDir, "-ConfigDir")
+    args.ListFile = clean_path(args.ListFile, "-ListFile")
 
     # --- Resolve V8Path ---
     v8path = resolve_v8path(args.V8Path)
@@ -412,14 +500,8 @@ def main():
         result = run_ibcmd([v8path] + arguments, bool(args.UserName))
         if result.returncode != 0:
             print(f"Error loading configuration from files (code: {result.returncode}){describe_exit(result.returncode)}", file=sys.stderr)
-            if result.stdout:
-                print(result.stdout)
-            if result.stderr:
-                print(result.stderr, file=sys.stderr)
             sys.exit(result.returncode)
         print(f"Configuration loaded successfully from: {args.ConfigDir}")
-        if result.stdout:
-            print(result.stdout)
         exit_code = 0
         if args.UpdateDB:
             apply_args = ["infobase", "config", "apply", f"--db-path={args.InfoBasePath}", "--force"]
@@ -436,10 +518,7 @@ def main():
                 print("Database configuration updated successfully")
             else:
                 print(f"Error updating database configuration (code: {exit_code}){describe_exit(exit_code)}", file=sys.stderr)
-            if ar.stdout:
-                print(ar.stdout)
-            if ar.stderr:
-                print(ar.stderr, file=sys.stderr)
+            print_platform_output(ar)
         sys.exit(exit_code)
 
     # --- Temp dir ---
@@ -451,16 +530,16 @@ def main():
         arguments = ["DESIGNER"]
 
         if args.InfoBaseServer and args.InfoBaseRef:
-            arguments += ["/S", f"{args.InfoBaseServer}/{args.InfoBaseRef}"]
+            arguments += ["/S", f'"{args.InfoBaseServer}/{args.InfoBaseRef}"']
         else:
-            arguments += ["/F", args.InfoBasePath]
+            arguments += ["/F", f'"{args.InfoBasePath}"']
 
         if args.UserName:
-            arguments.append(f"/N{args.UserName}")
+            arguments.append(f'/N"{args.UserName}"')
         if args.Password:
-            arguments.append(f"/P{args.Password}")
+            arguments.append(f'/P"{args.Password}"')
 
-        arguments += ["/LoadConfigFromFiles", args.ConfigDir]
+        arguments += ["/LoadConfigFromFiles", f'"{args.ConfigDir}"']
 
         if args.Mode == "Full":
             print("Executing full configuration load...")
@@ -496,7 +575,7 @@ def main():
             for fl in file_list:
                 print(f"  {fl}")
 
-            arguments += ["-listFile", generated_list_file]
+            arguments += ["-listFile", f'"{generated_list_file}"']
             arguments.append("-partial")
             arguments.append("-updateConfigDumpInfo")
 
@@ -504,7 +583,7 @@ def main():
 
         # --- Extensions ---
         if args.Extension:
-            arguments += ["-Extension", args.Extension]
+            arguments += ["-Extension", f'"{args.Extension}"']
         elif args.AllExtensions:
             arguments.append("-AllExtensions")
 
@@ -514,17 +593,13 @@ def main():
 
         # --- Output ---
         out_file = os.path.join(temp_dir, "load_log.txt")
-        arguments += ["/Out", out_file]
+        arguments += ["/Out", f'"{out_file}"']
         arguments.append("/DisableStartupDialogs")
-        arguments.extend(extra_args)
+        arguments.extend(quote_if_needed(a) for a in extra_args)
 
         # --- Execute ---
         print(f"Running: 1cv8.exe {_redact(' '.join(format_args_for_display(arguments, engine)), args.Password, args.UserName)}")
-        result = subprocess.run(
-            [v8path] + arguments,
-            capture_output=True,
-            text=True,
-        )
+        result = run_v8(v8path, arguments)
         exit_code = result.returncode
 
         # --- Read log ---
@@ -570,6 +645,7 @@ def main():
             print(log_content)
             print("--- End ---")
 
+        print_platform_output(result)
         if silent_failures:
             suffix = "" if args.StrictLog else " (pass -StrictLog to treat as error)"
             print(
