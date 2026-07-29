@@ -16,7 +16,6 @@
     "-AdditionalV8Arguments",
     "/UseHwLicenses+"
   ],
-  "runtimeOnly": "powershell",
   "expect": {
     "stdoutContains": [
       "ARGS: CREATEINFOBASE",
