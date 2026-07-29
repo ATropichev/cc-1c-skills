@@ -653,7 +653,7 @@ async function runCaseAsync(testCase, opts) {
     const { scriptPath, args } = buildArgs(skillConfig, caseData, workDir, inputFile, opts.runtime);
     let stdout = '', stderr = '', exitCode = 0;
     try {
-      const execCwd = skillConfig.cwd === 'workDir' ? workDir : undefined;
+      const execCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : undefined;
       stdout = await execSkillAsync(opts.runtime, scriptPath, args, execCwd);
     } catch (e) {
       exitCode = e.status ?? 1;
@@ -679,6 +679,10 @@ async function runCaseAsync(testCase, opts) {
           if (!existsSync(join(workDir, f))) errors.push(`Expected file not found: ${f}`);
         }
       }
+    }
+    // stdout checks apply to negative cases too — a case that says what the failure must
+    // print was silently checking nothing when they lived in the positive branch only.
+    {
       if (caseData.expect?.stdoutContains) {
         const needles = Array.isArray(caseData.expect.stdoutContains)
           ? caseData.expect.stdoutContains : [caseData.expect.stdoutContains];
@@ -693,6 +697,8 @@ async function runCaseAsync(testCase, opts) {
           if (stdout.includes(needle)) errors.push(`stdout unexpectedly contains "${needle}"`);
         }
       }
+    }
+    if (!caseData.expectError) {
       if (caseData.expect?.preserves) {
         const specs = Array.isArray(caseData.expect.preserves)
           ? caseData.expect.preserves : [caseData.expect.preserves];
@@ -713,7 +719,7 @@ async function runCaseAsync(testCase, opts) {
       if (errors.length === 0 && caseData.idempotent && !workspace.readOnly) {
         const before = snapshotWorkDirBytes(workDir);
         try {
-          const execCwd = skillConfig.cwd === 'workDir' ? workDir : undefined;
+          const execCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : undefined;
           await execSkillAsync(opts.runtime, scriptPath, args, execCwd);
         } catch (e) {
           errors.push(`Idempotency rerun failed: exitCode=${e.status}\nstderr: ${(e.stderr || '').substring(0, 300)}`);
@@ -835,7 +841,7 @@ function runCase(testCase, opts) {
     let stdout = '', stderr = '', exitCode = 0;
 
     try {
-      const execCwd = skillConfig.cwd === 'workDir' ? workDir : undefined;
+      const execCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : undefined;
       stdout = execSkillRaw(opts.runtime, scriptPath, args, execCwd);
     } catch (e) {
       exitCode = e.status ?? 1;
@@ -871,8 +877,12 @@ function runCase(testCase, opts) {
           }
         }
       }
+    }
 
-      // expect.stdoutContains / stdoutNotContains (string or array)
+    // expect.stdoutContains / stdoutNotContains (string or array) — applies to negative
+    // cases too: a case that says what the failure must print was silently checking
+    // nothing while these lived in the positive branch only.
+    {
       if (caseData.expect?.stdoutContains) {
         const needles = Array.isArray(caseData.expect.stdoutContains)
           ? caseData.expect.stdoutContains : [caseData.expect.stdoutContains];
@@ -887,6 +897,9 @@ function runCase(testCase, opts) {
           if (stdout.includes(needle)) errors.push(`stdout unexpectedly contains "${needle}"`);
         }
       }
+    }
+
+    if (!caseData.expectError) {
       if (caseData.expect?.preserves) {
         const specs = Array.isArray(caseData.expect.preserves)
           ? caseData.expect.preserves : [caseData.expect.preserves];
@@ -908,7 +921,7 @@ function runCase(testCase, opts) {
       if (errors.length === 0 && caseData.idempotent && !workspace.readOnly) {
         const before = snapshotWorkDirBytes(workDir);
         try {
-          const execCwd = skillConfig.cwd === 'workDir' ? workDir : undefined;
+          const execCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : undefined;
           execSkillRaw(opts.runtime, scriptPath, args, execCwd);
         } catch (e) {
           errors.push(`Idempotency rerun failed: exitCode=${e.status}\nstderr: ${(e.stderr || '').substring(0, 300)}`);

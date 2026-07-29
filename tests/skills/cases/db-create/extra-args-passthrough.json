@@ -5,6 +5,7 @@
   ],
   "args_extra": ["-V8Path", "{workDir}\\fake.cmd", "-InfoBasePath", "{workDir}\\ib",
                  "-AdditionalV8Arguments", "/UseHwLicenses+"],
+  "runtimeOnly": "powershell",
   "expect": { "stdoutContains": ["ARGS: CREATEINFOBASE", "/DisableStartupDialogs /UseHwLicenses+"] },
   "expectError": true,
   "noSnapshot": "проверяется командная строка в stdout, файлов на выходе нет"

@@ -1,0 +1,12 @@
+{
+  "name": "Доп. аргументы 1cv8 попадают в командную строку, py-порт (fake platform)",
+  "runtimeOnly": "python",
+  "preRun": [
+    { "writeFile": { "path": "fake.cmd", "content": "@echo off\r\necho ARGS: %*\r\nexit /b 0\r\n" } }
+  ],
+  "args_extra": ["-V8Path", "{workDir}\\fake.cmd", "-InfoBasePath", "{workDir}\\ib",
+                 "-AdditionalV8Arguments", "/UseHwLicenses+"],
+  "expect": { "stdoutContains": "/DisableStartupDialogs /UseHwLicenses+" },
+  "expectError": true,
+  "noSnapshot": "py-порт печатает лог /Out, а не stdout платформы — проверяется строка запуска"
+}

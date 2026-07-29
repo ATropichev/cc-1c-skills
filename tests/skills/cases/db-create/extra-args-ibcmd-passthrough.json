@@ -4,7 +4,7 @@
     { "writeFile": { "path": "ibcmd.cmd", "content": "@echo off\r\necho ARGS: %*\r\nexit /b 0\r\n" } }
   ],
   "args_extra": ["-V8Path", "{workDir}\\ibcmd.cmd", "-InfoBasePath", "{workDir}\\ib",
-                 "-AdditionalIbcmdArguments", "--verbose", "--token=topsecret"],
+                 "-AdditionalIbcmdArguments", "--verbose,--token=topsecret"],
   "expect": {
     "stdoutContains": ["ARGS: infobase create", "--verbose --token=topsecret", "--token=***"]
   },
