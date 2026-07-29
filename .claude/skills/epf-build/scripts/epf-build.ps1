@@ -1,4 +1,4 @@
-﻿# epf-build v1.9 — Build external data processor or report (EPF/ERF) from XML sources
+﻿# epf-build v1.10 — Build external data processor or report (EPF/ERF) from XML sources
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -33,6 +33,12 @@
 .PARAMETER OutputFile
     Путь к выходному EPF/ERF-файлу
 
+.PARAMETER AdditionalV8Arguments
+    Дополнительные аргументы запуска 1cv8.exe (например /UseHwLicenses+)
+
+.PARAMETER AdditionalIbcmdArguments
+    Дополнительные аргументы запуска ibcmd (форма --ключ=значение)
+
 .EXAMPLE
     .\epf-build.ps1 -InfoBasePath "C:\Bases\MyDB" -SourceFile "src\МояОбработка.xml" -OutputFile "build\МояОбработка.epf"
 
@@ -64,7 +70,13 @@ param(
     [string]$SourceFile,
 
     [Parameter(Mandatory=$true)]
-    [string]$OutputFile
+    [string]$OutputFile,
+
+    [Parameter(Mandatory=$false)]
+    [string[]]$AdditionalV8Arguments = @(),
+
+    [Parameter(Mandatory=$false)]
+    [string[]]$AdditionalIbcmdArguments = @()
 )
 
 $OutputEncoding = [System.Text.Encoding]::UTF8
@@ -75,6 +87,122 @@ function Protect-Secrets {
     param([string]$Text, [string[]]$Secrets)
     foreach ($s in $Secrets) { if ($s) { $Text = $Text.Replace($s, '***') } }
     return $Text
+}
+
+# --- Additional platform arguments ---
+$script:V8OwnedKeys = @(
+    'DESIGNER', 'ENTERPRISE', 'CREATEINFOBASE', 'CONFIG',
+    '/F', '/S', '/N', '/P', '/Out', '/DisableStartupDialogs',
+    '/UseTemplate', '/AddToList', '/Execute', '/C', '/URL', '/UC',
+    '/DumpIB', '/RestoreIB', '/DumpCfg', '/LoadCfg',
+    '/DumpConfigToFiles', '/LoadConfigFromFiles', '/UpdateDBCfg',
+    '/DumpExternalDataProcessorOrReportToFiles', '/LoadExternalDataProcessorOrReportFromFiles'
+)
+$script:IbcmdOwnedKeys = @(
+    '--db-path', '--data', '--out', '--file', '--load', '--restore',
+    '--import', '--export', '--apply', '--force', '--create-database',
+    '--user', '--password'
+)
+$script:V8SecretKeys = @('/P', '/UC', '/WSP', '/AWSP')
+$script:IbcmdSecretKeys = @('--password', '--token', '--db-pwd')
+
+function Test-ArgKeyMatch {
+    # A token matches a key when it equals the key, or starts with it and the next
+    # character is not a letter — catches glued /N"user" and --password=x, while
+    # keeping /ClearCache distinct from /C.
+    param([string]$Token, [string]$Key)
+    if ($Token.Length -lt $Key.Length) { return $false }
+    if (-not $Token.Substring(0, $Key.Length).Equals($Key, [System.StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if ($Token.Length -eq $Key.Length) { return $true }
+    return -not [char]::IsLetter($Token[$Key.Length])
+}
+
+function Get-ProjectExtraArgs {
+    # v8args / ibcmdargs from .v8-project.json — same upward walk as v8path.
+    param([string]$Name)
+    $dir = (Get-Location).Path
+    while ($dir) {
+        $pf = Join-Path $dir ".v8-project.json"
+        if (Test-Path $pf) {
+            try {
+                $j = Get-Content $pf -Raw -Encoding UTF8 | ConvertFrom-Json
+                if ($j.$Name) { return @($j.$Name | ForEach-Object { [string]$_ }) }
+            } catch {}
+            return @()
+        }
+        $parent = Split-Path $dir -Parent
+        if (-not $parent -or $parent -eq $dir) { break }
+        $dir = $parent
+    }
+    return @()
+}
+
+function Assert-ExtraArgs {
+    # The platform accepts only one batch operation, and a duplicate connection or
+    # output key fails with an opaque 1C error — reject what the skill owns itself.
+    param([string[]]$ExtraArgs, [string]$Engine, [hashtable]$Hints)
+    $paramName = if ($Engine -eq 'ibcmd') { '-AdditionalIbcmdArguments' } else { '-AdditionalV8Arguments' }
+    $owned = if ($Engine -eq 'ibcmd') { $script:IbcmdOwnedKeys } else { $script:V8OwnedKeys }
+    foreach ($tok in $ExtraArgs) {
+        if ($Engine -eq 'ibcmd' -and $tok -notmatch '^-') {
+            Write-Host "Error: '$tok' is a positional token — pass values as --key=value ($paramName cannot extend the ibcmd command)" -ForegroundColor Red
+            exit 1
+        }
+        foreach ($k in $owned) {
+            if (Test-ArgKeyMatch $tok $k) {
+                $hint = ''
+                if ($Hints -and $Hints.ContainsKey($k)) { $hint = " (use $($Hints[$k]))" }
+                Write-Host "Error: $k is controlled by the skill and cannot be passed via $paramName$hint" -ForegroundColor Red
+                exit 1
+            }
+        }
+    }
+}
+
+function Resolve-ExtraArgs {
+    # Pick the argument list for the selected engine and validate it. An explicitly passed
+    # parameter for the other engine is an error; the same keys coming from .v8-project.json
+    # simply do not apply — a project may describe both engines.
+    param([string]$Engine, [string[]]$V8Extra, [string[]]$IbcmdExtra, [hashtable]$Hints)
+    if ($Engine -eq 'ibcmd' -and $V8Extra.Count -gt 0) {
+        Write-Host "Error: -AdditionalV8Arguments applies to 1cv8 only; the selected engine is ibcmd (use -AdditionalIbcmdArguments)" -ForegroundColor Red
+        exit 1
+    }
+    if ($Engine -ne 'ibcmd' -and $IbcmdExtra.Count -gt 0) {
+        Write-Host "Error: -AdditionalIbcmdArguments applies to ibcmd only; the selected engine is 1cv8 (use -AdditionalV8Arguments)" -ForegroundColor Red
+        exit 1
+    }
+    if ($Engine -eq 'ibcmd') {
+        $extra = @(Get-ProjectExtraArgs 'ibcmdargs') + @($IbcmdExtra)
+    } else {
+        $extra = @(Get-ProjectExtraArgs 'v8args') + @($V8Extra)
+    }
+    if ($extra.Count -gt 0) { Assert-ExtraArgs $extra $Engine $Hints }
+    # Plain return, no comma trick: the caller re-collects with @(...), and ,@() there
+    # would nest the array — the tokens would then be glued into one argument.
+    return $extra
+}
+
+function Format-ArgsForDisplay {
+    # Redact values of secret-prone keys in glued, =-joined and separate forms.
+    # Matching here is a plain prefix (no letter rule): over-masking costs nothing,
+    # a leaked password does.
+    param([string[]]$ArgList, [string]$Engine)
+    $keys = if ($Engine -eq 'ibcmd') { $script:IbcmdSecretKeys } else { $script:V8SecretKeys }
+    $res = @()
+    $maskNext = $false
+    foreach ($tok in $ArgList) {
+        if ($maskNext) { $res += '***'; $maskNext = $false; continue }
+        $hit = $null
+        foreach ($k in $keys) {
+            if ($tok.Length -ge $k.Length -and $tok.Substring(0, $k.Length).Equals($k, [System.StringComparison]::OrdinalIgnoreCase)) { $hit = $k; break }
+        }
+        if (-not $hit) { $res += $tok; continue }
+        if ($tok.Length -eq $hit.Length) { $res += $tok; $maskNext = $true }
+        elseif ($tok[$hit.Length] -eq '=') { $res += ($hit + '=***') }
+        else { $res += ($hit + '***') }
+    }
+    return ,$res
 }
 
 # --- Resolve V8Path ---
@@ -156,6 +284,10 @@ function Test-OutputNonEmpty {
 }
 
 $engine = if ((Split-Path $V8Path -Leaf) -match '^ibcmd') { "ibcmd" } else { "1cv8" }
+
+# --- Resolve additional arguments for the selected engine ---
+$argHints = @{ '/F' = '-InfoBasePath'; '/S' = '-InfoBaseServer + -InfoBaseRef'; '/N' = '-UserName'; '/P' = '-Password'; '--db-path' = '-InfoBasePath'; '--user' = '-UserName'; '--password' = '-Password' }
+$extraArgs = @(Resolve-ExtraArgs $engine $AdditionalV8Arguments $AdditionalIbcmdArguments $argHints)
 if ($engine -eq "ibcmd" -and $InfoBaseServer -and $InfoBaseRef) {
     Write-Host "Error: ibcmd supports file infobases only (use -InfoBasePath or omit for stub)" -ForegroundColor Red
     exit 1
@@ -168,8 +300,20 @@ if (-not $InfoBasePath -and (-not $InfoBaseServer -or -not $InfoBaseRef)) {
     $autoBasePath = Join-Path $env:TEMP "epf_stub_db_$(Get-Random)"
     $stubScript = Join-Path $PSScriptRoot "stub-db-create.ps1"
     Write-Host "No database specified. Creating temporary stub database..."
-    $stubArgs = "-SourceDir `"$sourceDir`" -V8Path `"$V8Path`" -TempBasePath `"$autoBasePath`""
-    $stubProc = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -File `"$stubScript`" $stubArgs" -NoNewWindow -Wait -PassThru
+    # The stub runs its own platform processes (CREATEINFOBASE, LoadConfigFromFiles,
+    # UpdateDBCfg) — they need the same extra arguments as the final build. Only the
+    # explicit ones are forwarded: the stub reads .v8-project.json itself.
+    # Invoked via -Command, not -File: -File takes the tail literally, so an array
+    # parameter would arrive as a single comma-glued token.
+    $q = { param($s) "'" + ($s -replace "'", "''") + "'" }
+    $stubCmd = "& $(& $q $stubScript) -SourceDir $(& $q $sourceDir) -V8Path $(& $q $V8Path) -TempBasePath $(& $q $autoBasePath)"
+    if ($AdditionalV8Arguments.Count -gt 0) {
+        $stubCmd += " -AdditionalV8Arguments " + (($AdditionalV8Arguments | ForEach-Object { & $q $_ }) -join ',')
+    }
+    if ($AdditionalIbcmdArguments.Count -gt 0) {
+        $stubCmd += " -AdditionalIbcmdArguments " + (($AdditionalIbcmdArguments | ForEach-Object { & $q $_ }) -join ',')
+    }
+    $stubProc = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -Command `"$stubCmd`"" -NoNewWindow -Wait -PassThru
     if ($stubProc.ExitCode -ne 0) {
         Write-Host "Error: failed to create stub database" -ForegroundColor Red
         exit 1
@@ -202,7 +346,8 @@ try {
         if ($UserName) { $arguments += "--user=$UserName" }
         if ($Password) { $arguments += "--password=$Password" }
         $arguments += "--data=$tempDir"
-        Write-Host "Running: ibcmd $(Protect-Secrets ($arguments -join ' ') @($Password, $UserName))"
+        $arguments += $extraArgs
+        Write-Host "Running: ibcmd $(Protect-Secrets ((Format-ArgsForDisplay $arguments $engine) -join ' ') @($Password, $UserName))"
         $__ib = Invoke-IbcmdProcess $V8Path $arguments
         $output = $__ib.Output
         $exitCode = $__ib.ExitCode
@@ -238,9 +383,10 @@ try {
     $outFile = Join-Path $tempDir "build_log.txt"
     $arguments += "/Out", "`"$outFile`""
     $arguments += "/DisableStartupDialogs"
+    $arguments += $extraArgs
 
     # --- Execute ---
-    Write-Host "Running: 1cv8.exe $(Protect-Secrets ($arguments -join ' ') @($Password, $UserName))"
+    Write-Host "Running: 1cv8.exe $(Protect-Secrets ((Format-ArgsForDisplay $arguments $engine) -join ' ') @($Password, $UserName))"
     $process = Start-Process -FilePath $V8Path -ArgumentList $arguments -NoNewWindow -Wait -PassThru
     $exitCode = $process.ExitCode
 

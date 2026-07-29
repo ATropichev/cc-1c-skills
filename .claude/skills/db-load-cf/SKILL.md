@@ -52,6 +52,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-load-cf.ps1" <п
 | `-InputFile <путь>` | да | Путь к CF-файлу |
 | `-Extension <имя>` | нет | Загрузить как расширение |
 | `-AllExtensions` | нет | Загрузить все расширения из архива |
+| `-AdditionalV8Arguments <арг>…` | нет | Доп. аргументы запуска `1cv8.exe`, напр. `/UseHwLicenses+` |
+| `-AdditionalIbcmdArguments <арг>…` | нет | Доп. аргументы `ibcmd` в форме `--ключ=значение` |
 
 > `*` — нужен либо `-InfoBasePath`, либо пара `-InfoBaseServer` + `-InfoBaseRef`
 

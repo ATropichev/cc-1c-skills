@@ -29,6 +29,7 @@ allowed-tools:
 ```json
 {
   "v8path": "C:\\Program Files\\1cv8\\8.3.25.1257\\bin",
+  "v8args": ["/UseHwLicenses+"],
   "databases": [
     {
       "id": "dev",
@@ -61,6 +62,8 @@ allowed-tools:
 | Поле | Тип | Описание |
 |------|-----|----------|
 | `v8path` | string | Каталог bin платформы 1С. Необязательный — если не задан, автоопределение |
+| `v8args` | array | Доп. аргументы запуска `1cv8.exe` для всех навыков, напр. `["/UseHwLicenses+"]` |
+| `ibcmdargs` | array | Доп. аргументы `ibcmd` (форма `--ключ=значение`) |
 | `databases` | array | Массив баз данных |
 | `default` | string | id базы по умолчанию |
 

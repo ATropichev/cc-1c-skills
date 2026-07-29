@@ -51,6 +51,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-dump-cf.ps1" <п
 | `-OutputFile <путь>` | да | Путь к выходному CF-файлу |
 | `-Extension <имя>` | нет | Выгрузить расширение |
 | `-AllExtensions` | нет | Выгрузить все расширения |
+| `-AdditionalV8Arguments <арг>…` | нет | Доп. аргументы запуска `1cv8.exe`, напр. `/UseHwLicenses+` |
+| `-AdditionalIbcmdArguments <арг>…` | нет | Доп. аргументы `ibcmd` в форме `--ключ=значение` |
 
 > `*` — нужен либо `-InfoBasePath`, либо пара `-InfoBaseServer` + `-InfoBaseRef`
 

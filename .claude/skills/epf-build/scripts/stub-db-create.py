@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# stub-db-create v1.3 — Create temp 1C infobase with metadata stubs for EPF/ERF build
+# stub-db-create v1.4 — Create temp 1C infobase with metadata stubs for EPF/ERF build
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -31,6 +31,157 @@ def run_ibcmd(cmd, has_username=False, warn_no_user=True):
         sys.stderr.write(IBCMD_NOUSER_HINT)
         sys.stderr.flush()
     return subprocess.run(cmd, input="", capture_output=True, encoding="utf-8", errors="replace")
+
+
+# --- Additional platform arguments ---
+V8_OWNED_KEYS = [
+    "DESIGNER", "ENTERPRISE", "CREATEINFOBASE", "CONFIG",
+    "/F", "/S", "/N", "/P", "/Out", "/DisableStartupDialogs",
+    "/UseTemplate", "/AddToList", "/Execute", "/C", "/URL", "/UC",
+    "/DumpIB", "/RestoreIB", "/DumpCfg", "/LoadCfg",
+    "/DumpConfigToFiles", "/LoadConfigFromFiles", "/UpdateDBCfg",
+    "/DumpExternalDataProcessorOrReportToFiles", "/LoadExternalDataProcessorOrReportFromFiles",
+]
+IBCMD_OWNED_KEYS = [
+    "--db-path", "--data", "--out", "--file", "--load", "--restore",
+    "--import", "--export", "--apply", "--force", "--create-database",
+    "--user", "--password",
+]
+V8_SECRET_KEYS = ["/P", "/UC", "/WSP", "/AWSP"]
+IBCMD_SECRET_KEYS = ["--password", "--token", "--db-pwd"]
+
+
+def arg_key_match(token, key):
+    """Token matches a key when it equals it, or starts with it and the next character
+    is not a letter — catches glued /N"user" and --password=x, while keeping
+    /ClearCache distinct from /C."""
+    if len(token) < len(key):
+        return False
+    if token[: len(key)].lower() != key.lower():
+        return False
+    if len(token) == len(key):
+        return True
+    return not token[len(key)].isalpha()
+
+
+def project_extra_args(name):
+    """v8args / ibcmdargs from .v8-project.json — same upward walk as v8path."""
+    d = os.getcwd()
+    while True:
+        pf = os.path.join(d, ".v8-project.json")
+        if os.path.isfile(pf):
+            try:
+                with open(pf, encoding="utf-8-sig") as f:
+                    data = json.load(f)
+                v = data.get(name)
+                if v:
+                    return [str(x) for x in v]
+            except Exception:
+                pass
+            return []
+        parent = os.path.dirname(d)
+        if parent == d:
+            return []
+        d = parent
+
+
+def assert_extra_args(extra, engine, hints):
+    """The platform accepts only one batch operation, and a duplicate connection or
+    output key fails with an opaque 1C error — reject what the skill owns itself."""
+    param = "-AdditionalIbcmdArguments" if engine == "ibcmd" else "-AdditionalV8Arguments"
+    owned = IBCMD_OWNED_KEYS if engine == "ibcmd" else V8_OWNED_KEYS
+    for tok in extra:
+        if engine == "ibcmd" and not tok.startswith("-"):
+            print(
+                f"Error: '{tok}' is a positional token — pass values as --key=value "
+                f"({param} cannot extend the ibcmd command)",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        for k in owned:
+            if arg_key_match(tok, k):
+                hint = f" (use {hints[k]})" if hints and k in hints else ""
+                print(
+                    f"Error: {k} is controlled by the skill and cannot be passed via {param}{hint}",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+
+
+def format_args_for_display(arglist, engine):
+    """Redact values of secret-prone keys in glued, =-joined and separate forms.
+    Matching here is a plain prefix (no letter rule): over-masking costs nothing,
+    a leaked password does."""
+    keys = IBCMD_SECRET_KEYS if engine == "ibcmd" else V8_SECRET_KEYS
+    res = []
+    mask_next = False
+    for tok in arglist:
+        if mask_next:
+            res.append("***")
+            mask_next = False
+            continue
+        hit = None
+        for k in keys:
+            if tok[: len(k)].lower() == k.lower():
+                hit = k
+                break
+        if hit is None:
+            res.append(tok)
+        elif len(tok) == len(hit):
+            res.append(tok)
+            mask_next = True
+        elif tok[len(hit)] == "=":
+            res.append(hit + "=***")
+        else:
+            res.append(hit + "***")
+    return res
+
+
+def extract_extra_args(argv, known_opts):
+    """argparse refuses values that start with '-' (every ibcmd key does), so pull the two
+    escape-hatch lists out of argv by hand: after the flag, take everything up to the next
+    declared skill option. Returns (remaining_argv, v8_extra, ibcmd_extra)."""
+    rest, v8, ibcmd = [], [], []
+    i = 0
+    while i < len(argv):
+        low = argv[i].lower()
+        if low in ("-additionalv8arguments", "-additionalibcmdarguments"):
+            target = v8 if low == "-additionalv8arguments" else ibcmd
+            i += 1
+            while i < len(argv) and argv[i].lower() not in known_opts:
+                target.append(argv[i])
+                i += 1
+            continue
+        rest.append(argv[i])
+        i += 1
+    return rest, v8, ibcmd
+
+
+def resolve_extra_args(engine, v8_extra, ibcmd_extra, hints):
+    """Pick the argument list for the selected engine and validate it. An explicitly
+    passed parameter for the other engine is an error; the same keys coming from
+    .v8-project.json simply do not apply — a project may describe both engines."""
+    if engine == "ibcmd" and v8_extra:
+        print(
+            "Error: -AdditionalV8Arguments applies to 1cv8 only; the selected engine is ibcmd "
+            "(use -AdditionalIbcmdArguments)",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if engine != "ibcmd" and ibcmd_extra:
+        print(
+            "Error: -AdditionalIbcmdArguments applies to ibcmd only; the selected engine is 1cv8 "
+            "(use -AdditionalV8Arguments)",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    if engine == "ibcmd":
+        extra = project_extra_args("ibcmdargs") + list(ibcmd_extra)
+    else:
+        extra = project_extra_args("v8args") + list(v8_extra)
+    if extra:
+        assert_extra_args(extra, engine, hints)
+    return extra
 
 
 def new_uuid():
@@ -802,7 +953,13 @@ def main():
     parser.add_argument('-SourceDir', required=True)
     parser.add_argument('-V8Path', required=True)
     parser.add_argument('-TempBasePath', default='')
-    args = parser.parse_args()
+    parser.add_argument('-AdditionalV8Arguments', nargs='*', default=[],
+                        help='Extra 1cv8 arguments, e.g. /UseHwLicenses+')
+    parser.add_argument('-AdditionalIbcmdArguments', nargs='*', default=[],
+                        help='Extra ibcmd arguments in --key=value form')
+    known_opts = {s.lower() for a in parser._actions for s in a.option_strings}
+    argv, v8_extra, ibcmd_extra = extract_extra_args(sys.argv[1:], known_opts)
+    args = parser.parse_args(argv)
 
     type_map = scan_ref_types(args.SourceDir)
     register_columns = scan_register_columns(args.SourceDir)
@@ -1057,6 +1214,10 @@ def main():
 
     # Stub via ibcmd (one call: create [--import --apply])
     stub_engine = "ibcmd" if os.path.basename(args.V8Path).lower().startswith("ibcmd") else "1cv8"
+
+    # --- Resolve additional arguments for the selected engine ---
+    arg_hints = {"/F": "-TempBasePath", "--db-path": "-TempBasePath"}
+    extra_args = resolve_extra_args(stub_engine, v8_extra, ibcmd_extra, arg_hints)
     if stub_engine == "ibcmd":
         import shutil
         print(f'Creating infobase (ibcmd): {temp_base}')
@@ -1065,6 +1226,7 @@ def main():
         if has_ref_types:
             ib_args += [f'--import={os.path.join(temp_base, "cfg")}', '--apply', '--force']
         ib_args.append(f'--data={ib_data}')
+        ib_args.extend(extra_args)
         result = run_ibcmd(ib_args, warn_no_user=False)
         shutil.rmtree(ib_data, ignore_errors=True)
         if result.returncode != 0:
@@ -1084,7 +1246,7 @@ def main():
     # Create infobase
     print(f'Creating infobase: {temp_base}')
     result = subprocess.run(
-        [args.V8Path, 'CREATEINFOBASE', f'File={temp_base}', '/DisableStartupDialogs'],
+        [args.V8Path, 'CREATEINFOBASE', f'File={temp_base}', '/DisableStartupDialogs'] + extra_args,
         capture_output=True, text=True,
     )
     if result.returncode != 0:
@@ -1096,7 +1258,7 @@ def main():
         # LoadConfigFromFiles
         print('Loading configuration from files...')
         result = subprocess.run(
-            [args.V8Path, 'DESIGNER', f'/F{temp_base}', '/LoadConfigFromFiles', cfg_dir, '/DisableStartupDialogs'],
+            [args.V8Path, 'DESIGNER', f'/F{temp_base}', '/LoadConfigFromFiles', cfg_dir, '/DisableStartupDialogs'] + extra_args,
             capture_output=True, text=True,
         )
         if result.returncode != 0:
@@ -1107,7 +1269,7 @@ def main():
         print('Updating database configuration...')
         update_log = os.path.join(tempfile.gettempdir(), 'stub_update_log.txt')
         result = subprocess.run(
-            [args.V8Path, 'DESIGNER', f'/F{temp_base}', '/UpdateDBCfg', '/Out', update_log, '/DisableStartupDialogs'],
+            [args.V8Path, 'DESIGNER', f'/F{temp_base}', '/UpdateDBCfg', '/Out', update_log, '/DisableStartupDialogs'] + extra_args,
             capture_output=True, text=True,
         )
         if result.returncode != 0:

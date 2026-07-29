@@ -1,4 +1,4 @@
-﻿# stub-db-create v1.3 — Create temp 1C infobase with metadata stubs for EPF/ERF build
+﻿# stub-db-create v1.4 — Create temp 1C infobase with metadata stubs for EPF/ERF build
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -7,11 +7,132 @@ param(
 	[Parameter(Mandatory)]
 	[string]$V8Path,
 
-	[string]$TempBasePath
+	[string]$TempBasePath,
+
+	[string[]]$AdditionalV8Arguments = @(),
+
+	[string[]]$AdditionalIbcmdArguments = @()
 )
 
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# --- Additional platform arguments ---
+$script:V8OwnedKeys = @(
+    'DESIGNER', 'ENTERPRISE', 'CREATEINFOBASE', 'CONFIG',
+    '/F', '/S', '/N', '/P', '/Out', '/DisableStartupDialogs',
+    '/UseTemplate', '/AddToList', '/Execute', '/C', '/URL', '/UC',
+    '/DumpIB', '/RestoreIB', '/DumpCfg', '/LoadCfg',
+    '/DumpConfigToFiles', '/LoadConfigFromFiles', '/UpdateDBCfg',
+    '/DumpExternalDataProcessorOrReportToFiles', '/LoadExternalDataProcessorOrReportFromFiles'
+)
+$script:IbcmdOwnedKeys = @(
+    '--db-path', '--data', '--out', '--file', '--load', '--restore',
+    '--import', '--export', '--apply', '--force', '--create-database',
+    '--user', '--password'
+)
+$script:V8SecretKeys = @('/P', '/UC', '/WSP', '/AWSP')
+$script:IbcmdSecretKeys = @('--password', '--token', '--db-pwd')
+
+function Test-ArgKeyMatch {
+    # A token matches a key when it equals the key, or starts with it and the next
+    # character is not a letter — catches glued /N"user" and --password=x, while
+    # keeping /ClearCache distinct from /C.
+    param([string]$Token, [string]$Key)
+    if ($Token.Length -lt $Key.Length) { return $false }
+    if (-not $Token.Substring(0, $Key.Length).Equals($Key, [System.StringComparison]::OrdinalIgnoreCase)) { return $false }
+    if ($Token.Length -eq $Key.Length) { return $true }
+    return -not [char]::IsLetter($Token[$Key.Length])
+}
+
+function Get-ProjectExtraArgs {
+    # v8args / ibcmdargs from .v8-project.json — same upward walk as v8path.
+    param([string]$Name)
+    $dir = (Get-Location).Path
+    while ($dir) {
+        $pf = Join-Path $dir ".v8-project.json"
+        if (Test-Path $pf) {
+            try {
+                $j = Get-Content $pf -Raw -Encoding UTF8 | ConvertFrom-Json
+                if ($j.$Name) { return @($j.$Name | ForEach-Object { [string]$_ }) }
+            } catch {}
+            return @()
+        }
+        $parent = Split-Path $dir -Parent
+        if (-not $parent -or $parent -eq $dir) { break }
+        $dir = $parent
+    }
+    return @()
+}
+
+function Assert-ExtraArgs {
+    # The platform accepts only one batch operation, and a duplicate connection or
+    # output key fails with an opaque 1C error — reject what the skill owns itself.
+    param([string[]]$ExtraArgs, [string]$Engine, [hashtable]$Hints)
+    $paramName = if ($Engine -eq 'ibcmd') { '-AdditionalIbcmdArguments' } else { '-AdditionalV8Arguments' }
+    $owned = if ($Engine -eq 'ibcmd') { $script:IbcmdOwnedKeys } else { $script:V8OwnedKeys }
+    foreach ($tok in $ExtraArgs) {
+        if ($Engine -eq 'ibcmd' -and $tok -notmatch '^-') {
+            Write-Host "Error: '$tok' is a positional token — pass values as --key=value ($paramName cannot extend the ibcmd command)" -ForegroundColor Red
+            exit 1
+        }
+        foreach ($k in $owned) {
+            if (Test-ArgKeyMatch $tok $k) {
+                $hint = ''
+                if ($Hints -and $Hints.ContainsKey($k)) { $hint = " (use $($Hints[$k]))" }
+                Write-Host "Error: $k is controlled by the skill and cannot be passed via $paramName$hint" -ForegroundColor Red
+                exit 1
+            }
+        }
+    }
+}
+
+function Resolve-ExtraArgs {
+    # Pick the argument list for the selected engine and validate it. An explicitly passed
+    # parameter for the other engine is an error; the same keys coming from .v8-project.json
+    # simply do not apply — a project may describe both engines.
+    param([string]$Engine, [string[]]$V8Extra, [string[]]$IbcmdExtra, [hashtable]$Hints)
+    if ($Engine -eq 'ibcmd' -and $V8Extra.Count -gt 0) {
+        Write-Host "Error: -AdditionalV8Arguments applies to 1cv8 only; the selected engine is ibcmd (use -AdditionalIbcmdArguments)" -ForegroundColor Red
+        exit 1
+    }
+    if ($Engine -ne 'ibcmd' -and $IbcmdExtra.Count -gt 0) {
+        Write-Host "Error: -AdditionalIbcmdArguments applies to ibcmd only; the selected engine is 1cv8 (use -AdditionalV8Arguments)" -ForegroundColor Red
+        exit 1
+    }
+    if ($Engine -eq 'ibcmd') {
+        $extra = @(Get-ProjectExtraArgs 'ibcmdargs') + @($IbcmdExtra)
+    } else {
+        $extra = @(Get-ProjectExtraArgs 'v8args') + @($V8Extra)
+    }
+    if ($extra.Count -gt 0) { Assert-ExtraArgs $extra $Engine $Hints }
+    # Plain return, no comma trick: the caller re-collects with @(...), and ,@() there
+    # would nest the array — the tokens would then be glued into one argument.
+    return $extra
+}
+
+function Format-ArgsForDisplay {
+    # Redact values of secret-prone keys in glued, =-joined and separate forms.
+    # Matching here is a plain prefix (no letter rule): over-masking costs nothing,
+    # a leaked password does.
+    param([string[]]$ArgList, [string]$Engine)
+    $keys = if ($Engine -eq 'ibcmd') { $script:IbcmdSecretKeys } else { $script:V8SecretKeys }
+    $res = @()
+    $maskNext = $false
+    foreach ($tok in $ArgList) {
+        if ($maskNext) { $res += '***'; $maskNext = $false; continue }
+        $hit = $null
+        foreach ($k in $keys) {
+            if ($tok.Length -ge $k.Length -and $tok.Substring(0, $k.Length).Equals($k, [System.StringComparison]::OrdinalIgnoreCase)) { $hit = $k; break }
+        }
+        if (-not $hit) { $res += $tok; continue }
+        if ($tok.Length -eq $hit.Length) { $res += $tok; $maskNext = $true }
+        elseif ($tok[$hit.Length] -eq '=') { $res += ($hit + '=***') }
+        else { $res += ($hit + '***') }
+    }
+    return ,$res
+}
+
 
 # --- 1. Scan XML files for reference types ---
 
@@ -1281,6 +1402,18 @@ function Invoke-IbcmdProcess {
 
 
 $stubEngine = if ((Split-Path $V8Path -Leaf) -match '^ibcmd') { "ibcmd" } else { "1cv8" }
+
+# --- Resolve additional arguments for the selected engine ---
+$argHints = @{ '/F' = '-TempBasePath'; '--db-path' = '-TempBasePath' }
+$extraArgs = @(Resolve-ExtraArgs $stubEngine $AdditionalV8Arguments $AdditionalIbcmdArguments $argHints)
+
+function Format-ArgToken {
+	# Start-Process takes these argument lists as one string, so quote each token that needs it.
+	param([string]$Token)
+	if ($Token -match '[\s"]') { return ' "' + ($Token -replace '"', '\"') + '"' }
+	return " $Token"
+}
+$extraArgString = -join ($extraArgs | ForEach-Object { Format-ArgToken $_ })
 if ($stubEngine -eq "ibcmd") {
 	Write-Host "Creating infobase (ibcmd): $TempBasePath"
 	$ibData = Join-Path $env:TEMP "stub_data_$(Get-Random)"
@@ -1288,6 +1421,7 @@ if ($stubEngine -eq "ibcmd") {
 	$ibArgs = @("infobase", "create", "--db-path=$TempBasePath", "--create-database")
 	if ($hasRefTypes) { $ibArgs += "--import=$(Join-Path $TempBasePath 'cfg')", "--apply", "--force" }
 	$ibArgs += "--data=$ibData"
+	$ibArgs += $extraArgs
 	$__ib = Invoke-IbcmdProcess $V8Path $ibArgs
 	$ibOut = $__ib.Output
 	$ibRc = $__ib.ExitCode
@@ -1305,7 +1439,7 @@ if ($stubEngine -eq "ibcmd") {
 
 # --- 5. Create infobase ---
 Write-Host "Creating infobase: $TempBasePath"
-$createArgs = "CREATEINFOBASE File=`"$TempBasePath`" /DisableStartupDialogs"
+$createArgs = "CREATEINFOBASE File=`"$TempBasePath`" /DisableStartupDialogs" + $extraArgString
 $proc = Start-Process -FilePath $V8Path -ArgumentList $createArgs -NoNewWindow -Wait -PassThru
 if ($proc.ExitCode -ne 0) {
 	Write-Error "Failed to create infobase (code: $($proc.ExitCode))"
@@ -1318,7 +1452,7 @@ if ($hasRefTypes) {
 	# LoadConfigFromFiles
 	Write-Host "Loading configuration from files..."
 	$loadLog = Join-Path $env:TEMP "stub_load_log.txt"
-	$loadArgs = "DESIGNER /F`"$TempBasePath`" /LoadConfigFromFiles `"$cfgDir`" /Out `"$loadLog`" /DisableStartupDialogs"
+	$loadArgs = "DESIGNER /F`"$TempBasePath`" /LoadConfigFromFiles `"$cfgDir`" /Out `"$loadLog`" /DisableStartupDialogs" + $extraArgString
 	$proc = Start-Process -FilePath $V8Path -ArgumentList $loadArgs -NoNewWindow -Wait -PassThru
 	if ($proc.ExitCode -ne 0) {
 		if (Test-Path $loadLog) { Get-Content $loadLog -Raw -ErrorAction SilentlyContinue | Write-Host }
@@ -1329,7 +1463,7 @@ if ($hasRefTypes) {
 	# UpdateDBCfg
 	Write-Host "Updating database configuration..."
 	$updateLog = Join-Path $env:TEMP "stub_update_log.txt"
-	$updateArgs = "DESIGNER /F`"$TempBasePath`" /UpdateDBCfg /Out `"$updateLog`" /DisableStartupDialogs"
+	$updateArgs = "DESIGNER /F`"$TempBasePath`" /UpdateDBCfg /Out `"$updateLog`" /DisableStartupDialogs" + $extraArgString
 	$proc = Start-Process -FilePath $V8Path -ArgumentList $updateArgs -NoNewWindow -Wait -PassThru
 	if ($proc.ExitCode -ne 0) {
 		if (Test-Path $updateLog) { Get-Content $updateLog -Raw -ErrorAction SilentlyContinue | Write-Host }
