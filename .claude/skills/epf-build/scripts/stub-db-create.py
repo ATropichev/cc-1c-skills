@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# stub-db-create v1.4 — Create temp 1C infobase with metadata stubs for EPF/ERF build
+# stub-db-create v1.5 — Create temp 1C infobase with metadata stubs for EPF/ERF build
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -160,7 +160,13 @@ def extract_extra_args(argv, known_opts):
 def resolve_extra_args(engine, v8_extra, ibcmd_extra, hints):
     """Pick the argument list for the selected engine and validate it. An explicitly
     passed parameter for the other engine is an error; the same keys coming from
-    .v8-project.json simply do not apply — a project may describe both engines."""
+    .v8-project.json simply do not apply — a project may describe both engines.
+
+    Comma-separated elements are split apart: PowerShell's -File cannot bind an array,
+    so that form is the documented one and both ports must accept it. A value containing
+    a comma is not supported."""
+    v8_extra = [p for tok in v8_extra for p in str(tok).split(",") if p]
+    ibcmd_extra = [p for tok in ibcmd_extra for p in str(tok).split(",") if p]
     if engine == "ibcmd" and v8_extra:
         print(
             "Error: -AdditionalV8Arguments applies to 1cv8 only; the selected engine is ibcmd "

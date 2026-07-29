@@ -52,7 +52,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-run.ps1" <пар
 | `-Execute <файл.epf>` | нет | Запуск внешней обработки сразу после старта |
 | `-CParam <строка>` | нет | Параметр запуска (/C) |
 | `-URL <ссылка>` | нет | Навигационная ссылка (формат `e1cib/...`) |
-| `-AdditionalV8Arguments <арг>…` | нет | Доп. аргументы запуска `1cv8.exe`, напр. `/UseHwLicenses+` |
+| `-AdditionalV8Arguments <список>` | нет | Доп. аргументы запуска `1cv8.exe` через запятую, напр. `/UseHwLicenses+` |
 
 > `*` — нужен либо `-InfoBasePath`, либо пара `-InfoBaseServer` + `-InfoBaseRef`
 

@@ -45,8 +45,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-create.ps1" <п�
 | `-UseTemplate <файл>` | нет | Создать из шаблона (.cf или .dt) |
 | `-AddToList` | нет | Добавить в список баз 1С |
 | `-ListName <имя>` | нет | Имя базы в списке |
-| `-AdditionalV8Arguments <арг>…` | нет | Доп. аргументы запуска `1cv8.exe`, напр. `/UseHwLicenses+` |
-| `-AdditionalIbcmdArguments <арг>…` | нет | Доп. аргументы `ibcmd` в форме `--ключ=значение` |
+| `-AdditionalV8Arguments <список>` | нет | Доп. аргументы запуска `1cv8.exe` через запятую, напр. `/UseHwLicenses+` |
+| `-AdditionalIbcmdArguments <список>` | нет | Доп. аргументы `ibcmd` через запятую, в форме `--ключ=значение` |
 
 > `*` — нужен либо `-InfoBasePath`, либо пара `-InfoBaseServer` + `-InfoBaseRef`
 

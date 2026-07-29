@@ -68,8 +68,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-load-dt.ps1" <п
 | `-InputFile <путь>` | да | Путь к DT-файлу |
 | `-JobsCount <N>` | нет | Число фоновых заданий загрузки (0 = по числу процессоров) |
 | `-UnlockCode <код>` | нет | Код разблокировки (`/UC`), если заблокировано начало сеансов |
-| `-AdditionalV8Arguments <арг>…` | нет | Доп. аргументы запуска `1cv8.exe`, напр. `/UseHwLicenses+` |
-| `-AdditionalIbcmdArguments <арг>…` | нет | Доп. аргументы `ibcmd` в форме `--ключ=значение` |
+| `-AdditionalV8Arguments <список>` | нет | Доп. аргументы запуска `1cv8.exe` через запятую, напр. `/UseHwLicenses+` |
+| `-AdditionalIbcmdArguments <список>` | нет | Доп. аргументы `ibcmd` через запятую, в форме `--ключ=значение` |
 
 > `*` — нужен либо `-InfoBasePath`, либо пара `-InfoBaseServer` + `-InfoBaseRef`
 

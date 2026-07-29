@@ -59,8 +59,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-load-xml.ps1" <�
 | `-AllExtensions` | нет | Загрузить все расширения |
 | `-Format <формат>` | нет | `Hierarchical` (по умолч.) / `Plain` |
 | `-UpdateDB` | нет | После загрузки сразу обновить конфигурацию БД (`/UpdateDBCfg`) |
-| `-AdditionalV8Arguments <арг>…` | нет | Доп. аргументы запуска `1cv8.exe`, напр. `/UseHwLicenses+` |
-| `-AdditionalIbcmdArguments <арг>…` | нет | Доп. аргументы `ibcmd` в форме `--ключ=значение` |
+| `-AdditionalV8Arguments <список>` | нет | Доп. аргументы запуска `1cv8.exe` через запятую, напр. `/UseHwLicenses+` |
+| `-AdditionalIbcmdArguments <список>` | нет | Доп. аргументы `ibcmd` через запятую, в форме `--ключ=значение` |
 
 > `*` — нужен либо `-InfoBasePath`, либо пара `-InfoBaseServer` + `-InfoBaseRef`
 

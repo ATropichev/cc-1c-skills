@@ -1,4 +1,4 @@
-﻿# db-dump-cf v1.10 — Dump 1C configuration to CF file
+﻿# db-dump-cf v1.11 — Dump 1C configuration to CF file
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -170,6 +170,12 @@ function Resolve-ExtraArgs {
     # parameter for the other engine is an error; the same keys coming from .v8-project.json
     # simply do not apply — a project may describe both engines.
     param([string]$Engine, [string[]]$V8Extra, [string[]]$IbcmdExtra, [hashtable]$Hints)
+    # powershell.exe -File — how skills are invoked — cannot bind an array parameter:
+    # space-separated values spill into positional ones, a comma-joined list arrives as a
+    # single token. So accept the repo's list convention (comma-separated) and split here;
+    # a native array call keeps working. A value containing a comma is not supported.
+    $V8Extra = @($V8Extra | ForEach-Object { $_ -split ',' } | Where-Object { $_ -ne '' })
+    $IbcmdExtra = @($IbcmdExtra | ForEach-Object { $_ -split ',' } | Where-Object { $_ -ne '' })
     if ($Engine -eq 'ibcmd' -and $V8Extra.Count -gt 0) {
         Write-Host "Error: -AdditionalV8Arguments applies to 1cv8 only; the selected engine is ibcmd (use -AdditionalIbcmdArguments)" -ForegroundColor Red
         exit 1

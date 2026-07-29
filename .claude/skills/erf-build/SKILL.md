@@ -57,8 +57,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/../epf-build/scripts/epf-bu
 | `-Password <пароль>` | нет | Пароль |
 | `-SourceFile <путь>` | да | Путь к корневому XML-файлу исходников |
 | `-OutputFile <путь>` | да | Путь к выходному ERF-файлу |
-| `-AdditionalV8Arguments <арг>…` | нет | Доп. аргументы запуска `1cv8.exe`, напр. `/UseHwLicenses+` |
-| `-AdditionalIbcmdArguments <арг>…` | нет | Доп. аргументы `ibcmd` в форме `--ключ=значение` |
+| `-AdditionalV8Arguments <список>` | нет | Доп. аргументы запуска `1cv8.exe` через запятую, напр. `/UseHwLicenses+` |
+| `-AdditionalIbcmdArguments <список>` | нет | Доп. аргументы `ibcmd` через запятую, в форме `--ключ=значение` |
 
 > `*` — опционально. Если не указано — автоматически создаётся временная база со заглушками метаданных
 

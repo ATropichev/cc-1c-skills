@@ -57,8 +57,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/../epf-dump/scripts/epf-dum
 | `-InputFile <путь>` | да | Путь к ERF-файлу |
 | `-OutputDir <путь>` | да | Каталог для выгрузки исходников |
 | `-Format <формат>` | нет | `Hierarchical` (по умолч.) / `Plain` |
-| `-AdditionalV8Arguments <арг>…` | нет | Доп. аргументы запуска `1cv8.exe`, напр. `/UseHwLicenses+` |
-| `-AdditionalIbcmdArguments <арг>…` | нет | Доп. аргументы `ibcmd` в форме `--ключ=значение` |
+| `-AdditionalV8Arguments <список>` | нет | Доп. аргументы запуска `1cv8.exe` через запятую, напр. `/UseHwLicenses+` |
+| `-AdditionalIbcmdArguments <список>` | нет | Доп. аргументы `ibcmd` через запятую, в форме `--ключ=значение` |
 
 > `*` — обязательно хотя бы одно подключение. Без базы скрипт завершится с ошибкой (dump в пустой базе безвозвратно теряет ссылочные типы)
 
