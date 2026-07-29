@@ -1,13 +1,29 @@
 {
   "name": "Доп. аргументы уходят и во временную базу, и в сборку (fake platform)",
   "preRun": [
-    { "writeFile": { "path": "fake.cmd", "content": "@echo off\r\necho ARGS: %*\r\nexit /b 0\r\n" } },
-    { "writeFile": { "path": "src/Обработка.xml", "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<MetaDataObject xmlns=\"http://v8.1c.ru/8.3/MDClasses\"/>\n" } }
+    {
+      "writeFile": {
+        "path": "fake.cmd",
+        "content": "@echo off\r\necho ARGS: %*\r\nexit /b 0\r\n"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "src/Обработка.xml",
+        "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<MetaDataObject xmlns=\"http://v8.1c.ru/8.3/MDClasses\"/>\n"
+      }
+    }
   ],
-  "args_extra": ["-V8Path", "{workDir}\\fake.cmd",
-                 "-SourceFile", "{workDir}\\src\\Обработка.xml",
-                 "-OutputFile", "{workDir}\\build\\Обработка.epf",
-                 "-AdditionalV8Arguments", "/UseHwLicenses+"],
+  "args_extra": [
+    "-V8Path",
+    "{workDir}\\fake.cmd",
+    "-SourceFile",
+    "{workDir}\\src\\Обработка.xml",
+    "-OutputFile",
+    "{workDir}\\build\\Обработка.epf",
+    "-AdditionalV8Arguments",
+    "/UseHwLicenses+"
+  ],
   "runtimeOnly": "powershell",
   "expect": {
     "stdoutContains": [
@@ -18,5 +34,6 @@
     ]
   },
   "expectError": true,
-  "noSnapshot": "проверяются командные строки в stdout, платформа фейковая — EPF не создаётся"
+  "noSnapshot": "проверяются командные строки в stdout, платформа фейковая — EPF не создаётся",
+  "osOnly": "win32"
 }

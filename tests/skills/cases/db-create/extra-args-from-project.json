@@ -25,5 +25,6 @@
   },
   "expectError": true,
   "noSnapshot": "проверяется командная строка в stdout, файлов на выходе нет",
-  "cwd": "workDir"
+  "cwd": "workDir",
+  "osOnly": "win32"
 }
