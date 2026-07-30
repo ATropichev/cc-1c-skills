@@ -1,4 +1,4 @@
-﻿# db-run v1.6 — Launch 1C:Enterprise
+﻿# db-run v1.7 — Launch 1C:Enterprise
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -219,6 +219,29 @@ function Format-ArgsForDisplay {
     }
     return ,$res
 }
+
+function ConvertTo-CleanPath {
+    # Forgive what is unambiguous in a path the caller passed: surrounding whitespace,
+    # surrounding quotes that survived shell parsing, a trailing separator. A quote left
+    # inside afterwards cannot be part of a real path — reject it by name instead of letting
+    # 1C answer with its opaque "Неверные или отсутствующие параметры соединения".
+    param([string]$Value, [string]$ParamName)
+    if (-not $Value) { return $Value }
+    $v = $Value.Trim()
+    if ($v.Length -ge 2 -and $v[0] -eq $v[-1] -and ($v[0] -eq '"' -or $v[0] -eq "'")) {
+        $v = $v.Substring(1, $v.Length - 2).Trim()
+    }
+    if ($v.Length -gt 3 -and ($v[-1] -eq '\' -or $v[-1] -eq '/')) { $v = $v.Substring(0, $v.Length - 1) }
+    if ($v.Contains('"')) {
+        Write-Host "Error: $ParamName contains a quote character: $Value" -ForegroundColor Red
+        exit 1
+    }
+    return $v
+}
+
+$V8Path = ConvertTo-CleanPath $V8Path '-V8Path'
+$InfoBasePath = ConvertTo-CleanPath $InfoBasePath '-InfoBasePath'
+$Execute = ConvertTo-CleanPath $Execute '-Execute'
 
 # --- Resolve V8Path ---
 function Find-ProjectV8Path {

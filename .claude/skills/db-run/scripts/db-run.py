@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-run v1.6 — Launch 1C:Enterprise
+# db-run v1.7 — Launch 1C:Enterprise
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -190,6 +190,24 @@ def resolve_extra_args(engine, v8_extra, ibcmd_extra, hints):
     return extra
 
 
+def clean_path(value, param=""):
+    """Forgive what is unambiguous in a path the caller passed: surrounding whitespace,
+    surrounding quotes that survived shell parsing, a trailing separator. A quote left
+    inside afterwards cannot be part of a real path — reject it by name instead of letting
+    1C answer with its opaque "Неверные или отсутствующие параметры соединения"."""
+    if not value:
+        return value
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        v = v[1:-1].strip()
+    if len(v) > 3 and v[-1] in "\\/":
+        v = v[:-1]
+    if '"' in v:
+        print(f"Error: {param or 'path'} contains a quote character: {value}", file=sys.stderr)
+        sys.exit(1)
+    return v
+
+
 def _version_dir(p):
     """Version dir for both Windows (.../1cv8/<ver>/bin/1cv8.exe) and *nix (.../1cv8/<ver>/1cv8)."""
     parent = os.path.dirname(p)
@@ -264,6 +282,10 @@ def main():
     known_opts = {s.lower() for a in parser._actions for s in a.option_strings}
     argv, v8_extra, ibcmd_extra = extract_extra_args(sys.argv[1:], known_opts)
     args = parser.parse_args(argv)
+
+    args.V8Path = clean_path(args.V8Path, "-V8Path")
+    args.InfoBasePath = clean_path(args.InfoBasePath, "-InfoBasePath")
+    args.Execute = clean_path(args.Execute, "-Execute")
 
     v8path = resolve_v8path(args.V8Path)
 

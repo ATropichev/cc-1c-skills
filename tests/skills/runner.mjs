@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// skill-test-runner v0.5 — Snapshot-based regression tests for 1C skill scripts
+// skill-test-runner v0.6 — Snapshot-based regression tests for 1C skill scripts
 // Usage: node tests/skills/runner.mjs [filter] [--update-snapshots] [--runtime python] [--json report.json] [--concurrency N] [--with-validation]
 
 import { execFileSync, execFile } from 'child_process';

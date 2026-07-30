@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# stub-db-create v1.6 — Create temp 1C infobase with metadata stubs for EPF/ERF build
+# stub-db-create v1.7 — Create temp 1C infobase with metadata stubs for EPF/ERF build
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1038,6 +1038,10 @@ def main():
     known_opts = {s.lower() for a in parser._actions for s in a.option_strings}
     argv, v8_extra, ibcmd_extra = extract_extra_args(sys.argv[1:], known_opts)
     args = parser.parse_args(argv)
+
+    args.SourceDir = clean_path(args.SourceDir, "-SourceDir")
+    args.V8Path = clean_path(args.V8Path, "-V8Path")
+    args.TempBasePath = clean_path(args.TempBasePath, "-TempBasePath")
 
     type_map = scan_ref_types(args.SourceDir)
     register_columns = scan_register_columns(args.SourceDir)
