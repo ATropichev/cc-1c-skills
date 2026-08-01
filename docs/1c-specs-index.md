@@ -158,7 +158,7 @@
 | Стандартные реквизиты | [1c-config-objects-spec.md § 5](1c-config-objects-spec.md#5-стандартные-реквизиты-standardattributes) |
 | Дочерние объекты (Attribute, TabularSection, Form, Template, Command) | [1c-config-objects-spec.md § 6](1c-config-objects-spec.md#6-дочерние-объекты-childobjects) |
 | Формат ссылок на объекты | [1c-config-objects-spec.md § 28](1c-config-objects-spec.md#28-формат-ссылок-на-объекты-метаданных) |
-| Различия версий 2.17 → 2.20 | [1c-config-objects-spec.md § 26](1c-config-objects-spec.md#26-различия-версий-платформы) |
+| Различия версий формата 2.17 → 2.18 → 2.19 → 2.20 | [1c-config-objects-spec.md § 26](1c-config-objects-spec.md#26-различия-версий-платформы) |
 
 ---
 
