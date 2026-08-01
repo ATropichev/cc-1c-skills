@@ -249,6 +249,7 @@
 			<Catalog>Валюты</Catalog>
 			<Catalog>Договоры</Catalog>
 			<InformationRegister>КурсыВалют</InformationRegister>
+			<DataProcessor>ЗагрузкаКурсов</DataProcessor>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

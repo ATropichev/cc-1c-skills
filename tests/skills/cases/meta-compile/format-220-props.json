@@ -22,6 +22,11 @@
       "periodicity": "Day",
       "dimensions": ["Валюта: CatalogRef.Валюты | master, mainFilter"],
       "resources": ["Курс: Number(15,4)"]
+    },
+    {
+      "type": "DataProcessor",
+      "name": "ЗагрузкаКурсов",
+      "tabularSections": { "Строки": ["Значение: Число(15,2)"] }
     }
   ],
   "validatePath": "Catalogs/Договоры",

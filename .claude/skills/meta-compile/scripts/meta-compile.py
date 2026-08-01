@@ -2151,7 +2151,10 @@ def emit_tabular_section(indent, ts_name, columns, object_type, object_name, ts_
         X(f'{indent}\t\t<Use>{ts_use if ts_use else "ForItem"}</Use>')
     # Формат 2.20 (8.3.27): длина номера строки ТЧ (5..9 → до 999 999 999 строк вместо 99 999).
     # Последним в Properties. Дефолт платформа берёт из режима совместимости на момент создания ТЧ.
-    if is_format_220:
+    # ТОЛЬКО у объектов с хранением в БД: обработкам и отчётам платформа тег не пишет вовсе
+    # (проверено на двух конфигурациях: 0 из 235+257 ТЧ обработок и 0 из 106+8 ТЧ отчётов).
+    # Свойство задаёт разрядность физического номера строки в таблице — у обработок таблицы нет.
+    if is_format_220 and object_type not in ('DataProcessor', 'Report', 'ExternalDataProcessor', 'ExternalReport'):
         lnl = int(ts_line_number_length) if ts_line_number_length not in (None, '') else line_number_length_default
         X(f'{indent}\t\t<LineNumberLength>{lnl}</LineNumberLength>')
     X(f'{indent}\t</Properties>')

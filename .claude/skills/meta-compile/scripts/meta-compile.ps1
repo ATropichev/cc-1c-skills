@@ -2094,7 +2094,10 @@ function Emit-TabularSection {
 	}
 	# Формат 2.20 (8.3.27): длина номера строки ТЧ (5..9 → до 999 999 999 строк вместо 99 999).
 	# Последним в Properties. Дефолт платформа берёт из режима совместимости на момент создания ТЧ.
-	if ($script:isFormat220) {
+	# ТОЛЬКО у объектов с хранением в БД: обработкам и отчётам платформа тег не пишет вовсе
+	# (проверено на двух конфигурациях: 0 из 235+257 ТЧ обработок и 0 из 106+8 ТЧ отчётов).
+	# Свойство задаёт разрядность физического номера строки в таблице — у обработок таблицы нет.
+	if ($script:isFormat220 -and $objectType -notin @("DataProcessor", "Report", "ExternalDataProcessor", "ExternalReport")) {
 		$lnl = if ($null -ne $tsLineNumberLength -and "$tsLineNumberLength" -ne '') { [int]$tsLineNumberLength } else { $script:lineNumberLengthDefault }
 		X "$indent`t`t<LineNumberLength>$lnl</LineNumberLength>"
 	}
