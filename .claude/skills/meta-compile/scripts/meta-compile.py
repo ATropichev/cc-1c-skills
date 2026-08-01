@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.70 — Compile 1C metadata object from JSON
+# meta-compile v1.71 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -416,7 +416,7 @@ valid_enum_values = {
     'RegisterRecordsDeletion': ['AutoDelete', 'AutoDeleteOnUnpost', 'AutoDeleteOff'],
     'RegisterRecordsWritingOnPost': ['WriteModified', 'WriteSelected', 'WriteAll'],
     'ReturnValuesReuse': ['DontUse', 'DuringRequest', 'DuringSession'],
-    'ReuseSessions': ['DontUse', 'AutoUse'],
+    'ReuseSessions': ['DontUse', 'Use', 'AutoUse'],
     'FillChecking': ['DontCheck', 'ShowError', 'ShowWarning'],
     'Indexing': ['DontIndex', 'Index', 'IndexWithAdditionalOrder'],
     'SubordinationUse': ['ToItems', 'ToFolders', 'ToFoldersAndItems'],
@@ -3729,7 +3729,7 @@ def emit_http_service_properties(indent):
     i = indent
     X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
-    X(f'{i}<Comment/>')
+    X(f'{i}<Comment>{esc_xml(str(defn["comment"]))}</Comment>' if defn.get('comment') else f'{i}<Comment/>')
     root_url = str(defn['rootURL']) if defn.get('rootURL') else obj_name.lower()
     X(f'{i}<RootURL>{esc_xml(root_url)}</RootURL>')
     reuse_sessions = get_enum_prop('ReuseSessions', 'reuseSessions', 'DontUse')
@@ -3800,29 +3800,48 @@ def emit_url_template(indent, tmpl_name, tmpl_def):
     tmpl_synonym = split_camel_case(tmpl_name)
     template = ''
     methods = {}
+    tmpl_comment = ''
     if isinstance(tmpl_def, str):
         template = tmpl_def
     else:
         template = str(tmpl_def['template']) if tmpl_def.get('template') else f'/{tmpl_name.lower()}'
+        if tmpl_def.get('synonym'):
+            tmpl_synonym = str(tmpl_def['synonym'])
+        if tmpl_def.get('comment'):
+            tmpl_comment = str(tmpl_def['comment'])
         if tmpl_def.get('methods'):
             for k, v in tmpl_def['methods'].items():
-                methods[k] = str(v)
+                methods[k] = v   # строка (HTTP-метод) ЛИБО объект {httpMethod, handler, synonym, comment}
     X(f'{indent}<URLTemplate uuid="{uid}">')
     X(f'{indent}\t<Properties>')
     X(f'{indent}\t\t<Name>{esc_xml(tmpl_name)}</Name>')
     emit_mltext(f'{indent}\t\t', 'Synonym', tmpl_synonym)
+    X(f'{indent}\t\t<Comment>{esc_xml(tmpl_comment)}</Comment>' if tmpl_comment else f'{indent}\t\t<Comment/>')
     X(f'{indent}\t\t<Template>{esc_xml(template)}</Template>')
     X(f'{indent}\t</Properties>')
     if methods:
         X(f'{indent}\t<ChildObjects>')
-        for method_name, http_method in sorted(methods.items()):
+        # Порядок — как в DSL (он же порядок исходного XML), а не отсортированный: иначе
+        # порты расходятся между собой и с выгрузкой платформы.
+        for method_name, m_def in methods.items():
             method_uuid = new_uuid()
-            method_synonym = split_camel_case(method_name)
-            handler = f'{tmpl_name}{method_name}'
+            # Строка — сокращение "только HTTP-метод"; объект — полная форма. Обработчик по
+            # умолчанию ИмяШаблона+ИмяМетода, но в реальных конфигурациях он произвольный.
+            if isinstance(m_def, str):
+                http_method = m_def
+                handler = f'{tmpl_name}{method_name}'
+                method_synonym = split_camel_case(method_name)
+                method_comment = ''
+            else:
+                http_method = str(m_def.get('httpMethod') or 'GET')
+                handler = str(m_def.get('handler') or f'{tmpl_name}{method_name}')
+                method_synonym = str(m_def['synonym']) if m_def.get('synonym') else split_camel_case(method_name)
+                method_comment = str(m_def.get('comment') or '')
             X(f'{indent}\t\t<Method uuid="{method_uuid}">')
             X(f'{indent}\t\t\t<Properties>')
             X(f'{indent}\t\t\t\t<Name>{esc_xml(method_name)}</Name>')
             emit_mltext(f'{indent}\t\t\t\t', 'Synonym', method_synonym)
+            X(f'{indent}\t\t\t\t<Comment>{esc_xml(method_comment)}</Comment>' if method_comment else f'{indent}\t\t\t\t<Comment/>')
             X(f'{indent}\t\t\t\t<HTTPMethod>{http_method}</HTTPMethod>')
             X(f'{indent}\t\t\t\t<Handler>{esc_xml(handler)}</Handler>')
             X(f'{indent}\t\t\t</Properties>')
@@ -4260,7 +4279,8 @@ if obj_type == 'HTTPService':
     if url_templates:
         has_children = True
         X('\t\t<ChildObjects>')
-        for tmpl_name in sorted(url_tmpl_order):
+        # Порядок — как в DSL (он же порядок исходного XML), а не отсортированный.
+        for tmpl_name in url_tmpl_order:
             emit_url_template('\t\t\t', tmpl_name, url_templates[tmpl_name])
         X('\t\t</ChildObjects>')
     else:

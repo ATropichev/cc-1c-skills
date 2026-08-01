@@ -9,9 +9,9 @@
 					<v8:content>ТоварныйAPI</v8:content>
 				</v8:item>
 			</Synonym>
-			<Comment/>
+			<Comment>Публичный API</Comment>
 			<RootURL>api/v1</RootURL>
-			<ReuseSessions>AutoUse</ReuseSessions>
+			<ReuseSessions>Use</ReuseSessions>
 			<SessionMaxAge>30</SessionMaxAge>
 		</Properties>
 		<ChildObjects>
@@ -24,23 +24,11 @@
 							<v8:content>Товары</v8:content>
 						</v8:item>
 					</Synonym>
+					<Comment/>
 					<Template>/products/{id}</Template>
 				</Properties>
 				<ChildObjects>
 					<Method uuid="UUID-003">
-						<Properties>
-							<Name>Обновить</Name>
-							<Synonym>
-								<v8:item>
-									<v8:lang>ru</v8:lang>
-									<v8:content>Обновить</v8:content>
-								</v8:item>
-							</Synonym>
-							<HTTPMethod>PUT</HTTPMethod>
-							<Handler>ТоварыОбновить</Handler>
-						</Properties>
-					</Method>
-					<Method uuid="UUID-004">
 						<Properties>
 							<Name>Получить</Name>
 							<Synonym>
@@ -49,8 +37,52 @@
 									<v8:content>Получить</v8:content>
 								</v8:item>
 							</Synonym>
+							<Comment/>
 							<HTTPMethod>GET</HTTPMethod>
 							<Handler>ТоварыПолучить</Handler>
+						</Properties>
+					</Method>
+					<Method uuid="UUID-004">
+						<Properties>
+							<Name>Обновить</Name>
+							<Synonym>
+								<v8:item>
+									<v8:lang>ru</v8:lang>
+									<v8:content>Обновить</v8:content>
+								</v8:item>
+							</Synonym>
+							<Comment/>
+							<HTTPMethod>PUT</HTTPMethod>
+							<Handler>ТоварыОбновить</Handler>
+						</Properties>
+					</Method>
+				</ChildObjects>
+			</URLTemplate>
+			<URLTemplate uuid="UUID-005">
+				<Properties>
+					<Name>rpc</Name>
+					<Synonym>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>rpc</v8:content>
+						</v8:item>
+					</Synonym>
+					<Comment>Удалённый вызов</Comment>
+					<Template>/rpc</Template>
+				</Properties>
+				<ChildObjects>
+					<Method uuid="UUID-006">
+						<Properties>
+							<Name>post</Name>
+							<Synonym>
+								<v8:item>
+									<v8:lang>ru</v8:lang>
+									<v8:content>Post</v8:content>
+								</v8:item>
+							</Synonym>
+							<Comment/>
+							<HTTPMethod>POST</HTTPMethod>
+							<Handler>ВызовЧерезТелоЗапроса</Handler>
 						</Properties>
 					</Method>
 				</ChildObjects>

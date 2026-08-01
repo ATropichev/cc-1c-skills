@@ -1,4 +1,4 @@
-﻿# meta-compile v1.70 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.71 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -267,7 +267,7 @@ $script:validEnumValues = @{
 	"RegisterRecordsDeletion"        = @("AutoDelete","AutoDeleteOnUnpost","AutoDeleteOff")
 	"RegisterRecordsWritingOnPost"   = @("WriteModified","WriteSelected","WriteAll")
 	"ReturnValuesReuse"              = @("DontUse","DuringRequest","DuringSession")
-	"ReuseSessions"                  = @("DontUse","AutoUse")
+	"ReuseSessions"                  = @("DontUse","Use","AutoUse")
 	"FillChecking"                   = @("DontCheck","ShowError","ShowWarning")
 	"Indexing"                       = @("DontIndex","Index","IndexWithAdditionalOrder")
 	"SubordinationUse"               = @("ToItems","ToFolders","ToFoldersAndItems")
@@ -3800,7 +3800,7 @@ function Emit-HTTPServiceProperties {
 
 	X "$i<Name>$(Esc-Xml $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
-	X "$i<Comment/>"
+	if ($def.comment) { X "$i<Comment>$(Esc-Xml "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 
 	$rootURL = if ($def.rootURL) { "$($def.rootURL)" } else { $objName.ToLower() }
 	X "$i<RootURL>$(Esc-Xml $rootURL)</RootURL>"
@@ -3881,15 +3881,20 @@ function Emit-URLTemplate {
 	$tmplSynonym = Split-CamelCase $tmplName
 
 	$template = ""
-	$methods = @{}
+	# [ordered], а не @{}: порядок методов должен совпадать с DSL (он же порядок исходного XML),
+	# иначе PS и py расходятся между собой и с выгрузкой платформы.
+	$methods = [ordered]@{}
 
+	$tmplComment = ""
 	if ($tmplDef -is [string]) {
 		$template = "$tmplDef"
 	} else {
 		$template = if ($tmplDef.template) { "$($tmplDef.template)" } else { "/$($tmplName.ToLower())" }
+		if ($tmplDef.synonym) { $tmplSynonym = "$($tmplDef.synonym)" }
+		if ($tmplDef.comment) { $tmplComment = "$($tmplDef.comment)" }
 		if ($tmplDef.methods) {
 			$tmplDef.methods.PSObject.Properties | ForEach-Object {
-				$methods[$_.Name] = "$($_.Value)"
+				$methods[$_.Name] = $_.Value   # строка (HTTP-метод) ЛИБО объект {httpMethod, handler, synonym, comment}
 			}
 		}
 	}
@@ -3898,6 +3903,7 @@ function Emit-URLTemplate {
 	X "$indent`t<Properties>"
 	X "$indent`t`t<Name>$(Esc-Xml $tmplName)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $tmplSynonym
+	if ($tmplComment) { X "$indent`t`t<Comment>$(Esc-Xml $tmplComment)</Comment>" } else { X "$indent`t`t<Comment/>" }
 	X "$indent`t`t<Template>$(Esc-Xml $template)</Template>"
 	X "$indent`t</Properties>"
 
@@ -3905,14 +3911,25 @@ function Emit-URLTemplate {
 		X "$indent`t<ChildObjects>"
 		foreach ($methodName in $methods.Keys) {
 			$methodUuid = New-Guid-String
-			$httpMethod = $methods[$methodName]
-			$methodSynonym = Split-CamelCase $methodName
-			$handler = "${tmplName}${methodName}"
+			$mDef = $methods[$methodName]
+			# Строка — сокращение "только HTTP-метод"; объект — полная форма. Обработчик по умолчанию
+			# выводится как ИмяШаблона+ИмяМетода, но в реальных конфигурациях он произвольный,
+			# поэтому задаётся явно ключом handler.
+			if ($mDef -is [string]) {
+				$httpMethod = "$mDef"; $handler = "${tmplName}${methodName}"
+				$methodSynonym = Split-CamelCase $methodName; $methodComment = ""
+			} else {
+				$httpMethod = if ($mDef.httpMethod) { "$($mDef.httpMethod)" } else { 'GET' }
+				$handler = if ($mDef.handler) { "$($mDef.handler)" } else { "${tmplName}${methodName}" }
+				$methodSynonym = if ($mDef.synonym) { "$($mDef.synonym)" } else { Split-CamelCase $methodName }
+				$methodComment = if ($mDef.comment) { "$($mDef.comment)" } else { "" }
+			}
 
 			X "$indent`t`t<Method uuid=`"$methodUuid`">"
 			X "$indent`t`t`t<Properties>"
 			X "$indent`t`t`t`t<Name>$(Esc-Xml $methodName)</Name>"
 			Emit-MLText "$indent`t`t`t`t" "Synonym" $methodSynonym
+			if ($methodComment) { X "$indent`t`t`t`t<Comment>$(Esc-Xml $methodComment)</Comment>" } else { X "$indent`t`t`t`t<Comment/>" }
 			X "$indent`t`t`t`t<HTTPMethod>$httpMethod</HTTPMethod>"
 			X "$indent`t`t`t`t<Handler>$(Esc-Xml $handler)</Handler>"
 			X "$indent`t`t`t</Properties>"
@@ -4369,7 +4386,9 @@ if ($objType -in @("FilterCriterion", "SettingsStorage")) {
 
 # --- HTTPService: URLTemplates ---
 if ($objType -eq "HTTPService") {
-	$urlTemplates = @{}
+	# [ordered]: порядок шаблонов — как в DSL (он же порядок исходного XML). @{} давало произвольный
+	# порядок в PS и расходилось с py, который сортировал; обе ветки приведены к порядку DSL.
+	$urlTemplates = [ordered]@{}
 	if ($def.urlTemplates) {
 		$def.urlTemplates.PSObject.Properties | ForEach-Object {
 			$urlTemplates[$_.Name] = $_.Value

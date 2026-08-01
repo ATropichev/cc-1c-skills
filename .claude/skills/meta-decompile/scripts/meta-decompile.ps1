@@ -1,4 +1,4 @@
-﻿# meta-decompile v0.56 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+﻿# meta-decompile v0.57 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Поддержаны: Catalog, ExchangePlan, ChartOfCharacteristicTypes, ChartOfAccounts, ChartOfCalculationTypes, Document,
@@ -92,7 +92,7 @@ foreach ($c in $rootEl.ChildNodes) { if ($c.NodeType -eq 'Element') { $objNode =
 if (-not $objNode) { [Console]::Error.WriteLine("meta-decompile: пустой MetaDataObject"); exit 3 }
 $objType = $objNode.LocalName
 
-if ($objType -notin @('Catalog', 'ExchangePlan', 'ChartOfCharacteristicTypes', 'ChartOfAccounts', 'ChartOfCalculationTypes', 'Document', 'InformationRegister', 'AccumulationRegister', 'AccountingRegister', 'CalculationRegister', 'BusinessProcess', 'Task', 'Enum', 'Report', 'DataProcessor', 'Constant', 'DefinedType', 'FunctionalOption', 'DocumentJournal', 'Sequence', 'FilterCriterion', 'DocumentNumerator', 'SettingsStorage', 'CommonModule', 'EventSubscription', 'ScheduledJob', 'CommonForm', 'SessionParameter', 'CommonCommand', 'CommandGroup', 'CommonAttribute', 'FunctionalOptionsParameter', 'WSReference', 'CommonPicture', 'CommonTemplate')) {
+if ($objType -notin @('Catalog', 'ExchangePlan', 'ChartOfCharacteristicTypes', 'ChartOfAccounts', 'ChartOfCalculationTypes', 'Document', 'InformationRegister', 'AccumulationRegister', 'AccountingRegister', 'CalculationRegister', 'BusinessProcess', 'Task', 'Enum', 'Report', 'DataProcessor', 'Constant', 'DefinedType', 'FunctionalOption', 'DocumentJournal', 'Sequence', 'FilterCriterion', 'DocumentNumerator', 'SettingsStorage', 'CommonModule', 'EventSubscription', 'ScheduledJob', 'CommonForm', 'SessionParameter', 'CommonCommand', 'CommandGroup', 'CommonAttribute', 'FunctionalOptionsParameter', 'WSReference', 'CommonPicture', 'CommonTemplate', 'HTTPService')) {
 	[Console]::Error.WriteLine("meta-decompile: тип '$objType' пока не поддержан (…, CommonPicture, CommonTemplate)"); exit 3
 }
 
@@ -781,6 +781,13 @@ if ($objType -eq 'CommonCommand') {
 	Add-BoolProp 'modifiesData' 'ModifiesData' $false
 	Add-EnumProp 'onMainServerUnavalableBehavior' 'OnMainServerUnavalableBehavior' 'Auto'
 }
+# HTTPService — корневой URL, повторное использование сеансов, время жизни сеанса.
+# Шаблоны URL с методами разбираются в блоке ChildObjects.
+if ($objType -eq 'HTTPService') {
+	$ru = P 'RootURL'; if ($ru -and $ru -ne $objName.ToLower()) { $dsl['rootURL'] = $ru }
+	Add-EnumProp 'reuseSessions' 'ReuseSessions' 'DontUse'
+	Add-IntProp  'sessionMaxAge' 'SessionMaxAge' 20
+}
 # CommonAttribute — общий реквизит: тип + value-свойства + состав объектов + свойства разделения данных.
 if ($objType -eq 'CommonAttribute') {
 	$vt = Get-TypeShorthand ($props.SelectSingleNode('md:Type', $nsm)); if ($vt -and $vt -ne 'String(0)') { $dsl['valueType'] = $vt }
@@ -1122,6 +1129,54 @@ if ($saNode) {
 # --- ChildObjects: Attributes + TabularSections ---
 $childObjs = $objNode.SelectSingleNode('md:ChildObjects', $nsm)
 if ($childObjs) {
+	# HTTPService: шаблоны URL и их методы. Шаблон — {template, methods{}}, метод — строка (только
+	# HTTP-метод, когда обработчик совпадает с авто-выводом ИмяШаблона+ИмяМетода) либо объект.
+	$tmplNodes = @($childObjs.SelectNodes('md:URLTemplate', $nsm))
+	if ($tmplNodes.Count -gt 0) {
+		$tmpls = [ordered]@{}
+		foreach ($t in $tmplNodes) {
+			$tp = $t.SelectSingleNode('md:Properties', $nsm)
+			$tName = ($tp.SelectSingleNode('md:Name', $nsm)).InnerText
+			$tObj = [ordered]@{}
+			$tTemplate = $tp.SelectSingleNode('md:Template', $nsm)
+			if ($tTemplate) { $tObj['template'] = $tTemplate.InnerText }
+			$tSyn = Get-MLValue ($tp.SelectSingleNode('md:Synonym', $nsm))
+			# -cne, не -ne: сравнение синонима с авто-выводом ДОЛЖНО быть регистрочувствительным,
+			# иначе "Post" против "post" считается совпадением и синоним теряется.
+			if ($null -ne $tSyn -and "$tSyn" -cne (Split-CamelWords $tName)) { $tObj['synonym'] = $tSyn }
+			$tCmt = $tp.SelectSingleNode('md:Comment', $nsm)
+			if ($tCmt -and $tCmt.InnerText) { $tObj['comment'] = $tCmt.InnerText }
+
+			$mNodes = @($t.SelectNodes('md:ChildObjects/md:Method', $nsm))
+			if ($mNodes.Count -gt 0) {
+				$methods = [ordered]@{}
+				foreach ($m in $mNodes) {
+					$mp = $m.SelectSingleNode('md:Properties', $nsm)
+					$mName = ($mp.SelectSingleNode('md:Name', $nsm)).InnerText
+					$mHttp = $mp.SelectSingleNode('md:HTTPMethod', $nsm)
+					$mHandler = $mp.SelectSingleNode('md:Handler', $nsm)
+					$mSyn = Get-MLValue ($mp.SelectSingleNode('md:Synonym', $nsm))
+					$mCmt = $mp.SelectSingleNode('md:Comment', $nsm)
+					$httpVal = if ($mHttp) { $mHttp.InnerText } else { 'GET' }
+					$handlerVal = if ($mHandler) { $mHandler.InnerText } else { '' }
+					$synDefault = ($null -eq $mSyn) -or ("$mSyn" -ceq (Split-CamelWords $mName))
+					$cmtEmpty = (-not $mCmt) -or (-not $mCmt.InnerText)
+					if ($handlerVal -eq "$tName$mName" -and $synDefault -and $cmtEmpty) {
+						$methods[$mName] = $httpVal
+					} else {
+						$mo = [ordered]@{ httpMethod = $httpVal }
+						if ($handlerVal) { $mo['handler'] = $handlerVal }
+						if (-not $synDefault) { $mo['synonym'] = $mSyn }
+						if (-not $cmtEmpty) { $mo['comment'] = $mCmt.InnerText }
+						$methods[$mName] = $mo
+					}
+				}
+				$tObj['methods'] = $methods
+			}
+			$tmpls[$tName] = $tObj
+		}
+		$dsl['urlTemplates'] = $tmpls
+	}
 	$attrs = @($childObjs.SelectNodes('md:Attribute', $nsm))
 	if ($attrs.Count -gt 0) {
 		$arr = [System.Collections.ArrayList]@()
