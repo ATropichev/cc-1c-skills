@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-decompile v0.55 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+# meta-decompile v0.56 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Зеркало meta-decompile.ps1 (КАНОН). Структура 1:1 — те же имена функций, порядок, комментарии.
@@ -299,6 +299,10 @@ def convert_ch_scalar_node(vN):
         if re.match(r'^-?\d+$', txt):
             return int(txt)
         return float(txt)
+    # Пустой DesignTimeRef != пустая строка: без маркера тип терялся, и компилятор эмитил xs:string.
+    # Та же конвенция, что у fillValue — маркер emptyRef.
+    if re.search(r'DesignTimeRef$', xt, re.I) and txt == '':
+        return {'emptyRef': True}
     return txt
 
 

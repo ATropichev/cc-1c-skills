@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.69 — Compile 1C metadata object from JSON
+# meta-compile v1.70 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1706,6 +1706,11 @@ def convert_from_ch_link_shorthand(s):
         o['dataPath'] = rest
     return o
 
+def is_empty_ref(v):
+    """Маркер пустой ссылки от декомпилятора: {emptyRef: true}."""
+    return isinstance(v, dict) and v.get('emptyRef') is True
+
+
 def emit_choice_parameters(indent, cp, tag='ChoiceParameters'):
     if not cp:
         X(f'{indent}<{tag}/>')
@@ -1724,9 +1729,15 @@ def emit_choice_parameters(indent, cp, tag='ChoiceParameters'):
         X(f'{indent}\t<app:item name="{esc_xml(str(name))}">')
         if not has_val:
             X(f'{indent}\t\t<app:value xsi:nil="true"/>')
+        elif is_empty_ref(val):
+            # Пустая ссылка (маркер декомпилятора emptyRef) — тип обязан остаться DesignTimeRef.
+            X(f'{indent}\t\t<app:value xsi:type="xr:DesignTimeRef"/>')
         elif val_is_array:
             X(f'{indent}\t\t<app:value xsi:type="v8:FixedArray">')
             for v in val:
+                if is_empty_ref(v):
+                    X(f'{indent}\t\t\t<v8:Value xsi:type="xr:DesignTimeRef"/>')
+                    continue
                 xt, tx = normalize_choice_value_t(v, ptype)
                 if tx == '' or tx is None:
                     X(f'{indent}\t\t\t<v8:Value xsi:type="{xt}"/>')

@@ -1,4 +1,4 @@
-﻿# meta-compile v1.69 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.70 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1612,6 +1612,15 @@ function ConvertFrom-ChLinkShorthand {
 
 # <ChoiceParameters> — [{name, value?}]. Значение ПРЯМО на app:value (xsi:type=тип); массив → v8:FixedArray
 # с детьми v8:Value; без value → app:value nil.
+# Маркер пустой ссылки от декомпилятора: {emptyRef: true}. Работает и на Hashtable, и на PSCustomObject.
+# Массивы отсекаем ЯВНО: у коллекции `$v.emptyRef` разворачивается в свойства элементов (member
+# enumeration), и массив с одним таким элементом дал бы -eq $true → FixedArray схлопнулся бы в скаляр.
+function Is-EmptyRef($v) {
+	if ($null -eq $v -or $v -is [string]) { return $false }
+	if (($v -is [System.Array]) -or ($v -is [System.Collections.IList])) { return $false }
+	return ($v.emptyRef -eq $true)
+}
+
 function Emit-ChoiceParameters {
 	param([string]$indent, $cp, [string]$tag = 'ChoiceParameters')
 	if (-not $cp -or @($cp).Count -eq 0) { X "$indent<$tag/>"; return }
@@ -1632,9 +1641,13 @@ function Emit-ChoiceParameters {
 		X "$indent`t<app:item name=`"$(Esc-Xml "$name")`">"
 		if (-not $hasVal) {
 			X "$indent`t`t<app:value xsi:nil=`"true`"/>"
+		} elseif ((Is-EmptyRef $val)) {
+			# Пустая ссылка (маркер декомпилятора emptyRef) — тип обязан остаться DesignTimeRef.
+			X "$indent`t`t<app:value xsi:type=`"xr:DesignTimeRef`"/>"
 		} elseif ($valIsArray) {
 			X "$indent`t`t<app:value xsi:type=`"v8:FixedArray`">"
 			foreach ($v in $val) {
+				if (Is-EmptyRef $v) { X "$indent`t`t`t<v8:Value xsi:type=`"xr:DesignTimeRef`"/>"; continue }
 				$norm = Normalize-ChoiceValueT $v $ptype
 				if ([string]::IsNullOrEmpty($norm.Text)) { X "$indent`t`t`t<v8:Value xsi:type=`"$($norm.XsiType)`"/>" }
 				else { X "$indent`t`t`t<v8:Value xsi:type=`"$($norm.XsiType)`">$(Esc-Xml $norm.Text)</v8:Value>" }

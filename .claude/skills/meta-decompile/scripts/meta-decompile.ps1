@@ -1,4 +1,4 @@
-﻿# meta-decompile v0.55 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+﻿# meta-decompile v0.56 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Поддержаны: Catalog, ExchangePlan, ChartOfCharacteristicTypes, ChartOfAccounts, ChartOfCalculationTypes, Document,
@@ -226,6 +226,9 @@ function Convert-ChScalarNode {
 		if ($txt -match '^-?\d+$') { return [int]$txt }
 		return [double]::Parse($txt, [System.Globalization.CultureInfo]::InvariantCulture)
 	}
+	# Пустой DesignTimeRef ≠ пустая строка: без маркера тип терялся, и компилятор эмитил xs:string.
+	# Та же конвенция, что у fillValue (см. ниже) — маркер emptyRef.
+	if ($xt -match 'DesignTimeRef$' -and $txt -eq '') { return [ordered]@{ emptyRef = $true } }
 	return $txt
 }
 # app:value (тип прямо на узле) → значение ЛИБО массив (v8:FixedArray с детьми v8:Value).
