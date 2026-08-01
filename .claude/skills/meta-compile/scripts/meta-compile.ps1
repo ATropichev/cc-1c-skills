@@ -1,4 +1,4 @@
-﻿# meta-compile v1.68 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.69 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1321,9 +1321,9 @@ function Emit-StandardAttribute {
 	X "$indent`t<xr:MultiLine>false</xr:MultiLine>"
 	X "$indent`t<xr:FillFromFillingValue>$ffv</xr:FillFromFillingValue>"
 	X "$indent`t<xr:CreateOnInput>Auto</xr:CreateOnInput>"
-	# Формат 2.20 (8.3.27): режим приведения типов. Платформа пишет его КАЖДОМУ стандартному
+	# Формат 2.18 (8.3.25): режим приведения типов. Платформа пишет его КАЖДОМУ стандартному
 	# реквизиту; значение всегда TransformValues, кроме владельца (Owner) — там Deny.
-	if ($script:isFormat220) {
+	if ($script:isFormat218) {
 		$trm = OvOr 'TypeReductionMode' $(if ($attrName -ceq 'Owner') { 'Deny' } else { 'TransformValues' })
 		X "$indent`t<xr:TypeReductionMode>$trm</xr:TypeReductionMode>"
 	}
@@ -1955,9 +1955,9 @@ function Emit-Attribute {
 			X "$indent`t`t<DataHistory>$dh</DataHistory>"
 		}
 	}
-	# Формат 2.20 (8.3.27): режим приведения типов — последним в Properties и ТОЛЬКО у измерений
+	# Формат 2.18 (8.3.25): режим приведения типов — последним в Properties и ТОЛЬКО у измерений
 	# регистра сведений (у реквизитов/ресурсов и у прочих семейств регистров платформа его не пишет).
-	if ($script:isFormat220 -and $elemTag -eq "Dimension" -and $context -eq "register-info") {
+	if ($script:isFormat218 -and $elemTag -eq "Dimension" -and $context -eq "register-info") {
 		$trm = if ($parsed.typeReductionMode) { "$($parsed.typeReductionMode)" } else { "TransformValues" }
 		X "$indent`t`t<TypeReductionMode>$trm</TypeReductionMode>"
 	}
@@ -4043,7 +4043,10 @@ function Get-FormatRank([string]$ver) {
 
 $script:formatVersion = Detect-FormatVersion $OutputDir
 $script:compatMode = Detect-CompatibilityMode $OutputDir
-# Формат 2.20+ (платформа 8.3.27) — только тогда эмитим новые свойства.
+# У каждого свойства свой порог: <TypeReductionMode> появился в формате 2.18 (платформа 8.3.25),
+# <LineNumberLength> — в 2.20 (8.3.27). Один общий флаг здесь неверен: на проекте 2.18/2.19 он
+# глушил бы TypeReductionMode, который платформа этих версий пишет, и роундтрип бы разъезжался.
+$script:isFormat218 = (Get-FormatRank $script:formatVersion) -ge 218
 $script:isFormat220 = (Get-FormatRank $script:formatVersion) -ge 220
 # Дефолт длины номера строки ТЧ: с режима 8.3.27 платформа заводит новые ТЧ с 9 разрядами.
 $script:lineNumberLengthDefault = if ((Get-CompatModeRank $script:compatMode) -ge 80327) { 9 } else { 5 }

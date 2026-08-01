@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.68 — Compile 1C metadata object from JSON
+# meta-compile v1.69 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1340,9 +1340,9 @@ def emit_standard_attribute(indent, attr_name, ov=None):
     X(f'{indent}\t<xr:MultiLine>false</xr:MultiLine>')
     X(f'{indent}\t<xr:FillFromFillingValue>{ffv}</xr:FillFromFillingValue>')
     X(f'{indent}\t<xr:CreateOnInput>Auto</xr:CreateOnInput>')
-    # Формат 2.20 (8.3.27): режим приведения типов. Платформа пишет его КАЖДОМУ стандартному
+    # Формат 2.18 (8.3.25): режим приведения типов. Платформа пишет его КАЖДОМУ стандартному
     # реквизиту; значение всегда TransformValues, кроме владельца (Owner) — там Deny.
-    if is_format_220:
+    if is_format_218:
         trm = ov.get('TypeReductionMode', 'Deny' if attr_name == 'Owner' else 'TransformValues')
         X(f'{indent}\t<xr:TypeReductionMode>{trm}</xr:TypeReductionMode>')
     X(f'{indent}\t<xr:MaxValue xsi:nil="true"/>')
@@ -2017,9 +2017,9 @@ def emit_attribute(indent, parsed, context, elem_tag='Attribute'):
         # DataHistory — not for Chart* types and non-InformationRegister register family
         if context not in ('chart', 'register-other', 'register-accum', 'register-calc', 'register-account'):
             X(f'{indent}\t\t<DataHistory>{parsed.get("dataHistory") or "Use"}</DataHistory>')
-    # Формат 2.20 (8.3.27): режим приведения типов — последним в Properties и ТОЛЬКО у измерений
+    # Формат 2.18 (8.3.25): режим приведения типов — последним в Properties и ТОЛЬКО у измерений
     # регистра сведений (у реквизитов/ресурсов и у прочих семейств регистров платформа его не пишет).
-    if is_format_220 and elem_tag == 'Dimension' and context == 'register-info':
+    if is_format_218 and elem_tag == 'Dimension' and context == 'register-info':
         X(f'{indent}\t\t<TypeReductionMode>{parsed.get("typeReductionMode") or "TransformValues"}</TypeReductionMode>')
     X(f'{indent}\t</Properties>')
     X(f'{indent}</{elem_tag}>')
@@ -3935,7 +3935,10 @@ def format_rank(ver):
 
 format_version = detect_format_version(output_dir)
 compat_mode = detect_compatibility_mode(output_dir)
-# Формат 2.20+ (платформа 8.3.27) — только тогда эмитим новые свойства.
+# У каждого свойства свой порог: <TypeReductionMode> появился в формате 2.18 (платформа 8.3.25),
+# <LineNumberLength> — в 2.20 (8.3.27). Один общий флаг здесь неверен: на проекте 2.18/2.19 он
+# глушил бы TypeReductionMode, который платформа этих версий пишет, и роундтрип бы разъезжался.
+is_format_218 = format_rank(format_version) >= 218
 is_format_220 = format_rank(format_version) >= 220
 # Дефолт длины номера строки ТЧ: с режима 8.3.27 платформа заводит новые ТЧ с 9 разрядами.
 line_number_length_default = 9 if compat_mode_rank(compat_mode) >= 80327 else 5

@@ -125,8 +125,11 @@ function ensureSetup(setupName, runtime, skillCasesDir) {
   // Пустые конфигурации-фикстуры. Версия формата и режим совместимости — независимые оси:
   // формат задаёт платформа выгрузки, а режим влияет на дефолт <LineNumberLength> у ТЧ
   // (<=8_3_26 → 5, >=8_3_27 → 9). Отсюда две 2.20-фикстуры с разными режимами.
+  // Фикстура 2.18 (8.3.25) держит границу между свойствами: TypeReductionMode там уже есть,
+  // а LineNumberLength ещё нет — он появился только в 2.20.
   const EMPTY_CONFIGS = {
     'empty-config': [],
+    'empty-config-218': ['-FormatVersion', '2.18', '-CompatibilityMode', 'Version8_3_24'],
     'empty-config-220': ['-FormatVersion', '2.20', '-CompatibilityMode', 'Version8_3_27'],
     'empty-config-220-compat24': ['-FormatVersion', '2.20', '-CompatibilityMode', 'Version8_3_24'],
   };

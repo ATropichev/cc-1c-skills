@@ -1,4 +1,4 @@
-﻿# epf-validate v1.2 — Validate 1C external data processor / report structure
+﻿# epf-validate v1.3 — Validate 1C external data processor / report structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # Works for both EPF (ExternalDataProcessor) and ERF (ExternalReport) — auto-detects
 param(
@@ -185,8 +185,9 @@ if ($root.NamespaceURI -ne $expectedNs) {
 $version = $root.GetAttribute("version")
 if (-not $version) {
 	Report-Warn "1. Missing version attribute on MetaDataObject"
-} elseif ($version -ne "2.17" -and $version -ne "2.20" -and $version -ne "2.21") {
-	Report-Warn "1. Unusual version '$version' (expected 2.17, 2.20 or 2.21)"
+} elseif ($version -notin @("2.17", "2.18", "2.19", "2.20", "2.21")) {
+	# Лестница версий формата: 2.17 (8.3.20-8.3.24), 2.18 (8.3.25), 2.19 (8.3.26), 2.20 (8.3.27).
+	Report-Warn "1. Unusual version '$version' (expected 2.17-2.20 or 2.21)"
 }
 
 # Detect type: ExternalDataProcessor or ExternalReport

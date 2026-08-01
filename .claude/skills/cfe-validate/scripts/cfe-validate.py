@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.4 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.5 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -216,8 +216,9 @@ def main():
     version = root.get('version', '')
     if not version:
         r.warn('1. Missing version attribute on MetaDataObject')
-    elif version not in ('2.17', '2.20', '2.21'):
-        r.warn(f"1. Unusual version '{version}' (expected 2.17, 2.20 or 2.21)")
+    elif version not in ('2.17', '2.18', '2.19', '2.20', '2.21'):
+        # Лестница версий формата: 2.17 (8.3.20-8.3.24), 2.18 (8.3.25), 2.19 (8.3.26), 2.20 (8.3.27).
+        r.warn(f"1. Unusual version '{version}' (expected 2.17-2.20 or 2.21)")
 
     # Must have Configuration child
     cfg_node = None

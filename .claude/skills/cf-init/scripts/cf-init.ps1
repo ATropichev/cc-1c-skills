@@ -1,4 +1,4 @@
-﻿# cf-init v1.3 — Create empty 1C configuration scaffold
+﻿# cf-init v1.4 — Create empty 1C configuration scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -9,9 +9,9 @@ param(
 	[string]$Vendor,
 	[string]$CompatibilityMode = "Version8_3_24",
 	# Версия формата выгрузки (MDClasses). Её задаёт ПЛАТФОРМА, которой выгружают, и от режима
-	# совместимости она не зависит: 8.3.24 пишет 2.17, 8.3.27 — 2.20. Дефолт консервативный —
-	# 2.17 читается всеми поддерживаемыми платформами.
-	[ValidateSet("2.17", "2.20", "2.21")]
+	# совместимости она не зависит: 8.3.20-8.3.24 пишут 2.17, 8.3.25 — 2.18, 8.3.26 — 2.19,
+	# 8.3.27 — 2.20. Дефолт консервативный: 2.17 читается всеми поддерживаемыми платформами.
+	[ValidateSet("2.17", "2.18", "2.19", "2.20", "2.21")]
 	[string]$FormatVersion = "2.17"
 )
 

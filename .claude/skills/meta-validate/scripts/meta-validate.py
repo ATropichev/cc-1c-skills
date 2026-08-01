@@ -1,4 +1,4 @@
-# meta-validate v1.12 — Validate 1C metadata object structure (Python port) (+корневой <Type>: скаляр без структуры = ошибка)
+# meta-validate v1.13 — Validate 1C metadata object structure (Python port) (+корневой <Type>: скаляр без структуры = ошибка)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -371,8 +371,9 @@ if root_ns != expected_ns:
 version = root.get("version", "")
 if not version:
     report_warn("1. Missing version attribute on MetaDataObject")
-elif version not in ("2.17", "2.20"):
-    report_warn(f"1. Unusual version '{version}' (expected 2.17 or 2.20)")
+elif version not in ("2.17", "2.18", "2.19", "2.20"):
+    # Лестница версий формата: 2.17 (8.3.20-8.3.24), 2.18 (8.3.25), 2.19 (8.3.26), 2.20 (8.3.27).
+    report_warn(f"1. Unusual version '{version}' (expected 2.17-2.20)")
 
 # Detect type element -- exactly one child element in md namespace
 type_node = None
@@ -1401,7 +1402,7 @@ if config_dir:
 # рапортует успех, а свойство теряется); (2) подсказать, что конструкция требует более нового
 # формата. Расширяется одной строкой на свойство — задел под 2.21 (8.5) и последующие.
 versioned_props = {
-    "TypeReductionMode": "2.20",   # режим приведения типов (стандартные реквизиты, измерения РС)
+    "TypeReductionMode": "2.18",   # режим приведения типов (стандартные реквизиты, измерения РС)
     "LineNumberLength": "2.20",    # длина номера строки ТЧ (5..9)
 }
 
