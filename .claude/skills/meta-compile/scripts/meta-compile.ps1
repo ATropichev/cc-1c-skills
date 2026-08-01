@@ -853,8 +853,12 @@ function Normalize-FillRef {
 	$root = $script:fillRefRoots[$parts[0].ToLower()]
 	if (-not $root) { return $null }
 	$typeName = $parts[1]
+	# Двухчастное "Тип.Имя" — это объект метаданных, а не ЗНАЧЕНИЕ. Значением бывают пустая ссылка,
+	# предопределённый элемент или значение перечисления — все они длиннее. Правило было выведено
+	# только для Enum; без него строка вида "Документ.РеализацияТоваров" молча становилась ссылкой
+	# (на корпусе: 5520 значений в ChoiceParameters и 8623 в FillValue — двухчастных НЕТ ни одного).
+	if ($parts.Count -lt 3) { return $null }
 	if ($root -eq 'Enum') {
-		if ($parts.Count -eq 2) { return $null }   # "Enum.X" — не значение
 		if ($parts.Count -eq 3) {
 			if ($script:fillEmptyRefWords -contains $parts[2].ToLower()) { return "Enum.$typeName.EmptyRef" }
 			return "Enum.$typeName.EnumValue.$($parts[2])"

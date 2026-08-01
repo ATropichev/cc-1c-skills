@@ -873,9 +873,13 @@ def normalize_fill_ref(s):
     if not root:
         return None
     type_name = parts[1]
+    # Двухчастное "Тип.Имя" — это объект метаданных, а не ЗНАЧЕНИЕ. Значением бывают пустая ссылка,
+    # предопределённый элемент или значение перечисления — все они длиннее. Правило было выведено
+    # только для Enum; без него строка вида "Документ.РеализацияТоваров" молча становилась ссылкой
+    # (на корпусе: 5520 значений в ChoiceParameters и 8623 в FillValue — двухчастных НЕТ ни одного).
+    if len(parts) < 3:
+        return None
     if root == 'Enum':
-        if len(parts) == 2:
-            return None
         if len(parts) == 3:
             if parts[2].lower() in fill_empty_ref_words:
                 return f'Enum.{type_name}.EmptyRef'
