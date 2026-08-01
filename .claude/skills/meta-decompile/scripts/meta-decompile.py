@@ -291,6 +291,10 @@ def get_type_shorthand(type_node):
 
 # Скалярное значение параметра выбора (<Value xsi:type=...>) → JSON-значение (bool/число/строка).
 def convert_ch_scalar_node(vN):
+    # nil-элемент массива (<v8:Value xsi:nil="true"/>) -> JSON null. Без этого он приезжал пустой
+    # строкой и компилятор эмитил xs:string вместо nil.
+    if _attr(vN, 'nil', NS_XSI) == 'true':
+        return None
     xt = _attr(vN, 'type', NS_XSI)
     txt = _text(vN)
     if re.search(r'boolean$', xt, re.I):

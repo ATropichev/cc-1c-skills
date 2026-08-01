@@ -1041,6 +1041,9 @@ function Parse-AttributeShorthand {
 		accountingFlag = $val.accountingFlag
 		extDimensionAccountingFlag = $val.extDimensionAccountingFlag
 		addressingDimension = $val.addressingDimension
+		# Режим приведения типов измерения РС (формат 2.18). Ключ обязан доехать до эмиттера:
+		# без него не-дефолтное значение (Deny / DeleteData) молча заменялось на TransformValues.
+		typeReductionMode = $val.typeReductionMode
 	}
 }
 
@@ -1647,6 +1650,7 @@ function Emit-ChoiceParameters {
 		} elseif ($valIsArray) {
 			X "$indent`t`t<app:value xsi:type=`"v8:FixedArray`">"
 			foreach ($v in $val) {
+				if ($null -eq $v) { X "$indent`t`t`t<v8:Value xsi:nil=`"true`"/>"; continue }
 				if (Is-EmptyRef $v) { X "$indent`t`t`t<v8:Value xsi:type=`"xr:DesignTimeRef`"/>"; continue }
 				$norm = Normalize-ChoiceValueT $v $ptype
 				if ([string]::IsNullOrEmpty($norm.Text)) { X "$indent`t`t`t<v8:Value xsi:type=`"$($norm.XsiType)`"/>" }
@@ -4794,6 +4798,9 @@ if ($objType -eq "ExchangePlan") {
 		[System.IO.File]::WriteAllText($contentPath, $sbC.ToString(), $enc)
 		$modulesCreated += $contentPath
 	} elseif (-not (Test-Path $contentPath)) {
+		# При пустом составе платформа всё равно пишет пустой <ExchangePlanContent/> — проверено на
+		# ОДНОЙ конфигурации, снятой 8.3.24/8.3.25/8.3.26/8.3.27: во всех четырёх файл есть.
+		# (Единственный план обмена БЕЗ файла найден в УТ — хвостовая аномалия конфигурации, не правило.)
 		Ensure-ExtDir
 		$contentXml = "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<ExchangePlanContent $xepNs version=`"$($script:formatVersion)`"/>`r`n"
 		[System.IO.File]::WriteAllText($contentPath, $contentXml, $enc)

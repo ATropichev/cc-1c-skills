@@ -219,6 +219,9 @@ function Get-TypeShorthand {
 # string/dateTime/DesignTimeRef → строка (компилятор auto-детектит обратно).
 function Convert-ChScalarNode {
 	param($vN)
+	# nil-элемент массива (<v8:Value xsi:nil="true"/>) → JSON null. Без этого он приезжал пустой
+	# строкой и компилятор эмитил xs:string вместо nil.
+	if ($vN.GetAttribute('nil', 'http://www.w3.org/2001/XMLSchema-instance') -eq 'true') { return $null }
 	$xt = $vN.GetAttribute('type', 'http://www.w3.org/2001/XMLSchema-instance')
 	$txt = $vN.InnerText
 	if ($xt -match 'boolean$') { return ($txt -eq 'true') }

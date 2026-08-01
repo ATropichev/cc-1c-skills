@@ -1073,6 +1073,9 @@ def parse_attribute_shorthand(val):
         'accountingFlag': val.get('accountingFlag'),
         'extDimensionAccountingFlag': val.get('extDimensionAccountingFlag'),
         'addressingDimension': val.get('addressingDimension'),
+        # Режим приведения типов измерения РС (формат 2.18). Ключ обязан доехать до эмиттера:
+        # без него не-дефолтное значение (Deny / DeleteData) молча заменялось на TransformValues.
+        'typeReductionMode': val.get('typeReductionMode'),
     }
 
 def parse_enum_value_shorthand(val):
@@ -1735,6 +1738,9 @@ def emit_choice_parameters(indent, cp, tag='ChoiceParameters'):
         elif val_is_array:
             X(f'{indent}\t\t<app:value xsi:type="v8:FixedArray">')
             for v in val:
+                if v is None:
+                    X(f'{indent}\t\t\t<v8:Value xsi:nil="true"/>')
+                    continue
                 if is_empty_ref(v):
                     X(f'{indent}\t\t\t<v8:Value xsi:type="xr:DesignTimeRef"/>')
                     continue
@@ -4684,6 +4690,9 @@ if obj_type == 'ExchangePlan':
         write_utf8_bom(content_path, ''.join(parts))
         modules_created.append(content_path)
     elif not os.path.isfile(content_path):
+        # При пустом составе платформа всё равно пишет пустой <ExchangePlanContent/> — проверено на
+        # ОДНОЙ конфигурации, снятой 8.3.24/8.3.25/8.3.26/8.3.27: во всех четырёх файл есть.
+        # (Единственный план обмена БЕЗ файла найден в УТ — хвостовая аномалия конфигурации, не правило.)
         ensure_ext_dir()
         content_xml = f'<?xml version="1.0" encoding="UTF-8"?>\r\n<ExchangePlanContent {xep_ns} version="{format_version}"/>\r\n'
         write_utf8_bom(content_path, content_xml)
