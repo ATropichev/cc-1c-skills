@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-decompile v0.57 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+# meta-decompile v0.58 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Зеркало meta-decompile.ps1 (КАНОН). Структура 1:1 — те же имена функций, порядок, комментарии.
@@ -56,6 +56,14 @@ def _text(node):
     if node is None:
         return None
     return ''.join(node.itertext())
+
+
+def _ns_of_prefix(node, prefix):
+    """URI по префиксу — зеркало GetNamespaceOfPrefix из PS. lxml отдаёт nsmap с учётом
+    унаследованных объявлений, поэтому локальный xmlns:dNpM на самом теге тоже виден."""
+    if node is None:
+        return None
+    return node.nsmap.get(prefix)
 
 
 def _attr(node, name, ns=None):
@@ -290,6 +298,25 @@ def get_type_shorthand(type_node):
 
 
 # Скалярное значение параметра выбора (<Value xsi:type=...>) → JSON-значение (bool/число/строка).
+def get_xdto_type_value(node):
+    """XDTO-тип: префиксное значение (d6p1:Local) -> нотация Кларка "{uri}Local".
+
+    Префиксы платформы (dNpM) произвольны и переносу не подлежат; стандартные (xs:, v8:, xr:)
+    оставляем дословно — компилятор их так и пишет.
+    """
+    if node is None:
+        return None
+    txt = _text(node)
+    m = re.match(r'^([\w.\-]+):(.+)$', txt or '')
+    if m:
+        prefix, local = m.group(1), m.group(2)
+        if prefix not in ('xs', 'xsi', 'v8', 'xr'):
+            uri = _ns_of_prefix(node, prefix)
+            if uri:
+                return '{%s}%s' % (uri, local)
+    return txt
+
+
 def convert_ch_scalar_node(vN):
     # nil-элемент массива (<v8:Value xsi:nil="true"/>) -> JSON null. Без этого он приезжал пустой
     # строкой и компилятор эмитил xs:string вместо nil.
@@ -1191,6 +1218,26 @@ def build_dsl():
         get_picture_to_dsl(props, dsl)
         add_enum_prop('category', 'Category', 'NavigationPanel')
     # CommonCommand.
+    # WebService — пространство имён, состав XDTO-пакетов, дескриптор.
+    if obj_type == 'WebService':
+        ns_ = P('Namespace')
+        if ns_:
+            dsl['namespace'] = ns_
+        pkg_nodes = _nodes(props, 'md:XDTOPackages/xr:Item/xr:Value')
+        if len(pkg_nodes) > 0:
+            dsl['xdtoPackages'] = [_text(pn) for pn in pkg_nodes]
+        dfn = P('DescriptorFileName')
+        if dfn and dfn != f'{obj_name}.1cws':
+            dsl['descriptorFileName'] = dfn
+        add_enum_prop('reuseSessions', 'ReuseSessions', 'DontUse')
+        add_int_prop('sessionMaxAge', 'SessionMaxAge', 20)
+    # HTTPService — корневой URL, повторное использование сеансов, время жизни сеанса.
+    if obj_type == 'HTTPService':
+        ru = P('RootURL')
+        if ru and ru != obj_name.lower():
+            dsl['rootURL'] = ru
+        add_enum_prop('reuseSessions', 'ReuseSessions', 'DontUse')
+        add_int_prop('sessionMaxAge', 'SessionMaxAge', 20)
     if obj_type == 'CommonCommand':
         grp = P('Group')
         if grp:
@@ -1618,6 +1665,100 @@ def build_dsl():
     # --- ChildObjects: Attributes + TabularSections ---
     child_objs = _single(obj_node, 'md:ChildObjects')
     if child_objs is not None:
+        # WebService: операции с параметрами. Строчное сокращение — только тип возврата.
+        op_nodes = _nodes(child_objs, 'md:Operation')
+        if len(op_nodes) > 0:
+            ops = {}
+            for op in op_nodes:
+                op_p = _single(op, 'md:Properties')
+                op_name = _text(_single(op_p, 'md:Name'))
+                o = {}
+                rt = get_xdto_type_value(_single(op_p, 'md:XDTOReturningValueType'))
+                if rt and rt != 'xs:string':
+                    o['returnType'] = rt
+                if _text(_single(op_p, 'md:Nillable')) == 'true':
+                    o['nillable'] = True
+                if _text(_single(op_p, 'md:Transactioned')) == 'true':
+                    o['transactioned'] = True
+                pn = _text(_single(op_p, 'md:ProcedureName'))
+                if pn and pn != op_name:
+                    o['procedureName'] = pn
+                dl = _text(_single(op_p, 'md:DataLockControlMode'))
+                if dl and dl != 'Managed':
+                    o['dataLockControlMode'] = dl
+                osyn = get_ml_value(_single(op_p, 'md:Synonym'))
+                if osyn is not None and str(osyn) != split_camel_words(op_name):
+                    o['synonym'] = osyn
+                ocmt = _text(_single(op_p, 'md:Comment'))
+                if ocmt:
+                    o['comment'] = ocmt
+                par_nodes = _nodes(op, 'md:ChildObjects/md:Parameter')
+                if len(par_nodes) > 0:
+                    pars = {}
+                    for par in par_nodes:
+                        pp = _single(par, 'md:Properties')
+                        par_name = _text(_single(pp, 'md:Name'))
+                        po = {}
+                        pt = get_xdto_type_value(_single(pp, 'md:XDTOValueType'))
+                        if pt:
+                            po['type'] = pt
+                        if _text(_single(pp, 'md:Nillable')) == 'false':
+                            po['nillable'] = False
+                        pdir = _text(_single(pp, 'md:TransferDirection'))
+                        if pdir and pdir != 'In':
+                            po['direction'] = pdir
+                        psyn = get_ml_value(_single(pp, 'md:Synonym'))
+                        if psyn is not None and str(psyn) != split_camel_words(par_name):
+                            po['synonym'] = psyn
+                        pcmt = _text(_single(pp, 'md:Comment'))
+                        if pcmt:
+                            po['comment'] = pcmt
+                        pars[par_name] = po['type'] if list(po.keys()) == ['type'] else po
+                    o['parameters'] = pars
+                ops[op_name] = o['returnType'] if list(o.keys()) == ['returnType'] else o
+            dsl['operations'] = ops
+        # HTTPService: шаблоны URL и их методы.
+        tmpl_nodes = _nodes(child_objs, 'md:URLTemplate')
+        if len(tmpl_nodes) > 0:
+            tmpls = {}
+            for t in tmpl_nodes:
+                tp = _single(t, 'md:Properties')
+                t_name = _text(_single(tp, 'md:Name'))
+                t_obj = {}
+                t_template = _text(_single(tp, 'md:Template'))
+                if t_template:
+                    t_obj['template'] = t_template
+                t_syn = get_ml_value(_single(tp, 'md:Synonym'))
+                if t_syn is not None and str(t_syn) != split_camel_words(t_name):
+                    t_obj['synonym'] = t_syn
+                t_cmt = _text(_single(tp, 'md:Comment'))
+                if t_cmt:
+                    t_obj['comment'] = t_cmt
+                m_nodes = _nodes(t, 'md:ChildObjects/md:Method')
+                if len(m_nodes) > 0:
+                    methods = {}
+                    for m in m_nodes:
+                        mp = _single(m, 'md:Properties')
+                        m_name = _text(_single(mp, 'md:Name'))
+                        http_val = _text(_single(mp, 'md:HTTPMethod')) or 'GET'
+                        handler_val = _text(_single(mp, 'md:Handler')) or ''
+                        m_syn = get_ml_value(_single(mp, 'md:Synonym'))
+                        m_cmt = _text(_single(mp, 'md:Comment'))
+                        syn_default = m_syn is None or str(m_syn) == split_camel_words(m_name)
+                        if handler_val == f'{t_name}{m_name}' and syn_default and not m_cmt:
+                            methods[m_name] = http_val
+                        else:
+                            mo = {'httpMethod': http_val}
+                            if handler_val:
+                                mo['handler'] = handler_val
+                            if not syn_default:
+                                mo['synonym'] = m_syn
+                            if m_cmt:
+                                mo['comment'] = m_cmt
+                            methods[m_name] = mo
+                    t_obj['methods'] = methods
+                tmpls[t_name] = t_obj
+            dsl['urlTemplates'] = tmpls
         attrs = _nodes(child_objs, 'md:Attribute')
         if len(attrs) > 0:
             arr = []
@@ -1938,7 +2079,7 @@ SUPPORTED_TYPES = (
     'Enum', 'Report', 'DataProcessor', 'Constant', 'DefinedType', 'FunctionalOption', 'DocumentJournal', 'Sequence',
     'FilterCriterion', 'DocumentNumerator', 'SettingsStorage', 'CommonModule', 'EventSubscription', 'ScheduledJob',
     'CommonForm', 'SessionParameter', 'CommonCommand', 'CommandGroup', 'CommonAttribute', 'FunctionalOptionsParameter',
-    'WSReference', 'CommonPicture', 'CommonTemplate',
+    'WSReference', 'CommonPicture', 'CommonTemplate', 'HTTPService', 'WebService',
 )
 
 

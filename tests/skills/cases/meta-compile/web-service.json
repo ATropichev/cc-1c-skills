@@ -5,6 +5,8 @@
     "name": "СервисОбмена",
     "namespace": "http://example.com/exchange",
     "reuseSessions": "AutoUse",
+    "descriptorFileName": "exchange.1cws",
+    "xdtoPackages": ["http://v8.1c.ru/8.3/data/ext", "http://example.com/exchange"],
     "operations": {
       "ПолучитьДанные": {
         "returnType": "xs:string",
@@ -13,6 +15,15 @@
         "parameters": {
           "ИдентификаторЗапроса": "xs:string",
           "ДатаНачала": "xs:dateTime"
+        }
+      },
+      "ОбменСообщениями": {
+        "returnType": "{http://example.com/exchange}MessageExchange",
+        "procedureName": "ВыполнитьОбмен",
+        "comment": "Основная операция",
+        "parameters": {
+          "Сообщение": { "type": "{http://example.com/exchange}MessageExchange", "nillable": false },
+          "Ошибка": { "type": "xs:string", "nillable": false, "direction": "Out" }
         }
       }
     }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.71 — Compile 1C metadata object from JSON
+# meta-compile v1.72 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -3737,18 +3737,44 @@ def emit_http_service_properties(indent):
     session_max_age = str(defn['sessionMaxAge']) if defn.get('sessionMaxAge') is not None else '20'
     X(f'{i}<SessionMaxAge>{session_max_age}</SessionMaxAge>')
 
+def emit_xdto_type(indent, tag, value):
+    """XDTO-тип значения: "{uri}Local" (нотация Кларка) -> тег с ЛОКАЛЬНЫМ объявлением xmlns,
+    как пишет платформа. Простой "xs:string" — как есть."""
+    m = re.match(r'^\{([^}]+)\}(.+)$', value or '')
+    if m:
+        X(f'{indent}<{tag} xmlns:d1p1="{esc_xml(m.group(1))}">d1p1:{esc_xml(m.group(2))}</{tag}>')
+    else:
+        X(f'{indent}<{tag}>{esc_xml(value)}</{tag}>')
+
+
 def emit_web_service_properties(indent):
     i = indent
     X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
-    X(f'{i}<Comment/>')
+    X(f'{i}<Comment>{esc_xml(str(defn["comment"]))}</Comment>' if defn.get('comment') else f'{i}<Comment/>')
     namespace = str(defn['namespace']) if defn.get('namespace') else ''
     X(f'{i}<Namespace>{esc_xml(namespace)}</Namespace>')
-    xdto_packages = str(defn['xdtoPackages']) if defn.get('xdtoPackages') else ''
-    if xdto_packages:
-        X(f'{i}<XDTOPackages>{xdto_packages}</XDTOPackages>')
+    # XDTOPackages — СПИСОК элементов: ссылка на пакет конфигурации (xr:MDObjectRef) либо URI
+    # внешнего пространства имён (xs:string). Presentation пуст, CheckState 0 (корпус: 19/19).
+    pkgs = defn.get('xdtoPackages') or []
+    if not isinstance(pkgs, list):
+        pkgs = [pkgs]
+    if pkgs:
+        X(f'{i}<XDTOPackages>')
+        for p in pkgs:
+            pv = str(p)
+            xt = 'xr:MDObjectRef' if pv.startswith('XDTOPackage.') else 'xs:string'
+            X(f'{i}\t<xr:Item>')
+            X(f'{i}\t\t<xr:Presentation/>')
+            X(f'{i}\t\t<xr:CheckState>0</xr:CheckState>')
+            X(f'{i}\t\t<xr:Value xsi:type="{xt}">{esc_xml(pv)}</xr:Value>')
+            X(f'{i}\t</xr:Item>')
+        X(f'{i}</XDTOPackages>')
     else:
         X(f'{i}<XDTOPackages/>')
+    # Имя файла дескриптора не выводится из имени сервиса (DMILService -> dmil.1cws) — только дефолт.
+    descriptor = str(defn['descriptorFileName']) if defn.get('descriptorFileName') else f'{obj_name}.1cws'
+    X(f'{i}<DescriptorFileName>{esc_xml(descriptor)}</DescriptorFileName>')
     reuse_sessions = get_enum_prop('ReuseSessions', 'reuseSessions', 'DontUse')
     X(f'{i}<ReuseSessions>{reuse_sessions}</ReuseSessions>')
     session_max_age = str(defn['sessionMaxAge']) if defn.get('sessionMaxAge') is not None else '20'
@@ -3858,6 +3884,8 @@ def emit_operation(indent, op_name, op_def):
     nillable = 'false'
     transactioned = 'false'
     handler = op_name
+    op_comment = ''
+    data_lock = 'Managed'   # у всех 192 операций корпуса
     params = {}
     if isinstance(op_def, str):
         return_type = op_def
@@ -3870,6 +3898,14 @@ def emit_operation(indent, op_name, op_def):
             transactioned = 'true'
         if op_def.get('handler'):
             handler = str(op_def['handler'])
+        if op_def.get('procedureName'):
+            handler = str(op_def['procedureName'])
+        if op_def.get('synonym'):
+            op_synonym = str(op_def['synonym'])
+        if op_def.get('comment'):
+            op_comment = str(op_def['comment'])
+        if op_def.get('dataLockControlMode'):
+            data_lock = str(op_def['dataLockControlMode'])
         if op_def.get('parameters'):
             for k, v in op_def['parameters'].items():
                 params[k] = v
@@ -3877,20 +3913,23 @@ def emit_operation(indent, op_name, op_def):
     X(f'{indent}\t<Properties>')
     X(f'{indent}\t\t<Name>{esc_xml(op_name)}</Name>')
     emit_mltext(f'{indent}\t\t', 'Synonym', op_synonym)
-    X(f'{indent}\t\t<Comment/>')
-    X(f'{indent}\t\t<XDTOReturningValueType>{return_type}</XDTOReturningValueType>')
+    X(f'{indent}\t\t<Comment>{esc_xml(op_comment)}</Comment>' if op_comment else f'{indent}\t\t<Comment/>')
+    emit_xdto_type(f'{indent}\t\t', 'XDTOReturningValueType', return_type)
     X(f'{indent}\t\t<Nillable>{nillable}</Nillable>')
     X(f'{indent}\t\t<Transactioned>{transactioned}</Transactioned>')
     X(f'{indent}\t\t<ProcedureName>{esc_xml(handler)}</ProcedureName>')
+    X(f'{indent}\t\t<DataLockControlMode>{data_lock}</DataLockControlMode>')
     X(f'{indent}\t</Properties>')
     if params:
         X(f'{indent}\t<ChildObjects>')
-        for param_name, param_def in sorted(params.items()):
+        # Порядок — как в DSL (он же порядок исходного XML), а не отсортированный.
+        for param_name, param_def in params.items():
             param_uuid = new_uuid()
             param_synonym = split_camel_case(param_name)
             param_type = 'xs:string'
             param_nillable = 'true'
             param_dir = 'In'
+            param_comment = ''
             if isinstance(param_def, str):
                 param_type = param_def
             else:
@@ -3900,11 +3939,16 @@ def emit_operation(indent, op_name, op_def):
                     param_nillable = 'false'
                 if param_def.get('direction'):
                     param_dir = str(param_def['direction'])
+                if param_def.get('synonym'):
+                    param_synonym = str(param_def['synonym'])
+                if param_def.get('comment'):
+                    param_comment = str(param_def['comment'])
             X(f'{indent}\t\t<Parameter uuid="{param_uuid}">')
             X(f'{indent}\t\t\t<Properties>')
             X(f'{indent}\t\t\t\t<Name>{esc_xml(param_name)}</Name>')
             emit_mltext(f'{indent}\t\t\t\t', 'Synonym', param_synonym)
-            X(f'{indent}\t\t\t\t<XDTOValueType>{param_type}</XDTOValueType>')
+            X(f'{indent}\t\t\t\t<Comment>{esc_xml(param_comment)}</Comment>' if param_comment else f'{indent}\t\t\t\t<Comment/>')
+            emit_xdto_type(f'{indent}\t\t\t\t', 'XDTOValueType', param_type)
             X(f'{indent}\t\t\t\t<Nillable>{param_nillable}</Nillable>')
             X(f'{indent}\t\t\t\t<TransferDirection>{param_dir}</TransferDirection>')
             X(f'{indent}\t\t\t</Properties>')
@@ -4297,7 +4341,8 @@ if obj_type == 'WebService':
     if operations:
         has_children = True
         X('\t\t<ChildObjects>')
-        for op_name in sorted(op_order):
+        # Порядок — как в DSL (он же порядок исходного XML), а не отсортированный.
+        for op_name in op_order:
             emit_operation('\t\t\t', op_name, operations[op_name])
         X('\t\t</ChildObjects>')
     else:

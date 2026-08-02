@@ -1,4 +1,4 @@
-﻿# meta-decompile v0.57 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+﻿# meta-decompile v0.58 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Поддержаны: Catalog, ExchangePlan, ChartOfCharacteristicTypes, ChartOfAccounts, ChartOfCalculationTypes, Document,
@@ -92,7 +92,7 @@ foreach ($c in $rootEl.ChildNodes) { if ($c.NodeType -eq 'Element') { $objNode =
 if (-not $objNode) { [Console]::Error.WriteLine("meta-decompile: пустой MetaDataObject"); exit 3 }
 $objType = $objNode.LocalName
 
-if ($objType -notin @('Catalog', 'ExchangePlan', 'ChartOfCharacteristicTypes', 'ChartOfAccounts', 'ChartOfCalculationTypes', 'Document', 'InformationRegister', 'AccumulationRegister', 'AccountingRegister', 'CalculationRegister', 'BusinessProcess', 'Task', 'Enum', 'Report', 'DataProcessor', 'Constant', 'DefinedType', 'FunctionalOption', 'DocumentJournal', 'Sequence', 'FilterCriterion', 'DocumentNumerator', 'SettingsStorage', 'CommonModule', 'EventSubscription', 'ScheduledJob', 'CommonForm', 'SessionParameter', 'CommonCommand', 'CommandGroup', 'CommonAttribute', 'FunctionalOptionsParameter', 'WSReference', 'CommonPicture', 'CommonTemplate', 'HTTPService')) {
+if ($objType -notin @('Catalog', 'ExchangePlan', 'ChartOfCharacteristicTypes', 'ChartOfAccounts', 'ChartOfCalculationTypes', 'Document', 'InformationRegister', 'AccumulationRegister', 'AccountingRegister', 'CalculationRegister', 'BusinessProcess', 'Task', 'Enum', 'Report', 'DataProcessor', 'Constant', 'DefinedType', 'FunctionalOption', 'DocumentJournal', 'Sequence', 'FilterCriterion', 'DocumentNumerator', 'SettingsStorage', 'CommonModule', 'EventSubscription', 'ScheduledJob', 'CommonForm', 'SessionParameter', 'CommonCommand', 'CommandGroup', 'CommonAttribute', 'FunctionalOptionsParameter', 'WSReference', 'CommonPicture', 'CommonTemplate', 'HTTPService', 'WebService')) {
 	[Console]::Error.WriteLine("meta-decompile: тип '$objType' пока не поддержан (…, CommonPicture, CommonTemplate)"); exit 3
 }
 
@@ -781,6 +781,34 @@ if ($objType -eq 'CommonCommand') {
 	Add-BoolProp 'modifiesData' 'ModifiesData' $false
 	Add-EnumProp 'onMainServerUnavalableBehavior' 'OnMainServerUnavalableBehavior' 'Auto'
 }
+# XDTO-тип из элемента: если значение с префиксом (d6p1:Local) — разворачиваем префикс в URI и
+# отдаём в нотации Кларка "{uri}Local"; префиксы платформы (dNpM) произвольны и переносу не подлежат.
+function Get-XDTOTypeValue {
+	param($node)
+	if (-not $node) { return $null }
+	$txt = $node.InnerText
+	if ($txt -match '^([\w.-]+):(.+)$') {
+		$prefix = $Matches[1]; $local = $Matches[2]
+		$uri = $node.GetNamespaceOfPrefix($prefix)
+		# xs: и прочие стандартные оставляем как есть — компилятор их пишет дословно.
+		if ($uri -and $prefix -notin @('xs','xsi','v8','xr')) { return "{$uri}$local" }
+	}
+	return $txt
+}
+# WebService — пространство имён, состав XDTO-пакетов, дескриптор, операции с параметрами.
+if ($objType -eq 'WebService') {
+	$ns = P 'Namespace'; if ($ns) { $dsl['namespace'] = $ns }
+	$pkgNodes = @($props.SelectNodes('md:XDTOPackages/xr:Item/xr:Value', $nsm))
+	if ($pkgNodes.Count -gt 0) {
+		$pkgs = [System.Collections.ArrayList]@()
+		foreach ($pn in $pkgNodes) { [void]$pkgs.Add($pn.InnerText) }
+		$dsl['xdtoPackages'] = $pkgs
+	}
+	$dfn = P 'DescriptorFileName'
+	if ($dfn -and $dfn -cne "$objName.1cws") { $dsl['descriptorFileName'] = $dfn }
+	Add-EnumProp 'reuseSessions' 'ReuseSessions' 'DontUse'
+	Add-IntProp  'sessionMaxAge' 'SessionMaxAge' 20
+}
 # HTTPService — корневой URL, повторное использование сеансов, время жизни сеанса.
 # Шаблоны URL с методами разбираются в блоке ChildObjects.
 if ($objType -eq 'HTTPService') {
@@ -1129,6 +1157,56 @@ if ($saNode) {
 # --- ChildObjects: Attributes + TabularSections ---
 $childObjs = $objNode.SelectSingleNode('md:ChildObjects', $nsm)
 if ($childObjs) {
+	# WebService: операции с параметрами. Строчное сокращение — только тип возврата (когда всё
+	# остальное дефолтно); иначе объект с nillable/transactioned/procedureName/параметрами.
+	$opNodes = @($childObjs.SelectNodes('md:Operation', $nsm))
+	if ($opNodes.Count -gt 0) {
+		$ops = [ordered]@{}
+		foreach ($op in $opNodes) {
+			$op_p = $op.SelectSingleNode('md:Properties', $nsm)
+			$opName = ($op_p.SelectSingleNode('md:Name', $nsm)).InnerText
+			$o = [ordered]@{}
+			$rt = Get-XDTOTypeValue ($op_p.SelectSingleNode('md:XDTOReturningValueType', $nsm))
+			if ($rt -and $rt -cne 'xs:string') { $o['returnType'] = $rt }
+			$nil = $op_p.SelectSingleNode('md:Nillable', $nsm)
+			if ($nil -and $nil.InnerText -eq 'true') { $o['nillable'] = $true }
+			$tr = $op_p.SelectSingleNode('md:Transactioned', $nsm)
+			if ($tr -and $tr.InnerText -eq 'true') { $o['transactioned'] = $true }
+			$pn = $op_p.SelectSingleNode('md:ProcedureName', $nsm)
+			if ($pn -and $pn.InnerText -cne $opName) { $o['procedureName'] = $pn.InnerText }
+			$dl = $op_p.SelectSingleNode('md:DataLockControlMode', $nsm)
+			if ($dl -and $dl.InnerText -cne 'Managed') { $o['dataLockControlMode'] = $dl.InnerText }
+			$osyn = Get-MLValue ($op_p.SelectSingleNode('md:Synonym', $nsm))
+			if ($null -ne $osyn -and "$osyn" -cne (Split-CamelWords $opName)) { $o['synonym'] = $osyn }
+			$ocmt = $op_p.SelectSingleNode('md:Comment', $nsm)
+			if ($ocmt -and $ocmt.InnerText) { $o['comment'] = $ocmt.InnerText }
+
+			$parNodes = @($op.SelectNodes('md:ChildObjects/md:Parameter', $nsm))
+			if ($parNodes.Count -gt 0) {
+				$pars = [ordered]@{}
+				foreach ($par in $parNodes) {
+					$pp = $par.SelectSingleNode('md:Properties', $nsm)
+					$parName = ($pp.SelectSingleNode('md:Name', $nsm)).InnerText
+					$po = [ordered]@{}
+					$pt = Get-XDTOTypeValue ($pp.SelectSingleNode('md:XDTOValueType', $nsm))
+					if ($pt) { $po['type'] = $pt }
+					$pnil = $pp.SelectSingleNode('md:Nillable', $nsm)
+					if ($pnil -and $pnil.InnerText -eq 'false') { $po['nillable'] = $false }
+					$pdir = $pp.SelectSingleNode('md:TransferDirection', $nsm)
+					if ($pdir -and $pdir.InnerText -cne 'In') { $po['direction'] = $pdir.InnerText }
+					$psyn = Get-MLValue ($pp.SelectSingleNode('md:Synonym', $nsm))
+					if ($null -ne $psyn -and "$psyn" -cne (Split-CamelWords $parName)) { $po['synonym'] = $psyn }
+					$pcmt = $pp.SelectSingleNode('md:Comment', $nsm)
+					if ($pcmt -and $pcmt.InnerText) { $po['comment'] = $pcmt.InnerText }
+					# Только тип и дефолтное остальное → строчное сокращение.
+					if ($po.Count -eq 1 -and $po.Contains('type')) { $pars[$parName] = $po['type'] } else { $pars[$parName] = $po }
+				}
+				$o['parameters'] = $pars
+			}
+			if ($o.Count -eq 1 -and $o.Contains('returnType')) { $ops[$opName] = $o['returnType'] } else { $ops[$opName] = $o }
+		}
+		$dsl['operations'] = $ops
+	}
 	# HTTPService: шаблоны URL и их методы. Шаблон — {template, methods{}}, метод — строка (только
 	# HTTP-метод, когда обработчик совпадает с авто-выводом ИмяШаблона+ИмяМетода) либо объект.
 	$tmplNodes = @($childObjs.SelectNodes('md:URLTemplate', $nsm))

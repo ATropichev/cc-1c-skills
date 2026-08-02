@@ -1,4 +1,4 @@
-﻿# meta-compile v1.71 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.72 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -3812,19 +3812,51 @@ function Emit-HTTPServiceProperties {
 	X "$i<SessionMaxAge>$sessionMaxAge</SessionMaxAge>"
 }
 
+# XDTO-тип значения: "{uri}Local" (нотация Кларка) → тег с ЛОКАЛЬНЫМ объявлением xmlns, как пишет
+# платформа (<XDTOValueType xmlns:d1p1="uri">d1p1:Local</...>). Простой "xs:string" — как есть.
+function Emit-XDTOType {
+	param([string]$indent, [string]$tag, [string]$value)
+	if ($value -match '^\{([^}]+)\}(.+)$') {
+		$uri = $Matches[1]; $local = $Matches[2]
+		X "$indent<$tag xmlns:d1p1=`"$(Esc-Xml $uri)`">d1p1:$(Esc-Xml $local)</$tag>"
+	} else {
+		X "$indent<$tag>$(Esc-Xml $value)</$tag>"
+	}
+}
+
 function Emit-WebServiceProperties {
 	param([string]$indent)
 	$i = $indent
 
 	X "$i<Name>$(Esc-Xml $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
-	X "$i<Comment/>"
+	if ($def.comment) { X "$i<Comment>$(Esc-Xml "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 
 	$namespace = if ($def.namespace) { "$($def.namespace)" } else { "" }
 	X "$i<Namespace>$(Esc-Xml $namespace)</Namespace>"
 
-	$xdtoPackages = if ($def.xdtoPackages) { "$($def.xdtoPackages)" } else { "" }
-	if ($xdtoPackages) { X "$i<XDTOPackages>$xdtoPackages</XDTOPackages>" } else { X "$i<XDTOPackages/>" }
+	# XDTOPackages — СПИСОК элементов, а не скаляр: значение либо ссылка на пакет конфигурации
+	# (xr:MDObjectRef "XDTOPackage.Имя"), либо URI внешнего пространства имён (xs:string).
+	# Presentation всегда пуст, CheckState всегда 0 (проверено на корпусе: 19/19).
+	$pkgs = @()
+	if ($def.xdtoPackages) { $pkgs = @($def.xdtoPackages) }
+	if ($pkgs.Count -gt 0) {
+		X "$i<XDTOPackages>"
+		foreach ($p in $pkgs) {
+			$pv = "$p"
+			$xt = if ($pv -like 'XDTOPackage.*') { 'xr:MDObjectRef' } else { 'xs:string' }
+			X "$i`t<xr:Item>"
+			X "$i`t`t<xr:Presentation/>"
+			X "$i`t`t<xr:CheckState>0</xr:CheckState>"
+			X "$i`t`t<xr:Value xsi:type=`"$xt`">$(Esc-Xml $pv)</xr:Value>"
+			X "$i`t</xr:Item>"
+		}
+		X "$i</XDTOPackages>"
+	} else { X "$i<XDTOPackages/>" }
+
+	# Имя файла дескриптора не выводится из имени сервиса (DMILService → dmil.1cws) — только дефолт.
+	$descriptor = if ($def.descriptorFileName) { "$($def.descriptorFileName)" } else { "$objName.1cws" }
+	X "$i<DescriptorFileName>$(Esc-Xml $descriptor)</DescriptorFileName>"
 
 	$reuseSessions = Get-EnumProp "ReuseSessions" "reuseSessions" "DontUse"
 	X "$i<ReuseSessions>$reuseSessions</ReuseSessions>"
@@ -3952,7 +3984,10 @@ function Emit-Operation {
 	$nillable = "false"
 	$transactioned = "false"
 	$handler = $opName
-	$params = @{}
+	$opComment = ""
+	$dataLock = "Managed"   # у всех 192 операций корпуса
+	# [ordered]: порядок параметров — как в DSL (он же порядок исходного XML).
+	$params = [ordered]@{}
 
 	if ($opDef -is [string]) {
 		$returnType = "$opDef"
@@ -3961,6 +3996,10 @@ function Emit-Operation {
 		if ($opDef.nillable -eq $true) { $nillable = "true" }
 		if ($opDef.transactioned -eq $true) { $transactioned = "true" }
 		if ($opDef.handler) { $handler = "$($opDef.handler)" }
+		if ($opDef.procedureName) { $handler = "$($opDef.procedureName)" }
+		if ($opDef.synonym) { $opSynonym = "$($opDef.synonym)" }
+		if ($opDef.comment) { $opComment = "$($opDef.comment)" }
+		if ($opDef.dataLockControlMode) { $dataLock = "$($opDef.dataLockControlMode)" }
 		if ($opDef.parameters) {
 			$opDef.parameters.PSObject.Properties | ForEach-Object {
 				$params[$_.Name] = $_.Value
@@ -3972,11 +4011,12 @@ function Emit-Operation {
 	X "$indent`t<Properties>"
 	X "$indent`t`t<Name>$(Esc-Xml $opName)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $opSynonym
-	X "$indent`t`t<Comment/>"
-	X "$indent`t`t<XDTOReturningValueType>$returnType</XDTOReturningValueType>"
+	if ($opComment) { X "$indent`t`t<Comment>$(Esc-Xml $opComment)</Comment>" } else { X "$indent`t`t<Comment/>" }
+	Emit-XDTOType "$indent`t`t" "XDTOReturningValueType" $returnType
 	X "$indent`t`t<Nillable>$nillable</Nillable>"
 	X "$indent`t`t<Transactioned>$transactioned</Transactioned>"
 	X "$indent`t`t<ProcedureName>$(Esc-Xml $handler)</ProcedureName>"
+	X "$indent`t`t<DataLockControlMode>$dataLock</DataLockControlMode>"
 	X "$indent`t</Properties>"
 
 	if ($params.Count -gt 0) {
@@ -3988,6 +4028,7 @@ function Emit-Operation {
 			$paramType = "xs:string"
 			$paramNillable = "true"
 			$paramDir = "In"
+			$paramComment = ""
 
 			if ($paramDef -is [string]) {
 				$paramType = "$paramDef"
@@ -3995,13 +4036,16 @@ function Emit-Operation {
 				if ($paramDef.type) { $paramType = "$($paramDef.type)" }
 				if ($paramDef.nillable -eq $false) { $paramNillable = "false" }
 				if ($paramDef.direction) { $paramDir = "$($paramDef.direction)" }
+				if ($paramDef.synonym) { $paramSynonym = "$($paramDef.synonym)" }
+				if ($paramDef.comment) { $paramComment = "$($paramDef.comment)" }
 			}
 
 			X "$indent`t`t<Parameter uuid=`"$paramUuid`">"
 			X "$indent`t`t`t<Properties>"
 			X "$indent`t`t`t`t<Name>$(Esc-Xml $paramName)</Name>"
 			Emit-MLText "$indent`t`t`t`t" "Synonym" $paramSynonym
-			X "$indent`t`t`t`t<XDTOValueType>$paramType</XDTOValueType>"
+			if ($paramComment) { X "$indent`t`t`t`t<Comment>$(Esc-Xml $paramComment)</Comment>" } else { X "$indent`t`t`t`t<Comment/>" }
+			Emit-XDTOType "$indent`t`t`t`t" "XDTOValueType" $paramType
 			X "$indent`t`t`t`t<Nillable>$paramNillable</Nillable>"
 			X "$indent`t`t`t`t<TransferDirection>$paramDir</TransferDirection>"
 			X "$indent`t`t`t</Properties>"
@@ -4408,7 +4452,8 @@ if ($objType -eq "HTTPService") {
 
 # --- WebService: Operations ---
 if ($objType -eq "WebService") {
-	$operations = @{}
+	# [ordered]: порядок операций — как в DSL (он же порядок исходного XML).
+	$operations = [ordered]@{}
 	if ($def.operations) {
 		$def.operations.PSObject.Properties | ForEach-Object {
 			$operations[$_.Name] = $_.Value
