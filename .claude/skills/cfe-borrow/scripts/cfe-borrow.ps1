@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.10 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.11 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -285,14 +285,36 @@ $script:generatedTypes = @{
 	"DefinedType" = @(
 		@{ prefix = "DefinedType"; category = "DefinedType" }
 	)
+	"Sequence" = @(
+		@{ prefix = "SequenceRecord";    category = "Record" }
+		@{ prefix = "SequenceManager";   category = "Manager" }
+		@{ prefix = "SequenceRecordSet"; category = "RecordSet" }
+	)
+	"FilterCriterion" = @(
+		@{ prefix = "FilterCriterionManager"; category = "Manager" }
+		@{ prefix = "FilterCriterionList";    category = "List" }
+	)
+	"SettingsStorage" = @(
+		@{ prefix = "SettingsStorageManager"; category = "Manager" }
+	)
+	"IntegrationService" = @(
+		@{ prefix = "IntegrationServiceManager"; category = "Manager" }
+	)
+	"WSReference" = @(
+		@{ prefix = "WSReferenceManager"; category = "Manager" }
+	)
 }
 
-# Types that need ChildObjects element
+# Types that need ChildObjects element — fallback when the source object cannot be probed.
+# The platform emits <ChildObjects> for every container type even when empty, and rejects
+# the file without it ("ожидаемое ChildObjects"); primary signal is the source object itself.
 $typesWithChildObjects = @(
 	"Catalog","Document","ExchangePlan","ChartOfAccounts",
 	"ChartOfCharacteristicTypes","ChartOfCalculationTypes",
 	"BusinessProcess","Task","Enum",
-	"InformationRegister","AccumulationRegister","AccountingRegister","CalculationRegister"
+	"InformationRegister","AccumulationRegister","AccountingRegister","CalculationRegister",
+	"DataProcessor","Report","DocumentJournal","FilterCriterion","SettingsStorage",
+	"Sequence","HTTPService","WebService","IntegrationService","Subsystem"
 )
 
 # CommonModule properties to copy from source
@@ -456,6 +478,9 @@ function Read-SourceObject {
 			}
 		}
 	}
+
+	# Whether the platform emits <ChildObjects> for this type — the source object is the ground truth
+	$srcProps["__HasChildObjects"] = ($srcEl.SelectSingleNode("md:ChildObjects", $srcNs) -ne $null)
 
 	return @{
 		Uuid = $srcUuid
@@ -1672,7 +1697,7 @@ function Build-BorrowedObjectXml {
 	$sb.AppendLine("`t`t</Properties>") | Out-Null
 
 	# ChildObjects (for types that need it)
-	if ($typesWithChildObjects -contains $typeName) {
+	if ($sourceProps["__HasChildObjects"] -or ($typesWithChildObjects -contains $typeName)) {
 		$sb.AppendLine("`t`t<ChildObjects/>") | Out-Null
 	}
 

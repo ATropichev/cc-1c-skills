@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.10 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.11 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -254,13 +254,36 @@ GENERATED_TYPES = {
     "DefinedType": [
         {"prefix": "DefinedType", "category": "DefinedType"},
     ],
+    "Sequence": [
+        {"prefix": "SequenceRecord", "category": "Record"},
+        {"prefix": "SequenceManager", "category": "Manager"},
+        {"prefix": "SequenceRecordSet", "category": "RecordSet"},
+    ],
+    "FilterCriterion": [
+        {"prefix": "FilterCriterionManager", "category": "Manager"},
+        {"prefix": "FilterCriterionList", "category": "List"},
+    ],
+    "SettingsStorage": [
+        {"prefix": "SettingsStorageManager", "category": "Manager"},
+    ],
+    "IntegrationService": [
+        {"prefix": "IntegrationServiceManager", "category": "Manager"},
+    ],
+    "WSReference": [
+        {"prefix": "WSReferenceManager", "category": "Manager"},
+    ],
 }
 
+# Types that need ChildObjects element — fallback when the source object cannot be probed.
+# The platform emits <ChildObjects> for every container type even when empty, and rejects
+# the file without it ("expected ChildObjects"); primary signal is the source object itself.
 TYPES_WITH_CHILD_OBJECTS = [
     "Catalog", "Document", "ExchangePlan", "ChartOfAccounts",
     "ChartOfCharacteristicTypes", "ChartOfCalculationTypes",
     "BusinessProcess", "Task", "Enum",
     "InformationRegister", "AccumulationRegister", "AccountingRegister", "CalculationRegister",
+    "DataProcessor", "Report", "DocumentJournal", "FilterCriterion", "SettingsStorage",
+    "Sequence", "HTTPService", "WebService", "IntegrationService", "Subsystem",
 ]
 
 COMMON_MODULE_PROPS = ["Global", "ClientManagedApplication", "Server", "ExternalConnection", "ClientOrdinaryApplication", "ServerCall"]
@@ -536,6 +559,9 @@ def main():
                     type_xml = etree.tostring(type_node, encoding="unicode")
                     src_props["__TypeXml"] = re.sub(r'\s+xmlns(?::\w+)?="[^"]*"', '', type_xml)
 
+        # Whether the platform emits <ChildObjects> for this type — the source object is the ground truth
+        src_props["__HasChildObjects"] = src_el.find(f"{{{MD_NS}}}ChildObjects") is not None
+
         return {"Uuid": src_uuid, "Properties": src_props, "Element": src_el}
 
     def read_source_form_uuid(type_name, obj_name, form_name):
@@ -612,7 +638,7 @@ def main():
 
         lines.append("\t\t</Properties>")
 
-        if type_name in TYPES_WITH_CHILD_OBJECTS:
+        if source_props.get("__HasChildObjects") or type_name in TYPES_WITH_CHILD_OBJECTS:
             lines.append("\t\t<ChildObjects/>")
 
         lines.append(f"\t</{type_name}>")
