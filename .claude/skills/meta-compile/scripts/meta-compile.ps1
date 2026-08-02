@@ -1,4 +1,4 @@
-﻿# meta-compile v1.73 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.74 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -375,7 +375,7 @@ function Normalize-FormRef {
 # Ссылка на форму по умолчанию: непустая → <Tag>значение</Tag>, иначе <Tag/>.
 function Emit-FormRef {
 	param([string]$i, [string]$tag, $val)
-	if ($val) { X "$i<$tag>$(Esc-Xml (Normalize-FormRef "$val"))</$tag>" } else { X "$i<$tag/>" }
+	if ($val) { X "$i<$tag>$(Esc-XmlText (Normalize-FormRef "$val"))</$tag>" } else { X "$i<$tag/>" }
 }
 
 # Ссылка verbatim (без Normalize-FormRef): для форм/схем/хранилищ Report/DataProcessor, где имя формы может быть
@@ -383,7 +383,7 @@ function Emit-FormRef {
 # вида (SettingsStorage.X / Report.X.Template.Y). Декомпилятор пишет полный путь → passthrough.
 function Emit-VerbatimRef {
 	param([string]$i, [string]$tag, $val)
-	if ($val) { X "$i<$tag>$(Esc-Xml "$val")</$tag>" } else { X "$i<$tag/>" }
+	if ($val) { X "$i<$tag>$(Esc-XmlText "$val")</$tag>" } else { X "$i<$tag/>" }
 }
 
 if (-not $def.type) {
@@ -1318,7 +1318,7 @@ function Emit-StandardAttribute {
 		$lbtDp = if ($lbt.dataPath) { "$($lbt.dataPath)" } else { "$lbt" }
 		$lbtLi = if ($null -ne $lbt.linkItem) { $lbt.linkItem } else { 0 }
 		X "$indent`t<xr:LinkByType>"
-		X "$indent`t`t<xr:DataPath>$(Esc-Xml $lbtDp)</xr:DataPath>"
+		X "$indent`t`t<xr:DataPath>$(Esc-XmlText $lbtDp)</xr:DataPath>"
 		X "$indent`t`t<xr:LinkItem>$lbtLi</xr:LinkItem>"
 		X "$indent`t</xr:LinkByType>"
 	} else {
@@ -1338,7 +1338,7 @@ function Emit-StandardAttribute {
 	Emit-MLText "$indent`t" "xr:ToolTip" $tt
 	X "$indent`t<xr:ExtendedEdit>false</xr:ExtendedEdit>"
 	Emit-MLText "$indent`t" "xr:Format" $fmt
-	if ($cf) { X "$indent`t<xr:ChoiceForm>$(Esc-Xml "$cf")</xr:ChoiceForm>" } else { X "$indent`t<xr:ChoiceForm/>" }
+	if ($cf) { X "$indent`t<xr:ChoiceForm>$(Esc-XmlText "$cf")</xr:ChoiceForm>" } else { X "$indent`t<xr:ChoiceForm/>" }
 	X "$indent`t<xr:QuickChoice>Auto</xr:QuickChoice>"
 	X "$indent`t<xr:ChoiceHistoryOnInput>$chi</xr:ChoiceHistoryOnInput>"
 	Emit-MLText "$indent`t" "xr:EditFormat" $efmt
@@ -1358,7 +1358,7 @@ function Emit-StandardAttribute {
 	else {
 		$fvN = Normalize-ChoiceValue $fvRaw
 		if ([string]::IsNullOrEmpty($fvN.Text)) { X "$indent`t<xr:FillValue xsi:type=`"$($fvN.XsiType)`"/>" }
-		else { X "$indent`t<xr:FillValue xsi:type=`"$($fvN.XsiType)`">$(Esc-Xml $fvN.Text)</xr:FillValue>" }
+		else { X "$indent`t<xr:FillValue xsi:type=`"$($fvN.XsiType)`">$(Esc-XmlText $fvN.Text)</xr:FillValue>" }
 	}
 	if ($msk) { X "$indent`t<xr:Mask>$(Esc-XmlText "$msk")</xr:Mask>" } else { X "$indent`t<xr:Mask/>" }
 	Emit-ChoiceParameters "$indent`t" (OvOr 'ChoiceParameters' $null) 'xr:ChoiceParameters'
@@ -1503,7 +1503,7 @@ function Emit-LinkByType {
 	if (-not $dp) { X "$indent<LinkByType/>"; return }
 	$dp = Expand-DataPath $dp
 	X "$indent<LinkByType>"
-	X "$indent`t<xr:DataPath>$(Esc-Xml "$dp")</xr:DataPath>"
+	X "$indent`t<xr:DataPath>$(Esc-XmlText "$dp")</xr:DataPath>"
 	X "$indent`t<xr:LinkItem>$li</xr:LinkItem>"
 	X "$indent</LinkByType>"
 }
@@ -1517,7 +1517,7 @@ function Emit-FieldBlock {
 	$arr = @($fields | Where-Object { "$_" -ne '' })
 	if ($arr.Count -eq 0) { X "$indent<$tag/>"; return }
 	X "$indent<$tag>"
-	foreach ($f in $arr) { X "$indent`t<xr:Field>$(Esc-Xml "$f")</xr:Field>" }
+	foreach ($f in $arr) { X "$indent`t<xr:Field>$(Esc-XmlText "$f")</xr:Field>" }
 	X "$indent</$tag>"
 }
 
@@ -1527,7 +1527,7 @@ function Emit-BasedOn {
 	$arr = @($items | Where-Object { $_ })
 	if ($arr.Count -eq 0) { X "$indent<BasedOn/>"; return }
 	X "$indent<BasedOn>"
-	foreach ($it in $arr) { X "$indent`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$it"))</xr:Item>" }
+	foreach ($it in $arr) { X "$indent`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-XmlText (Normalize-MDObjectRef "$it"))</xr:Item>" }
 	X "$indent</BasedOn>"
 }
 
@@ -1658,13 +1658,13 @@ function Emit-ChoiceParameters {
 				if (Is-EmptyRef $v) { X "$indent`t`t`t<v8:Value xsi:type=`"xr:DesignTimeRef`"/>"; continue }
 				$norm = Normalize-ChoiceValueT $v $ptype
 				if ([string]::IsNullOrEmpty($norm.Text)) { X "$indent`t`t`t<v8:Value xsi:type=`"$($norm.XsiType)`"/>" }
-				else { X "$indent`t`t`t<v8:Value xsi:type=`"$($norm.XsiType)`">$(Esc-Xml $norm.Text)</v8:Value>" }
+				else { X "$indent`t`t`t<v8:Value xsi:type=`"$($norm.XsiType)`">$(Esc-XmlText $norm.Text)</v8:Value>" }
 			}
 			X "$indent`t`t</app:value>"
 		} else {
 			$norm = Normalize-ChoiceValueT $val $ptype
 			if ([string]::IsNullOrEmpty($norm.Text)) { X "$indent`t`t<app:value xsi:type=`"$($norm.XsiType)`"/>" }
-			else { X "$indent`t`t<app:value xsi:type=`"$($norm.XsiType)`">$(Esc-Xml $norm.Text)</app:value>" }
+			else { X "$indent`t`t<app:value xsi:type=`"$($norm.XsiType)`">$(Esc-XmlText $norm.Text)</app:value>" }
 		}
 		X "$indent`t</app:item>"
 	}
@@ -1690,8 +1690,8 @@ function Emit-ChoiceParameterLinks {
 			}
 		}
 		X "$indent`t<xr:Link>"
-		X "$indent`t`t<xr:Name>$(Esc-Xml "$name")</xr:Name>"
-		X "$indent`t`t<xr:DataPath xsi:type=`"xs:string`">$(Esc-Xml "$dp")</xr:DataPath>"
+		X "$indent`t`t<xr:Name>$(Esc-XmlText "$name")</xr:Name>"
+		X "$indent`t`t<xr:DataPath xsi:type=`"xs:string`">$(Esc-XmlText "$dp")</xr:DataPath>"
 		X "$indent`t`t<xr:ValueChange>$vc</xr:ValueChange>"
 		X "$indent`t</xr:Link>"
 	}
@@ -1747,8 +1747,12 @@ function Expand-CharField {
 	return $s
 }
 
-# Числовое поле-флаг Characteristics (DataPathField/MultipleValues*) — дефолт -1.
-function Get-CharIntField { param($obj, [string[]]$names) $v = Get-ChElProp $obj $names; if ($null -eq $v -or "$v" -eq '') { return -1 } return [int]$v }
+# Поле-флаг Characteristics (DataPathField/MultipleValues*) — дефолт -1. ПОЛИМОРФНО: обычно число,
+# но DataPathField в некоторых конфигурациях содержит ПУТЬ к полю (8 случаев на корпус) — тогда
+# пропускаем строку как есть, приведение к [int] на ней падало.
+function Get-CharIntField { param($obj, [string[]]$names) $v = Get-ChElProp $obj $names; if ($null -eq $v -or "$v" -eq '') { return -1 }
+	if ("$v" -match '^-?\d+$') { return [int]$v }
+	return "$v" }
 
 function Emit-Characteristics {
 	param([string]$indent, $chars)
@@ -1771,23 +1775,23 @@ function Emit-Characteristics {
 		$mvo = Get-CharIntField $values @('multipleValuesOrderField')
 		X "$indent`t<xr:Characteristic>"
 		X "$indent`t`t<xr:CharacteristicTypes from=`"$(Esc-Xml $tFrom)`">"
-		X "$indent`t`t`t<xr:KeyField>$(Esc-Xml $key)</xr:KeyField>"
-		X "$indent`t`t`t<xr:TypesFilterField>$(Esc-Xml $tff)</xr:TypesFilterField>"
+		X "$indent`t`t`t<xr:KeyField>$(Esc-XmlText $key)</xr:KeyField>"
+		X "$indent`t`t`t<xr:TypesFilterField>$(Esc-XmlText $tff)</xr:TypesFilterField>"
 		# filterValue: $null→nil; голое→xs:string, полный путь→DTR, bool→xs:boolean.
 		$tfvRaw = Get-ChElProp $types @('filterValue','typesFilterValue')
 		if ($null -eq $tfvRaw) { X "$indent`t`t`t<xr:TypesFilterValue xsi:nil=`"true`"/>" }
 		else {
 			$tfvN = Normalize-ChoiceValue $tfvRaw
 			if ([string]::IsNullOrEmpty($tfvN.Text)) { X "$indent`t`t`t<xr:TypesFilterValue xsi:type=`"$($tfvN.XsiType)`"/>" }
-			else { X "$indent`t`t`t<xr:TypesFilterValue xsi:type=`"$($tfvN.XsiType)`">$(Esc-Xml $tfvN.Text)</xr:TypesFilterValue>" }
+			else { X "$indent`t`t`t<xr:TypesFilterValue xsi:type=`"$($tfvN.XsiType)`">$(Esc-XmlText $tfvN.Text)</xr:TypesFilterValue>" }
 		}
-		X "$indent`t`t`t<xr:DataPathField>$dpf</xr:DataPathField>"
+		X "$indent`t`t`t<xr:DataPathField>$(Esc-XmlText (Expand-CharField "$dpf" $tFrom))</xr:DataPathField>"
 		X "$indent`t`t`t<xr:MultipleValuesUseField>$mvu</xr:MultipleValuesUseField>"
 		X "$indent`t`t</xr:CharacteristicTypes>"
 		X "$indent`t`t<xr:CharacteristicValues from=`"$(Esc-Xml $vFrom)`">"
-		X "$indent`t`t`t<xr:ObjectField>$(Esc-Xml $obj)</xr:ObjectField>"
-		X "$indent`t`t`t<xr:TypeField>$(Esc-Xml $typ)</xr:TypeField>"
-		X "$indent`t`t`t<xr:ValueField>$(Esc-Xml $val)</xr:ValueField>"
+		X "$indent`t`t`t<xr:ObjectField>$(Esc-XmlText $obj)</xr:ObjectField>"
+		X "$indent`t`t`t<xr:TypeField>$(Esc-XmlText $typ)</xr:TypeField>"
+		X "$indent`t`t`t<xr:ValueField>$(Esc-XmlText $val)</xr:ValueField>"
 		X "$indent`t`t`t<xr:MultipleValuesKeyField>$mvk</xr:MultipleValuesKeyField>"
 		X "$indent`t`t`t<xr:MultipleValuesOrderField>$mvo</xr:MultipleValuesOrderField>"
 		X "$indent`t`t</xr:CharacteristicValues>"
@@ -1802,7 +1806,7 @@ function Emit-MinMaxValue {
 	param([string]$indent, [string]$tag, $val)
 	if ($null -eq $val) { X "$indent<$tag xsi:nil=`"true`"/>"; return }
 	$t = if ($val -is [string]) { 'xs:string' } else { 'xs:decimal' }
-	X "$indent<$tag xsi:type=`"$t`">$(Esc-Xml "$val")</$tag>"
+	X "$indent<$tag xsi:type=`"$t`">$(Esc-XmlText "$val")</$tag>"
 }
 
 function Emit-Attribute {
@@ -1827,7 +1831,7 @@ function Emit-Attribute {
 	$uuid = New-Guid-String
 	X "$indent<$elemTag uuid=`"$uuid`">"
 	X "$indent`t<Properties>"
-	X "$indent`t`t<Name>$(Esc-Xml $parsed.name)</Name>"
+	X "$indent`t`t<Name>$(Esc-XmlText $parsed.name)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $parsed.synonym
 	if ($parsed.comment) { X "$indent`t`t<Comment>$(Esc-XmlText $parsed.comment)</Comment>" } else { X "$indent`t`t<Comment/>" }
 
@@ -1891,7 +1895,7 @@ function Emit-Attribute {
 	X "$indent`t`t<QuickChoice>$qc</QuickChoice>"
 	$coi = if ($parsed.createOnInput) { $parsed.createOnInput } else { "Auto" }
 	X "$indent`t`t<CreateOnInput>$coi</CreateOnInput>"
-	if ($parsed.choiceForm) { X "$indent`t`t<ChoiceForm>$(Esc-Xml "$($parsed.choiceForm)")</ChoiceForm>" } else { X "$indent`t`t<ChoiceForm/>" }
+	if ($parsed.choiceForm) { X "$indent`t`t<ChoiceForm>$(Esc-XmlText "$($parsed.choiceForm)")</ChoiceForm>" } else { X "$indent`t`t<ChoiceForm/>" }
 	Emit-LinkByType "$indent`t`t" $parsed.linkByType
 	$chi = if ($parsed.choiceHistoryOnInput) { $parsed.choiceHistoryOnInput } else { "Auto" }
 	X "$indent`t`t<ChoiceHistoryOnInput>$chi</ChoiceHistoryOnInput>"
@@ -1921,7 +1925,7 @@ function Emit-Attribute {
 	}
 	# Регистр расчёта: ScheduleLink у измерений и реквизитов (НЕ ресурсов), перед Indexing. Дефолт пустой.
 	if ($context -eq "register-calc" -and $elemTag -in @("Dimension", "Attribute")) {
-		if ($parsed.scheduleLink) { X "$indent`t`t<ScheduleLink>$(Esc-Xml "$($parsed.scheduleLink)")</ScheduleLink>" }
+		if ($parsed.scheduleLink) { X "$indent`t`t<ScheduleLink>$(Esc-XmlText "$($parsed.scheduleLink)")</ScheduleLink>" }
 		else { X "$indent`t`t<ScheduleLink/>" }
 	}
 
@@ -1930,12 +1934,12 @@ function Emit-Attribute {
 	if ($context -eq "register-account" -and $elemTag -in @("Dimension", "Resource")) {
 		$balance = if ($parsed.balance -eq $true -or $parsed.flags -contains "balance") { "true" } else { "false" }
 		X "$indent`t`t<Balance>$balance</Balance>"
-		if ($parsed.accountingFlag) { X "$indent`t`t<AccountingFlag>$(Esc-Xml "$($parsed.accountingFlag)")</AccountingFlag>" } else { X "$indent`t`t<AccountingFlag/>" }
+		if ($parsed.accountingFlag) { X "$indent`t`t<AccountingFlag>$(Esc-XmlText "$($parsed.accountingFlag)")</AccountingFlag>" } else { X "$indent`t`t<AccountingFlag/>" }
 		if ($elemTag -eq "Dimension") {
 			$denyIncomplete = if ($parsed.denyIncompleteValues -eq $true -or $parsed.flags -contains "denyincomplete") { "true" } else { "false" }
 			X "$indent`t`t<DenyIncompleteValues>$denyIncomplete</DenyIncompleteValues>"
 		} else {
-			if ($parsed.extDimensionAccountingFlag) { X "$indent`t`t<ExtDimensionAccountingFlag>$(Esc-Xml "$($parsed.extDimensionAccountingFlag)")</ExtDimensionAccountingFlag>" } else { X "$indent`t`t<ExtDimensionAccountingFlag/>" }
+			if ($parsed.extDimensionAccountingFlag) { X "$indent`t`t<ExtDimensionAccountingFlag>$(Esc-XmlText "$($parsed.extDimensionAccountingFlag)")</ExtDimensionAccountingFlag>" } else { X "$indent`t`t<ExtDimensionAccountingFlag/>" }
 		}
 	}
 
@@ -1960,7 +1964,7 @@ function Emit-Attribute {
 
 			# Реквизит адресации задачи: AddressingDimension (ссылка на измерение регистра исполнителей), между Indexing и FullTextSearch.
 			if ($context -eq "task-addressing" -and $elemTag -eq "AddressingAttribute") {
-				if ($parsed.addressingDimension) { X "$indent`t`t<AddressingDimension>$(Esc-Xml "$($parsed.addressingDimension)")</AddressingDimension>" } else { X "$indent`t`t<AddressingDimension/>" }
+				if ($parsed.addressingDimension) { X "$indent`t`t<AddressingDimension>$(Esc-XmlText "$($parsed.addressingDimension)")</AddressingDimension>" } else { X "$indent`t`t<AddressingDimension/>" }
 			}
 			$fts = if ($parsed.fullTextSearch) { $parsed.fullTextSearch } else { "Use" }
 			X "$indent`t`t<FullTextSearch>$fts</FullTextSearch>"
@@ -2003,8 +2007,8 @@ function Emit-CommandPicture {
 	}
 	if (-not $src) { X "$indent<Picture/>"; return }
 	X "$indent<Picture>"
-	if ($src -match '^abs:(.*)$') { X "$indent`t<xr:Abs>$(Esc-Xml $matches[1])</xr:Abs>" }
-	else { X "$indent`t<xr:Ref>$(Esc-Xml $src)</xr:Ref>" }
+	if ($src -match '^abs:(.*)$') { X "$indent`t<xr:Abs>$(Esc-XmlText $matches[1])</xr:Abs>" }
+	else { X "$indent`t<xr:Ref>$(Esc-XmlText $src)</xr:Ref>" }
 	X "$indent`t<xr:LoadTransparent>$(if ($lt) { 'true' } else { 'false' })</xr:LoadTransparent>"
 	if ($tpx) { X "$indent`t<xr:TransparentPixel x=`"$($tpx.x)`" y=`"$($tpx.y)`"/>" }
 	X "$indent</Picture>"
@@ -2018,7 +2022,7 @@ function Emit-Command {
 	param([string]$indent, [string]$cmdName, $cmd)
 	X "$indent<Command uuid=`"$(New-Guid-String)`">"
 	X "$indent`t<Properties>"
-	X "$indent`t`t<Name>$(Esc-Xml $cmdName)</Name>"
+	X "$indent`t`t<Name>$(Esc-XmlText $cmdName)</Name>"
 	$syn = if ($null -ne $cmd.synonym) { $cmd.synonym } else { Split-CamelCase $cmdName }
 	Emit-MLText "$indent`t`t" "Synonym" $syn
 	if ($cmd.comment) { X "$indent`t`t<Comment>$(Esc-XmlText "$($cmd.comment)")</Comment>" } else { X "$indent`t`t<Comment/>" }
@@ -2027,7 +2031,7 @@ function Emit-Command {
 		Write-Error "Команда '$cmdName': тип параметра (commandParameterType) недоступен для команд командного интерфейса раздела ('$group'). Тип параметра — только для групп формы (FormCommandBar*/FormNavigationPanel*) или CommandGroup.<Имя>."
 		exit 1
 	}
-	X "$indent`t`t<Group>$(Esc-Xml $group)</Group>"
+	X "$indent`t`t<Group>$(Esc-XmlText $group)</Group>"
 	if ($cmd.commandParameterType) {
 		X "$indent`t`t<CommandParameterType>"
 		Emit-TypeContent "$indent`t`t`t" "$($cmd.commandParameterType)"
@@ -2043,7 +2047,7 @@ function Emit-Command {
 	X "$indent`t`t<Representation>$rep</Representation>"
 	Emit-MLText "$indent`t`t" "ToolTip" $cmd.tooltip
 	Emit-CommandPicture "$indent`t`t" $cmd
-	if ($cmd.shortcut) { X "$indent`t`t<Shortcut>$(Esc-Xml "$($cmd.shortcut)")</Shortcut>" } else { X "$indent`t`t<Shortcut/>" }
+	if ($cmd.shortcut) { X "$indent`t`t<Shortcut>$(Esc-XmlText "$($cmd.shortcut)")</Shortcut>" } else { X "$indent`t`t<Shortcut/>" }
 	$osu = if ($cmd.onMainServerUnavalableBehavior) { "$($cmd.onMainServerUnavalableBehavior)" } else { "Auto" }
 	X "$indent`t`t<OnMainServerUnavalableBehavior>$osu</OnMainServerUnavalableBehavior>"
 	X "$indent`t</Properties>"
@@ -2075,7 +2079,7 @@ function Emit-TabularSection {
 	$tsSynonym = if ($null -ne $tsSynonymArg) { $tsSynonymArg } else { Split-CamelCase $tsName }
 
 	X "$indent`t<Properties>"
-	X "$indent`t`t<Name>$(Esc-Xml $tsName)</Name>"
+	X "$indent`t`t<Name>$(Esc-XmlText $tsName)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $tsSynonym
 	if ($tsComment) { X "$indent`t`t<Comment>$(Esc-XmlText $tsComment)</Comment>" } else { X "$indent`t`t<Comment/>" }
 	Emit-MLText "$indent`t`t" "ToolTip" $tsTooltip
@@ -2121,7 +2125,7 @@ function Emit-EnumValue {
 	$uuid = New-Guid-String
 	X "$indent<EnumValue uuid=`"$uuid`">"
 	X "$indent`t<Properties>"
-	X "$indent`t`t<Name>$(Esc-Xml $parsed.name)</Name>"
+	X "$indent`t`t<Name>$(Esc-XmlText $parsed.name)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $parsed.synonym
 	if ($parsed.comment) { X "$indent`t`t<Comment>$(Esc-XmlText $parsed.comment)</Comment>" } else { X "$indent`t`t<Comment/>" }
 	X "$indent`t</Properties>"
@@ -2136,7 +2140,7 @@ function Emit-Dimension {
 	$uuid = New-Guid-String
 	X "$indent<Dimension uuid=`"$uuid`">"
 	X "$indent`t<Properties>"
-	X "$indent`t`t<Name>$(Esc-Xml $parsed.name)</Name>"
+	X "$indent`t`t<Name>$(Esc-XmlText $parsed.name)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $parsed.synonym
 	X "$indent`t`t<Comment/>"
 
@@ -2178,7 +2182,7 @@ function Emit-Dimension {
 	X "$indent`t`t<ChoiceParameters/>"
 	X "$indent`t`t<QuickChoice>Auto</QuickChoice>"
 	X "$indent`t`t<CreateOnInput>Auto</CreateOnInput>"
-	if ($parsed.choiceForm) { X "$indent`t`t<ChoiceForm>$(Esc-Xml "$($parsed.choiceForm)")</ChoiceForm>" } else { X "$indent`t`t<ChoiceForm/>" }
+	if ($parsed.choiceForm) { X "$indent`t`t<ChoiceForm>$(Esc-XmlText "$($parsed.choiceForm)")</ChoiceForm>" } else { X "$indent`t`t<ChoiceForm/>" }
 	X "$indent`t`t<LinkByType/>"
 	X "$indent`t`t<ChoiceHistoryOnInput>Auto</ChoiceHistoryOnInput>"
 
@@ -2226,7 +2230,7 @@ function Emit-Resource {
 	$uuid = New-Guid-String
 	X "$indent<Resource uuid=`"$uuid`">"
 	X "$indent`t<Properties>"
-	X "$indent`t`t<Name>$(Esc-Xml $parsed.name)</Name>"
+	X "$indent`t`t<Name>$(Esc-XmlText $parsed.name)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $parsed.synonym
 	X "$indent`t`t<Comment/>"
 
@@ -2272,7 +2276,7 @@ function Emit-Resource {
 	X "$indent`t`t<ChoiceParameters/>"
 	X "$indent`t`t<QuickChoice>Auto</QuickChoice>"
 	X "$indent`t`t<CreateOnInput>Auto</CreateOnInput>"
-	if ($parsed.choiceForm) { X "$indent`t`t<ChoiceForm>$(Esc-Xml "$($parsed.choiceForm)")</ChoiceForm>" } else { X "$indent`t`t<ChoiceForm/>" }
+	if ($parsed.choiceForm) { X "$indent`t`t<ChoiceForm>$(Esc-XmlText "$($parsed.choiceForm)")</ChoiceForm>" } else { X "$indent`t`t<ChoiceForm/>" }
 	X "$indent`t`t<LinkByType/>"
 	X "$indent`t`t<ChoiceHistoryOnInput>Auto</ChoiceHistoryOnInput>"
 
@@ -2298,7 +2302,7 @@ function Emit-CatalogProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 
@@ -2317,7 +2321,7 @@ function Emit-CatalogProperties {
 	if ($def.owners -and $def.owners.Count -gt 0) {
 		X "$i<Owners>"
 		foreach ($ownerRef in $def.owners) {
-			X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$ownerRef" 'Catalog'))</xr:Item>"
+			X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-XmlText (Normalize-MDObjectRef "$ownerRef" 'Catalog'))</xr:Item>"
 		}
 		X "$i</Owners>"
 	} else {
@@ -2403,12 +2407,12 @@ function Emit-DocumentProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmd = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
 	X "$i<UseStandardCommands>$useStdCmd</UseStandardCommands>"
-	if ($def.numerator) { X "$i<Numerator>$(Esc-Xml "$($def.numerator)")</Numerator>" } else { X "$i<Numerator/>" }
+	if ($def.numerator) { X "$i<Numerator>$(Esc-XmlText "$($def.numerator)")</Numerator>" } else { X "$i<Numerator/>" }
 
 	$numberType = Get-EnumProp "NumberType" "numberType" "String"
 	$numberLength = if ($null -ne $def.numberLength) { "$($def.numberLength)" } else { "11" }
@@ -2468,7 +2472,7 @@ function Emit-DocumentProperties {
 	}
 	if ($regRecords.Count -gt 0) {
 		X "$i<RegisterRecords>"
-		foreach ($rr in $regRecords) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$rr"))</xr:Item>" }
+		foreach ($rr in $regRecords) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-XmlText (Normalize-MDObjectRef "$rr"))</xr:Item>" }
 		X "$i</RegisterRecords>"
 	} else {
 		X "$i<RegisterRecords/>"
@@ -2502,7 +2506,7 @@ function Emit-EnumProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmds = if (Get-BoolProp "useStandardCommands" $false) { "true" } else { "false" }
@@ -2528,7 +2532,7 @@ function Emit-ConstantProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 
@@ -2558,7 +2562,7 @@ function Emit-ConstantProperties {
 	Emit-ChoiceParameterLinks $i $def.choiceParameterLinks
 	Emit-ChoiceParameters $i $def.choiceParameters
 	X "$i<QuickChoice>$(Get-EnumProp 'QuickChoice' 'quickChoice' 'Auto')</QuickChoice>"
-	if ($def.choiceForm) { X "$i<ChoiceForm>$(Esc-Xml "$($def.choiceForm)")</ChoiceForm>" } else { X "$i<ChoiceForm/>" }
+	if ($def.choiceForm) { X "$i<ChoiceForm>$(Esc-XmlText "$($def.choiceForm)")</ChoiceForm>" } else { X "$i<ChoiceForm/>" }
 	Emit-LinkByType $i $def.linkByType
 	X "$i<ChoiceHistoryOnInput>$(Get-EnumProp 'ChoiceHistoryOnInput' 'choiceHistoryOnInput' 'Auto')</ChoiceHistoryOnInput>"
 
@@ -2572,7 +2576,7 @@ function Emit-InformationRegisterProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmd = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
@@ -2623,7 +2627,7 @@ function Emit-AccumulationRegisterProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmd = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
@@ -2659,7 +2663,7 @@ function Emit-DefinedTypeProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 
@@ -2675,13 +2679,13 @@ function Emit-FunctionalOptionProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	# Location — хранилище значения опции (Constant.X / InformationRegister.X.Resource.Y / <Тип>.X.Attribute.Y).
 	# Ссылка verbatim (MDObjectRef-путь; принимаем location или value).
 	$loc = if ($def.location) { "$($def.location)" } elseif ($def.value) { "$($def.value)" } else { "" }
-	if ($loc) { X "$i<Location>$(Esc-Xml (Normalize-MDObjectRef $loc))</Location>" } else { X "$i<Location/>" }
+	if ($loc) { X "$i<Location>$(Esc-XmlText (Normalize-MDObjectRef $loc))</Location>" } else { X "$i<Location/>" }
 	# PrivilegedGetMode — привилегированный режим чтения (корпус 2864/2864 = true → дефолт true).
 	X "$i<PrivilegedGetMode>$(if (Get-BoolProp 'privilegedGetMode' $true) { 'true' } else { 'false' })</PrivilegedGetMode>"
 	# Content — объекты, зависящие от опции (список MDObjectRef-путей к реквизитам/измерениям/ресурсам). omit-on-empty.
@@ -2689,7 +2693,7 @@ function Emit-FunctionalOptionProperties {
 	if ($def.content) { $content = @($def.content) }
 	if ($content.Count -gt 0) {
 		X "$i<Content>"
-		foreach ($obj in $content) { X "$i`t<xr:Object>$(Esc-Xml (Normalize-MDObjectRef "$obj"))</xr:Object>" }
+		foreach ($obj in $content) { X "$i`t<xr:Object>$(Esc-XmlText (Normalize-MDObjectRef "$obj"))</xr:Object>" }
 		X "$i</Content>"
 	} else {
 		X "$i<Content/>"
@@ -2702,7 +2706,7 @@ function Emit-MDRefList {
 	$arr = @(); if ($items) { $arr = @($items) }
 	if ($arr.Count -gt 0) {
 		X "$indent<$tag>"
-		foreach ($it in $arr) { X "$indent`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$it"))</xr:Item>" }
+		foreach ($it in $arr) { X "$indent`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-XmlText (Normalize-MDObjectRef "$it"))</xr:Item>" }
 		X "$indent</$tag>"
 	} else {
 		X "$indent<$tag/>"
@@ -2712,7 +2716,7 @@ function Emit-MDRefList {
 function Emit-SequenceProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	X "$i<MoveBoundaryOnPosting>$(Get-EnumProp 'MoveBoundaryOnPosting' 'moveBoundaryOnPosting' 'DontMove')</MoveBoundaryOnPosting>"
@@ -2724,7 +2728,7 @@ function Emit-SequenceProperties {
 function Emit-FilterCriterionProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	$vt = if ($def.valueType) { "$($def.valueType)" } elseif ($def.valueTypes) { (@($def.valueTypes) | ForEach-Object { "$_" }) -join ' + ' } else { '' }
@@ -2735,7 +2739,7 @@ function Emit-FilterCriterionProperties {
 	$content = @(); if ($def.content) { $content = @($def.content) }
 	if ($content.Count -gt 0) {
 		X "$i<Content>"
-		foreach ($obj in $content) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$obj"))</xr:Item>" }
+		foreach ($obj in $content) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-XmlText (Normalize-MDObjectRef "$obj"))</xr:Item>" }
 		X "$i</Content>"
 	} else {
 		X "$i<Content/>"
@@ -2750,7 +2754,7 @@ function Emit-FilterCriterionProperties {
 function Emit-DocumentNumeratorProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	X "$i<NumberType>$(Get-EnumProp 'NumberType' 'numberType' 'String')</NumberType>"
@@ -2763,7 +2767,7 @@ function Emit-DocumentNumeratorProperties {
 function Emit-SettingsStorageProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	Emit-VerbatimRef $i "DefaultSaveForm"   $def.defaultSaveForm
@@ -2775,7 +2779,7 @@ function Emit-SettingsStorageProperties {
 function Emit-CommonFormProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	X "$i<FormType>$(Get-EnumProp 'FormType' 'formType' 'Managed')</FormType>"
@@ -2799,7 +2803,7 @@ function Emit-CommonFormProperties {
 function Emit-SessionParameterProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	$vt = if ($def.valueType) { "$($def.valueType)" } elseif ($def.valueTypes) { (@($def.valueTypes) | ForEach-Object { "$_" }) -join ' + ' } else { '' }
@@ -2809,7 +2813,7 @@ function Emit-SessionParameterProperties {
 function Emit-FunctionalOptionsParameterProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	# Use — измерения регистров/реквизиты, к которым привязан параметр (список MDObjectRef).
@@ -2819,7 +2823,7 @@ function Emit-FunctionalOptionsParameterProperties {
 function Emit-WSReferenceProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	$url = if ($def.locationURL) { "$($def.locationURL)" } elseif ($def.locationUrl) { "$($def.locationUrl)" } else { "" }
@@ -2829,7 +2833,7 @@ function Emit-WSReferenceProperties {
 function Emit-CommonPictureProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	X "$i<AvailabilityForChoice>$(if (Get-BoolProp 'availabilityForChoice' $false) { 'true' } else { 'false' })</AvailabilityForChoice>"
@@ -2839,7 +2843,7 @@ function Emit-CommonPictureProperties {
 function Emit-CommonTemplateProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	X "$i<TemplateType>$(Get-EnumProp 'TemplateType' 'templateType' 'SpreadsheetDocument')</TemplateType>"
@@ -2848,7 +2852,7 @@ function Emit-CommonTemplateProperties {
 function Emit-CommandGroupProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	X "$i<Representation>$(Get-EnumProp 'Representation' 'representation' 'Auto')</Representation>"
@@ -2860,15 +2864,15 @@ function Emit-CommandGroupProperties {
 function Emit-CommonCommandProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	$group = if ($def.group) { "$($def.group)" } else { "" }
-	if ($group) { X "$i<Group>$(Esc-Xml $group)</Group>" } else { X "$i<Group/>" }
+	if ($group) { X "$i<Group>$(Esc-XmlText $group)</Group>" } else { X "$i<Group/>" }
 	X "$i<Representation>$(Get-EnumProp 'Representation' 'representation' 'Auto')</Representation>"
 	Emit-MLText $i "ToolTip" $def.tooltip
 	Emit-CommandPicture $i $def
-	if ($def.shortcut) { X "$i<Shortcut>$(Esc-Xml "$($def.shortcut)")</Shortcut>" } else { X "$i<Shortcut/>" }
+	if ($def.shortcut) { X "$i<Shortcut>$(Esc-XmlText "$($def.shortcut)")</Shortcut>" } else { X "$i<Shortcut/>" }
 	$inclHelp = if (Get-BoolProp "includeHelpInContents" $false) { "true" } else { "false" }
 	X "$i<IncludeHelpInContents>$inclHelp</IncludeHelpInContents>"
 	if ($def.commandParameterType) {
@@ -2886,7 +2890,7 @@ function Emit-CommonCommandProperties {
 function Emit-CommonAttributeProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	# Дефолт типа — String(0) (переменная длина 0), НЕ $def.type (это тип метаобъекта «CommonAttribute»).
@@ -2911,7 +2915,7 @@ function Emit-CommonAttributeProperties {
 	Emit-ChoiceParameters $i $def.choiceParameters
 	X "$i<QuickChoice>$(Get-EnumProp 'QuickChoice' 'quickChoice' 'Auto')</QuickChoice>"
 	X "$i<CreateOnInput>$(Get-EnumProp 'CreateOnInput' 'createOnInput' 'Auto')</CreateOnInput>"
-	if ($def.choiceForm) { X "$i<ChoiceForm>$(Esc-Xml "$($def.choiceForm)")</ChoiceForm>" } else { X "$i<ChoiceForm/>" }
+	if ($def.choiceForm) { X "$i<ChoiceForm>$(Esc-XmlText "$($def.choiceForm)")</ChoiceForm>" } else { X "$i<ChoiceForm/>" }
 	Emit-LinkByType $i $def.linkByType
 	X "$i<ChoiceHistoryOnInput>$(Get-EnumProp 'ChoiceHistoryOnInput' 'choiceHistoryOnInput' 'Auto')</ChoiceHistoryOnInput>"
 	# Content — объекты, к которым добавлен общий реквизит: {metadata, use?, conditionalSeparation?}.
@@ -2922,10 +2926,10 @@ function Emit-CommonAttributeProperties {
 			$md = if ($c -is [string]) { "$c" } else { "$($c.metadata)" }
 			$use = if ($c -is [string]) { 'Use' } elseif ($c.use) { "$($c.use)" } else { 'Use' }
 			X "$i`t<xr:Item>"
-			X "$i`t`t<xr:Metadata>$(Esc-Xml (Normalize-MDObjectRef $md))</xr:Metadata>"
+			X "$i`t`t<xr:Metadata>$(Esc-XmlText (Normalize-MDObjectRef $md))</xr:Metadata>"
 			X "$i`t`t<xr:Use>$use</xr:Use>"
 			$cs = if ($c -isnot [string] -and $c.conditionalSeparation) { "$($c.conditionalSeparation)" } else { "" }
-			if ($cs) { X "$i`t`t<xr:ConditionalSeparation>$(Esc-Xml $cs)</xr:ConditionalSeparation>" } else { X "$i`t`t<xr:ConditionalSeparation/>" }
+			if ($cs) { X "$i`t`t<xr:ConditionalSeparation>$(Esc-XmlText $cs)</xr:ConditionalSeparation>" } else { X "$i`t`t<xr:ConditionalSeparation/>" }
 			X "$i`t</xr:Item>"
 		}
 		X "$i</Content>"
@@ -2936,11 +2940,11 @@ function Emit-CommonAttributeProperties {
 	X "$i<DataSeparation>$(Get-EnumProp 'DataSeparation' 'dataSeparation' 'DontUse')</DataSeparation>"
 	X "$i<SeparatedDataUse>$(Get-EnumProp 'SeparatedDataUse' 'separatedDataUse' 'Independently')</SeparatedDataUse>"
 	$dsv = if ($def.dataSeparationValue) { "$($def.dataSeparationValue)" } else { "" }
-	if ($dsv) { X "$i<DataSeparationValue>$(Esc-Xml $dsv)</DataSeparationValue>" } else { X "$i<DataSeparationValue/>" }
+	if ($dsv) { X "$i<DataSeparationValue>$(Esc-XmlText $dsv)</DataSeparationValue>" } else { X "$i<DataSeparationValue/>" }
 	$dsu = if ($def.dataSeparationUse) { "$($def.dataSeparationUse)" } else { "" }
-	if ($dsu) { X "$i<DataSeparationUse>$(Esc-Xml $dsu)</DataSeparationUse>" } else { X "$i<DataSeparationUse/>" }
+	if ($dsu) { X "$i<DataSeparationUse>$(Esc-XmlText $dsu)</DataSeparationUse>" } else { X "$i<DataSeparationUse/>" }
 	$cs2 = if ($def.conditionalSeparation) { "$($def.conditionalSeparation)" } else { "" }
-	if ($cs2) { X "$i<ConditionalSeparation>$(Esc-Xml $cs2)</ConditionalSeparation>" } else { X "$i<ConditionalSeparation/>" }
+	if ($cs2) { X "$i<ConditionalSeparation>$(Esc-XmlText $cs2)</ConditionalSeparation>" } else { X "$i<ConditionalSeparation/>" }
 	X "$i<UsersSeparation>$(Get-EnumProp 'UsersSeparation' 'usersSeparation' 'DontUse')</UsersSeparation>"
 	X "$i<AuthenticationSeparation>$(Get-EnumProp 'AuthenticationSeparation' 'authenticationSeparation' 'DontUse')</AuthenticationSeparation>"
 	X "$i<ConfigurationExtensionsSeparation>$(Get-EnumProp 'ConfigurationExtensionsSeparation' 'configurationExtensionsSeparation' 'DontUse')</ConfigurationExtensionsSeparation>"
@@ -2957,7 +2961,7 @@ function Emit-SequenceDimension {
 	$parsed = Parse-AttributeShorthand $dimDef
 	X "$indent<Dimension uuid=`"$uuid`">"
 	X "$indent`t<Properties>"
-	X "$indent`t`t<Name>$(Esc-Xml $parsed.name)</Name>"
+	X "$indent`t`t<Name>$(Esc-XmlText $parsed.name)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $parsed.synonym
 	if ($parsed.comment) { X "$indent`t`t<Comment>$(Esc-XmlText $parsed.comment)</Comment>" } else { X "$indent`t`t<Comment/>" }
 	if ($parsed.typeEmpty) { X "$indent`t`t<Type/>" }
@@ -2975,7 +2979,7 @@ function Emit-CommonModuleProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 
@@ -3017,7 +3021,7 @@ function Emit-ScheduledJobProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 
@@ -3026,14 +3030,14 @@ function Emit-ScheduledJobProperties {
 	if ($methodName -and -not $methodName.StartsWith("CommonModule.")) {
 		$methodName = "CommonModule.$methodName"
 	}
-	X "$i<MethodName>$(Esc-Xml $methodName)</MethodName>"
+	X "$i<MethodName>$(Esc-XmlText $methodName)</MethodName>"
 
 	# Description — плоская строка (дефолт ПУСТО: корпус 662 пустых / 209 заданы; не подставляем синоним — иначе роундтрип рвётся).
 	$description = if ($def.description) { "$($def.description)" } else { "" }
 	if ($description) { X "$i<Description>$(Esc-XmlText $description)</Description>" } else { X "$i<Description/>" }
 
 	$key = if ($def.key) { "$($def.key)" } else { "" }
-	X "$i<Key>$(Esc-Xml $key)</Key>"
+	X "$i<Key>$(Esc-XmlText $key)</Key>"
 
 	$use = if ($def.use -eq $true) { "true" } else { "false" }
 	X "$i<Use>$use</Use>"
@@ -3051,7 +3055,7 @@ function Emit-EventSubscriptionProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 
@@ -3075,7 +3079,7 @@ function Emit-EventSubscriptionProperties {
 	if ($handler -and -not $handler.StartsWith("CommonModule.")) {
 		$handler = "CommonModule.$handler"
 	}
-	X "$i<Handler>$(Esc-Xml $handler)</Handler>"
+	X "$i<Handler>$(Esc-XmlText $handler)</Handler>"
 }
 
 # --- 13b. Wave 2: Report, DataProcessor ---
@@ -3084,7 +3088,7 @@ function Emit-ReportProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	# UseStandardCommands: дефолт true (авторски-безопасно — доступность объекта через стандартный командный
@@ -3110,7 +3114,7 @@ function Emit-DataProcessorProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmds = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
@@ -3130,7 +3134,7 @@ function Emit-ExchangePlanProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmd = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
@@ -3202,7 +3206,7 @@ function Emit-ChartOfCharacteristicTypesProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmd = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
@@ -3211,7 +3215,7 @@ function Emit-ChartOfCharacteristicTypesProperties {
 	X "$i<IncludeHelpInContents>$inclHelp</IncludeHelpInContents>"
 
 	# CharacteristicExtValues — ссылка на справочник доп. значений характеристик (обычно пусто).
-	if ($def.characteristicExtValues) { X "$i<CharacteristicExtValues>$(Esc-Xml "$($def.characteristicExtValues)")</CharacteristicExtValues>" }
+	if ($def.characteristicExtValues) { X "$i<CharacteristicExtValues>$(Esc-XmlText "$($def.characteristicExtValues)")</CharacteristicExtValues>" }
 	else { X "$i<CharacteristicExtValues/>" }
 
 	# Type — тип значения характеристики (составной). DSL `valueType` строка "A + B + C" ИЛИ массив; нет ключа → дефолт.
@@ -3311,7 +3315,7 @@ function Emit-DocumentJournalProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText $def.comment)</Comment>" } else { X "$i<Comment/>" }
 
@@ -3325,7 +3329,7 @@ function Emit-DocumentJournalProperties {
 	if ($def.registeredDocuments) { $regDocs = @($def.registeredDocuments) }
 	if ($regDocs.Count -gt 0) {
 		X "$i<RegisteredDocuments>"
-		foreach ($rd in $regDocs) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$rd"))</xr:Item>" }
+		foreach ($rd in $regDocs) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-XmlText (Normalize-MDObjectRef "$rd"))</xr:Item>" }
 		X "$i</RegisteredDocuments>"
 	} else {
 		X "$i<RegisteredDocuments/>"
@@ -3358,7 +3362,7 @@ function Emit-ChartOfAccountsProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmd = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
@@ -3369,7 +3373,7 @@ function Emit-ChartOfAccountsProperties {
 
 	# ExtDimensionTypes — ссылка на ПВХ видов субконто (прощающий ввод: ПланВидовХарактеристик.X → ChartOfCharacteristicTypes.X).
 	$extDimTypes = if ($def.extDimensionTypes) { Resolve-TypePrefixSyn "$($def.extDimensionTypes)" } else { "" }
-	if ($extDimTypes) { X "$i<ExtDimensionTypes>$(Esc-Xml $extDimTypes)</ExtDimensionTypes>" } else { X "$i<ExtDimensionTypes/>" }
+	if ($extDimTypes) { X "$i<ExtDimensionTypes>$(Esc-XmlText $extDimTypes)</ExtDimensionTypes>" } else { X "$i<ExtDimensionTypes/>" }
 
 	# Количество субконто: без ПВХ (extDimensionTypes) платформа не даёт > 0 → дефолт 0; с ПВХ — 3.
 	$maxExtDim = if ($null -ne $def.maxExtDimensionCount) { "$($def.maxExtDimensionCount)" } elseif ($extDimTypes) { "3" } else { "0" }
@@ -3464,7 +3468,7 @@ function Emit-AccountingRegisterProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmd = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
@@ -3473,7 +3477,7 @@ function Emit-AccountingRegisterProperties {
 	X "$i<IncludeHelpInContents>$inclHelp</IncludeHelpInContents>"
 
 	$chartOfAccounts = if ($def.chartOfAccounts) { "$($def.chartOfAccounts)" } else { "" }
-	if ($chartOfAccounts) { X "$i<ChartOfAccounts>$(Esc-Xml $chartOfAccounts)</ChartOfAccounts>" }
+	if ($chartOfAccounts) { X "$i<ChartOfAccounts>$(Esc-XmlText $chartOfAccounts)</ChartOfAccounts>" }
 	else { X "$i<ChartOfAccounts/>" }
 
 	$correspondence = if ($def.correspondence -eq $true) { "true" } else { "false" }
@@ -3537,7 +3541,7 @@ function Emit-ChartOfCalculationTypesProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmd = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
@@ -3582,7 +3586,7 @@ function Emit-ChartOfCalculationTypesProperties {
 	$baseTypes = @(); if ($def.baseCalculationTypes) { $baseTypes = @($def.baseCalculationTypes | ForEach-Object { Resolve-TypePrefixSyn "$_" }) }
 	if ($baseTypes.Count -gt 0) {
 		X "$i<BaseCalculationTypes>"
-		foreach ($bt in $baseTypes) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$bt"))</xr:Item>" }
+		foreach ($bt in $baseTypes) { X "$i`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-XmlText (Normalize-MDObjectRef "$bt"))</xr:Item>" }
 		X "$i</BaseCalculationTypes>"
 	} else { X "$i<BaseCalculationTypes/>" }
 	$actionPeriodUse = if ($def.actionPeriodUse -eq $true) { "true" } else { "false" }
@@ -3616,7 +3620,7 @@ function Emit-CalculationRegisterProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmd = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
@@ -3634,16 +3638,16 @@ function Emit-CalculationRegisterProperties {
 	X "$i<BasePeriod>$basePeriod</BasePeriod>"
 
 	$schedule = if ($def.schedule) { "$($def.schedule)" } else { "" }
-	if ($schedule) { X "$i<Schedule>$(Esc-Xml $schedule)</Schedule>" } else { X "$i<Schedule/>" }
+	if ($schedule) { X "$i<Schedule>$(Esc-XmlText $schedule)</Schedule>" } else { X "$i<Schedule/>" }
 
 	$scheduleValue = if ($def.scheduleValue) { "$($def.scheduleValue)" } else { "" }
-	if ($scheduleValue) { X "$i<ScheduleValue>$(Esc-Xml $scheduleValue)</ScheduleValue>" } else { X "$i<ScheduleValue/>" }
+	if ($scheduleValue) { X "$i<ScheduleValue>$(Esc-XmlText $scheduleValue)</ScheduleValue>" } else { X "$i<ScheduleValue/>" }
 
 	$scheduleDate = if ($def.scheduleDate) { "$($def.scheduleDate)" } else { "" }
-	if ($scheduleDate) { X "$i<ScheduleDate>$(Esc-Xml $scheduleDate)</ScheduleDate>" } else { X "$i<ScheduleDate/>" }
+	if ($scheduleDate) { X "$i<ScheduleDate>$(Esc-XmlText $scheduleDate)</ScheduleDate>" } else { X "$i<ScheduleDate/>" }
 
 	$chartOfCalcTypes = if ($def.chartOfCalculationTypes) { "$($def.chartOfCalculationTypes)" } else { "" }
-	if ($chartOfCalcTypes) { X "$i<ChartOfCalculationTypes>$(Esc-Xml $chartOfCalcTypes)</ChartOfCalculationTypes>" }
+	if ($chartOfCalcTypes) { X "$i<ChartOfCalculationTypes>$(Esc-XmlText $chartOfCalcTypes)</ChartOfCalculationTypes>" }
 	else { X "$i<ChartOfCalculationTypes/>" }
 
 	$inclHelp = if (Get-BoolProp "includeHelpInContents" $false) { "true" } else { "false" }
@@ -3668,7 +3672,7 @@ function Emit-BusinessProcessProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmd = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
@@ -3707,7 +3711,7 @@ function Emit-BusinessProcessProperties {
 	Emit-BasedOn $i $def.basedOn
 	X "$i<NumberPeriodicity>$(Get-EnumProp 'NumberPeriodicity' 'numberPeriodicity' 'Nonperiodical')</NumberPeriodicity>"
 
-	if ($def.task) { X "$i<Task>$(Esc-Xml "$($def.task)")</Task>" } else { X "$i<Task/>" }
+	if ($def.task) { X "$i<Task>$(Esc-XmlText "$($def.task)")</Task>" } else { X "$i<Task/>" }
 	$createTaskPriv = if (Get-BoolProp "createTaskInPrivilegedMode" $true) { "true" } else { "false" }
 	X "$i<CreateTaskInPrivilegedMode>$createTaskPriv</CreateTaskInPrivilegedMode>"
 
@@ -3733,7 +3737,7 @@ function Emit-BusinessProcessProperties {
 function Emit-TaskProperties {
 	param([string]$indent)
 	$i = $indent
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 	$useStdCmd = if (Get-BoolProp "useStandardCommands" $true) { "true" } else { "false" }
@@ -3752,9 +3756,9 @@ function Emit-TaskProperties {
 	X "$i<Autonumbering>$autonumbering</Autonumbering>"
 	X "$i<TaskNumberAutoPrefix>$taskNumberAutoPrefix</TaskNumberAutoPrefix>"
 	X "$i<DescriptionLength>$descriptionLength</DescriptionLength>"
-	if ($def.addressing) { X "$i<Addressing>$(Esc-Xml "$($def.addressing)")</Addressing>" } else { X "$i<Addressing/>" }
-	if ($def.mainAddressingAttribute) { X "$i<MainAddressingAttribute>$(Esc-Xml "$($def.mainAddressingAttribute)")</MainAddressingAttribute>" } else { X "$i<MainAddressingAttribute/>" }
-	if ($def.currentPerformer) { X "$i<CurrentPerformer>$(Esc-Xml "$($def.currentPerformer)")</CurrentPerformer>" } else { X "$i<CurrentPerformer/>" }
+	if ($def.addressing) { X "$i<Addressing>$(Esc-XmlText "$($def.addressing)")</Addressing>" } else { X "$i<Addressing/>" }
+	if ($def.mainAddressingAttribute) { X "$i<MainAddressingAttribute>$(Esc-XmlText "$($def.mainAddressingAttribute)")</MainAddressingAttribute>" } else { X "$i<MainAddressingAttribute/>" }
+	if ($def.currentPerformer) { X "$i<CurrentPerformer>$(Esc-XmlText "$($def.currentPerformer)")</CurrentPerformer>" } else { X "$i<CurrentPerformer/>" }
 	Emit-BasedOn $i $def.basedOn
 	Emit-StandardAttributes $i "Task"
 	Emit-Characteristics $i $def.characteristics
@@ -3798,12 +3802,12 @@ function Emit-HTTPServiceProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
-	if ($def.comment) { X "$i<Comment>$(Esc-Xml "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
+	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 
 	$rootURL = if ($def.rootURL) { "$($def.rootURL)" } else { $objName.ToLower() }
-	X "$i<RootURL>$(Esc-Xml $rootURL)</RootURL>"
+	X "$i<RootURL>$(Esc-XmlText $rootURL)</RootURL>"
 
 	$reuseSessions = Get-EnumProp "ReuseSessions" "reuseSessions" "DontUse"
 	X "$i<ReuseSessions>$reuseSessions</ReuseSessions>"
@@ -3820,7 +3824,7 @@ function Emit-XDTOType {
 		$uri = $Matches[1]; $local = $Matches[2]
 		X "$indent<$tag xmlns:d1p1=`"$(Esc-Xml $uri)`">d1p1:$(Esc-Xml $local)</$tag>"
 	} else {
-		X "$indent<$tag>$(Esc-Xml $value)</$tag>"
+		X "$indent<$tag>$(Esc-XmlText $value)</$tag>"
 	}
 }
 
@@ -3828,12 +3832,12 @@ function Emit-WebServiceProperties {
 	param([string]$indent)
 	$i = $indent
 
-	X "$i<Name>$(Esc-Xml $objName)</Name>"
+	X "$i<Name>$(Esc-XmlText $objName)</Name>"
 	Emit-MLText $i "Synonym" $synonym
-	if ($def.comment) { X "$i<Comment>$(Esc-Xml "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
+	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 
 	$namespace = if ($def.namespace) { "$($def.namespace)" } else { "" }
-	X "$i<Namespace>$(Esc-Xml $namespace)</Namespace>"
+	X "$i<Namespace>$(Esc-XmlText $namespace)</Namespace>"
 
 	# XDTOPackages — СПИСОК элементов, а не скаляр: значение либо ссылка на пакет конфигурации
 	# (xr:MDObjectRef "XDTOPackage.Имя"), либо URI внешнего пространства имён (xs:string).
@@ -3848,7 +3852,7 @@ function Emit-WebServiceProperties {
 			X "$i`t<xr:Item>"
 			X "$i`t`t<xr:Presentation/>"
 			X "$i`t`t<xr:CheckState>0</xr:CheckState>"
-			X "$i`t`t<xr:Value xsi:type=`"$xt`">$(Esc-Xml $pv)</xr:Value>"
+			X "$i`t`t<xr:Value xsi:type=`"$xt`">$(Esc-XmlText $pv)</xr:Value>"
 			X "$i`t</xr:Item>"
 		}
 		X "$i</XDTOPackages>"
@@ -3856,7 +3860,7 @@ function Emit-WebServiceProperties {
 
 	# Имя файла дескриптора не выводится из имени сервиса (DMILService → dmil.1cws) — только дефолт.
 	$descriptor = if ($def.descriptorFileName) { "$($def.descriptorFileName)" } else { "$objName.1cws" }
-	X "$i<DescriptorFileName>$(Esc-Xml $descriptor)</DescriptorFileName>"
+	X "$i<DescriptorFileName>$(Esc-XmlText $descriptor)</DescriptorFileName>"
 
 	$reuseSessions = Get-EnumProp "ReuseSessions" "reuseSessions" "DontUse"
 	X "$i<ReuseSessions>$reuseSessions</ReuseSessions>"
@@ -3890,14 +3894,14 @@ function Emit-Column {
 
 	X "$indent<Column uuid=`"$uuid`">"
 	X "$indent`t<Properties>"
-	X "$indent`t`t<Name>$(Esc-Xml $name)</Name>"
+	X "$indent`t`t<Name>$(Esc-XmlText $name)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $synonym
 	if ($comment) { X "$indent`t`t<Comment>$(Esc-XmlText $comment)</Comment>" } else { X "$indent`t`t<Comment/>" }
 	X "$indent`t`t<Indexing>$indexing</Indexing>"
 	if ($references.Count -gt 0) {
 		X "$indent`t`t<References>"
 		foreach ($ref in $references) {
-			X "$indent`t`t`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$ref"))</xr:Item>"
+			X "$indent`t`t`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-XmlText (Normalize-MDObjectRef "$ref"))</xr:Item>"
 		}
 		X "$indent`t`t</References>"
 	} else {
@@ -3933,10 +3937,10 @@ function Emit-URLTemplate {
 
 	X "$indent<URLTemplate uuid=`"$uuid`">"
 	X "$indent`t<Properties>"
-	X "$indent`t`t<Name>$(Esc-Xml $tmplName)</Name>"
+	X "$indent`t`t<Name>$(Esc-XmlText $tmplName)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $tmplSynonym
-	if ($tmplComment) { X "$indent`t`t<Comment>$(Esc-Xml $tmplComment)</Comment>" } else { X "$indent`t`t<Comment/>" }
-	X "$indent`t`t<Template>$(Esc-Xml $template)</Template>"
+	if ($tmplComment) { X "$indent`t`t<Comment>$(Esc-XmlText $tmplComment)</Comment>" } else { X "$indent`t`t<Comment/>" }
+	X "$indent`t`t<Template>$(Esc-XmlText $template)</Template>"
 	X "$indent`t</Properties>"
 
 	if ($methods.Count -gt 0) {
@@ -3959,11 +3963,11 @@ function Emit-URLTemplate {
 
 			X "$indent`t`t<Method uuid=`"$methodUuid`">"
 			X "$indent`t`t`t<Properties>"
-			X "$indent`t`t`t`t<Name>$(Esc-Xml $methodName)</Name>"
+			X "$indent`t`t`t`t<Name>$(Esc-XmlText $methodName)</Name>"
 			Emit-MLText "$indent`t`t`t`t" "Synonym" $methodSynonym
-			if ($methodComment) { X "$indent`t`t`t`t<Comment>$(Esc-Xml $methodComment)</Comment>" } else { X "$indent`t`t`t`t<Comment/>" }
+			if ($methodComment) { X "$indent`t`t`t`t<Comment>$(Esc-XmlText $methodComment)</Comment>" } else { X "$indent`t`t`t`t<Comment/>" }
 			X "$indent`t`t`t`t<HTTPMethod>$httpMethod</HTTPMethod>"
-			X "$indent`t`t`t`t<Handler>$(Esc-Xml $handler)</Handler>"
+			X "$indent`t`t`t`t<Handler>$(Esc-XmlText $handler)</Handler>"
 			X "$indent`t`t`t</Properties>"
 			X "$indent`t`t</Method>"
 		}
@@ -4009,13 +4013,13 @@ function Emit-Operation {
 
 	X "$indent<Operation uuid=`"$uuid`">"
 	X "$indent`t<Properties>"
-	X "$indent`t`t<Name>$(Esc-Xml $opName)</Name>"
+	X "$indent`t`t<Name>$(Esc-XmlText $opName)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $opSynonym
-	if ($opComment) { X "$indent`t`t<Comment>$(Esc-Xml $opComment)</Comment>" } else { X "$indent`t`t<Comment/>" }
+	if ($opComment) { X "$indent`t`t<Comment>$(Esc-XmlText $opComment)</Comment>" } else { X "$indent`t`t<Comment/>" }
 	Emit-XDTOType "$indent`t`t" "XDTOReturningValueType" $returnType
 	X "$indent`t`t<Nillable>$nillable</Nillable>"
 	X "$indent`t`t<Transactioned>$transactioned</Transactioned>"
-	X "$indent`t`t<ProcedureName>$(Esc-Xml $handler)</ProcedureName>"
+	X "$indent`t`t<ProcedureName>$(Esc-XmlText $handler)</ProcedureName>"
 	X "$indent`t`t<DataLockControlMode>$dataLock</DataLockControlMode>"
 	X "$indent`t</Properties>"
 
@@ -4042,9 +4046,9 @@ function Emit-Operation {
 
 			X "$indent`t`t<Parameter uuid=`"$paramUuid`">"
 			X "$indent`t`t`t<Properties>"
-			X "$indent`t`t`t`t<Name>$(Esc-Xml $paramName)</Name>"
+			X "$indent`t`t`t`t<Name>$(Esc-XmlText $paramName)</Name>"
 			Emit-MLText "$indent`t`t`t`t" "Synonym" $paramSynonym
-			if ($paramComment) { X "$indent`t`t`t`t<Comment>$(Esc-Xml $paramComment)</Comment>" } else { X "$indent`t`t`t`t<Comment/>" }
+			if ($paramComment) { X "$indent`t`t`t`t<Comment>$(Esc-XmlText $paramComment)</Comment>" } else { X "$indent`t`t`t`t<Comment/>" }
 			Emit-XDTOType "$indent`t`t`t`t" "XDTOValueType" $paramType
 			X "$indent`t`t`t`t<Nillable>$paramNillable</Nillable>"
 			X "$indent`t`t`t`t<TransferDirection>$paramDir</TransferDirection>"
@@ -4861,7 +4865,7 @@ if ($objType -eq "ExchangePlan") {
 		[void]$sbC.Append("<ExchangePlanContent $xepNs version=`"$($script:formatVersion)`">`r`n")
 		foreach ($it in $cItems) {
 			[void]$sbC.Append("`t<Item>`r`n")
-			[void]$sbC.Append("`t`t<Metadata>$(Esc-Xml $it.metadata)</Metadata>`r`n")
+			[void]$sbC.Append("`t`t<Metadata>$(Esc-XmlText $it.metadata)</Metadata>`r`n")
 			[void]$sbC.Append("`t`t<AutoRecord>$($it.autoRecord)</AutoRecord>`r`n")
 			[void]$sbC.Append("`t</Item>`r`n")
 		}

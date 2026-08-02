@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.73 — Compile 1C metadata object from JSON
+# meta-compile v1.74 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -520,7 +520,7 @@ def normalize_form_ref(s):
 def emit_form_ref(i, tag, val):
     """Ссылка на форму по умолчанию: непустая → <Tag>значение</Tag>, иначе <Tag/>."""
     if val:
-        X(f'{i}<{tag}>{esc_xml(normalize_form_ref(str(val)))}</{tag}>')
+        X(f'{i}<{tag}>{esc_xml_text(normalize_form_ref(str(val)))}</{tag}>')
     else:
         X(f'{i}<{tag}/>')
 
@@ -528,7 +528,7 @@ def emit_verbatim_ref(i, tag, val):
     """Ссылка verbatim (без normalize_form_ref): формы/схемы/хранилища Report/DataProcessor, где имя формы
     может быть буквально «Форма» (normalize перевёл бы имя-сегмент Форма→Form) либо ref не-форменного вида."""
     if val:
-        X(f'{i}<{tag}>{esc_xml(str(val))}</{tag}>')
+        X(f'{i}<{tag}>{esc_xml_text(str(val))}</{tag}>')
     else:
         X(f'{i}<{tag}/>')
 
@@ -1338,7 +1338,7 @@ def emit_standard_attribute(indent, attr_name, ov=None):
         lbt_dp = str(lbt.get('dataPath')) if isinstance(lbt, dict) else str(lbt)
         lbt_li = lbt.get('linkItem', 0) if isinstance(lbt, dict) else 0
         X(f'{indent}\t<xr:LinkByType>')
-        X(f'{indent}\t\t<xr:DataPath>{esc_xml(lbt_dp)}</xr:DataPath>')
+        X(f'{indent}\t\t<xr:DataPath>{esc_xml_text(lbt_dp)}</xr:DataPath>')
         X(f'{indent}\t\t<xr:LinkItem>{lbt_li}</xr:LinkItem>')
         X(f'{indent}\t</xr:LinkByType>')
     else:
@@ -1357,7 +1357,7 @@ def emit_standard_attribute(indent, attr_name, ov=None):
     X(f'{indent}\t<xr:ExtendedEdit>false</xr:ExtendedEdit>')
     emit_mltext(f'{indent}\t', 'xr:Format', fmt)
     if cf:
-        X(f'{indent}\t<xr:ChoiceForm>{esc_xml(str(cf))}</xr:ChoiceForm>')
+        X(f'{indent}\t<xr:ChoiceForm>{esc_xml_text(str(cf))}</xr:ChoiceForm>')
     else:
         X(f'{indent}\t<xr:ChoiceForm/>')
     X(f'{indent}\t<xr:QuickChoice>Auto</xr:QuickChoice>')
@@ -1386,7 +1386,7 @@ def emit_standard_attribute(indent, attr_name, ov=None):
         if fv_tx == '' or fv_tx is None:
             X(f'{indent}\t<xr:FillValue xsi:type="{fv_xt}"/>')
         else:
-            X(f'{indent}\t<xr:FillValue xsi:type="{fv_xt}">{esc_xml(fv_tx)}</xr:FillValue>')
+            X(f'{indent}\t<xr:FillValue xsi:type="{fv_xt}">{esc_xml_text(fv_tx)}</xr:FillValue>')
     if msk:
         X(f'{indent}\t<xr:Mask>{esc_xml_text(str(msk))}</xr:Mask>')
     else:
@@ -1591,7 +1591,7 @@ def emit_link_by_type(indent, spec):
         return
     dp = expand_data_path(dp)
     X(f'{indent}<LinkByType>')
-    X(f'{indent}\t<xr:DataPath>{esc_xml(str(dp))}</xr:DataPath>')
+    X(f'{indent}\t<xr:DataPath>{esc_xml_text(str(dp))}</xr:DataPath>')
     X(f'{indent}\t<xr:LinkItem>{li}</xr:LinkItem>')
     X(f'{indent}</LinkByType>')
 
@@ -1603,7 +1603,7 @@ def emit_field_block(indent, tag, fields):
         return
     X(f'{indent}<{tag}>')
     for f in arr:
-        X(f'{indent}\t<xr:Field>{esc_xml(str(f))}</xr:Field>')
+        X(f'{indent}\t<xr:Field>{esc_xml_text(str(f))}</xr:Field>')
     X(f'{indent}</{tag}>')
 
 def emit_based_on(indent, items):
@@ -1614,7 +1614,7 @@ def emit_based_on(indent, items):
         return
     X(f'{indent}<BasedOn>')
     for it in arr:
-        X(f'{indent}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(it)))}</xr:Item>')
+        X(f'{indent}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml_text(normalize_md_object_ref(str(it)))}</xr:Item>')
     X(f'{indent}</BasedOn>')
 
 # --- Параметры/связи выбора (порт из form-compile) ---
@@ -1752,14 +1752,14 @@ def emit_choice_parameters(indent, cp, tag='ChoiceParameters'):
                 if tx == '' or tx is None:
                     X(f'{indent}\t\t\t<v8:Value xsi:type="{xt}"/>')
                 else:
-                    X(f'{indent}\t\t\t<v8:Value xsi:type="{xt}">{esc_xml(tx)}</v8:Value>')
+                    X(f'{indent}\t\t\t<v8:Value xsi:type="{xt}">{esc_xml_text(tx)}</v8:Value>')
             X(f'{indent}\t\t</app:value>')
         else:
             xt, tx = normalize_choice_value_t(val, ptype)
             if tx == '' or tx is None:
                 X(f'{indent}\t\t<app:value xsi:type="{xt}"/>')
             else:
-                X(f'{indent}\t\t<app:value xsi:type="{xt}">{esc_xml(tx)}</app:value>')
+                X(f'{indent}\t\t<app:value xsi:type="{xt}">{esc_xml_text(tx)}</app:value>')
         X(f'{indent}\t</app:item>')
     X(f'{indent}</{tag}>')
 
@@ -1786,8 +1786,8 @@ def emit_choice_parameter_links(indent, cpl, tag='ChoiceParameterLinks'):
             else:
                 vc = str(vc_raw)
         X(f'{indent}\t<xr:Link>')
-        X(f'{indent}\t\t<xr:Name>{esc_xml(str(name))}</xr:Name>')
-        X(f'{indent}\t\t<xr:DataPath xsi:type="xs:string">{esc_xml(str(dp))}</xr:DataPath>')
+        X(f'{indent}\t\t<xr:Name>{esc_xml_text(str(name))}</xr:Name>')
+        X(f'{indent}\t\t<xr:DataPath xsi:type="xs:string">{esc_xml_text(str(dp))}</xr:DataPath>')
         X(f'{indent}\t\t<xr:ValueChange>{vc}</xr:ValueChange>')
         X(f'{indent}\t</xr:Link>')
     X(f'{indent}</{tag}>')
@@ -1863,8 +1863,8 @@ def emit_characteristics(indent, chars):
         mvo = char_int_field(values, ['multipleValuesOrderField'])
         X(f'{indent}\t<xr:Characteristic>')
         X(f'{indent}\t\t<xr:CharacteristicTypes from="{esc_xml(t_from)}">')
-        X(f'{indent}\t\t\t<xr:KeyField>{esc_xml(key)}</xr:KeyField>')
-        X(f'{indent}\t\t\t<xr:TypesFilterField>{esc_xml(tff)}</xr:TypesFilterField>')
+        X(f'{indent}\t\t\t<xr:KeyField>{esc_xml_text(key)}</xr:KeyField>')
+        X(f'{indent}\t\t\t<xr:TypesFilterField>{esc_xml_text(tff)}</xr:TypesFilterField>')
         # filterValue: None→nil; голое→xs:string, полный путь→DTR, bool→xs:boolean.
         tfv_raw = ch_el_prop(types, ['filterValue', 'typesFilterValue'])
         if tfv_raw is None:
@@ -1874,14 +1874,14 @@ def emit_characteristics(indent, chars):
             if tfv_tx == '' or tfv_tx is None:
                 X(f'{indent}\t\t\t<xr:TypesFilterValue xsi:type="{tfv_xt}"/>')
             else:
-                X(f'{indent}\t\t\t<xr:TypesFilterValue xsi:type="{tfv_xt}">{esc_xml(tfv_tx)}</xr:TypesFilterValue>')
+                X(f'{indent}\t\t\t<xr:TypesFilterValue xsi:type="{tfv_xt}">{esc_xml_text(tfv_tx)}</xr:TypesFilterValue>')
         X(f'{indent}\t\t\t<xr:DataPathField>{dpf}</xr:DataPathField>')
         X(f'{indent}\t\t\t<xr:MultipleValuesUseField>{mvu}</xr:MultipleValuesUseField>')
         X(f'{indent}\t\t</xr:CharacteristicTypes>')
         X(f'{indent}\t\t<xr:CharacteristicValues from="{esc_xml(v_from)}">')
-        X(f'{indent}\t\t\t<xr:ObjectField>{esc_xml(obj)}</xr:ObjectField>')
-        X(f'{indent}\t\t\t<xr:TypeField>{esc_xml(typ)}</xr:TypeField>')
-        X(f'{indent}\t\t\t<xr:ValueField>{esc_xml(val)}</xr:ValueField>')
+        X(f'{indent}\t\t\t<xr:ObjectField>{esc_xml_text(obj)}</xr:ObjectField>')
+        X(f'{indent}\t\t\t<xr:TypeField>{esc_xml_text(typ)}</xr:TypeField>')
+        X(f'{indent}\t\t\t<xr:ValueField>{esc_xml_text(val)}</xr:ValueField>')
         X(f'{indent}\t\t\t<xr:MultipleValuesKeyField>{mvk}</xr:MultipleValuesKeyField>')
         X(f'{indent}\t\t\t<xr:MultipleValuesOrderField>{mvo}</xr:MultipleValuesOrderField>')
         X(f'{indent}\t\t</xr:CharacteristicValues>')
@@ -1894,7 +1894,7 @@ def emit_min_max_value(indent, tag, val):
         X(f'{indent}<{tag} xsi:nil="true"/>')
         return
     t = 'xs:string' if isinstance(val, str) else 'xs:decimal'
-    X(f'{indent}<{tag} xsi:type="{t}">{esc_xml(str(val))}</{tag}>')
+    X(f'{indent}<{tag} xsi:type="{t}">{esc_xml_text(str(val))}</{tag}>')
 
 def emit_attribute(indent, parsed, context, elem_tag='Attribute'):
     # context: "catalog", "document", "object", "processor", "tabular", "processor-tabular", "register",
@@ -1911,7 +1911,7 @@ def emit_attribute(indent, parsed, context, elem_tag='Attribute'):
     uid = new_uuid()
     X(f'{indent}<{elem_tag} uuid="{uid}">')
     X(f'{indent}\t<Properties>')
-    X(f'{indent}\t\t<Name>{esc_xml(parsed["name"])}</Name>')
+    X(f'{indent}\t\t<Name>{esc_xml_text(parsed["name"])}</Name>')
     emit_mltext(f'{indent}\t\t', 'Synonym', parsed['synonym'])
     if parsed.get('comment'):
         X(f'{indent}\t\t<Comment>{esc_xml_text(parsed["comment"])}</Comment>')
@@ -1965,7 +1965,7 @@ def emit_attribute(indent, parsed, context, elem_tag='Attribute'):
     emit_choice_parameters(f'{indent}\t\t', parsed.get('choiceParameters'))
     X(f'{indent}\t\t<QuickChoice>{parsed.get("quickChoice") or "Auto"}</QuickChoice>')
     X(f'{indent}\t\t<CreateOnInput>{parsed.get("createOnInput") or "Auto"}</CreateOnInput>')
-    X(f'{indent}\t\t<ChoiceForm>{esc_xml(str(parsed["choiceForm"]))}</ChoiceForm>' if parsed.get('choiceForm') else f'{indent}\t\t<ChoiceForm/>')
+    X(f'{indent}\t\t<ChoiceForm>{esc_xml_text(str(parsed["choiceForm"]))}</ChoiceForm>' if parsed.get('choiceForm') else f'{indent}\t\t<ChoiceForm/>')
     emit_link_by_type(f'{indent}\t\t', parsed.get('linkByType'))
     chi = parsed.get('choiceHistoryOnInput') or 'Auto'
     X(f'{indent}\t\t<ChoiceHistoryOnInput>{chi}</ChoiceHistoryOnInput>')
@@ -1990,7 +1990,7 @@ def emit_attribute(indent, parsed, context, elem_tag='Attribute'):
     # Регистр расчёта: ScheduleLink у измерений и реквизитов (НЕ ресурсов), перед Indexing. Дефолт пустой.
     if context == 'register-calc' and elem_tag in ('Dimension', 'Attribute'):
         if parsed.get('scheduleLink'):
-            X(f'{indent}\t\t<ScheduleLink>{esc_xml(str(parsed["scheduleLink"]))}</ScheduleLink>')
+            X(f'{indent}\t\t<ScheduleLink>{esc_xml_text(str(parsed["scheduleLink"]))}</ScheduleLink>')
         else:
             X(f'{indent}\t\t<ScheduleLink/>')
     # Измерение/ресурс регистра бухгалтерии: Balance + AccountingFlag, затем DenyIncompleteValues (изм.) / ExtDimensionAccountingFlag (рес.).
@@ -1998,7 +1998,7 @@ def emit_attribute(indent, parsed, context, elem_tag='Attribute'):
         balance = 'true' if (parsed.get('balance') is True or 'balance' in parsed.get('flags', [])) else 'false'
         X(f'{indent}\t\t<Balance>{balance}</Balance>')
         if parsed.get('accountingFlag'):
-            X(f'{indent}\t\t<AccountingFlag>{esc_xml(str(parsed["accountingFlag"]))}</AccountingFlag>')
+            X(f'{indent}\t\t<AccountingFlag>{esc_xml_text(str(parsed["accountingFlag"]))}</AccountingFlag>')
         else:
             X(f'{indent}\t\t<AccountingFlag/>')
         if elem_tag == 'Dimension':
@@ -2006,7 +2006,7 @@ def emit_attribute(indent, parsed, context, elem_tag='Attribute'):
             X(f'{indent}\t\t<DenyIncompleteValues>{deny_incomplete}</DenyIncompleteValues>')
         else:
             if parsed.get('extDimensionAccountingFlag'):
-                X(f'{indent}\t\t<ExtDimensionAccountingFlag>{esc_xml(str(parsed["extDimensionAccountingFlag"]))}</ExtDimensionAccountingFlag>')
+                X(f'{indent}\t\t<ExtDimensionAccountingFlag>{esc_xml_text(str(parsed["extDimensionAccountingFlag"]))}</ExtDimensionAccountingFlag>')
             else:
                 X(f'{indent}\t\t<ExtDimensionAccountingFlag/>')
     if context == 'catalog':
@@ -2027,7 +2027,7 @@ def emit_attribute(indent, parsed, context, elem_tag='Attribute'):
             # Реквизит адресации задачи: AddressingDimension (между Indexing и FullTextSearch).
             if context == 'task-addressing' and elem_tag == 'AddressingAttribute':
                 if parsed.get('addressingDimension'):
-                    X(f'{indent}\t\t<AddressingDimension>{esc_xml(str(parsed["addressingDimension"]))}</AddressingDimension>')
+                    X(f'{indent}\t\t<AddressingDimension>{esc_xml_text(str(parsed["addressingDimension"]))}</AddressingDimension>')
                 else:
                     X(f'{indent}\t\t<AddressingDimension/>')
             X(f'{indent}\t\t<FullTextSearch>{parsed.get("fullTextSearch") or "Use"}</FullTextSearch>')
@@ -2074,9 +2074,9 @@ def emit_command_picture(indent, cmd):
     X(f'{indent}<Picture>')
     m = re.match(r'^abs:(.*)$', src)
     if m:
-        X(f'{indent}\t<xr:Abs>{esc_xml(m.group(1))}</xr:Abs>')
+        X(f'{indent}\t<xr:Abs>{esc_xml_text(m.group(1))}</xr:Abs>')
     else:
-        X(f'{indent}\t<xr:Ref>{esc_xml(src)}</xr:Ref>')
+        X(f'{indent}\t<xr:Ref>{esc_xml_text(src)}</xr:Ref>')
     X(f'{indent}\t<xr:LoadTransparent>{"true" if lt else "false"}</xr:LoadTransparent>')
     if tpx:
         X(f'{indent}\t<xr:TransparentPixel x="{tpx.get("x")}" y="{tpx.get("y")}"/>')
@@ -2085,7 +2085,7 @@ def emit_command_picture(indent, cmd):
 def emit_command(indent, cmd_name, cmd):
     X(f'{indent}<Command uuid="{new_uuid()}">')
     X(f'{indent}\t<Properties>')
-    X(f'{indent}\t\t<Name>{esc_xml(cmd_name)}</Name>')
+    X(f'{indent}\t\t<Name>{esc_xml_text(cmd_name)}</Name>')
     syn = cmd['synonym'] if cmd.get('synonym') is not None else split_camel_case(cmd_name)
     emit_mltext(f'{indent}\t\t', 'Synonym', syn)
     if cmd.get('comment'):
@@ -2098,7 +2098,7 @@ def emit_command(indent, cmd_name, cmd):
                          f"командного интерфейса раздела ('{group}'). Тип параметра — только для групп формы "
                          f"(FormCommandBar*/FormNavigationPanel*) или CommandGroup.<Имя>.\n")
         sys.exit(1)
-    X(f'{indent}\t\t<Group>{esc_xml(group)}</Group>')
+    X(f'{indent}\t\t<Group>{esc_xml_text(group)}</Group>')
     if cmd.get('commandParameterType'):
         X(f'{indent}\t\t<CommandParameterType>')
         emit_type_content(f'{indent}\t\t\t', str(cmd['commandParameterType']))
@@ -2111,7 +2111,7 @@ def emit_command(indent, cmd_name, cmd):
     emit_mltext(f'{indent}\t\t', 'ToolTip', cmd.get('tooltip'))
     emit_command_picture(f'{indent}\t\t', cmd)
     if cmd.get('shortcut'):
-        X(f'{indent}\t\t<Shortcut>{esc_xml(str(cmd["shortcut"]))}</Shortcut>')
+        X(f'{indent}\t\t<Shortcut>{esc_xml_text(str(cmd["shortcut"]))}</Shortcut>')
     else:
         X(f'{indent}\t\t<Shortcut/>')
     X(f'{indent}\t\t<OnMainServerUnavalableBehavior>{cmd.get("onMainServerUnavalableBehavior") or "Auto"}</OnMainServerUnavalableBehavior>')
@@ -2135,7 +2135,7 @@ def emit_tabular_section(indent, ts_name, columns, object_type, object_name, ts_
     X(f'{indent}\t</InternalInfo>')
     ts_synonym = ts_synonym_arg if ts_synonym_arg is not None else split_camel_case(ts_name)
     X(f'{indent}\t<Properties>')
-    X(f'{indent}\t\t<Name>{esc_xml(ts_name)}</Name>')
+    X(f'{indent}\t\t<Name>{esc_xml_text(ts_name)}</Name>')
     emit_mltext(f'{indent}\t\t', 'Synonym', ts_synonym)
     if ts_comment:
         X(f'{indent}\t\t<Comment>{esc_xml_text(ts_comment)}</Comment>')
@@ -2174,7 +2174,7 @@ def emit_enum_value(indent, parsed):
     uid = new_uuid()
     X(f'{indent}<EnumValue uuid="{uid}">')
     X(f'{indent}\t<Properties>')
-    X(f'{indent}\t\t<Name>{esc_xml(parsed["name"])}</Name>')
+    X(f'{indent}\t\t<Name>{esc_xml_text(parsed["name"])}</Name>')
     emit_mltext(f'{indent}\t\t', 'Synonym', parsed['synonym'])
     if parsed.get('comment'):
         X(f'{indent}\t\t<Comment>{esc_xml_text(parsed["comment"])}</Comment>')
@@ -2191,7 +2191,7 @@ def emit_dimension(indent, parsed, register_type):
     uid = new_uuid()
     X(f'{indent}<Dimension uuid="{uid}">')
     X(f'{indent}\t<Properties>')
-    X(f'{indent}\t\t<Name>{esc_xml(parsed["name"])}</Name>')
+    X(f'{indent}\t\t<Name>{esc_xml_text(parsed["name"])}</Name>')
     emit_mltext(f'{indent}\t\t', 'Synonym', parsed['synonym'])
     X(f'{indent}\t\t<Comment/>')
     type_str = parsed['type']
@@ -2227,7 +2227,7 @@ def emit_dimension(indent, parsed, register_type):
     X(f'{indent}\t\t<ChoiceParameters/>')
     X(f'{indent}\t\t<QuickChoice>Auto</QuickChoice>')
     X(f'{indent}\t\t<CreateOnInput>Auto</CreateOnInput>')
-    X(f'{indent}\t\t<ChoiceForm>{esc_xml(str(parsed["choiceForm"]))}</ChoiceForm>' if parsed.get('choiceForm') else f'{indent}\t\t<ChoiceForm/>')
+    X(f'{indent}\t\t<ChoiceForm>{esc_xml_text(str(parsed["choiceForm"]))}</ChoiceForm>' if parsed.get('choiceForm') else f'{indent}\t\t<ChoiceForm/>')
     X(f'{indent}\t\t<LinkByType/>')
     X(f'{indent}\t\t<ChoiceHistoryOnInput>Auto</ChoiceHistoryOnInput>')
     if register_type == 'InformationRegister':
@@ -2261,7 +2261,7 @@ def emit_resource(indent, parsed, register_type):
     uid = new_uuid()
     X(f'{indent}<Resource uuid="{uid}">')
     X(f'{indent}\t<Properties>')
-    X(f'{indent}\t\t<Name>{esc_xml(parsed["name"])}</Name>')
+    X(f'{indent}\t\t<Name>{esc_xml_text(parsed["name"])}</Name>')
     emit_mltext(f'{indent}\t\t', 'Synonym', parsed['synonym'])
     X(f'{indent}\t\t<Comment/>')
     type_str = parsed['type']
@@ -2301,7 +2301,7 @@ def emit_resource(indent, parsed, register_type):
     X(f'{indent}\t\t<ChoiceParameters/>')
     X(f'{indent}\t\t<QuickChoice>Auto</QuickChoice>')
     X(f'{indent}\t\t<CreateOnInput>Auto</CreateOnInput>')
-    X(f'{indent}\t\t<ChoiceForm>{esc_xml(str(parsed["choiceForm"]))}</ChoiceForm>' if parsed.get('choiceForm') else f'{indent}\t\t<ChoiceForm/>')
+    X(f'{indent}\t\t<ChoiceForm>{esc_xml_text(str(parsed["choiceForm"]))}</ChoiceForm>' if parsed.get('choiceForm') else f'{indent}\t\t<ChoiceForm/>')
     X(f'{indent}\t\t<LinkByType/>')
     X(f'{indent}\t\t<ChoiceHistoryOnInput>Auto</ChoiceHistoryOnInput>')
     if register_type == 'InformationRegister':
@@ -2319,7 +2319,7 @@ def emit_resource(indent, parsed, register_type):
 
 def emit_catalog_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2341,7 +2341,7 @@ def emit_catalog_properties(indent):
     if owners:
         X(f'{i}<Owners>')
         for owner_ref in owners:
-            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(owner_ref), "Catalog"))}</xr:Item>')
+            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml_text(normalize_md_object_ref(str(owner_ref), "Catalog"))}</xr:Item>')
         X(f'{i}</Owners>')
     else:
         X(f'{i}<Owners/>')
@@ -2416,7 +2416,7 @@ def emit_catalog_properties(indent):
 
 def emit_document_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2425,7 +2425,7 @@ def emit_document_properties(indent):
     use_std_cmd = 'true' if get_bool_prop('useStandardCommands', True) else 'false'
     X(f'{i}<UseStandardCommands>{use_std_cmd}</UseStandardCommands>')
     if defn.get('numerator'):
-        X(f'{i}<Numerator>{esc_xml(str(defn["numerator"]))}</Numerator>')
+        X(f'{i}<Numerator>{esc_xml_text(str(defn["numerator"]))}</Numerator>')
     else:
         X(f'{i}<Numerator/>')
     number_type = get_enum_prop('NumberType', 'numberType', 'String')
@@ -2481,7 +2481,7 @@ def emit_document_properties(indent):
     if reg_records:
         X(f'{i}<RegisterRecords>')
         for rr in reg_records:
-            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(rr)))}</xr:Item>')
+            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml_text(normalize_md_object_ref(str(rr)))}</xr:Item>')
         X(f'{i}</RegisterRecords>')
     else:
         X(f'{i}<RegisterRecords/>')
@@ -2509,7 +2509,7 @@ def emit_document_properties(indent):
 
 def emit_enum_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(defn["comment"])}</Comment>')
@@ -2533,7 +2533,7 @@ def emit_enum_properties(indent):
 
 def emit_constant_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2571,7 +2571,7 @@ def emit_constant_properties(indent):
     emit_choice_parameters(i, defn.get('choiceParameters'))
     X(f'{i}<QuickChoice>{get_enum_prop("QuickChoice", "quickChoice", "Auto")}</QuickChoice>')
     if defn.get('choiceForm'):
-        X(f'{i}<ChoiceForm>{esc_xml(str(defn["choiceForm"]))}</ChoiceForm>')
+        X(f'{i}<ChoiceForm>{esc_xml_text(str(defn["choiceForm"]))}</ChoiceForm>')
     else:
         X(f'{i}<ChoiceForm/>')
     emit_link_by_type(i, defn.get('linkByType'))
@@ -2583,7 +2583,7 @@ def emit_constant_properties(indent):
 
 def emit_information_register_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2626,7 +2626,7 @@ def emit_information_register_properties(indent):
 
 def emit_accumulation_register_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2655,7 +2655,7 @@ def emit_accumulation_register_properties(indent):
 
 def emit_defined_type_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2675,7 +2675,7 @@ def emit_defined_type_properties(indent):
 
 def emit_functional_option_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2684,7 +2684,7 @@ def emit_functional_option_properties(indent):
     # Location — хранилище значения опции (ссылка verbatim; location или value).
     loc = str(defn['location']) if defn.get('location') else (str(defn['value']) if defn.get('value') else '')
     if loc:
-        X(f'{i}<Location>{esc_xml(normalize_md_object_ref(loc))}</Location>')
+        X(f'{i}<Location>{esc_xml_text(normalize_md_object_ref(loc))}</Location>')
     else:
         X(f'{i}<Location/>')
     # PrivilegedGetMode — дефолт true (корпус 2864/2864).
@@ -2694,7 +2694,7 @@ def emit_functional_option_properties(indent):
     if content:
         X(f'{i}<Content>')
         for obj in content:
-            X(f'{i}\t<xr:Object>{esc_xml(normalize_md_object_ref(str(obj)))}</xr:Object>')
+            X(f'{i}\t<xr:Object>{esc_xml_text(normalize_md_object_ref(str(obj)))}</xr:Object>')
         X(f'{i}</Content>')
     else:
         X(f'{i}<Content/>')
@@ -2705,14 +2705,14 @@ def emit_md_ref_list(indent, tag, items):
     if arr:
         X(f'{indent}<{tag}>')
         for it in arr:
-            X(f'{indent}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(it)))}</xr:Item>')
+            X(f'{indent}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml_text(normalize_md_object_ref(str(it)))}</xr:Item>')
         X(f'{indent}</{tag}>')
     else:
         X(f'{indent}<{tag}/>')
 
 def emit_sequence_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2725,7 +2725,7 @@ def emit_sequence_properties(indent):
 
 def emit_filter_criterion_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2747,7 +2747,7 @@ def emit_filter_criterion_properties(indent):
     if content:
         X(f'{i}<Content>')
         for obj in content:
-            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(obj)))}</xr:Item>')
+            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml_text(normalize_md_object_ref(str(obj)))}</xr:Item>')
         X(f'{i}</Content>')
     else:
         X(f'{i}<Content/>')
@@ -2759,7 +2759,7 @@ def emit_filter_criterion_properties(indent):
 
 def emit_document_numerator_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2774,7 +2774,7 @@ def emit_document_numerator_properties(indent):
 
 def emit_settings_storage_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2787,7 +2787,7 @@ def emit_settings_storage_properties(indent):
 
 def emit_common_form_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -2817,7 +2817,7 @@ def _emit_comment(i):
 
 def emit_session_parameter_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     _emit_comment(i)
     if defn.get('valueType'):
@@ -2833,14 +2833,14 @@ def emit_session_parameter_properties(indent):
 
 def emit_functional_options_parameter_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     _emit_comment(i)
     emit_md_ref_list(i, 'Use', defn.get('use'))
 
 def emit_ws_reference_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     _emit_comment(i)
     url = str(defn['locationURL']) if defn.get('locationURL') else (str(defn['locationUrl']) if defn.get('locationUrl') else '')
@@ -2851,7 +2851,7 @@ def emit_ws_reference_properties(indent):
 
 def emit_common_picture_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     _emit_comment(i)
     X(f'{i}<AvailabilityForChoice>{"true" if get_bool_prop("availabilityForChoice", False) else "false"}</AvailabilityForChoice>')
@@ -2859,14 +2859,14 @@ def emit_common_picture_properties(indent):
 
 def emit_common_template_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     _emit_comment(i)
     X(f'{i}<TemplateType>{get_enum_prop("TemplateType", "templateType", "SpreadsheetDocument")}</TemplateType>')
 
 def emit_command_group_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     _emit_comment(i)
     X(f'{i}<Representation>{get_enum_prop("Representation", "representation", "Auto")}</Representation>')
@@ -2876,19 +2876,19 @@ def emit_command_group_properties(indent):
 
 def emit_common_command_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     _emit_comment(i)
     group = str(defn['group']) if defn.get('group') else ''
     if group:
-        X(f'{i}<Group>{esc_xml(group)}</Group>')
+        X(f'{i}<Group>{esc_xml_text(group)}</Group>')
     else:
         X(f'{i}<Group/>')
     X(f'{i}<Representation>{get_enum_prop("Representation", "representation", "Auto")}</Representation>')
     emit_mltext(i, 'ToolTip', defn.get('tooltip'))
     emit_command_picture(i, defn)
     if defn.get('shortcut'):
-        X(f'{i}<Shortcut>{esc_xml(str(defn["shortcut"]))}</Shortcut>')
+        X(f'{i}<Shortcut>{esc_xml_text(str(defn["shortcut"]))}</Shortcut>')
     else:
         X(f'{i}<Shortcut/>')
     incl_help = 'true' if get_bool_prop('includeHelpInContents', False) else 'false'
@@ -2905,7 +2905,7 @@ def emit_common_command_properties(indent):
 
 def emit_common_attribute_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     _emit_comment(i)
     vt = str(defn['valueType']) if defn.get('valueType') else 'String(0)'
@@ -2932,7 +2932,7 @@ def emit_common_attribute_properties(indent):
     X(f'{i}<QuickChoice>{get_enum_prop("QuickChoice", "quickChoice", "Auto")}</QuickChoice>')
     X(f'{i}<CreateOnInput>{get_enum_prop("CreateOnInput", "createOnInput", "Auto")}</CreateOnInput>')
     if defn.get('choiceForm'):
-        X(f'{i}<ChoiceForm>{esc_xml(str(defn["choiceForm"]))}</ChoiceForm>')
+        X(f'{i}<ChoiceForm>{esc_xml_text(str(defn["choiceForm"]))}</ChoiceForm>')
     else:
         X(f'{i}<ChoiceForm/>')
     emit_link_by_type(i, defn.get('linkByType'))
@@ -2944,11 +2944,11 @@ def emit_common_attribute_properties(indent):
             md = c if isinstance(c, str) else str(c.get('metadata', ''))
             use = 'Use' if isinstance(c, str) else (str(c['use']) if c.get('use') else 'Use')
             X(f'{i}\t<xr:Item>')
-            X(f'{i}\t\t<xr:Metadata>{esc_xml(normalize_md_object_ref(md))}</xr:Metadata>')
+            X(f'{i}\t\t<xr:Metadata>{esc_xml_text(normalize_md_object_ref(md))}</xr:Metadata>')
             X(f'{i}\t\t<xr:Use>{use}</xr:Use>')
             cs = '' if isinstance(c, str) else (str(c['conditionalSeparation']) if c.get('conditionalSeparation') else '')
             if cs:
-                X(f'{i}\t\t<xr:ConditionalSeparation>{esc_xml(cs)}</xr:ConditionalSeparation>')
+                X(f'{i}\t\t<xr:ConditionalSeparation>{esc_xml_text(cs)}</xr:ConditionalSeparation>')
             else:
                 X(f'{i}\t\t<xr:ConditionalSeparation/>')
             X(f'{i}\t</xr:Item>')
@@ -2959,11 +2959,11 @@ def emit_common_attribute_properties(indent):
     X(f'{i}<DataSeparation>{get_enum_prop("DataSeparation", "dataSeparation", "DontUse")}</DataSeparation>')
     X(f'{i}<SeparatedDataUse>{get_enum_prop("SeparatedDataUse", "separatedDataUse", "Independently")}</SeparatedDataUse>')
     dsv = str(defn['dataSeparationValue']) if defn.get('dataSeparationValue') else ''
-    X(f'{i}<DataSeparationValue>{esc_xml(dsv)}</DataSeparationValue>' if dsv else f'{i}<DataSeparationValue/>')
+    X(f'{i}<DataSeparationValue>{esc_xml_text(dsv)}</DataSeparationValue>' if dsv else f'{i}<DataSeparationValue/>')
     dsu = str(defn['dataSeparationUse']) if defn.get('dataSeparationUse') else ''
-    X(f'{i}<DataSeparationUse>{esc_xml(dsu)}</DataSeparationUse>' if dsu else f'{i}<DataSeparationUse/>')
+    X(f'{i}<DataSeparationUse>{esc_xml_text(dsu)}</DataSeparationUse>' if dsu else f'{i}<DataSeparationUse/>')
     cs2 = str(defn['conditionalSeparation']) if defn.get('conditionalSeparation') else ''
-    X(f'{i}<ConditionalSeparation>{esc_xml(cs2)}</ConditionalSeparation>' if cs2 else f'{i}<ConditionalSeparation/>')
+    X(f'{i}<ConditionalSeparation>{esc_xml_text(cs2)}</ConditionalSeparation>' if cs2 else f'{i}<ConditionalSeparation/>')
     X(f'{i}<UsersSeparation>{get_enum_prop("UsersSeparation", "usersSeparation", "DontUse")}</UsersSeparation>')
     X(f'{i}<AuthenticationSeparation>{get_enum_prop("AuthenticationSeparation", "authenticationSeparation", "DontUse")}</AuthenticationSeparation>')
     X(f'{i}<ConfigurationExtensionsSeparation>{get_enum_prop("ConfigurationExtensionsSeparation", "configurationExtensionsSeparation", "DontUse")}</ConfigurationExtensionsSeparation>')
@@ -2976,7 +2976,7 @@ def emit_sequence_dimension(indent, dim_def):
     parsed = parse_attribute_shorthand(dim_def)
     X(f'{indent}<Dimension uuid="{uid}">')
     X(f'{indent}\t<Properties>')
-    X(f'{indent}\t\t<Name>{esc_xml(parsed["name"])}</Name>')
+    X(f'{indent}\t\t<Name>{esc_xml_text(parsed["name"])}</Name>')
     emit_mltext(f'{indent}\t\t', 'Synonym', parsed['synonym'])
     if parsed.get('comment'):
         X(f'{indent}\t\t<Comment>{esc_xml_text(parsed["comment"])}</Comment>')
@@ -2997,7 +2997,7 @@ def emit_sequence_dimension(indent, dim_def):
 
 def emit_common_module_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3044,7 +3044,7 @@ def emit_common_module_properties(indent):
 
 def emit_scheduled_job_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3054,7 +3054,7 @@ def emit_scheduled_job_properties(indent):
     # Ensure CommonModule. prefix
     if method_name and not method_name.startswith('CommonModule.'):
         method_name = f'CommonModule.{method_name}'
-    X(f'{i}<MethodName>{esc_xml(method_name)}</MethodName>')
+    X(f'{i}<MethodName>{esc_xml_text(method_name)}</MethodName>')
     # Description — плоская строка (дефолт ПУСТО, не синоним — иначе роундтрип рвётся).
     description = str(defn['description']) if defn.get('description') else ''
     if description:
@@ -3062,7 +3062,7 @@ def emit_scheduled_job_properties(indent):
     else:
         X(f'{i}<Description/>')
     key = str(defn['key']) if defn.get('key') else ''
-    X(f'{i}<Key>{esc_xml(key)}</Key>')
+    X(f'{i}<Key>{esc_xml_text(key)}</Key>')
     use = 'true' if defn.get('use') is True else 'false'
     X(f'{i}<Use>{use}</Use>')
     predefined = 'true' if defn.get('predefined') is True else 'false'
@@ -3074,7 +3074,7 @@ def emit_scheduled_job_properties(indent):
 
 def emit_event_subscription_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3094,13 +3094,13 @@ def emit_event_subscription_properties(indent):
     # Ensure CommonModule. prefix
     if handler and not handler.startswith('CommonModule.'):
         handler = f'CommonModule.{handler}'
-    X(f'{i}<Handler>{esc_xml(handler)}</Handler>')
+    X(f'{i}<Handler>{esc_xml_text(handler)}</Handler>')
 
 # --- 13b. Report, DataProcessor ---
 
 def emit_report_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(defn["comment"])}</Comment>')
@@ -3125,7 +3125,7 @@ def emit_report_properties(indent):
 
 def emit_data_processor_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(defn["comment"])}</Comment>')
@@ -3144,7 +3144,7 @@ def emit_data_processor_properties(indent):
 
 def emit_exchange_plan_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3205,7 +3205,7 @@ def emit_exchange_plan_properties(indent):
 
 def emit_chart_of_characteristic_types_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3214,7 +3214,7 @@ def emit_chart_of_characteristic_types_properties(indent):
     X(f'{i}<UseStandardCommands>{"true" if get_bool_prop("useStandardCommands", True) else "false"}</UseStandardCommands>')
     X(f'{i}<IncludeHelpInContents>{"true" if get_bool_prop("includeHelpInContents", False) else "false"}</IncludeHelpInContents>')
     if defn.get('characteristicExtValues'):
-        X(f'{i}<CharacteristicExtValues>{esc_xml(str(defn["characteristicExtValues"]))}</CharacteristicExtValues>')
+        X(f'{i}<CharacteristicExtValues>{esc_xml_text(str(defn["characteristicExtValues"]))}</CharacteristicExtValues>')
     else:
         X(f'{i}<CharacteristicExtValues/>')
     vt = defn.get('valueType')
@@ -3300,7 +3300,7 @@ def emit_chart_of_characteristic_types_properties(indent):
 
 def emit_document_journal_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3314,7 +3314,7 @@ def emit_document_journal_properties(indent):
     if reg_docs:
         X(f'{i}<RegisteredDocuments>')
         for rd in reg_docs:
-            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(rd)))}</xr:Item>')
+            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml_text(normalize_md_object_ref(str(rd)))}</xr:Item>')
         X(f'{i}</RegisteredDocuments>')
     else:
         X(f'{i}<RegisteredDocuments/>')
@@ -3336,7 +3336,7 @@ def resolve_type_prefix_syn(ref):
 
 def emit_chart_of_accounts_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3348,7 +3348,7 @@ def emit_chart_of_accounts_properties(indent):
     # ExtDimensionTypes — ссылка на ПВХ видов субконто (прощающий ввод: ПланВидовХарактеристик.X → ChartOfCharacteristicTypes.X).
     ext_dim_types = resolve_type_prefix_syn(str(defn['extDimensionTypes'])) if defn.get('extDimensionTypes') else ''
     if ext_dim_types:
-        X(f'{i}<ExtDimensionTypes>{esc_xml(ext_dim_types)}</ExtDimensionTypes>')
+        X(f'{i}<ExtDimensionTypes>{esc_xml_text(ext_dim_types)}</ExtDimensionTypes>')
     else:
         X(f'{i}<ExtDimensionTypes/>')
     # Количество субконто: без ПВХ (extDimensionTypes) платформа не даёт > 0 → дефолт 0; с ПВХ — 3.
@@ -3433,7 +3433,7 @@ def emit_chart_of_accounts_properties(indent):
 
 def emit_accounting_register_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3443,7 +3443,7 @@ def emit_accounting_register_properties(indent):
     X(f'{i}<IncludeHelpInContents>{"true" if get_bool_prop("includeHelpInContents", False) else "false"}</IncludeHelpInContents>')
     chart_of_accounts = str(defn['chartOfAccounts']) if defn.get('chartOfAccounts') else ''
     if chart_of_accounts:
-        X(f'{i}<ChartOfAccounts>{esc_xml(chart_of_accounts)}</ChartOfAccounts>')
+        X(f'{i}<ChartOfAccounts>{esc_xml_text(chart_of_accounts)}</ChartOfAccounts>')
     else:
         X(f'{i}<ChartOfAccounts/>')
     correspondence = 'true' if defn.get('correspondence') is True else 'false'
@@ -3492,7 +3492,7 @@ def emit_calc_types_std_tabular(i):
 
 def emit_chart_of_calculation_types_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3535,7 +3535,7 @@ def emit_chart_of_calculation_types_properties(indent):
     if base_types:
         X(f'{i}<BaseCalculationTypes>')
         for bt in base_types:
-            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(bt))}</xr:Item>')
+            X(f'{i}\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml_text(normalize_md_object_ref(bt))}</xr:Item>')
         X(f'{i}</BaseCalculationTypes>')
     else:
         X(f'{i}<BaseCalculationTypes/>')
@@ -3560,7 +3560,7 @@ def emit_chart_of_calculation_types_properties(indent):
 
 def emit_calculation_register_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3577,22 +3577,22 @@ def emit_calculation_register_properties(indent):
     X(f'{i}<BasePeriod>{base_period}</BasePeriod>')
     schedule = str(defn['schedule']) if defn.get('schedule') else ''
     if schedule:
-        X(f'{i}<Schedule>{esc_xml(schedule)}</Schedule>')
+        X(f'{i}<Schedule>{esc_xml_text(schedule)}</Schedule>')
     else:
         X(f'{i}<Schedule/>')
     schedule_value = str(defn['scheduleValue']) if defn.get('scheduleValue') else ''
     if schedule_value:
-        X(f'{i}<ScheduleValue>{esc_xml(schedule_value)}</ScheduleValue>')
+        X(f'{i}<ScheduleValue>{esc_xml_text(schedule_value)}</ScheduleValue>')
     else:
         X(f'{i}<ScheduleValue/>')
     schedule_date = str(defn['scheduleDate']) if defn.get('scheduleDate') else ''
     if schedule_date:
-        X(f'{i}<ScheduleDate>{esc_xml(schedule_date)}</ScheduleDate>')
+        X(f'{i}<ScheduleDate>{esc_xml_text(schedule_date)}</ScheduleDate>')
     else:
         X(f'{i}<ScheduleDate/>')
     chart_of_calc_types = str(defn['chartOfCalculationTypes']) if defn.get('chartOfCalculationTypes') else ''
     if chart_of_calc_types:
-        X(f'{i}<ChartOfCalculationTypes>{esc_xml(chart_of_calc_types)}</ChartOfCalculationTypes>')
+        X(f'{i}<ChartOfCalculationTypes>{esc_xml_text(chart_of_calc_types)}</ChartOfCalculationTypes>')
     else:
         X(f'{i}<ChartOfCalculationTypes/>')
     X(f'{i}<IncludeHelpInContents>{"true" if get_bool_prop("includeHelpInContents", False) else "false"}</IncludeHelpInContents>')
@@ -3607,7 +3607,7 @@ def emit_calculation_register_properties(indent):
 
 def emit_business_process_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3646,7 +3646,7 @@ def emit_business_process_properties(indent):
     X(f'{i}<NumberPeriodicity>{get_enum_prop("NumberPeriodicity", "numberPeriodicity", "Nonperiodical")}</NumberPeriodicity>')
     task_ref = str(defn['task']) if defn.get('task') else ''
     if task_ref:
-        X(f'{i}<Task>{esc_xml(task_ref)}</Task>')
+        X(f'{i}<Task>{esc_xml_text(task_ref)}</Task>')
     else:
         X(f'{i}<Task/>')
     X(f'{i}<CreateTaskInPrivilegedMode>{"true" if get_bool_prop("createTaskInPrivilegedMode", True) else "false"}</CreateTaskInPrivilegedMode>')
@@ -3666,7 +3666,7 @@ def emit_business_process_properties(indent):
 
 def emit_task_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
     if defn.get('comment'):
         X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>')
@@ -3687,9 +3687,9 @@ def emit_task_properties(indent):
     X(f'{i}<Autonumbering>{autonumbering}</Autonumbering>')
     X(f'{i}<TaskNumberAutoPrefix>{task_number_auto_prefix}</TaskNumberAutoPrefix>')
     X(f'{i}<DescriptionLength>{description_length}</DescriptionLength>')
-    X(f'{i}<Addressing>{esc_xml(str(defn["addressing"]))}</Addressing>' if defn.get('addressing') else f'{i}<Addressing/>')
-    X(f'{i}<MainAddressingAttribute>{esc_xml(str(defn["mainAddressingAttribute"]))}</MainAddressingAttribute>' if defn.get('mainAddressingAttribute') else f'{i}<MainAddressingAttribute/>')
-    X(f'{i}<CurrentPerformer>{esc_xml(str(defn["currentPerformer"]))}</CurrentPerformer>' if defn.get('currentPerformer') else f'{i}<CurrentPerformer/>')
+    X(f'{i}<Addressing>{esc_xml_text(str(defn["addressing"]))}</Addressing>' if defn.get('addressing') else f'{i}<Addressing/>')
+    X(f'{i}<MainAddressingAttribute>{esc_xml_text(str(defn["mainAddressingAttribute"]))}</MainAddressingAttribute>' if defn.get('mainAddressingAttribute') else f'{i}<MainAddressingAttribute/>')
+    X(f'{i}<CurrentPerformer>{esc_xml_text(str(defn["currentPerformer"]))}</CurrentPerformer>' if defn.get('currentPerformer') else f'{i}<CurrentPerformer/>')
     emit_based_on(i, defn.get('basedOn'))
     emit_standard_attributes(i, 'Task')
     emit_characteristics(i, defn.get('characteristics'))
@@ -3727,11 +3727,11 @@ def emit_task_properties(indent):
 
 def emit_http_service_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
-    X(f'{i}<Comment>{esc_xml(str(defn["comment"]))}</Comment>' if defn.get('comment') else f'{i}<Comment/>')
+    X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>' if defn.get('comment') else f'{i}<Comment/>')
     root_url = str(defn['rootURL']) if defn.get('rootURL') else obj_name.lower()
-    X(f'{i}<RootURL>{esc_xml(root_url)}</RootURL>')
+    X(f'{i}<RootURL>{esc_xml_text(root_url)}</RootURL>')
     reuse_sessions = get_enum_prop('ReuseSessions', 'reuseSessions', 'DontUse')
     X(f'{i}<ReuseSessions>{reuse_sessions}</ReuseSessions>')
     session_max_age = str(defn['sessionMaxAge']) if defn.get('sessionMaxAge') is not None else '20'
@@ -3744,16 +3744,16 @@ def emit_xdto_type(indent, tag, value):
     if m:
         X(f'{indent}<{tag} xmlns:d1p1="{esc_xml(m.group(1))}">d1p1:{esc_xml(m.group(2))}</{tag}>')
     else:
-        X(f'{indent}<{tag}>{esc_xml(value)}</{tag}>')
+        X(f'{indent}<{tag}>{esc_xml_text(value)}</{tag}>')
 
 
 def emit_web_service_properties(indent):
     i = indent
-    X(f'{i}<Name>{esc_xml(obj_name)}</Name>')
+    X(f'{i}<Name>{esc_xml_text(obj_name)}</Name>')
     emit_mltext(i, 'Synonym', synonym)
-    X(f'{i}<Comment>{esc_xml(str(defn["comment"]))}</Comment>' if defn.get('comment') else f'{i}<Comment/>')
+    X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>' if defn.get('comment') else f'{i}<Comment/>')
     namespace = str(defn['namespace']) if defn.get('namespace') else ''
-    X(f'{i}<Namespace>{esc_xml(namespace)}</Namespace>')
+    X(f'{i}<Namespace>{esc_xml_text(namespace)}</Namespace>')
     # XDTOPackages — СПИСОК элементов: ссылка на пакет конфигурации (xr:MDObjectRef) либо URI
     # внешнего пространства имён (xs:string). Presentation пуст, CheckState 0 (корпус: 19/19).
     pkgs = defn.get('xdtoPackages') or []
@@ -3767,14 +3767,14 @@ def emit_web_service_properties(indent):
             X(f'{i}\t<xr:Item>')
             X(f'{i}\t\t<xr:Presentation/>')
             X(f'{i}\t\t<xr:CheckState>0</xr:CheckState>')
-            X(f'{i}\t\t<xr:Value xsi:type="{xt}">{esc_xml(pv)}</xr:Value>')
+            X(f'{i}\t\t<xr:Value xsi:type="{xt}">{esc_xml_text(pv)}</xr:Value>')
             X(f'{i}\t</xr:Item>')
         X(f'{i}</XDTOPackages>')
     else:
         X(f'{i}<XDTOPackages/>')
     # Имя файла дескриптора не выводится из имени сервиса (DMILService -> dmil.1cws) — только дефолт.
     descriptor = str(defn['descriptorFileName']) if defn.get('descriptorFileName') else f'{obj_name}.1cws'
-    X(f'{i}<DescriptorFileName>{esc_xml(descriptor)}</DescriptorFileName>')
+    X(f'{i}<DescriptorFileName>{esc_xml_text(descriptor)}</DescriptorFileName>')
     reuse_sessions = get_enum_prop('ReuseSessions', 'reuseSessions', 'DontUse')
     X(f'{i}<ReuseSessions>{reuse_sessions}</ReuseSessions>')
     session_max_age = str(defn['sessionMaxAge']) if defn.get('sessionMaxAge') is not None else '20'
@@ -3804,7 +3804,7 @@ def emit_column(indent, col_def):
             references = list(col_def['references'])
     X(f'{indent}<Column uuid="{uid}">')
     X(f'{indent}\t<Properties>')
-    X(f'{indent}\t\t<Name>{esc_xml(name)}</Name>')
+    X(f'{indent}\t\t<Name>{esc_xml_text(name)}</Name>')
     emit_mltext(f'{indent}\t\t', 'Synonym', col_synonym)
     if comment:
         X(f'{indent}\t\t<Comment>{esc_xml_text(comment)}</Comment>')
@@ -3814,7 +3814,7 @@ def emit_column(indent, col_def):
     if references:
         X(f'{indent}\t\t<References>')
         for ref in references:
-            X(f'{indent}\t\t\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(ref)))}</xr:Item>')
+            X(f'{indent}\t\t\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml_text(normalize_md_object_ref(str(ref)))}</xr:Item>')
         X(f'{indent}\t\t</References>')
     else:
         X(f'{indent}\t\t<References/>')
@@ -3840,10 +3840,10 @@ def emit_url_template(indent, tmpl_name, tmpl_def):
                 methods[k] = v   # строка (HTTP-метод) ЛИБО объект {httpMethod, handler, synonym, comment}
     X(f'{indent}<URLTemplate uuid="{uid}">')
     X(f'{indent}\t<Properties>')
-    X(f'{indent}\t\t<Name>{esc_xml(tmpl_name)}</Name>')
+    X(f'{indent}\t\t<Name>{esc_xml_text(tmpl_name)}</Name>')
     emit_mltext(f'{indent}\t\t', 'Synonym', tmpl_synonym)
-    X(f'{indent}\t\t<Comment>{esc_xml(tmpl_comment)}</Comment>' if tmpl_comment else f'{indent}\t\t<Comment/>')
-    X(f'{indent}\t\t<Template>{esc_xml(template)}</Template>')
+    X(f'{indent}\t\t<Comment>{esc_xml_text(tmpl_comment)}</Comment>' if tmpl_comment else f'{indent}\t\t<Comment/>')
+    X(f'{indent}\t\t<Template>{esc_xml_text(template)}</Template>')
     X(f'{indent}\t</Properties>')
     if methods:
         X(f'{indent}\t<ChildObjects>')
@@ -3865,11 +3865,11 @@ def emit_url_template(indent, tmpl_name, tmpl_def):
                 method_comment = str(m_def.get('comment') or '')
             X(f'{indent}\t\t<Method uuid="{method_uuid}">')
             X(f'{indent}\t\t\t<Properties>')
-            X(f'{indent}\t\t\t\t<Name>{esc_xml(method_name)}</Name>')
+            X(f'{indent}\t\t\t\t<Name>{esc_xml_text(method_name)}</Name>')
             emit_mltext(f'{indent}\t\t\t\t', 'Synonym', method_synonym)
-            X(f'{indent}\t\t\t\t<Comment>{esc_xml(method_comment)}</Comment>' if method_comment else f'{indent}\t\t\t\t<Comment/>')
+            X(f'{indent}\t\t\t\t<Comment>{esc_xml_text(method_comment)}</Comment>' if method_comment else f'{indent}\t\t\t\t<Comment/>')
             X(f'{indent}\t\t\t\t<HTTPMethod>{http_method}</HTTPMethod>')
-            X(f'{indent}\t\t\t\t<Handler>{esc_xml(handler)}</Handler>')
+            X(f'{indent}\t\t\t\t<Handler>{esc_xml_text(handler)}</Handler>')
             X(f'{indent}\t\t\t</Properties>')
             X(f'{indent}\t\t</Method>')
         X(f'{indent}\t</ChildObjects>')
@@ -3911,13 +3911,13 @@ def emit_operation(indent, op_name, op_def):
                 params[k] = v
     X(f'{indent}<Operation uuid="{uid}">')
     X(f'{indent}\t<Properties>')
-    X(f'{indent}\t\t<Name>{esc_xml(op_name)}</Name>')
+    X(f'{indent}\t\t<Name>{esc_xml_text(op_name)}</Name>')
     emit_mltext(f'{indent}\t\t', 'Synonym', op_synonym)
-    X(f'{indent}\t\t<Comment>{esc_xml(op_comment)}</Comment>' if op_comment else f'{indent}\t\t<Comment/>')
+    X(f'{indent}\t\t<Comment>{esc_xml_text(op_comment)}</Comment>' if op_comment else f'{indent}\t\t<Comment/>')
     emit_xdto_type(f'{indent}\t\t', 'XDTOReturningValueType', return_type)
     X(f'{indent}\t\t<Nillable>{nillable}</Nillable>')
     X(f'{indent}\t\t<Transactioned>{transactioned}</Transactioned>')
-    X(f'{indent}\t\t<ProcedureName>{esc_xml(handler)}</ProcedureName>')
+    X(f'{indent}\t\t<ProcedureName>{esc_xml_text(handler)}</ProcedureName>')
     X(f'{indent}\t\t<DataLockControlMode>{data_lock}</DataLockControlMode>')
     X(f'{indent}\t</Properties>')
     if params:
@@ -3945,9 +3945,9 @@ def emit_operation(indent, op_name, op_def):
                     param_comment = str(param_def['comment'])
             X(f'{indent}\t\t<Parameter uuid="{param_uuid}">')
             X(f'{indent}\t\t\t<Properties>')
-            X(f'{indent}\t\t\t\t<Name>{esc_xml(param_name)}</Name>')
+            X(f'{indent}\t\t\t\t<Name>{esc_xml_text(param_name)}</Name>')
             emit_mltext(f'{indent}\t\t\t\t', 'Synonym', param_synonym)
-            X(f'{indent}\t\t\t\t<Comment>{esc_xml(param_comment)}</Comment>' if param_comment else f'{indent}\t\t\t\t<Comment/>')
+            X(f'{indent}\t\t\t\t<Comment>{esc_xml_text(param_comment)}</Comment>' if param_comment else f'{indent}\t\t\t\t<Comment/>')
             emit_xdto_type(f'{indent}\t\t\t\t', 'XDTOValueType', param_type)
             X(f'{indent}\t\t\t\t<Nillable>{param_nillable}</Nillable>')
             X(f'{indent}\t\t\t\t<TransferDirection>{param_dir}</TransferDirection>')
@@ -4755,7 +4755,7 @@ if obj_type == 'ExchangePlan':
                  f'<ExchangePlanContent {xep_ns} version="{format_version}">\r\n']
         for it in c_items:
             parts.append('\t<Item>\r\n')
-            parts.append(f'\t\t<Metadata>{esc_xml(it["metadata"])}</Metadata>\r\n')
+            parts.append(f'\t\t<Metadata>{esc_xml_text(it["metadata"])}</Metadata>\r\n')
             parts.append(f'\t\t<AutoRecord>{it["autoRecord"]}</AutoRecord>\r\n')
             parts.append('\t</Item>\r\n')
         parts.append('</ExchangePlanContent>\r\n')
@@ -4857,7 +4857,7 @@ if os.path.isfile(config_xml_path):
             reg_result = 'already'
         else:
             eol = '\r\n' if '\r\n' in config_content else '\n'
-            entry = f'<{child_tag}>{esc_xml(obj_name)}</{child_tag}>'
+            entry = f'<{child_tag}>{esc_xml_text(obj_name)}</{child_tag}>'
 
             block = re.search(r'<ChildObjects\s*>.*?</ChildObjects>', config_content, re.S)
             if block is None:

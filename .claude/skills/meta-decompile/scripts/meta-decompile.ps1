@@ -1,4 +1,4 @@
-﻿# meta-decompile v0.61 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+﻿# meta-decompile v0.62 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Поддержаны: Catalog, ExchangePlan, ChartOfCharacteristicTypes, ChartOfAccounts, ChartOfCalculationTypes, Document,
@@ -1029,7 +1029,13 @@ if ($charsNode) {
 				filterField = Shorten-CharField (& $gt 'TypesFilterField' $ct) $tFrom
 				filterValue = if ($tfvNil -eq 'true') { $null } else { Convert-ChScalarNode $tfvNode }
 			}
-			$dpf = & $giv 'DataPathField' $ct; if ($dpf -ne -1) { $types['dataPathField'] = $dpf }
+			# DataPathField полиморфно: обычно -1, но встречается ПУТЬ к полю (8 случаев на корпус).
+			# Жёсткое [int] на нём роняло декомпиляцию всего объекта.
+			$dpfN = $ct.SelectSingleNode('xr:DataPathField', $nsm)
+			$dpfT = if ($dpfN) { $dpfN.InnerText } else { '' }
+			if ($dpfT -ne '' -and $dpfT -cne '-1') {
+				$types['dataPathField'] = if ($dpfT -match '^-?\d+$') { [int]$dpfT } else { Shorten-CharField $dpfT $tFrom }
+			}
 			$mvu = & $giv 'MultipleValuesUseField' $ct; if ($mvu -ne -1) { $types['multipleValuesUseField'] = $mvu }
 			$values = [ordered]@{
 				from = $vFrom
