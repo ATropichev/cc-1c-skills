@@ -907,7 +907,9 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         log('platform-load', true, 'skipped (no v8 context)');
         return result;
       }
-      const tplName = caseData.params?.templatePath || caseData.params?.outputPath || 'Template.xml';
+      // outputPath у кейса бывает на ВЕРХНЕМ уровне (так его читает runner.mjs) и в params.
+      // Порядок должен совпадать с раннером, иначе файл ищется не там, где навык его написал.
+      const tplName = caseData.params?.templatePath || caseData.outputPath || caseData.params?.outputPath || 'Template.xml';
       const tplPath = join(workDir, tplName);
       if (!existsSync(tplPath)) {
         result.errors.push(`Output not produced at ${tplPath}`);
@@ -944,7 +946,8 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
     }
 
     if (MXL_PLATFORM_VERIFY.has(skillName)) {
-      const tplName = caseData.params?.outputPath || 'Template.xml';
+      // См. выше: top-level outputPath имеет приоритет — так же, как в runner.mjs.
+      const tplName = caseData.outputPath || caseData.params?.outputPath || 'Template.xml';
       const tplPath = join(workDir, tplName);
       if (!existsSync(tplPath)) {
         result.errors.push(`Output not produced at ${tplPath}`);
