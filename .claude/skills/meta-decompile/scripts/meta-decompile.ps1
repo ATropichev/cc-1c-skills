@@ -1,4 +1,4 @@
-﻿# meta-decompile v0.59 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+﻿# meta-decompile v0.60 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Поддержаны: Catalog, ExchangePlan, ChartOfCharacteristicTypes, ChartOfAccounts, ChartOfCalculationTypes, Document,
@@ -435,7 +435,9 @@ $cmt = P 'Comment'; if ($cmt) { $dsl['comment'] = $cmt }
 
 # Свойства Catalog (omit-on-default). Порядок ключей — как удобно DSL.
 function Add-BoolProp { param([string]$key, [string]$tag, [bool]$default) $v = P $tag; if ($null -ne $v) { $b = ($v -eq 'true'); if ($b -ne $default) { $dsl[$key] = $b } } }
-function Add-EnumProp { param([string]$key, [string]$tag, [string]$default) $v = P $tag; if ($null -ne $v -and $v -ne '' -and $v -ne $default) { $dsl[$key] = $v } }
+# -cne: сравнение с дефолтом ВСЕГДА регистрочувствительное. PS -ne регистронезависим, и значение,
+# отличающееся от дефолта только регистром, молча терялось (ловилось трижды: синонимы, RootURL).
+function Add-EnumProp { param([string]$key, [string]$tag, [string]$default) $v = P $tag; if ($null -ne $v -and $v -ne '' -and $v -cne $default) { $dsl[$key] = $v } }
 function Add-IntProp  { param([string]$key, [string]$tag, [int]$default) $v = P $tag; if ($null -ne $v -and $v -ne '') { $iv = [int]$v; if ($iv -ne $default) { $dsl[$key] = $iv } } }
 
 Add-BoolProp 'hierarchical'   'Hierarchical'   $false
@@ -719,7 +721,7 @@ if ($objType -eq 'CommonForm') {
 	if ($upNode) {
 		$ups = @($upNode.SelectNodes('v8:Value', $nsm) | ForEach-Object { $_.InnerText })
 		$def2 = @('PlatformApplication', 'MobilePlatformApplication')
-		$same = ($ups.Count -eq $def2.Count); if ($same) { for ($k=0; $k -lt $ups.Count; $k++) { if ($ups[$k] -ne $def2[$k]) { $same=$false; break } } }
+		$same = ($ups.Count -eq $def2.Count); if ($same) { for ($k=0; $k -lt $ups.Count; $k++) { if ($ups[$k] -cne $def2[$k]) { $same=$false; break } } }
 		if (-not $same -and $ups.Count -gt 0) { $dsl['usePurposes'] = [System.Collections.ArrayList]@($ups) }
 	}
 	$ep = Get-MLValue ($props.SelectSingleNode('md:ExtendedPresentation', $nsm)); if ($null -ne $ep) { $dsl['extendedPresentation'] = $ep }
@@ -955,7 +957,7 @@ if ($ibNode) {
 	if ($cl -gt 0) { $ibDef += "StandardAttribute.Code" }
 	$ibShort = @($ibActual | ForEach-Object { Short-Field $_ })
 	$same = ($ibShort.Count -eq $ibDef.Count)
-	if ($same) { for ($k = 0; $k -lt $ibShort.Count; $k++) { if ($ibShort[$k] -ne $ibDef[$k]) { $same = $false; break } } }
+	if ($same) { for ($k = 0; $k -lt $ibShort.Count; $k++) { if ($ibShort[$k] -cne $ibDef[$k]) { $same = $false; break } } }
 	if (-not $same) { $dsl['inputByString'] = [System.Collections.ArrayList]@($ibShort) }
 }
 
@@ -1241,7 +1243,7 @@ if ($childObjs) {
 					$handlerVal = if ($mHandler) { $mHandler.InnerText } else { '' }
 					$synDefault = ($null -eq $mSyn) -or ("$mSyn" -ceq (Split-CamelWords $mName))
 					$cmtEmpty = (-not $mCmt) -or (-not $mCmt.InnerText)
-					if ($handlerVal -eq "$tName$mName" -and $synDefault -and $cmtEmpty) {
+					if ($handlerVal -ceq "$tName$mName" -and $synDefault -and $cmtEmpty) {
 						$methods[$mName] = $httpVal
 					} else {
 						$mo = [ordered]@{ httpMethod = $httpVal }
