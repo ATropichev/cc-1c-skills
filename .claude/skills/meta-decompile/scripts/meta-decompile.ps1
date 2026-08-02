@@ -1,4 +1,4 @@
-﻿# meta-decompile v0.60 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+﻿# meta-decompile v0.61 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Поддержаны: Catalog, ExchangePlan, ChartOfCharacteristicTypes, ChartOfAccounts, ChartOfCalculationTypes, Document,
@@ -1513,7 +1513,12 @@ if (Test-Path -LiteralPath $predefPath) {
 
 		# Компактная строка для плоских: без узла Type (Catalog) ИЛИ с непустым типом → "(Код) Имя [Наим]: Тип".
 		# Пустой <Type/> в короткую не влезает (нужен явный маркер) → object-форма с type:''.
-		if (-not $isFolder -and $kids.Count -eq 0 -and ($null -eq $typeStr -or $typeStr -ne '')) {
+		# Сокращение неоднозначно, если значение содержит собственные разделители грамматики
+		# "(Код) Имя [Наим]: Тип": ')' или ':' в коде, пробел/скобка/':' в имени, скобки в наименовании.
+		# Компилятор разбирает код как [^)]*, а имя как \S+ — на "114 (108)" разбор рассыпается,
+		# и элемент терял и имя, и код (6 элементов в БП и столько же в ERP).
+		$ambiguous = ($code -match '[):]') -or ($name -match '[\s:\[\]()]') -or ($desc -match '[\[\]]')
+		if (-not $isFolder -and $kids.Count -eq 0 -and ($null -eq $typeStr -or $typeStr -ne '') -and -not $ambiguous) {
 			$s = if ($code) { "($code) $name" } else { $name }
 			if ($desc -eq '') { $s = "$s []" }
 			elseif ($desc -cne $auto) { $s = "$s [$desc]" }

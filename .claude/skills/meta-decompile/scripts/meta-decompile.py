@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-decompile v0.60 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+# meta-decompile v0.61 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Зеркало meta-decompile.ps1 (КАНОН). Структура 1:1 — те же имена функций, порядок, комментарии.
@@ -717,7 +717,11 @@ def predef_item_to_dsl(item_el):
     auto = split_camel_words(name)
 
     # Компактная строка для плоских: без узла Type (Catalog) ИЛИ с непустым типом → "(Код) Имя [Наим]: Тип".
-    if (not is_folder) and len(kids) == 0 and (type_str is None or type_str != ''):
+    # Сокращение неоднозначно, если значение содержит собственные разделители грамматики:
+    # ')' или ':' в коде, пробел/скобка/':' в имени, скобки в наименовании. Компилятор читает код
+    # как [^)]*, а имя как \S+ — на "114 (108)" разбор рассыпается и элемент терял имя и код.
+    ambiguous = bool(re.search(r'[):]', code or '')) or bool(re.search(r'[\s:\[\]()]', name or ''))         or bool(re.search(r'[\[\]]', desc or ''))
+    if (not is_folder) and len(kids) == 0 and (type_str is None or type_str != '') and not ambiguous:
         s = ("(%s) %s" % (code, name)) if code else name
         if desc == '':
             s = s + " []"
