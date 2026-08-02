@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.72 — Compile 1C metadata object from JSON
+# meta-compile v1.73 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -3832,7 +3832,7 @@ def emit_url_template(indent, tmpl_name, tmpl_def):
     else:
         template = str(tmpl_def['template']) if tmpl_def.get('template') else f'/{tmpl_name.lower()}'
         if tmpl_def.get('synonym'):
-            tmpl_synonym = str(tmpl_def['synonym'])
+            tmpl_synonym = tmpl_def['synonym']   # объект {ru,en} НЕ приводить к строке
         if tmpl_def.get('comment'):
             tmpl_comment = str(tmpl_def['comment'])
         if tmpl_def.get('methods'):
@@ -3861,7 +3861,7 @@ def emit_url_template(indent, tmpl_name, tmpl_def):
             else:
                 http_method = str(m_def.get('httpMethod') or 'GET')
                 handler = str(m_def.get('handler') or f'{tmpl_name}{method_name}')
-                method_synonym = str(m_def['synonym']) if m_def.get('synonym') else split_camel_case(method_name)
+                method_synonym = m_def['synonym'] if m_def.get('synonym') else split_camel_case(method_name)
                 method_comment = str(m_def.get('comment') or '')
             X(f'{indent}\t\t<Method uuid="{method_uuid}">')
             X(f'{indent}\t\t\t<Properties>')
@@ -3901,7 +3901,7 @@ def emit_operation(indent, op_name, op_def):
         if op_def.get('procedureName'):
             handler = str(op_def['procedureName'])
         if op_def.get('synonym'):
-            op_synonym = str(op_def['synonym'])
+            op_synonym = op_def['synonym']
         if op_def.get('comment'):
             op_comment = str(op_def['comment'])
         if op_def.get('dataLockControlMode'):
@@ -3940,7 +3940,7 @@ def emit_operation(indent, op_name, op_def):
                 if param_def.get('direction'):
                     param_dir = str(param_def['direction'])
                 if param_def.get('synonym'):
-                    param_synonym = str(param_def['synonym'])
+                    param_synonym = param_def['synonym']
                 if param_def.get('comment'):
                     param_comment = str(param_def['comment'])
             X(f'{indent}\t\t<Parameter uuid="{param_uuid}">')

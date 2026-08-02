@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-decompile v0.58 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+# meta-decompile v0.59 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Зеркало meta-decompile.ps1 (КАНОН). Структура 1:1 — те же имена функций, порядок, комментарии.
@@ -1234,6 +1234,8 @@ def build_dsl():
     # HTTPService — корневой URL, повторное использование сеансов, время жизни сеанса.
     if obj_type == 'HTTPService':
         ru = P('RootURL')
+        # Сравнение регистрочувствительное: реальный RootURL часто отличается от дефолта
+        # только регистром (MobileAppReceiptScanner).
         if ru and ru != obj_name.lower():
             dsl['rootURL'] = ru
         add_enum_prop('reuseSessions', 'ReuseSessions', 'DontUse')

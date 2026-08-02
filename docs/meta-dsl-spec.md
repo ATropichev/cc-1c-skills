@@ -1462,9 +1462,14 @@ ChildObjects и модулей.
 | Поле JSON | Умолчание | XML элемент |
 |-----------|----------|-------------|
 | `rootURL` | = имя (lowercase) | RootURL |
-| `reuseSessions` | `DontUse` | ReuseSessions |
+| `reuseSessions` | `DontUse` | ReuseSessions (`DontUse` / `Use` / `AutoUse`) |
 | `sessionMaxAge` | `20` | SessionMaxAge |
 | `urlTemplates` | `{}` | → URLTemplate в ChildObjects (§16) |
+
+Шаблон: строкой — только путь; объектом — `template`, `synonym`, `comment`, `methods`.
+Метод: строкой — только HTTP-метод; объектом — `httpMethod`, `handler`, `synonym`, `comment`.
+Обработчик по умолчанию `<ИмяШаблона><ИмяМетода>`; в типовых конфигурациях он обычно
+произвольный, тогда задают `handler` явно.
 
 Модули: `Ext/Module.bsl` (пустой).
 
@@ -1472,7 +1477,9 @@ ChildObjects и модулей.
 {
   "type": "HTTPService", "name": "API", "rootURL": "api",
   "urlTemplates": {
-    "Users": { "template": "/v1/users", "methods": { "Get": "GET", "Create": "POST" } }
+    "Users": { "template": "/v1/users", "methods": { "Get": "GET", "Create": "POST" } },
+    "rpc": { "template": "/rpc", "methods": {
+      "post": { "httpMethod": "POST", "handler": "УдаленныйВызовЧерезТелоЗапроса" } } }
   }
 }
 ```
@@ -1482,21 +1489,37 @@ ChildObjects и модулей.
 | Поле JSON | Умолчание | XML элемент |
 |-----------|----------|-------------|
 | `namespace` | `""` | Namespace |
-| `xdtoPackages` | `""` | XDTOPackages |
-| `reuseSessions` | `DontUse` | ReuseSessions |
+| `xdtoPackages` | `[]` | XDTOPackages (список, см. ниже) |
+| `descriptorFileName` | `<Имя>.1cws` | DescriptorFileName |
+| `reuseSessions` | `DontUse` | ReuseSessions (`DontUse` / `Use` / `AutoUse`) |
 | `sessionMaxAge` | `20` | SessionMaxAge |
 | `operations` | `{}` | → Operation в ChildObjects (§17) |
+
+`xdtoPackages` — массив: значение `XDTOPackage.Имя` даёт ссылку на пакет конфигурации,
+любое другое трактуется как URI внешнего пространства имён.
+
+Операция: `returnType`, `nillable`, `transactioned`, `procedureName` (синоним ключа — `handler`),
+`dataLockControlMode` (умолчание `Managed`), `synonym`, `comment`, `parameters`.
+Параметр: `type`, `nillable`, `direction`, `synonym`, `comment`; строкой — только тип.
+
+Тип из собственного пространства имён задаётся нотацией Кларка `{uri}ИмяТипа` — компилятор
+объявит локальный `xmlns` в теге, как это делает платформа.
 
 Модули: `Ext/Module.bsl` (пустой).
 
 ```json
 {
   "type": "WebService", "name": "DataExchange", "namespace": "http://www.1c.ru/DataExchange",
+  "xdtoPackages": ["XDTOPackage.ОбменДанными", "http://v8.1c.ru/8.3/data/ext"],
   "operations": {
     "TestConnection": {
       "returnType": "xs:boolean",
       "handler": "ПроверкаПодключения",
       "parameters": { "ErrorMessage": { "type": "xs:string", "direction": "Out" } }
+    },
+    "Exchange": {
+      "returnType": "{http://www.1c.ru/DataExchange}Message",
+      "parameters": { "Data": { "type": "{http://www.1c.ru/DataExchange}Message", "nillable": false } }
     }
   }
 }

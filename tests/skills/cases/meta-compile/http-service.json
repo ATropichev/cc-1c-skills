@@ -19,7 +19,8 @@
         "template": "/rpc",
         "comment": "Удалённый вызов",
         "methods": {
-          "post": { "httpMethod": "POST", "handler": "ВызовЧерезТелоЗапроса", "synonym": "Post" }
+          "post": { "httpMethod": "POST", "handler": "ВызовЧерезТелоЗапроса",
+                    "synonym": { "ru": "Отправить", "en": "Post" } }
         }
       }
     }

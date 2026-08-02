@@ -1,4 +1,4 @@
-﻿# meta-decompile v0.58 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+﻿# meta-decompile v0.59 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Поддержаны: Catalog, ExchangePlan, ChartOfCharacteristicTypes, ChartOfAccounts, ChartOfCalculationTypes, Document,
@@ -812,7 +812,9 @@ if ($objType -eq 'WebService') {
 # HTTPService — корневой URL, повторное использование сеансов, время жизни сеанса.
 # Шаблоны URL с методами разбираются в блоке ChildObjects.
 if ($objType -eq 'HTTPService') {
-	$ru = P 'RootURL'; if ($ru -and $ru -ne $objName.ToLower()) { $dsl['rootURL'] = $ru }
+	# -cne: дефолт — имя в нижнем регистре, но реальный RootURL часто отличается ТОЛЬКО регистром
+	# (MobileAppReceiptScanner), и регистронезависимое сравнение считало его дефолтным.
+	$ru = P 'RootURL'; if ($ru -and $ru -cne $objName.ToLower()) { $dsl['rootURL'] = $ru }
 	Add-EnumProp 'reuseSessions' 'ReuseSessions' 'DontUse'
 	Add-IntProp  'sessionMaxAge' 'SessionMaxAge' 20
 }

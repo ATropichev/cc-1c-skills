@@ -1,4 +1,4 @@
-﻿# meta-compile v1.72 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.73 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -3922,7 +3922,7 @@ function Emit-URLTemplate {
 		$template = "$tmplDef"
 	} else {
 		$template = if ($tmplDef.template) { "$($tmplDef.template)" } else { "/$($tmplName.ToLower())" }
-		if ($tmplDef.synonym) { $tmplSynonym = "$($tmplDef.synonym)" }
+		if ($tmplDef.synonym) { $tmplSynonym = $tmplDef.synonym }   # объект {ru,en} НЕ интерполировать
 		if ($tmplDef.comment) { $tmplComment = "$($tmplDef.comment)" }
 		if ($tmplDef.methods) {
 			$tmplDef.methods.PSObject.Properties | ForEach-Object {
@@ -3953,7 +3953,7 @@ function Emit-URLTemplate {
 			} else {
 				$httpMethod = if ($mDef.httpMethod) { "$($mDef.httpMethod)" } else { 'GET' }
 				$handler = if ($mDef.handler) { "$($mDef.handler)" } else { "${tmplName}${methodName}" }
-				$methodSynonym = if ($mDef.synonym) { "$($mDef.synonym)" } else { Split-CamelCase $methodName }
+				$methodSynonym = if ($mDef.synonym) { $mDef.synonym } else { Split-CamelCase $methodName }
 				$methodComment = if ($mDef.comment) { "$($mDef.comment)" } else { "" }
 			}
 
@@ -3997,7 +3997,7 @@ function Emit-Operation {
 		if ($opDef.transactioned -eq $true) { $transactioned = "true" }
 		if ($opDef.handler) { $handler = "$($opDef.handler)" }
 		if ($opDef.procedureName) { $handler = "$($opDef.procedureName)" }
-		if ($opDef.synonym) { $opSynonym = "$($opDef.synonym)" }
+		if ($opDef.synonym) { $opSynonym = $opDef.synonym }
 		if ($opDef.comment) { $opComment = "$($opDef.comment)" }
 		if ($opDef.dataLockControlMode) { $dataLock = "$($opDef.dataLockControlMode)" }
 		if ($opDef.parameters) {
@@ -4036,7 +4036,7 @@ function Emit-Operation {
 				if ($paramDef.type) { $paramType = "$($paramDef.type)" }
 				if ($paramDef.nillable -eq $false) { $paramNillable = "false" }
 				if ($paramDef.direction) { $paramDir = "$($paramDef.direction)" }
-				if ($paramDef.synonym) { $paramSynonym = "$($paramDef.synonym)" }
+				if ($paramDef.synonym) { $paramSynonym = $paramDef.synonym }
 				if ($paramDef.comment) { $paramComment = "$($paramDef.comment)" }
 			}
 
