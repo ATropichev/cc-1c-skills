@@ -1,4 +1,4 @@
-# form-edit v1.5 — Edit 1C managed form elements (Python port)
+# form-edit v1.6 — Edit 1C managed form elements (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -226,7 +226,9 @@ def local_name(node):
 # ── helpers ──────────────────────────────────────────────────
 
 def esc_xml(s):
-    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
+    (92142 сырых кавычки на корпус, ни одной &quot;); &quot; она принимает, но нормализует обратно."""
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
 # ── 1. Load Form.xml ────────────────────────────────────────

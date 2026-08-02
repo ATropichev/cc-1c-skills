@@ -1,4 +1,4 @@
-﻿# subsystem-edit v1.7 — Edit existing 1C subsystem XML
+﻿# subsystem-edit v1.8 — Edit existing 1C subsystem XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$SubsystemPath,
@@ -303,7 +303,9 @@ Info "Subsystem: $($script:objName)"
 
 # --- XML manipulation helpers (from meta-edit pattern) ---
 function Esc-Xml([string]$s) {
-	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;').Replace('"','&quot;')
+	# Экранирование ТЕКСТА элемента: только & < > . Кавычки в тексте платформа НЕ экранирует —
+	# пишет литерально (92142 сырых кавычки на корпус, ни одной &quot;).
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;')
 }
 
 function New-Guid-String {

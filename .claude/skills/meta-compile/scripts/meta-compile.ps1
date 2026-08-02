@@ -1,4 +1,4 @@
-﻿# meta-compile v1.74 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.75 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1785,7 +1785,10 @@ function Emit-Characteristics {
 			if ([string]::IsNullOrEmpty($tfvN.Text)) { X "$indent`t`t`t<xr:TypesFilterValue xsi:type=`"$($tfvN.XsiType)`"/>" }
 			else { X "$indent`t`t`t<xr:TypesFilterValue xsi:type=`"$($tfvN.XsiType)`">$(Esc-XmlText $tfvN.Text)</xr:TypesFilterValue>" }
 		}
-		X "$indent`t`t`t<xr:DataPathField>$(Esc-XmlText (Expand-CharField "$dpf" $tFrom))</xr:DataPathField>"
+		# Числовое значение (обычно -1 или 0) — как есть; разворачивать через Expand-CharField нельзя,
+		# оно примет "0" за короткое имя поля и выдаст "<from>.Attribute.0".
+		$dpfOut = if ("$dpf" -match '^-?\d+$') { "$dpf" } else { Esc-XmlText (Expand-CharField "$dpf" $tFrom) }
+		X "$indent`t`t`t<xr:DataPathField>$dpfOut</xr:DataPathField>"
 		X "$indent`t`t`t<xr:MultipleValuesUseField>$mvu</xr:MultipleValuesUseField>"
 		X "$indent`t`t</xr:CharacteristicTypes>"
 		X "$indent`t`t<xr:CharacteristicValues from=`"$(Esc-Xml $vFrom)`">"

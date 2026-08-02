@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mxl-compile v1.4 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.5 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -188,7 +188,9 @@ def assert_edit_allowed(target_path, require):
 
 
 def esc_xml(s):
-    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
+    (92142 сырых кавычки на корпус, ни одной &quot;); &quot; она принимает, но нормализует обратно."""
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
 def write_utf8_bom(path, content):

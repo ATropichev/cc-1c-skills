@@ -1,4 +1,4 @@
-﻿# meta-edit v1.23 — Edit existing 1C metadata object XML
+﻿# meta-edit v1.24 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -601,7 +601,7 @@ function Build-MLTextXml {
 		"$indent<$tag>"
 		"$indent`t<v8:item>"
 		"$indent`t`t<v8:lang>ru</v8:lang>"
-		"$indent`t`t<v8:content>$(Esc-Xml $text)</v8:content>"
+		"$indent`t`t<v8:content>$(Esc-XmlText $text)</v8:content>"
 		"$indent`t</v8:item>"
 		"$indent</$tag>"
 	)
@@ -941,7 +941,7 @@ function Build-AttributeFragment {
 
 	$sb.AppendLine("$indent<Attribute uuid=`"$uuid`">") | Out-Null
 	$sb.AppendLine("$indent`t<Properties>") | Out-Null
-	$sb.AppendLine("$indent`t`t<Name>$(Esc-Xml $parsed.name)</Name>") | Out-Null
+	$sb.AppendLine("$indent`t`t<Name>$(Esc-XmlText $parsed.name)</Name>") | Out-Null
 	$sb.AppendLine($(Build-MLTextXml "$indent`t`t" "Synonym" $parsed.synonym)) | Out-Null
 	$sb.AppendLine("$indent`t`t<Comment/>") | Out-Null
 
@@ -1038,7 +1038,7 @@ function Build-TabularSectionFragment {
 
 	# Properties
 	$sb.AppendLine("$indent`t<Properties>") | Out-Null
-	$sb.AppendLine("$indent`t`t<Name>$(Esc-Xml $tsName)</Name>") | Out-Null
+	$sb.AppendLine("$indent`t`t<Name>$(Esc-XmlText $tsName)</Name>") | Out-Null
 	$sb.AppendLine($(Build-MLTextXml "$indent`t`t" "Synonym" $tsSynonym)) | Out-Null
 	$sb.AppendLine("$indent`t`t<Comment/>") | Out-Null
 	$sb.AppendLine("$indent`t`t<ToolTip/>") | Out-Null
@@ -1112,7 +1112,7 @@ function Build-DimensionFragment {
 
 	$sb.AppendLine("$indent<Dimension uuid=`"$uuid`">") | Out-Null
 	$sb.AppendLine("$indent`t<Properties>") | Out-Null
-	$sb.AppendLine("$indent`t`t<Name>$(Esc-Xml $parsed.name)</Name>") | Out-Null
+	$sb.AppendLine("$indent`t`t<Name>$(Esc-XmlText $parsed.name)</Name>") | Out-Null
 	$sb.AppendLine($(Build-MLTextXml "$indent`t`t" "Synonym" $parsed.synonym)) | Out-Null
 	$sb.AppendLine("$indent`t`t<Comment/>") | Out-Null
 
@@ -1203,7 +1203,7 @@ function Build-ResourceFragment {
 
 	$sb.AppendLine("$indent<Resource uuid=`"$uuid`">") | Out-Null
 	$sb.AppendLine("$indent`t<Properties>") | Out-Null
-	$sb.AppendLine("$indent`t`t<Name>$(Esc-Xml $parsed.name)</Name>") | Out-Null
+	$sb.AppendLine("$indent`t`t<Name>$(Esc-XmlText $parsed.name)</Name>") | Out-Null
 	$sb.AppendLine($(Build-MLTextXml "$indent`t`t" "Synonym" $parsed.synonym)) | Out-Null
 	$sb.AppendLine("$indent`t`t<Comment/>") | Out-Null
 
@@ -1276,7 +1276,7 @@ function Build-EnumValueFragment {
 	$sb = New-Object System.Text.StringBuilder
 	$sb.AppendLine("$indent<EnumValue uuid=`"$uuid`">") | Out-Null
 	$sb.AppendLine("$indent`t<Properties>") | Out-Null
-	$sb.AppendLine("$indent`t`t<Name>$(Esc-Xml $parsed.name)</Name>") | Out-Null
+	$sb.AppendLine("$indent`t`t<Name>$(Esc-XmlText $parsed.name)</Name>") | Out-Null
 	$sb.AppendLine($(Build-MLTextXml "$indent`t`t" "Synonym" $parsed.synonym)) | Out-Null
 	$sb.AppendLine("$indent`t`t<Comment/>") | Out-Null
 	$sb.AppendLine("$indent`t</Properties>") | Out-Null
@@ -1306,14 +1306,14 @@ function Build-ColumnFragment {
 	$sb = New-Object System.Text.StringBuilder
 	$sb.AppendLine("$indent<Column uuid=`"$uuid`">") | Out-Null
 	$sb.AppendLine("$indent`t<Properties>") | Out-Null
-	$sb.AppendLine("$indent`t`t<Name>$(Esc-Xml $name)</Name>") | Out-Null
+	$sb.AppendLine("$indent`t`t<Name>$(Esc-XmlText $name)</Name>") | Out-Null
 	$sb.AppendLine($(Build-MLTextXml "$indent`t`t" "Synonym" $synonym)) | Out-Null
 	$sb.AppendLine("$indent`t`t<Comment/>") | Out-Null
 	$sb.AppendLine("$indent`t`t<Indexing>$indexing</Indexing>") | Out-Null
 	if ($references.Count -gt 0) {
 		$sb.AppendLine("$indent`t`t<References>") | Out-Null
 		foreach ($ref in $references) {
-			$sb.AppendLine("$indent`t`t`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml (Normalize-MDObjectRef "$ref"))</xr:Item>") | Out-Null
+			$sb.AppendLine("$indent`t`t`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-XmlText (Normalize-MDObjectRef "$ref"))</xr:Item>") | Out-Null
 		}
 		$sb.AppendLine("$indent`t`t</References>") | Out-Null
 	} else {
@@ -1332,7 +1332,7 @@ function Build-SimpleChildFragment {
 	$sb = New-Object System.Text.StringBuilder
 	$sb.AppendLine("$indent<$tagName uuid=`"$uuid`">") | Out-Null
 	$sb.AppendLine("$indent`t<Properties>") | Out-Null
-	$sb.AppendLine("$indent`t`t<Name>$(Esc-Xml $name)</Name>") | Out-Null
+	$sb.AppendLine("$indent`t`t<Name>$(Esc-XmlText $name)</Name>") | Out-Null
 	$sb.AppendLine($(Build-MLTextXml "$indent`t`t" "Synonym" $synonym)) | Out-Null
 	$sb.AppendLine("$indent`t`t<Comment/>") | Out-Null
 	# Forms get additional properties
@@ -2316,7 +2316,7 @@ function Modify-ChildElements($modifyDef, [string]$childType) {
 					}
 				}
 				"ChoiceForm" {
-					if (Set-AttrPropertyElement $propsEl "ChoiceForm" "<ChoiceForm>$(Esc-Xml "$changeValue")</ChoiceForm>") {
+					if (Set-AttrPropertyElement $propsEl "ChoiceForm" "<ChoiceForm>$(Esc-XmlText "$changeValue")</ChoiceForm>") {
 						Info "Set $xmlTag '$elemName'.ChoiceForm"; $script:modifyCount++
 					}
 				}
@@ -2380,7 +2380,7 @@ function Modify-ChildElements($modifyDef, [string]$childType) {
 						} else {
 							$valueStr = Normalize-EnumValue $changeProp $valueStr
 						}
-						$newNodes = Import-Fragment "<$changeProp>$(Esc-Xml $valueStr)</$changeProp>"
+						$newNodes = Import-Fragment "<$changeProp>$(Esc-XmlText $valueStr)</$changeProp>"
 						if ($newNodes.Count -gt 0) {
 							Insert-PropertyInOrder $propsEl $newNodes[0] $script:attrPropOrder $changeProp
 							Info "Created $xmlTag '$elemName'.$changeProp = $valueStr"
@@ -2559,7 +2559,7 @@ function Set-AttrPropertyElement($propsEl, $propName, $fragmentXml) {
 function Build-MinMaxValueXml([string]$tag, $val) {
 	if ($null -eq $val -or "$val" -eq '') { return "<$tag xsi:nil=`"true`"/>" }
 	$t = if ($val -is [string]) { 'xs:string' } else { 'xs:decimal' }
-	return "<$tag xsi:type=`"$t`">$(Esc-Xml "$val")</$tag>"
+	return "<$tag xsi:type=`"$t`">$(Esc-XmlText "$val")</$tag>"
 }
 
 # --- Порт из meta-compile: развёртка путей данных + связи выбора / тип по ссылке (structural modify) ---
@@ -2624,7 +2624,7 @@ function Build-LinkByTypeXml([string]$indent, $spec) {
 	$dp = Expand-DataPath $dp
 	$lines = @(
 		"$indent<LinkByType>"
-		"$indent`t<xr:DataPath>$(Esc-Xml "$dp")</xr:DataPath>"
+		"$indent`t<xr:DataPath>$(Esc-XmlText "$dp")</xr:DataPath>"
 		"$indent`t<xr:LinkItem>$li</xr:LinkItem>"
 		"$indent</LinkByType>"
 	)
@@ -2650,8 +2650,8 @@ function Build-ChoiceParameterLinksXml([string]$indent, $cpl) {
 			}
 		}
 		$sb.Append("`r`n$indent`t<xr:Link>") | Out-Null
-		$sb.Append("`r`n$indent`t`t<xr:Name>$(Esc-Xml "$name")</xr:Name>") | Out-Null
-		$sb.Append("`r`n$indent`t`t<xr:DataPath xsi:type=`"xs:string`">$(Esc-Xml "$dp")</xr:DataPath>") | Out-Null
+		$sb.Append("`r`n$indent`t`t<xr:Name>$(Esc-XmlText "$name")</xr:Name>") | Out-Null
+		$sb.Append("`r`n$indent`t`t<xr:DataPath xsi:type=`"xs:string`">$(Esc-XmlText "$dp")</xr:DataPath>") | Out-Null
 		$sb.Append("`r`n$indent`t`t<xr:ValueChange>$vc</xr:ValueChange>") | Out-Null
 		$sb.Append("`r`n$indent`t</xr:Link>") | Out-Null
 	}
@@ -2792,13 +2792,13 @@ function Build-ChoiceParametersXml([string]$indent, $cp) {
 			foreach ($v in $val) {
 				$norm = Normalize-ChoiceValueT $v $ptype
 				if ([string]::IsNullOrEmpty($norm.Text)) { $sb.Append("`r`n$indent`t`t`t<v8:Value xsi:type=`"$($norm.XsiType)`"/>") | Out-Null }
-				else { $sb.Append("`r`n$indent`t`t`t<v8:Value xsi:type=`"$($norm.XsiType)`">$(Esc-Xml $norm.Text)</v8:Value>") | Out-Null }
+				else { $sb.Append("`r`n$indent`t`t`t<v8:Value xsi:type=`"$($norm.XsiType)`">$(Esc-XmlText $norm.Text)</v8:Value>") | Out-Null }
 			}
 			$sb.Append("`r`n$indent`t`t</app:value>") | Out-Null
 		} else {
 			$norm = Normalize-ChoiceValueT $val $ptype
 			if ([string]::IsNullOrEmpty($norm.Text)) { $sb.Append("`r`n$indent`t`t<app:value xsi:type=`"$($norm.XsiType)`"/>") | Out-Null }
-			else { $sb.Append("`r`n$indent`t`t<app:value xsi:type=`"$($norm.XsiType)`">$(Esc-Xml $norm.Text)</app:value>") | Out-Null }
+			else { $sb.Append("`r`n$indent`t`t<app:value xsi:type=`"$($norm.XsiType)`">$(Esc-XmlText $norm.Text)</app:value>") | Out-Null }
 		}
 		$sb.Append("`r`n$indent`t</app:item>") | Out-Null
 	}
@@ -2950,9 +2950,9 @@ function Add-ComplexPropertyItem([string]$propertyName, [string[]]$values) {
 		$tag = $mapEntry.tag
 		$attrStr = $mapEntry.attr
 		if ($attrStr) {
-			$fragXml = "<$tag $attrStr>$(Esc-Xml $val)</$tag>"
+			$fragXml = "<$tag $attrStr>$(Esc-XmlText $val)</$tag>"
 		} else {
-			$fragXml = "<$tag>$(Esc-Xml $val)</$tag>"
+			$fragXml = "<$tag>$(Esc-XmlText $val)</$tag>"
 		}
 		$nodes = Import-Fragment $fragXml
 		foreach ($node in $nodes) {
@@ -3037,9 +3037,9 @@ function Set-ComplexProperty([string]$propertyName, [string[]]$values) {
 		$tag = $mapEntry.tag
 		$attrStr = $mapEntry.attr
 		if ($attrStr) {
-			$fragXml = "<$tag $attrStr>$(Esc-Xml $val)</$tag>"
+			$fragXml = "<$tag $attrStr>$(Esc-XmlText $val)</$tag>"
 		} else {
-			$fragXml = "<$tag>$(Esc-Xml $val)</$tag>"
+			$fragXml = "<$tag>$(Esc-XmlText $val)</$tag>"
 		}
 		$nodes = Import-Fragment $fragXml
 		foreach ($node in $nodes) {

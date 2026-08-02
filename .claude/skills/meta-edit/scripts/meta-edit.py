@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.23 — Edit existing 1C metadata object XML
+# meta-edit v1.24 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -565,7 +565,7 @@ def build_mltext_xml(indent, tag, text):
         f"{indent}<{tag}>",
         f"{indent}\t<v8:item>",
         f"{indent}\t\t<v8:lang>ru</v8:lang>",
-        f"{indent}\t\t<v8:content>{esc_xml(text)}</v8:content>",
+        f"{indent}\t\t<v8:content>{esc_xml_text(text)}</v8:content>",
         f"{indent}\t</v8:item>",
         f"{indent}</{tag}>",
     ]
@@ -925,7 +925,7 @@ def build_attribute_fragment(parsed, context, indent):
 
     lines.append(f'{indent}<Attribute uuid="{uid}">')
     lines.append(f"{indent}\t<Properties>")
-    lines.append(f"{indent}\t\t<Name>{esc_xml(parsed['name'])}</Name>")
+    lines.append(f"{indent}\t\t<Name>{esc_xml_text(parsed['name'])}</Name>")
     lines.append(build_mltext_xml(f"{indent}\t\t", "Synonym", parsed["synonym"]))
     lines.append(f"{indent}\t\t<Comment/>")
 
@@ -1021,7 +1021,7 @@ def build_tabular_section_fragment(ts_def, indent):
 
     # Properties
     lines.append(f"{indent}\t<Properties>")
-    lines.append(f"{indent}\t\t<Name>{esc_xml(ts_name)}</Name>")
+    lines.append(f"{indent}\t\t<Name>{esc_xml_text(ts_name)}</Name>")
     lines.append(build_mltext_xml(f"{indent}\t\t", "Synonym", ts_synonym))
     lines.append(f"{indent}\t\t<Comment/>")
     lines.append(f"{indent}\t\t<ToolTip/>")
@@ -1095,7 +1095,7 @@ def build_dimension_fragment(parsed, register_type, indent):
 
     lines.append(f'{indent}<Dimension uuid="{uid}">')
     lines.append(f"{indent}\t<Properties>")
-    lines.append(f"{indent}\t\t<Name>{esc_xml(parsed['name'])}</Name>")
+    lines.append(f"{indent}\t\t<Name>{esc_xml_text(parsed['name'])}</Name>")
     lines.append(build_mltext_xml(f"{indent}\t\t", "Synonym", parsed["synonym"]))
     lines.append(f"{indent}\t\t<Comment/>")
 
@@ -1182,7 +1182,7 @@ def build_resource_fragment(parsed, register_type, indent):
 
     lines.append(f'{indent}<Resource uuid="{uid}">')
     lines.append(f"{indent}\t<Properties>")
-    lines.append(f"{indent}\t\t<Name>{esc_xml(parsed['name'])}</Name>")
+    lines.append(f"{indent}\t\t<Name>{esc_xml_text(parsed['name'])}</Name>")
     lines.append(build_mltext_xml(f"{indent}\t\t", "Synonym", parsed["synonym"]))
     lines.append(f"{indent}\t\t<Comment/>")
 
@@ -1251,7 +1251,7 @@ def build_enum_value_fragment(parsed, indent):
     lines = []
     lines.append(f'{indent}<EnumValue uuid="{uid}">')
     lines.append(f"{indent}\t<Properties>")
-    lines.append(f"{indent}\t\t<Name>{esc_xml(parsed['name'])}</Name>")
+    lines.append(f"{indent}\t\t<Name>{esc_xml_text(parsed['name'])}</Name>")
     lines.append(build_mltext_xml(f"{indent}\t\t", "Synonym", parsed["synonym"]))
     lines.append(f"{indent}\t\t<Comment/>")
     lines.append(f"{indent}\t</Properties>")
@@ -1281,14 +1281,14 @@ def build_column_fragment(col_def, indent):
     lines = []
     lines.append(f'{indent}<Column uuid="{uid}">')
     lines.append(f"{indent}\t<Properties>")
-    lines.append(f"{indent}\t\t<Name>{esc_xml(name)}</Name>")
+    lines.append(f"{indent}\t\t<Name>{esc_xml_text(name)}</Name>")
     lines.append(build_mltext_xml(f"{indent}\t\t", "Synonym", synonym))
     lines.append(f"{indent}\t\t<Comment/>")
     lines.append(f"{indent}\t\t<Indexing>{indexing}</Indexing>")
     if references:
         lines.append(f"{indent}\t\t<References>")
         for ref in references:
-            lines.append(f'{indent}\t\t\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(normalize_md_object_ref(str(ref)))}</xr:Item>')
+            lines.append(f'{indent}\t\t\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml_text(normalize_md_object_ref(str(ref)))}</xr:Item>')
         lines.append(f"{indent}\t\t</References>")
     else:
         lines.append(f"{indent}\t\t<References/>")
@@ -1304,7 +1304,7 @@ def build_simple_child_fragment(tag_name, name, indent):
     lines = []
     lines.append(f'{indent}<{tag_name} uuid="{uid}">')
     lines.append(f"{indent}\t<Properties>")
-    lines.append(f"{indent}\t\t<Name>{esc_xml(name)}</Name>")
+    lines.append(f"{indent}\t\t<Name>{esc_xml_text(name)}</Name>")
     lines.append(build_mltext_xml(f"{indent}\t\t", "Synonym", synonym))
     lines.append(f"{indent}\t\t<Comment/>")
     # Forms get additional properties
@@ -2153,7 +2153,7 @@ def modify_child_elements(modify_def, child_type):
                     info(f"Set {xml_tag} '{elem_name}'.ToolTip")
                     modify_count += 1
             elif change_prop == "ChoiceForm":
-                if set_attr_property_element(props_el, "ChoiceForm", f"<ChoiceForm>{esc_xml(str(change_value))}</ChoiceForm>"):
+                if set_attr_property_element(props_el, "ChoiceForm", f"<ChoiceForm>{esc_xml_text(str(change_value))}</ChoiceForm>"):
                     info(f"Set {xml_tag} '{elem_name}'.ChoiceForm")
                     modify_count += 1
             elif change_prop == "MinValue":
@@ -2210,7 +2210,7 @@ def modify_child_elements(modify_def, child_type):
                         value_str = "true" if change_value else "false"
                     else:
                         value_str = normalize_enum_value(change_prop, value_str)
-                    new_nodes = import_fragment(f"<{change_prop}>{esc_xml(value_str)}</{change_prop}>")
+                    new_nodes = import_fragment(f"<{change_prop}>{esc_xml_text(value_str)}</{change_prop}>")
                     if new_nodes:
                         insert_property_in_order(props_el, new_nodes[0], attr_prop_order, change_prop)
                         info(f"Created {xml_tag} '{elem_name}'.{change_prop} = {value_str}")
@@ -2375,7 +2375,7 @@ def build_min_max_value_xml(tag, val):
     if val is None or str(val) == '':
         return f'<{tag} xsi:nil="true"/>'
     t = 'xs:string' if isinstance(val, str) else 'xs:decimal'
-    return f'<{tag} xsi:type="{t}">{esc_xml(str(val))}</{tag}>'
+    return f'<{tag} xsi:type="{t}">{esc_xml_text(str(val))}</{tag}>'
 
 
 # --- Порт из meta-compile: развёртка путей данных + связи выбора / тип по ссылке (structural modify) ---
@@ -2464,7 +2464,7 @@ def build_link_by_type_xml(indent, spec):
     dp = expand_data_path(dp)
     return "\r\n".join([
         f"{indent}<LinkByType>",
-        f"{indent}\t<xr:DataPath>{esc_xml(str(dp))}</xr:DataPath>",
+        f"{indent}\t<xr:DataPath>{esc_xml_text(str(dp))}</xr:DataPath>",
         f"{indent}\t<xr:LinkItem>{li}</xr:LinkItem>",
         f"{indent}</LinkByType>",
     ])
@@ -2492,8 +2492,8 @@ def build_choice_parameter_links_xml(indent, cpl):
             else:
                 vc = str(vc_raw)
         parts.append(f"{indent}\t<xr:Link>")
-        parts.append(f"{indent}\t\t<xr:Name>{esc_xml(str(name) if name is not None else '')}</xr:Name>")
-        parts.append(f'{indent}\t\t<xr:DataPath xsi:type="xs:string">{esc_xml(str(dp) if dp is not None else "")}</xr:DataPath>')
+        parts.append(f"{indent}\t\t<xr:Name>{esc_xml_text(str(name) if name is not None else '')}</xr:Name>")
+        parts.append(f'{indent}\t\t<xr:DataPath xsi:type="xs:string">{esc_xml_text(str(dp) if dp is not None else "")}</xr:DataPath>')
         parts.append(f"{indent}\t\t<xr:ValueChange>{vc}</xr:ValueChange>")
         parts.append(f"{indent}\t</xr:Link>")
     parts.append(f"{indent}</ChoiceParameterLinks>")
@@ -2662,14 +2662,14 @@ def build_choice_parameters_xml(indent, cp):
                 if not norm['Text']:
                     parts.append(f'{indent}\t\t\t<v8:Value xsi:type="{norm["XsiType"]}"/>')
                 else:
-                    parts.append(f'{indent}\t\t\t<v8:Value xsi:type="{norm["XsiType"]}">{esc_xml(norm["Text"])}</v8:Value>')
+                    parts.append(f'{indent}\t\t\t<v8:Value xsi:type="{norm["XsiType"]}">{esc_xml_text(norm["Text"])}</v8:Value>')
             parts.append(f'{indent}\t\t</app:value>')
         else:
             norm = normalize_choice_value_t(val, ptype)
             if not norm['Text']:
                 parts.append(f'{indent}\t\t<app:value xsi:type="{norm["XsiType"]}"/>')
             else:
-                parts.append(f'{indent}\t\t<app:value xsi:type="{norm["XsiType"]}">{esc_xml(norm["Text"])}</app:value>')
+                parts.append(f'{indent}\t\t<app:value xsi:type="{norm["XsiType"]}">{esc_xml_text(norm["Text"])}</app:value>')
         parts.append(f'{indent}\t</app:item>')
     parts.append(f"{indent}</ChoiceParameters>")
     return "\r\n".join(parts)
@@ -2848,9 +2848,9 @@ def add_complex_property_item(property_name, values):
         tag = map_entry["tag"]
         attr_str = map_entry["attr"]
         if attr_str:
-            frag_xml = f"<{tag} {attr_str}>{esc_xml(val)}</{tag}>"
+            frag_xml = f"<{tag} {attr_str}>{esc_xml_text(val)}</{tag}>"
         else:
-            frag_xml = f"<{tag}>{esc_xml(val)}</{tag}>"
+            frag_xml = f"<{tag}>{esc_xml_text(val)}</{tag}>"
         nodes = import_fragment(frag_xml)
         for node in nodes:
             insert_before_element(prop_el, node, None, child_indent)
@@ -2928,9 +2928,9 @@ def set_complex_property(property_name, values):
         tag = map_entry["tag"]
         attr_str = map_entry["attr"]
         if attr_str:
-            frag_xml = f"<{tag} {attr_str}>{esc_xml(val)}</{tag}>"
+            frag_xml = f"<{tag} {attr_str}>{esc_xml_text(val)}</{tag}>"
         else:
-            frag_xml = f"<{tag}>{esc_xml(val)}</{tag}>"
+            frag_xml = f"<{tag}>{esc_xml_text(val)}</{tag}>"
         nodes = import_fragment(frag_xml)
         for node in nodes:
             insert_before_element(prop_el, node, None, child_indent)

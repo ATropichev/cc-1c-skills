@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.74 — Compile 1C metadata object from JSON
+# meta-compile v1.75 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1822,10 +1822,14 @@ def resolve_char_std_en(name):
     return None
 
 def char_int_field(obj, names):
+    """Поле-флаг Characteristics — дефолт -1. ПОЛИМОРФНО: обычно число, но DataPathField в
+    некоторых конфигурациях содержит ПУТЬ к полю — тогда возвращаем строку как есть."""
     v = ch_el_prop(obj, names)
     if v is None or str(v) == '':
         return -1
-    return int(v)
+    if re.fullmatch(r'-?\d+', str(v)):
+        return int(v)
+    return str(v)
 
 def expand_char_field(field, from_):
     s = str(field or '')
@@ -1875,7 +1879,10 @@ def emit_characteristics(indent, chars):
                 X(f'{indent}\t\t\t<xr:TypesFilterValue xsi:type="{tfv_xt}"/>')
             else:
                 X(f'{indent}\t\t\t<xr:TypesFilterValue xsi:type="{tfv_xt}">{esc_xml_text(tfv_tx)}</xr:TypesFilterValue>')
-        X(f'{indent}\t\t\t<xr:DataPathField>{dpf}</xr:DataPathField>')
+        # Числовое значение (обычно -1 или 0) — как есть; expand_char_field примет "0" за короткое
+        # имя поля и выдаст "<from>.Attribute.0".
+        dpf_out = str(dpf) if re.fullmatch(r'-?\d+', str(dpf)) else esc_xml_text(expand_char_field(str(dpf), t_from))
+        X(f'{indent}\t\t\t<xr:DataPathField>{dpf_out}</xr:DataPathField>')
         X(f'{indent}\t\t\t<xr:MultipleValuesUseField>{mvu}</xr:MultipleValuesUseField>')
         X(f'{indent}\t\t</xr:CharacteristicTypes>')
         X(f'{indent}\t\t<xr:CharacteristicValues from="{esc_xml(v_from)}">')

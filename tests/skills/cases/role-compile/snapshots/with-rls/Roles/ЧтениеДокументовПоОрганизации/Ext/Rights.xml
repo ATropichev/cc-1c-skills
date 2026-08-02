@@ -27,7 +27,7 @@
             <name>Read</name>
             <value>true</value>
             <restrictionByCondition>
-                <condition>#ДляОбъекта(&quot;&quot;)</condition>
+                <condition>#ДляОбъекта("")</condition>
             </restrictionByCondition>
         </right>
         <right>

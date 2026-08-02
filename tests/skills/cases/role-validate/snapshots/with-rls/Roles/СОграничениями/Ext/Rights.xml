@@ -12,7 +12,7 @@
             <name>Read</name>
             <value>true</value>
             <restrictionByCondition>
-                <condition>#Шаблон(&quot;&quot;)</condition>
+                <condition>#Шаблон("")</condition>
             </restrictionByCondition>
         </right>
         <right>

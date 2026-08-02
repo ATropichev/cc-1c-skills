@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-decompile v0.61 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+# meta-decompile v0.63 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Зеркало meta-decompile.ps1 (КАНОН). Структура 1:1 — те же имена функций, порядок, комментарии.
@@ -1519,9 +1519,13 @@ def build_dsl():
                     'filterField': shorten_char_field(gt('TypesFilterField', ct), t_from),
                     'filterValue': None if tfv_nil == 'true' else convert_ch_scalar_node(tfv_node),
                 }
-                dpf = giv('DataPathField', ct)
-                if dpf != -1:
-                    types['dataPathField'] = dpf
+                # DataPathField полиморфно: обычно -1, но встречается ПУТЬ к полю (8 случаев на
+                # корпус). Жёсткое int() на нём роняло декомпиляцию всего объекта.
+                dpf_node = _lx1(ct, "*[local-name()='DataPathField']")
+                dpf_txt = _text(dpf_node) if dpf_node is not None else ''
+                if dpf_txt != '' and dpf_txt != '-1':
+                    types['dataPathField'] = (int(dpf_txt) if re.fullmatch(r'-?\d+', dpf_txt)
+                                              else shorten_char_field(dpf_txt, t_from))
                 mvu = giv('MultipleValuesUseField', ct)
                 if mvu != -1:
                     types['multipleValuesUseField'] = mvu

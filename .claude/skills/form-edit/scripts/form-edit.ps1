@@ -1,4 +1,4 @@
-﻿# form-edit v1.5 — Edit 1C managed form elements
+﻿# form-edit v1.6 — Edit 1C managed form elements
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -270,8 +270,11 @@ function X {
 }
 
 function Esc-Xml {
+	# Экранирование ТЕКСТА элемента: только & < > . Кавычки в тексте платформа НЕ экранирует —
+	# пишет литерально (проверено: 92142 сырых кавычки на корпус, ни одной &quot;). &quot; платформа
+	# принимает, но при выгрузке нормализует обратно в кавычку → лишний шум в роундтрипе.
 	param([string]$s)
-	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;').Replace('"','&quot;')
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;')
 }
 
 function Emit-MLText {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.8 — Compile 1C role from JSON
+# role-compile v1.9 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -204,7 +204,9 @@ def detect_format_version(d):
 
 
 def esc_xml(s):
-    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
+    (92142 сырых кавычки на корпус, ни одной &quot;); &quot; она принимает, но нормализует обратно."""
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 
 def emit_mltext(lines, indent, tag, text):

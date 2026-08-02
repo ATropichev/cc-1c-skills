@@ -27,7 +27,7 @@
             <name>Read</name>
             <value>true</value>
             <restrictionByCondition>
-                <condition>#ПоОрганизации(&quot;&quot;)</condition>
+                <condition>#ПоОрганизации("")</condition>
             </restrictionByCondition>
         </right>
         <right>

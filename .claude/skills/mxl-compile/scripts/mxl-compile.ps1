@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.4 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.5 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -437,8 +437,11 @@ foreach ($col in ($colWidthMap.Keys | Sort-Object)) {
 
 # Helper: escape XML special characters
 function Esc-Xml {
+	# Экранирование ТЕКСТА элемента: только & < > . Кавычки в тексте платформа НЕ экранирует —
+	# пишет литерально (проверено: 92142 сырых кавычки на корпус, ни одной &quot;). &quot; платформа
+	# принимает, но при выгрузке нормализует обратно в кавычку → лишний шум в роундтрипе.
 	param([string]$s)
-	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;').Replace('"','&quot;')
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;')
 }
 
 # Helper: determine fillType from cell content

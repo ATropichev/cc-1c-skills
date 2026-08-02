@@ -1,4 +1,4 @@
-﻿# meta-decompile v0.62 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+﻿# meta-decompile v0.63 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Поддержаны: Catalog, ExchangePlan, ChartOfCharacteristicTypes, ChartOfAccounts, ChartOfCalculationTypes, Document,

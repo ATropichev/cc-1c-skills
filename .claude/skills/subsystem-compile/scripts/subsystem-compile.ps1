@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.9 — Create 1C subsystem from JSON definition
+﻿# subsystem-compile v1.10 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -189,7 +189,9 @@ function X([string]$text) {
 }
 
 function Esc-Xml([string]$s) {
-	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;').Replace('"','&quot;')
+	# Экранирование ТЕКСТА элемента: только & < > . Кавычки в тексте платформа НЕ экранирует —
+	# пишет литерально (92142 сырых кавычки на корпус, ни одной &quot;).
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;')
 }
 
 function Split-CamelCase([string]$name) {
