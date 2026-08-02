@@ -1,4 +1,4 @@
-# xdto-compile v1.1 — Build a 1C XDTO package from an XML Schema (XSD) (Python port)
+# xdto-compile v1.2 — Build a 1C XDTO package from an XML Schema (XSD) (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -96,6 +96,28 @@ def is_external_object_root(xml_path):
     except Exception:  # noqa: BLE001
         pass
     return False
+
+
+def detect_format_version(d):
+    """Версия формата выгрузки — из Configuration.xml проекта (климб вверх от каталога исходников).
+
+    Её задаёт платформа выгрузки: 8.3.20-8.3.24 -> 2.17, 8.3.25 -> 2.18, 8.3.26 -> 2.19,
+    8.3.27 -> 2.20. Раньше здесь стоял хардкод 2.17, и на проекте 2.20 пакет расходился с выгрузкой.
+    Тело — точная копия из остальных навыков (разрешение пути делает вызывающая сторона).
+    """
+    while d:
+        cfg_path = os.path.join(d, "Configuration.xml")
+        if os.path.isfile(cfg_path):
+            with open(cfg_path, "r", encoding="utf-8-sig") as f:
+                head = f.read(2000)
+            m = re.search(r'<MetaDataObject[^>]+version="(\d+\.\d+)"', head)
+            if m:
+                return m.group(1)
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return "2.17"
 
 
 def assert_edit_allowed(target_path):
@@ -837,6 +859,8 @@ if re.match(r"^\d", name):
 
 assert_edit_allowed(args.OutputDir)
 
+format_version = detect_format_version(os.path.abspath(args.OutputDir))
+
 pkg_root = os.path.join(args.OutputDir, "XDTOPackages")
 pkg_dir = os.path.join(pkg_root, name)
 ext_dir = os.path.join(pkg_dir, "Ext")
@@ -871,7 +895,7 @@ md_lines = [
     'xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" '
     'xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" '
     'xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" '
-    'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17">',
+    f'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="{format_version}">',
     f'\t<XDTOPackage uuid="{uuid.uuid4()}">',
     "\t\t<Properties>",
     f"\t\t\t<Name>{esc_text(name)}</Name>",
