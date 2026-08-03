@@ -1,4 +1,4 @@
-# meta-info v1.4 — Compact summary of 1C metadata object (Python port)
+# meta-info v1.5 — Compact summary of 1C metadata object (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -381,7 +381,10 @@ def get_max_name_len(attrs):
 def get_simple_children(parent_node, tag):
     result = []
     for child in find_all(parent_node, f"md:{tag}"):
-        result.append(inner_text(child))
+        # Form/Template в ChildObjects — простые узлы с именем в тексте, а Command — узел
+        # с вложенным Properties: у него inner_text склеил бы всё содержимое в одну строку.
+        name_node = find(child, "md:Properties/md:Name")
+        result.append(inner_text(name_node) if name_node is not None else inner_text(child))
     return result
 
 

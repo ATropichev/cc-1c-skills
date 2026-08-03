@@ -1,4 +1,4 @@
-﻿# meta-info v1.4 — Compact summary of 1C metadata object
+﻿# meta-info v1.5 — Compact summary of 1C metadata object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)][Alias('Path')][string]$ObjectPath,
@@ -329,7 +329,10 @@ function Get-MaxNameLen($attrs) {
 function Get-SimpleChildren($parentNode, [string]$tag) {
 	$result = @()
 	foreach ($child in $parentNode.SelectNodes("md:$tag", $ns)) {
-		$result += $child.InnerText
+		# Form/Template в ChildObjects — простые узлы с именем в тексте, а Command — узел
+		# с вложенным Properties: у него InnerText склеил бы всё содержимое в одну строку.
+		$nameNode = $child.SelectSingleNode("md:Properties/md:Name", $ns)
+		if ($nameNode) { $result += $nameNode.InnerText } else { $result += $child.InnerText }
 	}
 	return $result
 }
