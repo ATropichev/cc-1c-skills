@@ -1,4 +1,4 @@
-﻿# meta-info v1.5 — Compact summary of 1C metadata object
+﻿# meta-info v1.6 — Compact summary of 1C metadata object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)][Alias('Path')][string]$ObjectPath,
@@ -170,6 +170,22 @@ function Get-MLText($node) {
 	return ""
 }
 
+# Тип-множество: голое имя метатипа без `.Имя` означает ВСЕ ссылки этого класса
+# (см. docs/meta-dsl-spec.md §«Тип-множество»). Конкретный тип всегда пишется с точкой,
+# поэтому «СправочникСсылка» без точки читается однозначно как обобщённый.
+function Format-SingleTypeSet([string]$raw) {
+	$raw = $raw -replace '^d\d+p\d+:', 'cfg:'
+	if ($raw -match '^cfg:DefinedType\.(.+)$')   { return "ОпределяемыйТип.$($Matches[1])" }
+	if ($raw -match '^cfg:Characteristic\.(.+)$') { return "Характеристика.$($Matches[1])" }
+	if ($raw -eq 'cfg:AnyRef')   { return "ЛюбаяСсылка" }
+	if ($raw -eq 'cfg:AnyIBRef') { return "ЛюбаяСсылкаИБ" }
+	if ($raw -match '^cfg:(\w+Ref)$' -and $refTypeMap.ContainsKey($Matches[1])) {
+		return $refTypeMap[$Matches[1]]
+	}
+	if ($raw -match '^cfg:(.+)$') { return $Matches[1] }
+	return $raw
+}
+
 function Format-Type($typeNode) {
 	if (-not $typeNode) { return "" }
 	$types = @()
@@ -178,14 +194,7 @@ function Format-Type($typeNode) {
 		$types += Format-SingleType $raw $typeNode
 	}
 	foreach ($t in $typeNode.SelectNodes("v8:TypeSet", $ns)) {
-		$raw = $t.InnerText
-		if ($raw -match '^cfg:DefinedType\.(.+)$') {
-			$types += "ОпределяемыйТип.$($Matches[1])"
-		} elseif ($raw -match '^cfg:Characteristic\.(.+)$') {
-			$types += "Характеристика.$($Matches[1])"
-		} else {
-			$types += $raw
-		}
+		$types += Format-SingleTypeSet $t.InnerText
 	}
 	if ($types.Count -eq 0) { return "" }
 	if ($types.Count -eq 1) { return $types[0] }

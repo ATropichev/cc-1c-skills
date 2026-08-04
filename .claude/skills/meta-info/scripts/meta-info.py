@@ -1,4 +1,4 @@
-# meta-info v1.5 — Compact summary of 1C metadata object (Python port)
+# meta-info v1.6 — Compact summary of 1C metadata object (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -227,6 +227,30 @@ def get_ml_text(node):
     return ""
 
 
+# Тип-множество: голое имя метатипа без `.Имя` означает ВСЕ ссылки этого класса
+# (см. docs/meta-dsl-spec.md §«Тип-множество»). Конкретный тип всегда пишется с точкой,
+# поэтому «СправочникСсылка» без точки читается однозначно как обобщённый.
+def format_single_type_set(raw):
+    raw = re.sub(r'^d\d+p\d+:', 'cfg:', raw)
+    m = re.match(r'^cfg:DefinedType\.(.+)$', raw)
+    if m:
+        return f"ОпределяемыйТип.{m.group(1)}"
+    m = re.match(r'^cfg:Characteristic\.(.+)$', raw)
+    if m:
+        return f"Характеристика.{m.group(1)}"
+    if raw == "cfg:AnyRef":
+        return "ЛюбаяСсылка"
+    if raw == "cfg:AnyIBRef":
+        return "ЛюбаяСсылкаИБ"
+    m = re.match(r'^cfg:(\w+Ref)$', raw)
+    if m and m.group(1) in ref_type_map:
+        return ref_type_map[m.group(1)]
+    m = re.match(r'^cfg:(.+)$', raw)
+    if m:
+        return m.group(1)
+    return raw
+
+
 def format_type(type_node_el):
     if type_node_el is None:
         return ""
@@ -234,16 +258,7 @@ def format_type(type_node_el):
     for t in find_all(type_node_el, "v8:Type"):
         types.append(format_single_type(inner_text(t), type_node_el))
     for t in find_all(type_node_el, "v8:TypeSet"):
-        raw = inner_text(t)
-        m = re.match(r'^cfg:DefinedType\.(.+)$', raw)
-        if m:
-            types.append(f"ОпределяемыйТип.{m.group(1)}")
-            continue
-        m = re.match(r'^cfg:Characteristic\.(.+)$', raw)
-        if m:
-            types.append(f"Характеристика.{m.group(1)}")
-            continue
-        types.append(raw)
+        types.append(format_single_type_set(inner_text(t)))
     if len(types) == 0:
         return ""
     if len(types) == 1:
