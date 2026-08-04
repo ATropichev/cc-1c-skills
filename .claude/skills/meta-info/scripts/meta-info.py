@@ -1,4 +1,4 @@
-# meta-info v1.6 — Compact summary of 1C metadata object (Python port)
+# meta-info v1.7 — Compact summary of 1C metadata object (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -354,6 +354,190 @@ def format_flags(a_props, is_dimension=False):
     if not flags:
         return ""
     return f"  [{', '.join(flags)}]"
+
+
+# Ссылка на объект метаданных (`Catalog.Валюты` в Owners и подобных) — не тип значения,
+# но в выводе показываем именно тип, который присваивается: СправочникСсылка.Валюты.
+def format_md_object_ref(raw):
+    m = re.match(r'^(\w+)\.(.+)$', raw)
+    if m:
+        key = f"{m.group(1)}Ref"
+        if key in ref_type_map:
+            return f"{ref_type_map[key]}.{m.group(2)}"
+    return raw
+
+
+# ── Стандартные реквизиты ────────────────────────────────────
+
+# Сколько типов состава печатать списком, прежде чем свернуть в счётчик. По корпусу
+# acc/erp/ut/unf состав ПВХ доходит до 151 типа, при этом 20 из 42 ПВХ укладываются в 5.
+COMPOSED_TYPE_THRESHOLD = 5
+
+# Имена полей, состав которых свернули в счётчик, — по ним в конце вывода печатается
+# единственная подсказка, чем состав развернуть.
+collapsed_names = []
+
+# Блок StandardAttributes в XML опционален: платформа материализует его только когда хотя бы
+# один стандартный реквизит кастомизирован (docs/meta-dsl-spec.md §7.1.1). Когда блока нет,
+# действуют платформенные дефолты — профиль ниже совпадает с $stdAttrProfile в meta-compile
+# (выведен из корпуса acc+erp). Правки держать синхронными, иначе навыки разъедутся молча.
+std_attr_required_default = {
+    "Catalog": {"Owner": True, "Description": True},
+    "Document": {"Date": True},
+    "ExchangePlan": {"Description": True, "Code": True},
+    "ChartOfAccounts": {"Description": True, "Code": True},
+    "ChartOfCharacteristicTypes": {"Description": True},
+    "ChartOfCalculationTypes": {"Description": True},
+}
+
+
+def test_std_attr_required(props_node, attr_name, obj_type):
+    fc = find(props_node, f"md:StandardAttributes/xr:StandardAttribute[@name='{attr_name}']/xr:FillChecking")
+    if fc is not None:
+        return inner_text(fc) == "ShowError"
+    return std_attr_required_default.get(obj_type, {}).get(attr_name, False)
+
+
+def new_std_attr(name, type_str, flags):
+    f = [x for x in flags if x]
+    flag_str = f"  [{', '.join(f)}]" if f else ""
+    return {"Name": name, "Type": type_str, "Flags": flag_str}
+
+
+# Стандартные реквизиты, наличие и характеристики которых задаются настройками объекта, —
+# их нельзя вывести из остального вывода, поэтому они попадают и в overview. Ссылка,
+# ПометкаУдаления, Родитель и прочее следуют из типа объекта и строки «Иерархический» —
+# они только в full (см. get_standard_attributes_full).
+def get_standard_attributes(props_node, obj_type, mode_name):
+    result = []
+
+    # Владелец — только у подчинённого справочника; состав типов ниоткуда не выводится
+    if obj_type == "Catalog":
+        owners_node = find(props_node, "md:Owners")
+        owner_types = []
+        if owners_node is not None:
+            for it in find_all(owners_node, "xr:Item"):
+                owner_types.append(format_md_object_ref(inner_text(it)))
+        if owner_types:
+            req = "обязательный" if test_std_attr_required(props_node, "Owner", obj_type) else None
+            result.append(new_std_attr("Владелец", ", ".join(owner_types), [req]))
+
+    # ТипЗначения ПВХ — до полутора сотен типов, полный список раздул бы сводку в обоих
+    # режимах, поэтому сворачиваем в счётчик. Состав смотреть через -Name ТипЗначения.
+    if obj_type == "ChartOfCharacteristicTypes":
+        vt = find(props_node, "md:Type")
+        if vt is not None:
+            cnt = len(find_all(vt, "v8:Type")) + len(find_all(vt, "v8:TypeSet"))
+            if cnt > COMPOSED_TYPE_THRESHOLD:
+                type_str = f"Составной ({cnt})"
+                collapsed_names.append("ТипЗначения")
+            else:
+                type_str = format_type(vt)
+            if type_str:
+                result.append(new_std_attr("ТипЗначения", type_str, []))
+
+    # Дата — есть всегда, ценна флагом обязательности
+    if obj_type in ("Document", "BusinessProcess", "Task"):
+        req = "обязательный" if test_std_attr_required(props_node, "Date", obj_type) else None
+        result.append(new_std_attr("Дата", "Дата", [req]))
+
+    # Номер — тип и длина задаются объектом, при NumberLength=0 номера нет
+    if obj_type in ("Document", "BusinessProcess", "Task"):
+        num_len = find(props_node, "md:NumberLength")
+        if num_len is not None and inner_text(num_len).isdigit() and int(inner_text(num_len)) > 0:
+            num_type = find(props_node, "md:NumberType")
+            nt_ru = "Число" if num_type is not None and inner_text(num_type) == "Number" else "Строка"
+            flags = []
+            if test_std_attr_required(props_node, "Number", obj_type):
+                flags.append("обязательный")
+            num_per = find(props_node, "md:NumberPeriodicity")
+            if num_per is not None and inner_text(num_per) in number_period_map:
+                flags.append(number_period_map[inner_text(num_per)])
+            num_allowed = find(props_node, "md:NumberAllowedLength")
+            if num_allowed is not None and inner_text(num_allowed) == "Fixed":
+                flags.append("фикс. длина")
+            auto_num = find(props_node, "md:Autonumbering")
+            if auto_num is not None and inner_text(auto_num) == "true":
+                flags.append("авто")
+            result.append(new_std_attr("Номер", f"{nt_ru}({inner_text(num_len)})", flags))
+
+    # Код — при CodeLength=0 кода у объекта нет вовсе, строку не печатаем
+    code_len = find(props_node, "md:CodeLength")
+    if code_len is not None and inner_text(code_len).isdigit() and int(inner_text(code_len)) > 0:
+        code_type = find(props_node, "md:CodeType")
+        ct_ru = "Число" if code_type is not None and inner_text(code_type) == "Number" else "Строка"
+        flags = []
+        if test_std_attr_required(props_node, "Code", obj_type):
+            flags.append("обязательный")
+        code_allowed = find(props_node, "md:CodeAllowedLength")
+        if code_allowed is not None and inner_text(code_allowed) == "Fixed":
+            flags.append("фикс. длина")
+        result.append(new_std_attr("Код", f"{ct_ru}({inner_text(code_len)})", flags))
+
+    # Наименование — при DescriptionLength=0 наименования нет
+    desc_len = find(props_node, "md:DescriptionLength")
+    if desc_len is not None and inner_text(desc_len).isdigit() and int(inner_text(desc_len)) > 0:
+        req = "обязательный" if test_std_attr_required(props_node, "Description", obj_type) else None
+        result.append(new_std_attr("Наименование", f"Строка({inner_text(desc_len)})", [req]))
+
+    return result
+
+
+# Остальные стандартные реквизиты — предсказуемы по типу объекта, но в full полезны
+# как перечень доступных полей для запроса.
+def get_standard_attributes_full(props_node, obj_type, obj_name):
+    self_ref_map = {
+        "Catalog": "СправочникСсылка",
+        "ChartOfCharacteristicTypes": "ПВХСсылка",
+        "ChartOfAccounts": "ПланСчетовСсылка",
+        "ChartOfCalculationTypes": "ПВРСсылка",
+        "ExchangePlan": "ПланОбменаСсылка",
+        "Document": "ДокументСсылка",
+        "BusinessProcess": "БизнесПроцессСсылка",
+        "Task": "ЗадачаСсылка",
+    }
+    self_ref = f"{self_ref_map[obj_type]}.{obj_name}" if obj_type in self_ref_map else ""
+
+    result = []
+    if self_ref:
+        result.append(new_std_attr("Ссылка", self_ref, []))
+    result.append(new_std_attr("ПометкаУдаления", "Булево", []))
+
+    # Родитель и ЭтоГруппа существуют только у иерархических объектов
+    hier = find(props_node, "md:Hierarchical")
+    is_hier = (hier is not None and inner_text(hier) == "true") or obj_type == "ChartOfAccounts"
+    if is_hier and self_ref:
+        result.append(new_std_attr("Родитель", self_ref, []))
+        ht = find(props_node, "md:HierarchyType")
+        if obj_type == "Catalog" and (ht is None or inner_text(ht) == "HierarchyFoldersAndItems"):
+            result.append(new_std_attr("ЭтоГруппа", "Булево", []))
+
+    if obj_type == "Document":
+        result.append(new_std_attr("Проведен", "Булево", []))
+    elif obj_type == "ExchangePlan":
+        result.append(new_std_attr("ЭтотУзел", "Булево", []))
+        result.append(new_std_attr("НомерОтправленного", "Число", []))
+        result.append(new_std_attr("НомерПринятого", "Число", []))
+    elif obj_type == "BusinessProcess":
+        result.append(new_std_attr("Стартован", "Булево", []))
+        result.append(new_std_attr("Завершен", "Булево", []))
+        result.append(new_std_attr("ВедущаяЗадача", "ЗадачаСсылка", []))
+    elif obj_type == "Task":
+        result.append(new_std_attr("Выполнена", "Булево", []))
+        result.append(new_std_attr("БизнесПроцесс", "БизнесПроцессСсылка", []))
+        result.append(new_std_attr("ТочкаМаршрута", "БизнесПроцессТочкаМаршрутаСсылка", []))
+    elif obj_type == "ChartOfAccounts":
+        result.append(new_std_attr("Вид", "ВидСчета", []))
+        result.append(new_std_attr("Забалансовый", "Булево", []))
+        result.append(new_std_attr("Порядок", "Число", []))
+    elif obj_type == "ChartOfCalculationTypes":
+        result.append(new_std_attr("ПериодДействияБазовый", "Булево", []))
+
+    # Предопределённые данные есть у всех перечисленных типов, кроме документов и задач
+    if obj_type in ("Catalog", "ChartOfCharacteristicTypes", "ChartOfAccounts", "ChartOfCalculationTypes"):
+        result.append(new_std_attr("Предопределенный", "Булево", []))
+        result.append(new_std_attr("ИмяПредопределенныхДанных", "Строка", []))
+    return result
 
 
 def get_attributes(parent_node, child_tag="Attribute", is_dimension=False):
@@ -723,6 +907,44 @@ if drill_name and child_objs is not None:
                 drill_done = True
                 break
 
+    # Не нашли среди дочерних объектов — пробуем стандартные реквизиты ниже
+
+# Drill-down по стандартному реквизиту — единственный способ увидеть состав типов целиком,
+# когда в сводке он свёрнут в счётчик. Живёт в Properties, а не в ChildObjects, поэтому идёт
+# отдельной веткой и работает даже у объектов без ChildObjects.
+if drill_name and not drill_done:
+    std_all = get_standard_attributes(props, md_type, "full") + get_standard_attributes_full(props, md_type, obj_name)
+    for s in std_all:
+        if s["Name"] != drill_name:
+            continue
+        out(f"Стандартный реквизит: {s['Name']}")
+
+        # Состав типов разворачиваем списком: ради этого drill-down и нужен
+        type_list = []
+        type_src = find(props, "md:Type") if drill_name == "ТипЗначения" else None
+        if type_src is not None:
+            for t in find_all(type_src, "v8:Type"):
+                type_list.append(format_single_type(inner_text(t), type_src))
+            for t in find_all(type_src, "v8:TypeSet"):
+                type_list.append(format_single_type_set(inner_text(t)))
+        elif drill_name == "Владелец":
+            owners_node = find(props, "md:Owners")
+            if owners_node is not None:
+                for it in find_all(owners_node, "xr:Item"):
+                    type_list.append(format_md_object_ref(inner_text(it)))
+
+        if type_list:
+            out(f"  Типы ({len(type_list)}):")
+            for t in type_list:
+                out(f"    {t}")
+        else:
+            out(f"  Тип: {s['Type']}")
+        flag_text = s["Flags"].strip()
+        if flag_text:
+            out(f"  Свойства: {flag_text.strip('[]')}")
+        drill_done = True
+        break
+
     if not drill_done:
         print(f"[ERROR] '{drill_name}' not found in {obj_name}")
         sys.exit(1)
@@ -754,6 +976,18 @@ if not drill_done:
                 out(f"Расширенное представление списка: {ext_list_presentation}")
 
     if mode == "brief":
+        # Подчинённость — единственный факт структуры, который из brief не выводится никак,
+        # а без него код записи элемента падает. Про обязательность здесь намеренно молчим:
+        # обязательными бывают и обычные реквизиты, а их brief не разбирает.
+        if md_type == "Catalog":
+            owners_node = find(props, "md:Owners")
+            owner_names = []
+            if owners_node is not None:
+                for it in find_all(owners_node, "xr:Item"):
+                    owner_names.append(re.sub(r'^\w+\.', '', inner_text(it)))
+            if owner_names:
+                out(f"Подчинён: {', '.join(owner_names)}")
+
         # Attributes
         attrs = get_attributes(child_objs) if child_objs is not None else []
         if attrs:
@@ -883,21 +1117,9 @@ if not drill_done:
 
         # Document-specific header
         if md_type == "Document":
-            num_type = find(props, "md:NumberType")
-            num_len = find(props, "md:NumberLength")
-            num_per = find(props, "md:NumberPeriodicity")
-            auto_num = find(props, "md:Autonumbering")
             posting = find(props, "md:Posting")
             parts = []
-            if num_type is not None and num_len is not None:
-                nt = "Строка" if inner_text(num_type) == "String" else "Число"
-                piece = f"Номер: {nt}({inner_text(num_len)})"
-                if num_per is not None:
-                    per_ru = number_period_map.get(inner_text(num_per), inner_text(num_per))
-                    piece += f", {per_ru}"
-                if auto_num is not None and inner_text(auto_num) == "true":
-                    piece += ", авто"
-                parts.append(piece)
+            # Номер уехал в блок стандартных реквизитов — здесь остаются свойства объекта
             if posting is not None:
                 parts.append(f"Проведение: {'да' if inner_text(posting) == 'Allow' else 'нет'}")
             if parts:
@@ -917,12 +1139,13 @@ if not drill_done:
                 else:
                     ht_text += ", без ограничения уровней"
                 parts.append(f"Иерархический: {ht_text}")
-            code_len = find(props, "md:CodeLength")
-            desc_len = find(props, "md:DescriptionLength")
-            if code_len is not None and inner_text(code_len).isdigit() and int(inner_text(code_len)) > 0:
-                parts.append(f"Код({inner_text(code_len)})")
-            if desc_len is not None and inner_text(desc_len).isdigit() and int(inner_text(desc_len)) > 0:
-                parts.append(f"Наименование({inner_text(desc_len)})")
+            # Код и Наименование уехали в блок стандартных реквизитов — здесь только свойства объекта.
+            # Подчинение печатаем лишь когда оно отличается от дефолта ToItems.
+            sub = find(props, "md:SubordinationUse")
+            if sub is not None and inner_text(sub) != "ToItems":
+                sub_ru = {"ToFolders": "группам", "ToFoldersAndItems": "группам и элементам"}.get(
+                    inner_text(sub), inner_text(sub))
+                parts.append(f"Подчинение: {sub_ru}")
             if parts:
                 out(" | ".join(parts))
 
@@ -1085,6 +1308,17 @@ if not drill_done:
                     syn_text = f'"{v["Synonym"]}"' if v["Synonym"] and v["Synonym"] != v["Name"] else ""
                     out(f"  {padded} {syn_text}")
 
+        # Standard attributes
+        std_attrs = get_standard_attributes(props, md_type, mode)
+        if mode == "full":
+            std_attrs += get_standard_attributes_full(props, md_type, obj_name)
+        if std_attrs:
+            out("")
+            out("Стандартные реквизиты:")
+            ml = get_max_name_len(std_attrs)
+            for s in std_attrs:
+                out(format_attr_line(s, ml))
+
         # Dimensions (registers)
         if md_type.endswith("Register") and child_objs is not None:
             dims = get_attributes(child_objs, "Dimension", True)
@@ -1191,6 +1425,12 @@ if not drill_done:
             commands = get_simple_children(child_objs, "Command")
             if commands:
                 out(f"Команды: {', '.join(commands)}")
+
+    # Единственная подсказка на весь вывод — чем развернуть свёрнутый в счётчик состав
+    if collapsed_names:
+        hints = ", ".join(f"-Name {n}" for n in collapsed_names)
+        out("")
+        out(f"Полный состав типов: {hints}")
 
 # ── Pagination and output ────────────────────────────────────
 

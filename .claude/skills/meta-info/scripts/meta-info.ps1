@@ -1,4 +1,4 @@
-﻿# meta-info v1.6 — Compact summary of 1C metadata object
+﻿# meta-info v1.7 — Compact summary of 1C metadata object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)][Alias('Path')][string]$ObjectPath,
@@ -294,6 +294,202 @@ function Format-Flags($propsNode, [bool]$isDimension = $false) {
 
 	if ($flags.Count -eq 0) { return "" }
 	return "  [$($flags -join ', ')]"
+}
+
+# Ссылка на объект метаданных (`Catalog.Валюты` в Owners и подобных) — не тип значения,
+# но в выводе показываем именно тип, который присваивается: СправочникСсылка.Валюты.
+function Format-MDObjectRef([string]$raw) {
+	if ($raw -match '^(\w+)\.(.+)$') {
+		$key = "$($Matches[1])Ref"
+		if ($refTypeMap.ContainsKey($key)) { return "$($refTypeMap[$key]).$($Matches[2])" }
+	}
+	return $raw
+}
+
+# --- Стандартные реквизиты ---
+
+# Сколько типов состава печатать списком, прежде чем свернуть в счётчик. По корпусу
+# acc/erp/ut/unf состав ПВХ доходит до 151 типа, при этом 20 из 42 ПВХ укладываются в 5.
+$script:composedTypeThreshold = 5
+
+# Имена полей, состав которых свернули в счётчик, — по ним в конце вывода печатается
+# единственная подсказка, чем состав развернуть.
+$script:collapsedNames = @()
+
+# Блок StandardAttributes в XML опционален: платформа материализует его только когда хотя бы
+# один стандартный реквизит кастомизирован (docs/meta-dsl-spec.md §7.1.1). Когда блока нет,
+# действуют платформенные дефолты — профиль ниже совпадает с $stdAttrProfile в meta-compile
+# (выведен из корпуса acc+erp). Правки держать синхронными, иначе навыки разъедутся молча.
+$stdAttrRequiredDefault = @{
+	"Catalog"                    = @{ "Owner" = $true; "Description" = $true }
+	"Document"                   = @{ "Date" = $true }
+	"ExchangePlan"               = @{ "Description" = $true; "Code" = $true }
+	"ChartOfAccounts"            = @{ "Description" = $true; "Code" = $true }
+	"ChartOfCharacteristicTypes" = @{ "Description" = $true }
+	"ChartOfCalculationTypes"    = @{ "Description" = $true }
+}
+
+function Test-StdAttrRequired($propsNode, [string]$attrName, [string]$objType) {
+	$fc = $propsNode.SelectSingleNode("md:StandardAttributes/xr:StandardAttribute[@name='$attrName']/xr:FillChecking", $ns)
+	if ($fc) { return ($fc.InnerText -eq "ShowError") }
+	if ($stdAttrRequiredDefault.ContainsKey($objType) -and $stdAttrRequiredDefault[$objType].ContainsKey($attrName)) {
+		return $stdAttrRequiredDefault[$objType][$attrName]
+	}
+	return $false
+}
+
+function New-StdAttr([string]$name, [string]$type, $flags) {
+	$f = @($flags | Where-Object { $_ })
+	$flagStr = if ($f.Count -gt 0) { "  [$($f -join ', ')]" } else { "" }
+	return @{ Name = $name; Type = $type; Flags = $flagStr }
+}
+
+# Стандартные реквизиты, наличие и характеристики которых задаются настройками объекта, —
+# их нельзя вывести из остального вывода, поэтому они попадают и в overview. Ссылка,
+# ПометкаУдаления, Родитель и прочее следуют из типа объекта и строки «Иерархический» —
+# они только в full (см. Get-StandardAttributesFull).
+function Get-StandardAttributes($propsNode, [string]$objType, [string]$mode) {
+	$result = @()
+
+	# Владелец — только у подчинённого справочника; состав типов ниоткуда не выводится
+	if ($objType -eq "Catalog") {
+		$ownersNode = $propsNode.SelectSingleNode("md:Owners", $ns)
+		$ownerTypes = @()
+		if ($ownersNode) {
+			foreach ($it in $ownersNode.SelectNodes("xr:Item", $ns)) {
+				$ownerTypes += Format-MDObjectRef $it.InnerText
+			}
+		}
+		if ($ownerTypes.Count -gt 0) {
+			$req = if (Test-StdAttrRequired $propsNode "Owner" $objType) { "обязательный" } else { $null }
+			$result += New-StdAttr "Владелец" ($ownerTypes -join ", ") @($req)
+		}
+	}
+
+	# ТипЗначения ПВХ — до полутора сотен типов, полный список раздул бы сводку в обоих
+	# режимах, поэтому сворачиваем в счётчик. Состав смотреть через -Name ТипЗначения.
+	if ($objType -eq "ChartOfCharacteristicTypes") {
+		$vt = $propsNode.SelectSingleNode("md:Type", $ns)
+		if ($vt) {
+			$cnt = $vt.SelectNodes("v8:Type", $ns).Count + $vt.SelectNodes("v8:TypeSet", $ns).Count
+			$typeStr = if ($cnt -gt $script:composedTypeThreshold) {
+				$script:collapsedNames += "ТипЗначения"
+				"Составной ($cnt)"
+			} else { Format-Type $vt }
+			if ($typeStr) { $result += New-StdAttr "ТипЗначения" $typeStr @() }
+		}
+	}
+
+	# Дата — есть всегда, ценна флагом обязательности
+	if ($objType -in @("Document", "BusinessProcess", "Task")) {
+		$req = if (Test-StdAttrRequired $propsNode "Date" $objType) { "обязательный" } else { $null }
+		$result += New-StdAttr "Дата" "Дата" @($req)
+	}
+
+	# Номер — тип и длина задаются объектом, при NumberLength=0 номера нет
+	if ($objType -in @("Document", "BusinessProcess", "Task")) {
+		$numLen = $propsNode.SelectSingleNode("md:NumberLength", $ns)
+		if ($numLen -and [int]$numLen.InnerText -gt 0) {
+			$numType = $propsNode.SelectSingleNode("md:NumberType", $ns)
+			$ntRu = if ($numType -and $numType.InnerText -eq "Number") { "Число" } else { "Строка" }
+			$flags = @()
+			if (Test-StdAttrRequired $propsNode "Number" $objType) { $flags += "обязательный" }
+			$numPer = $propsNode.SelectSingleNode("md:NumberPeriodicity", $ns)
+			if ($numPer -and $numberPeriodMap.ContainsKey($numPer.InnerText)) { $flags += $numberPeriodMap[$numPer.InnerText] }
+			$numAllowed = $propsNode.SelectSingleNode("md:NumberAllowedLength", $ns)
+			if ($numAllowed -and $numAllowed.InnerText -eq "Fixed") { $flags += "фикс. длина" }
+			$autoNum = $propsNode.SelectSingleNode("md:Autonumbering", $ns)
+			if ($autoNum -and $autoNum.InnerText -eq "true") { $flags += "авто" }
+			$result += New-StdAttr "Номер" "$ntRu($($numLen.InnerText))" $flags
+		}
+	}
+
+	# Код — при CodeLength=0 кода у объекта нет вовсе, строку не печатаем
+	$codeLen = $propsNode.SelectSingleNode("md:CodeLength", $ns)
+	if ($codeLen -and [int]$codeLen.InnerText -gt 0) {
+		$codeType = $propsNode.SelectSingleNode("md:CodeType", $ns)
+		$ctRu = if ($codeType -and $codeType.InnerText -eq "Number") { "Число" } else { "Строка" }
+		$flags = @()
+		if (Test-StdAttrRequired $propsNode "Code" $objType) { $flags += "обязательный" }
+		$codeAllowed = $propsNode.SelectSingleNode("md:CodeAllowedLength", $ns)
+		if ($codeAllowed -and $codeAllowed.InnerText -eq "Fixed") { $flags += "фикс. длина" }
+		$result += New-StdAttr "Код" "$ctRu($($codeLen.InnerText))" $flags
+	}
+
+	# Наименование — при DescriptionLength=0 наименования нет
+	$descLen = $propsNode.SelectSingleNode("md:DescriptionLength", $ns)
+	if ($descLen -and [int]$descLen.InnerText -gt 0) {
+		$req = if (Test-StdAttrRequired $propsNode "Description" $objType) { "обязательный" } else { $null }
+		$result += New-StdAttr "Наименование" "Строка($($descLen.InnerText))" @($req)
+	}
+
+	return $result
+}
+
+# Остальные стандартные реквизиты — предсказуемы по типу объекта, но в full полезны
+# как перечень доступных полей для запроса.
+function Get-StandardAttributesFull($propsNode, [string]$objType, [string]$objName) {
+	$selfRef = switch ($objType) {
+		"Catalog"                    { "СправочникСсылка.$objName" }
+		"ChartOfCharacteristicTypes" { "ПВХСсылка.$objName" }
+		"ChartOfAccounts"            { "ПланСчетовСсылка.$objName" }
+		"ChartOfCalculationTypes"    { "ПВРСсылка.$objName" }
+		"ExchangePlan"               { "ПланОбменаСсылка.$objName" }
+		"Document"                   { "ДокументСсылка.$objName" }
+		"BusinessProcess"            { "БизнесПроцессСсылка.$objName" }
+		"Task"                       { "ЗадачаСсылка.$objName" }
+		default                      { "" }
+	}
+	$result = @()
+	if ($selfRef) { $result += New-StdAttr "Ссылка" $selfRef @() }
+	$result += New-StdAttr "ПометкаУдаления" "Булево" @()
+
+	# Родитель и ЭтоГруппа существуют только у иерархических объектов
+	$hier = $propsNode.SelectSingleNode("md:Hierarchical", $ns)
+	$isHier = ($hier -and $hier.InnerText -eq "true") -or $objType -eq "ChartOfAccounts"
+	if ($isHier -and $selfRef) {
+		$result += New-StdAttr "Родитель" $selfRef @()
+		$ht = $propsNode.SelectSingleNode("md:HierarchyType", $ns)
+		if ($objType -eq "Catalog" -and (-not $ht -or $ht.InnerText -eq "HierarchyFoldersAndItems")) {
+			$result += New-StdAttr "ЭтоГруппа" "Булево" @()
+		}
+	}
+
+	switch ($objType) {
+		"Document" {
+			$result += New-StdAttr "Проведен" "Булево" @()
+		}
+		"ExchangePlan" {
+			$result += New-StdAttr "ЭтотУзел" "Булево" @()
+			$result += New-StdAttr "НомерОтправленного" "Число" @()
+			$result += New-StdAttr "НомерПринятого" "Число" @()
+		}
+		"BusinessProcess" {
+			$result += New-StdAttr "Стартован" "Булево" @()
+			$result += New-StdAttr "Завершен" "Булево" @()
+			$result += New-StdAttr "ВедущаяЗадача" "ЗадачаСсылка" @()
+		}
+		"Task" {
+			$result += New-StdAttr "Выполнена" "Булево" @()
+			$result += New-StdAttr "БизнесПроцесс" "БизнесПроцессСсылка" @()
+			$result += New-StdAttr "ТочкаМаршрута" "БизнесПроцессТочкаМаршрутаСсылка" @()
+		}
+		"ChartOfAccounts" {
+			$result += New-StdAttr "Вид" "ВидСчета" @()
+			$result += New-StdAttr "Забалансовый" "Булево" @()
+			$result += New-StdAttr "Порядок" "Число" @()
+		}
+		"ChartOfCalculationTypes" {
+			$result += New-StdAttr "ПериодДействияБазовый" "Булево" @()
+		}
+	}
+
+	# Предопределённые данные есть у всех перечисленных типов, кроме документов и задач
+	if ($objType -in @("Catalog", "ChartOfCharacteristicTypes", "ChartOfAccounts", "ChartOfCalculationTypes")) {
+		$result += New-StdAttr "Предопределенный" "Булево" @()
+		$result += New-StdAttr "ИмяПредопределенныхДанных" "Строка" @()
+	}
+	return $result
 }
 
 function Get-Attributes($parentNode, [string]$childTag = "Attribute", [bool]$isDimension = $false) {
@@ -662,6 +858,43 @@ if ($Name -and $childObjs) {
 		}
 	}
 
+	# Не нашли среди дочерних объектов — пробуем стандартные реквизиты ниже
+}
+
+# Drill-down по стандартному реквизиту — единственный способ увидеть состав типов целиком,
+# когда в сводке он свёрнут в счётчик. Живёт в Properties, а не в ChildObjects, поэтому идёт
+# отдельной веткой и работает даже у объектов без ChildObjects.
+if ($Name -and -not $drillDone) {
+	$stdAll = @(Get-StandardAttributes $props $mdType "full") + @(Get-StandardAttributesFull $props $mdType $objName)
+	foreach ($s in $stdAll) {
+		if ($s.Name -ne $Name) { continue }
+		Out "Стандартный реквизит: $($s.Name)"
+
+		# Состав типов разворачиваем списком: ради этого drill-down и нужен
+		$typeSrc = $null
+		if ($Name -eq "ТипЗначения") { $typeSrc = $props.SelectSingleNode("md:Type", $ns) }
+		$typeList = @()
+		if ($typeSrc) {
+			foreach ($t in $typeSrc.SelectNodes("v8:Type", $ns))    { $typeList += Format-SingleType $t.InnerText $typeSrc }
+			foreach ($t in $typeSrc.SelectNodes("v8:TypeSet", $ns)) { $typeList += Format-SingleTypeSet $t.InnerText }
+		} elseif ($Name -eq "Владелец") {
+			$ownersNode = $props.SelectSingleNode("md:Owners", $ns)
+			if ($ownersNode) {
+				foreach ($it in $ownersNode.SelectNodes("xr:Item", $ns)) { $typeList += Format-MDObjectRef $it.InnerText }
+			}
+		}
+
+		if ($typeList.Count -gt 0) {
+			Out "  Типы ($($typeList.Count)):"
+			foreach ($t in $typeList) { Out "    $t" }
+		} else {
+			Out "  Тип: $($s.Type)"
+		}
+		$flagText = $s.Flags.Trim()
+		if ($flagText) { Out "  Свойства: $($flagText.Trim('[', ']'))" }
+		$drillDone = $true
+		break
+	}
 	if (-not $drillDone) {
 		Write-Host "[ERROR] '$Name' not found in $objName"
 		exit 1
@@ -692,6 +925,20 @@ if (-not $drillDone) {
 
 	# --- Mode: brief ---
 	if ($Mode -eq "brief") {
+		# Подчинённость — единственный факт структуры, который из brief не выводится никак,
+		# а без него код записи элемента падает. Про обязательность здесь намеренно молчим:
+		# обязательными бывают и обычные реквизиты, а их brief не разбирает.
+		if ($mdType -eq "Catalog") {
+			$ownersNode = $props.SelectSingleNode("md:Owners", $ns)
+			$ownerNames = @()
+			if ($ownersNode) {
+				foreach ($it in $ownersNode.SelectNodes("xr:Item", $ns)) {
+					$ownerNames += ($it.InnerText -replace '^\w+\.', '')
+				}
+			}
+			if ($ownerNames.Count -gt 0) { Out "Подчинён: $($ownerNames -join ', ')" }
+		}
+
 		# Attributes
 		$attrs = @()
 		if ($childObjs) { $attrs = @(Get-Attributes $childObjs) }
@@ -840,23 +1087,10 @@ if (-not $drillDone) {
 
 		# Document-specific header properties
 		if ($mdType -eq "Document") {
-			$numType = $props.SelectSingleNode("md:NumberType", $ns)
-			$numLen = $props.SelectSingleNode("md:NumberLength", $ns)
-			$numPer = $props.SelectSingleNode("md:NumberPeriodicity", $ns)
-			$autoNum = $props.SelectSingleNode("md:Autonumbering", $ns)
 			$posting = $props.SelectSingleNode("md:Posting", $ns)
 
 			$parts = @()
-			if ($numType -and $numLen) {
-				$nt = if ($numType.InnerText -eq "String") { "Строка" } else { "Число" }
-				$piece = "Номер: $nt($($numLen.InnerText))"
-				if ($numPer) {
-					$perRu = if ($numberPeriodMap.ContainsKey($numPer.InnerText)) { $numberPeriodMap[$numPer.InnerText] } else { $numPer.InnerText }
-					$piece += ", $perRu"
-				}
-				if ($autoNum -and $autoNum.InnerText -eq "true") { $piece += ", авто" }
-				$parts += $piece
-			}
+			# Номер уехал в блок стандартных реквизитов — здесь остаются свойства объекта
 			if ($posting) {
 				$parts += "Проведение: $(if ($posting.InnerText -eq 'Allow') { 'да' } else { 'нет' })"
 			}
@@ -879,10 +1113,17 @@ if (-not $drillDone) {
 				}
 				$parts += "Иерархический: $htText"
 			}
-			$codeLen = $props.SelectSingleNode("md:CodeLength", $ns)
-			$descLen = $props.SelectSingleNode("md:DescriptionLength", $ns)
-			if ($codeLen -and [int]$codeLen.InnerText -gt 0) { $parts += "Код($($codeLen.InnerText))" }
-			if ($descLen -and [int]$descLen.InnerText -gt 0) { $parts += "Наименование($($descLen.InnerText))" }
+			# Код и Наименование уехали в блок стандартных реквизитов — здесь только свойства объекта.
+			# Подчинение печатаем лишь когда оно отличается от дефолта ToItems.
+			$sub = $props.SelectSingleNode("md:SubordinationUse", $ns)
+			if ($sub -and $sub.InnerText -ne "ToItems") {
+				$subRu = switch ($sub.InnerText) {
+					"ToFolders"         { "группам" }
+					"ToFoldersAndItems" { "группам и элементам" }
+					default             { $sub.InnerText }
+				}
+				$parts += "Подчинение: $subRu"
+			}
 			if ($parts.Count -gt 0) { Out ($parts -join " | ") }
 		}
 
@@ -1071,6 +1312,16 @@ if (-not $drillDone) {
 			}
 		}
 
+		# --- Standard attributes ---
+		$stdAttrs = @(Get-StandardAttributes $props $mdType $Mode)
+		if ($Mode -eq "full") { $stdAttrs += @(Get-StandardAttributesFull $props $mdType $objName) }
+		if ($stdAttrs.Count -gt 0) {
+			Out ""
+			Out "Стандартные реквизиты:"
+			$ml = Get-MaxNameLen $stdAttrs
+			foreach ($s in $stdAttrs) { Out (Format-AttrLine $s $ml) }
+		}
+
 		# --- Dimensions (registers) ---
 		if ($mdType -match "Register$" -and $childObjs) {
 			$dims = @(Get-Attributes $childObjs "Dimension" $true)
@@ -1188,6 +1439,13 @@ if (-not $drillDone) {
 				Out "Команды: $($commands -join ', ')"
 			}
 		}
+	}
+
+	# Единственная подсказка на весь вывод — чем развернуть свёрнутый в счётчик состав
+	if ($script:collapsedNames.Count -gt 0) {
+		$hints = ($script:collapsedNames | ForEach-Object { "-Name $_" }) -join ", "
+		Out ""
+		Out "Полный состав типов: $hints"
 	}
 }
 
