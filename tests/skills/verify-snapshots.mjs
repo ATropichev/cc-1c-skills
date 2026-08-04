@@ -6,6 +6,10 @@
 //           role-compile, subsystem-compile, subsystem-edit, mxl-compile, template-add,
 //           help-add, cf-init, cf-edit, epf-init, meta-edit, interface-edit,
 //           cfe-init, cfe-borrow, cfe-patch-method
+// Работает и с кейсами навыков, которые сами ничего не пишут (info/validate), если у кейса
+// есть preRun: проверяется, что платформа принимает собранную им фикстуру.
+// Для кейсов на `setup: external:` проверка вырождается — 1С грузит собственную выгрузку
+// типовой конфигурации (~3 мин на кейс, ноль информации). Такие гонять через --case.
 
 import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync,
