@@ -1,4 +1,4 @@
-﻿# meta-info v1.7 — Compact summary of 1C metadata object
+﻿# meta-info v1.8 — Compact summary of 1C metadata object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)][Alias('Path')][string]$ObjectPath,
@@ -1097,24 +1097,26 @@ if (-not $drillDone) {
 			if ($parts.Count -gt 0) { Out ($parts -join " | ") }
 		}
 
-		# Catalog-specific header properties
-		if ($mdType -eq "Catalog") {
-			$parts = @()
-			$hier = $props.SelectSingleNode("md:Hierarchical", $ns)
-			if ($hier -and $hier.InnerText -eq "true") {
-				$ht = $props.SelectSingleNode("md:HierarchyType", $ns)
-				$htText = if ($ht -and $ht.InnerText -eq "HierarchyFoldersAndItems") { "группы и элементы" } else { "элементы" }
-				$limitNode = $props.SelectSingleNode("md:LimitLevelCount", $ns)
-				$levelNode = $props.SelectSingleNode("md:LevelCount", $ns)
-				if ($limitNode -and $limitNode.InnerText -eq "true" -and $levelNode) {
-					$htText += ", уровней: $($levelNode.InnerText)"
-				} else {
-					$htText += ", без ограничения уровней"
-				}
-				$parts += "Иерархический: $htText"
+		# Свойства иерархии и подчинения. Иерархия — не только у справочников: свойство
+		# Hierarchical есть и у ПВХ (в корпусе acc/erp/ut/unf их 13), а без этой строки
+		# в full появлялся Родитель, происхождение которого было ниоткуда не видно.
+		$parts = @()
+		$hier = $props.SelectSingleNode("md:Hierarchical", $ns)
+		if ($hier -and $hier.InnerText -eq "true") {
+			$ht = $props.SelectSingleNode("md:HierarchyType", $ns)
+			$htText = if ($ht -and $ht.InnerText -eq "HierarchyFoldersAndItems") { "группы и элементы" } else { "элементы" }
+			$limitNode = $props.SelectSingleNode("md:LimitLevelCount", $ns)
+			$levelNode = $props.SelectSingleNode("md:LevelCount", $ns)
+			if ($limitNode -and $limitNode.InnerText -eq "true" -and $levelNode) {
+				$htText += ", уровней: $($levelNode.InnerText)"
+			} else {
+				$htText += ", без ограничения уровней"
 			}
-			# Код и Наименование уехали в блок стандартных реквизитов — здесь только свойства объекта.
-			# Подчинение печатаем лишь когда оно отличается от дефолта ToItems.
+			$parts += "Иерархический: $htText"
+		}
+		# Код и Наименование уехали в блок стандартных реквизитов — здесь только свойства объекта.
+		# Подчинение печатаем лишь когда оно отличается от дефолта ToItems.
+		if ($mdType -eq "Catalog") {
 			$sub = $props.SelectSingleNode("md:SubordinationUse", $ns)
 			if ($sub -and $sub.InnerText -ne "ToItems") {
 				$subRu = switch ($sub.InnerText) {
@@ -1124,8 +1126,8 @@ if (-not $drillDone) {
 				}
 				$parts += "Подчинение: $subRu"
 			}
-			if ($parts.Count -gt 0) { Out ($parts -join " | ") }
 		}
+		if ($parts.Count -gt 0) { Out ($parts -join " | ") }
 
 		# Register-specific header properties
 		if ($mdType -match "Register$") {

@@ -1,4 +1,4 @@
-# meta-info v1.7 — Compact summary of 1C metadata object (Python port)
+# meta-info v1.8 — Compact summary of 1C metadata object (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1125,29 +1125,31 @@ if not drill_done:
             if parts:
                 out(" | ".join(parts))
 
-        # Catalog-specific header
+        # Свойства иерархии и подчинения. Иерархия — не только у справочников: свойство
+        # Hierarchical есть и у ПВХ (в корпусе acc/erp/ut/unf их 13), а без этой строки
+        # в full появлялся Родитель, происхождение которого было ниоткуда не видно.
+        parts = []
+        hier = find(props, "md:Hierarchical")
+        if hier is not None and inner_text(hier) == "true":
+            ht = find(props, "md:HierarchyType")
+            ht_text = "группы и элементы" if ht is not None and inner_text(ht) == "HierarchyFoldersAndItems" else "элементы"
+            limit_node = find(props, "md:LimitLevelCount")
+            level_node = find(props, "md:LevelCount")
+            if limit_node is not None and inner_text(limit_node) == "true" and level_node is not None:
+                ht_text += f", уровней: {inner_text(level_node)}"
+            else:
+                ht_text += ", без ограничения уровней"
+            parts.append(f"Иерархический: {ht_text}")
+        # Код и Наименование уехали в блок стандартных реквизитов — здесь только свойства объекта.
+        # Подчинение печатаем лишь когда оно отличается от дефолта ToItems.
         if md_type == "Catalog":
-            parts = []
-            hier = find(props, "md:Hierarchical")
-            if hier is not None and inner_text(hier) == "true":
-                ht = find(props, "md:HierarchyType")
-                ht_text = "группы и элементы" if ht is not None and inner_text(ht) == "HierarchyFoldersAndItems" else "элементы"
-                limit_node = find(props, "md:LimitLevelCount")
-                level_node = find(props, "md:LevelCount")
-                if limit_node is not None and inner_text(limit_node) == "true" and level_node is not None:
-                    ht_text += f", уровней: {inner_text(level_node)}"
-                else:
-                    ht_text += ", без ограничения уровней"
-                parts.append(f"Иерархический: {ht_text}")
-            # Код и Наименование уехали в блок стандартных реквизитов — здесь только свойства объекта.
-            # Подчинение печатаем лишь когда оно отличается от дефолта ToItems.
             sub = find(props, "md:SubordinationUse")
             if sub is not None and inner_text(sub) != "ToItems":
                 sub_ru = {"ToFolders": "группам", "ToFoldersAndItems": "группам и элементам"}.get(
                     inner_text(sub), inner_text(sub))
                 parts.append(f"Подчинение: {sub_ru}")
-            if parts:
-                out(" | ".join(parts))
+        if parts:
+            out(" | ".join(parts))
 
         # Register-specific header
         if md_type.endswith("Register"):
