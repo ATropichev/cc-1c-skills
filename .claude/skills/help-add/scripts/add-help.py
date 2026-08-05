@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# help-add v1.12 — Add built-in help to 1C object
+# help-add v1.13 — Add built-in help to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -253,9 +253,22 @@ def save_xml_with_bom(tree, path):
 
 
 def write_text_with_bom(path, text):
-    """Write text to file with UTF-8 BOM."""
-    with open(path, "w", encoding="utf-8-sig") as f:
+    """Write text to file with UTF-8 BOM.
+
+    newline="" обязателен: в текстовом режиме Python на Windows превратил бы \\n в
+    \\r\\n, а на macOS оставил \\n — вывод навыка зависел бы от ОС. Через эту функцию
+    идёт HTML-страница справки, а её платформа хранит именно с LF (корпус: 399 LF из 400).
+    """
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
         f.write(text)
+
+
+def write_xml_file(path, text):
+    """XML в каноне выгрузки Конфигуратора: CRLF, без перевода строки в конце.
+
+    Для Help.xml. HTML-страница сюда НЕ идёт — у неё свой канон (LF).
+    """
+    write_text_with_bom(path, text.replace("\r\n", "\n").replace("\n", "\r\n").rstrip("\r\n"))
 
 
 def main():
@@ -301,7 +314,7 @@ def main():
         '</Help>'
     )
 
-    write_text_with_bom(help_xml_path, help_xml)
+    write_xml_file(help_xml_path, help_xml)
 
     # --- 2. Help/<lang>.html ---
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# interface-edit v1.10 — Edit 1C CommandInterface.xml
+# interface-edit v1.11 — Edit 1C CommandInterface.xml
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -438,7 +438,12 @@ def main():
                 f'\tversion="{format_version}">\n'
                 f'</CommandInterface>'
             )
-            with open(ci_path, "w", encoding="utf-8-sig") as fh:
+            # Файл СОЗДАЁМ — пишем канон выгрузки: CRLF в разделителях. (Правка
+            # существующего файла, наоборот, наследует его стиль — это делает
+            # save_xml_bom через _detect_xml_style.) newline="" обязателен: без него
+            # текстовый режим дал бы CRLF на Windows и LF на macOS.
+            empty_ci = empty_ci.replace("\r\n", "\n").replace("\n", "\r\n")
+            with open(ci_path, "w", encoding="utf-8-sig", newline="") as fh:
                 fh.write(empty_ci)
             print(f"[INFO] Created new CommandInterface.xml: {ci_path}")
         else:

@@ -1,4 +1,4 @@
-﻿# interface-edit v1.10 — Edit 1C CommandInterface.xml
+﻿# interface-edit v1.11 — Edit 1C CommandInterface.xml
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$CIPath,
@@ -202,7 +202,12 @@ if (-not (Test-Path $CIPath)) {
 </CommandInterface>
 "@
 		$utf8Bom = New-Object System.Text.UTF8Encoding($true)
-		[System.IO.File]::WriteAllText($CIPath, $emptyCI, $utf8Bom)
+		# Файл СОЗДАЁМ — пишем канон выгрузки: CRLF, без перевода строки в конце.
+		# (Правка существующего файла, наоборот, наследует его стиль — это делает
+		# основной путь сохранения ниже.) Нормализация нужна потому, что here-string
+		# берёт переводы строк из самого .ps1, а он в репозитории хранится с LF.
+		$emptyCI = ($emptyCI -replace "`r`n", "`n") -replace "`n", "`r`n"
+		[System.IO.File]::WriteAllText($CIPath, $emptyCI.TrimEnd("`r", "`n"), $utf8Bom)
 		Write-Host "[INFO] Created new CommandInterface.xml: $CIPath"
 	} else {
 		Write-Error "File not found: $CIPath (use -CreateIfMissing to create)"

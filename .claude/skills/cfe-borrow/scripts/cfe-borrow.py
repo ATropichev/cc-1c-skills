@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.12 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.13 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -419,8 +419,24 @@ def save_xml_bom(tree, path):
 
 
 def save_text_bom(path, text):
-    with open(path, "w", encoding="utf-8-sig") as fh:
+    """Записать текст как есть, ничего не нормализуя.
+
+    Для файлов, которые мы ПРАВИМ: переводы строк уже пришли из самого файла, и
+    менять их нельзя (контракт #44/#46/#47). newline="" обязателен — без него
+    текстовый режим Python дал бы CRLF на Windows и LF на macOS, то есть вывод
+    навыка зависел бы от ОС.
+    """
+    with open(path, "w", encoding="utf-8-sig", newline="") as fh:
         fh.write(text)
+
+
+def save_xml_file(path, text):
+    """XML в каноне выгрузки Конфигуратора: CRLF, без перевода строки в конце.
+
+    Для файлов, которые мы СОЗДАЁМ. Правило: создаём — пишем канон, правим
+    существующий — наследуем его стиль (см. save_text_bom).
+    """
+    save_text_bom(path, text.replace("\r\n", "\n").replace("\n", "\r\n").rstrip("\r\n"))
 
 
 def new_guid():
@@ -997,7 +1013,9 @@ def main():
             warn(f"Cannot merge attributes: {obj_file} not found")
             return
 
-        with open(obj_file, "r", encoding="utf-8-sig") as fh:
+        # newline="" => без трансляции: иначе CRLF молча схлопнется в LF при чтении
+        # и файл будет переписан в LF (#44/#46/#47).
+        with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
             obj_content = fh.read()
 
         # Collect existing attribute names for dedup (text-based)
@@ -1056,7 +1074,9 @@ def main():
         obj_file = os.path.join(ext_dir, dir_name, f"{obj_name}.xml")
 
         # Read existing object XML (needed for dedup + enrichment)
-        with open(obj_file, "r", encoding="utf-8-sig") as fh:
+        # newline="" => без трансляции: иначе CRLF молча схлопнется в LF при чтении
+        # и файл будет переписан в LF (#44/#46/#47).
+        with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
             obj_content = fh.read()
 
         # Dedup: skip attributes/TS already present in object's ChildObjects (idempotent re-borrow)
@@ -1133,7 +1153,7 @@ def main():
             target_dir = os.path.join(ext_dir, CHILD_TYPE_DIR_MAP[rt["TypeName"]])
             os.makedirs(target_dir, exist_ok=True)
             target_file = os.path.join(target_dir, f"{rt['ObjName']}.xml")
-            save_text_bom(target_file, borrowed_xml)
+            save_xml_file(target_file, borrowed_xml)
             add_to_child_objects(rt["TypeName"], rt["ObjName"])
             borrowed_files.append(target_file)
             info(f"  Auto-borrowed: {rt['TypeName']}.{rt['ObjName']}")
@@ -1198,7 +1218,7 @@ def main():
             t_target_dir = os.path.join(ext_dir, CHILD_TYPE_DIR_MAP[target_type_name])
             os.makedirs(t_target_dir, exist_ok=True)
             t_target_file = os.path.join(t_target_dir, f"{target_obj_name}.xml")
-            save_text_bom(t_target_file, t_borrowed_xml)
+            save_xml_file(t_target_file, t_borrowed_xml)
             add_to_child_objects(target_type_name, target_obj_name)
             borrowed_files.append(t_target_file)
             info(f"  Auto-borrowed for deep path: {target_type_name}.{target_obj_name}")
@@ -1222,7 +1242,7 @@ def main():
                 s_target_dir = os.path.join(ext_dir, CHILD_TYPE_DIR_MAP[srt["TypeName"]])
                 os.makedirs(s_target_dir, exist_ok=True)
                 s_target_file = os.path.join(s_target_dir, f"{srt['ObjName']}.xml")
-                save_text_bom(s_target_file, s_borrowed_xml)
+                save_xml_file(s_target_file, s_borrowed_xml)
                 add_to_child_objects(srt["TypeName"], srt["ObjName"])
                 borrowed_files.append(s_target_file)
                 info(f"  Auto-borrowed (deep): {srt['TypeName']}.{srt['ObjName']}")
@@ -1279,7 +1299,7 @@ def main():
         os.makedirs(form_meta_dir, exist_ok=True)
 
         form_meta_file = os.path.join(form_meta_dir, f"{form_name}.xml")
-        save_text_bom(form_meta_file, "\n".join(form_meta_lines))
+        save_xml_file(form_meta_file, "\n".join(form_meta_lines))
         info(f"  Created: {form_meta_file}")
 
         # 5. Generate Form.xml with BaseForm
@@ -1365,7 +1385,7 @@ def main():
                         target_dir = os.path.join(ext_dir, "CommonPictures")
                         os.makedirs(target_dir, exist_ok=True)
                         target_file = os.path.join(target_dir, f"{pic_name}.xml")
-                        save_text_bom(target_file, borrowed_xml)
+                        save_xml_file(target_file, borrowed_xml)
                         add_to_child_objects("CommonPicture", pic_name)
                         auto_borrowed_pics.append(pic_name)
                         borrowed_files.append(target_file)
@@ -1414,7 +1434,7 @@ def main():
                         target_dir = os.path.join(ext_dir, "StyleItems")
                         os.makedirs(target_dir, exist_ok=True)
                         target_file = os.path.join(target_dir, f"{style_name}.xml")
-                        save_text_bom(target_file, borrowed_xml)
+                        save_xml_file(target_file, borrowed_xml)
                         add_to_child_objects("StyleItem", style_name)
                         borrowed_files.append(target_file)
                         info(f"  Auto-borrowed: StyleItem.{style_name}")
@@ -1478,7 +1498,7 @@ def main():
                         target_dir = os.path.join(ext_dir, "Enums")
                         os.makedirs(target_dir, exist_ok=True)
                         target_file = os.path.join(target_dir, f"{enum_name}.xml")
-                        save_text_bom(target_file, borrowed_xml)
+                        save_xml_file(target_file, borrowed_xml)
                         add_to_child_objects("Enum", enum_name)
                         borrowed_files.append(target_file)
                         info(f"  Auto-borrowed: Enum.{enum_name} (with {len(ev_xmls)} EnumValue(s))")
@@ -1572,7 +1592,7 @@ def main():
         form_xml_dir = os.path.join(form_meta_dir, form_name, "Ext")
         os.makedirs(form_xml_dir, exist_ok=True)
         form_xml_file = os.path.join(form_xml_dir, "Form.xml")
-        save_text_bom(form_xml_file, "".join(parts))
+        save_xml_file(form_xml_file, "".join(parts))
         info(f"  Created: {form_xml_file}")
 
         # 6. Create empty Module.bsl — but NEVER overwrite an existing one (re-borrow must
@@ -1656,7 +1676,7 @@ def main():
                 target_dir = os.path.join(ext_dir, dir_name)
                 os.makedirs(target_dir, exist_ok=True)
                 target_file = os.path.join(target_dir, f"{obj_name}.xml")
-                save_text_bom(target_file, borrowed_xml)
+                save_xml_file(target_file, borrowed_xml)
                 info(f"  Created: {target_file}")
 
                 add_to_child_objects(type_name, obj_name)
@@ -1683,7 +1703,7 @@ def main():
             os.makedirs(target_dir, exist_ok=True)
 
             target_file = os.path.join(target_dir, f"{obj_name}.xml")
-            save_text_bom(target_file, borrowed_xml)
+            save_xml_file(target_file, borrowed_xml)
             info(f"  Created: {target_file}")
 
             add_to_child_objects(type_name, obj_name)

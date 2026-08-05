@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# template-add v1.14 — Add template to 1C object
+# template-add v1.15 — Add template to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -246,9 +246,23 @@ def save_xml_with_bom(tree, path):
 
 
 def write_text_with_bom(path, text):
-    """Write text to file with UTF-8 BOM."""
-    with open(path, "w", encoding="utf-8-sig") as f:
+    """Write text to file with UTF-8 BOM.
+
+    newline="" обязателен: в текстовом режиме Python на Windows превратил бы \\n в
+    \\r\\n, а на macOS оставил \\n — вывод навыка зависел бы от ОС. Через эту функцию
+    идёт HTML-макет, а его платформа хранит именно с LF (корпус: 399 LF из 400).
+    """
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
         f.write(text)
+
+
+def write_xml_file(path, text):
+    """XML в каноне выгрузки Конфигуратора: CRLF, без перевода строки в конце.
+
+    Для XML-макетов (SpreadsheetDocument, DataCompositionSchema) и Template.xml.
+    HTML-макет сюда НЕ идёт — у него свой канон (LF).
+    """
+    write_text_with_bom(path, text.replace("\r\n", "\n").replace("\n", "\r\n").rstrip("\r\n"))
 
 
 def detect_format_version(d):
@@ -376,7 +390,7 @@ def main():
         '</MetaDataObject>'
     )
 
-    write_text_with_bom(template_meta_path, template_meta_xml)
+    write_xml_file(template_meta_path, template_meta_xml)
 
     # --- 2. Template content (Templates/<TemplateName>/Ext/Template.<ext>) ---
 
@@ -408,7 +422,7 @@ def main():
             ' xmlns:xs="http://www.w3.org/2001/XMLSchema">\n'
             '</SpreadsheetDocument>'
         )
-        write_text_with_bom(template_file_path, content)
+        write_xml_file(template_file_path, content)
 
     elif template_type == "BinaryData":
         with open(template_file_path, "wb") as f:
@@ -431,7 +445,7 @@ def main():
             '\t</dataSource>\n'
             '</DataCompositionSchema>'
         )
-        write_text_with_bom(template_file_path, content)
+        write_xml_file(template_file_path, content)
 
     # --- 3. Modify root XML ---
 
