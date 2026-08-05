@@ -97,7 +97,7 @@
 						</v8:item>
 					</Synonym>
 					<Comment/>
-					<Group></Group>
+					<Group/>
 					<CommandParameterType>
 						<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:CatalogRef.ТестКоманд</v8:Type>
 					</CommandParameterType>

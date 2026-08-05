@@ -16,8 +16,8 @@
     <dataSource>ИсточникДанных1</dataSource>
     <query>SELECT 1</query>
     <field xsi:type="DataSetFieldField">
-      <dataPath></dataPath>
-      <field></field>
+      <dataPath/>
+      <field/>
     </field>
   </dataSet>
   <settingsVariant>

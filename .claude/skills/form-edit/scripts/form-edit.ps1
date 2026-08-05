@@ -1,4 +1,4 @@
-﻿# form-edit v1.6 — Edit 1C managed form elements
+﻿# form-edit v1.7 — Edit 1C managed form elements
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1387,6 +1387,9 @@ if ($def.elementEvents -and $def.elementEvents.Count -gt 0) {
 $content = $xmlDoc.OuterXml
 # Ensure encoding declaration is uppercase UTF-8
 $content = $content -replace '^<\?xml version="1.0" encoding="utf-8"\?>', '<?xml version="1.0" encoding="UTF-8"?>'
+# Пустой элемент: OuterXml (как и XmlWriter) пишет `<a />`, Конфигуратор — `<a/>`.
+# Гард на CDATA/комментарии: только там ` />` может быть содержимым, а не концом тега.
+if ($content -notmatch '<!\[CDATA\[|<!--') { $content = [regex]::Replace($content, '(?<=\S) />', '/>') }
 
 $enc = New-Object System.Text.UTF8Encoding($true)
 [System.IO.File]::WriteAllText($resolvedFormPath, $content, $enc)

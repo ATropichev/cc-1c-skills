@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.26 — Edit existing 1C metadata object XML
+# meta-edit v1.27 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -3094,7 +3094,9 @@ def add_predefined_items(items):
     item_list = items if isinstance(items, list) else [items]
     items_xml = ''.join(build_predef_item_xml('\t', it, code_type) for it in item_list)
     if os.path.exists(path):
-        with open(path, 'r', encoding='utf-8-sig') as f:
+        # newline='' => без трансляции переводов строк: иначе CRLF молча схлопнется
+        # в LF при чтении и файл будет переписан в LF (#44/#46/#47).
+        with open(path, 'r', encoding='utf-8-sig', newline='') as f:
             text = f.read()
         text = text.replace('</PredefinedData>', items_xml + '</PredefinedData>')
     else:
@@ -3103,7 +3105,7 @@ def add_predefined_items(items):
                'xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" '
                'xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
                f'xsi:type="{xsi_type}" version="{version}">\r\n')
-        text = hdr + items_xml + '</PredefinedData>\r\n'
+        text = hdr + items_xml + '</PredefinedData>'
     with open(path, 'wb') as f:
         f.write(b'\xef\xbb\xbf')
         f.write(text.encode('utf-8'))

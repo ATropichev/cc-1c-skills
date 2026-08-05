@@ -303,6 +303,14 @@ function buildArgs(skillConfig, caseData, workDir, inputFilePath, runtime) {
 
 const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
 
+// Applied to the python runtime only: irons out ElementTree/lxml serialization quirks
+// so a snapshot recorded from PowerShell can still be compared against the python port.
+//
+// Three former steps — space before `/>`, empty pair `<Tag></Tag>`, trailing whitespace —
+// were REMOVED with the fix for issue #57. They masked exactly the divergence that issue
+// was about (PS wrote `<a />` plus a trailing newline, python wrote `<a/>` without one),
+// so port parity was being checked through the mask. Do not bring them back: the byte
+// canon itself is now asserted per case via `preserves`.
 function normalizeXmlContent(text, opts = {}) {
   let s = text;
   // 1. XML declaration: normalize quotes and encoding case
@@ -317,14 +325,9 @@ function normalizeXmlContent(text, opts = {}) {
   if (!opts.keepXmlns) {
     s = s.replace(/\s+xmlns(?::[\w]+)?="[^"]*"/g, '');
   }
-  // 4. Normalize self-closing tags: remove space before />
-  s = s.replace(/\s*\/>/g, '/>');
-  // 5. Collapse whitespace between tags: ">  \n\t  <" → "><"
+  // 3. Collapse whitespace between tags: ">  \n\t  <" → "><". Kept: the ports indent a
+  //    few blocks differently, which is formatting rather than the byte canon.
   s = s.replace(/>\s+</g, '><');
-  // 6. Normalize empty elements: <Tag></Tag> → <Tag/>
-  s = s.replace(/<([\w:.]+)([^>]*)><\/\1>/g, '<$1$2/>');
-  // 7. Strip trailing whitespace
-  s = s.trimEnd();
   return s;
 }
 
@@ -356,10 +359,11 @@ function normalizeContent(text, config, relFile) {
   return s;
 }
 
-// ─── Byte-style preservation check (round-trip #44/#46/#47) ─────────────────
+// ─── Byte-style preservation check (round-trip #44/#46/#47, канон #57) ──────
 // Проверяет СЫРЫЕ байты файла (в обход normalizeContent): BOM / EOL / регистр
-// encoding / финальный перенос / отсутствие &#13;. spec: { file, bom, eol:"crlf"|"lf",
-// encoding, finalNewline, noCR13 }. Возвращает массив ошибок.
+// encoding / финальный перенос / отсутствие &#13; / форма пустого элемента.
+// spec: { file, bom, eol:"crlf"|"lf", encoding, finalNewline, noCR13,
+//         selfClose:"tight", noEmptyPairs }. Возвращает массив ошибок.
 function checkPreserves(workDir, spec) {
   const errs = [];
   const target = join(workDir, spec.file);
@@ -371,9 +375,18 @@ function checkPreserves(workDir, spec) {
   if (spec.bom !== undefined && hasBom !== spec.bom)
     errs.push(`preserves: BOM expected ${spec.bom}, got ${hasBom}`);
   if (spec.eol) {
-    const hasCR = body.includes(0x0d);
-    const wantCR = spec.eol === 'crlf';
-    if (hasCR !== wantCR) errs.push(`preserves: EOL expected ${spec.eol} (CR=${wantCR}), got CR=${hasCR}`);
+    // Считаем ОДИНОЧНЫЕ LF, а не «есть ли хоть один CR»: прежняя проверка пропускала
+    // смешанный выход (cfe-init давал 10 CR на 70 строк и проходил её) — то есть
+    // главный дефект #57 был ей невидим.
+    let lf = 0, crlf = 0;
+    for (let i = 0; i < body.length; i++) {
+      if (body[i] === 0x0a) { lf++; if (i > 0 && body[i - 1] === 0x0d) crlf++; }
+    }
+    const loneLF = lf - crlf;
+    if (spec.eol === 'crlf' && loneLF > 0)
+      errs.push(`preserves: EOL expected crlf, got mixed (${crlf} CRLF + ${loneLF} lone LF)`);
+    if (spec.eol === 'lf' && crlf > 0)
+      errs.push(`preserves: EOL expected lf, got mixed (${crlf} CRLF + ${loneLF} lone LF)`);
   }
   if (spec.encoding) {
     const m = /encoding="([^"]+)"/.exec(text);
@@ -384,6 +397,16 @@ function checkPreserves(workDir, spec) {
     if (endsNL !== spec.finalNewline) errs.push(`preserves: finalNewline expected ${spec.finalNewline}, got ${endsNL}`);
   }
   if (spec.noCR13 && text.includes('&#13;')) errs.push(`preserves: unexpected &#13; literal in output`);
+  // Канон Конфигуратора (#57): пустой элемент — <a/>, не <a /> и не <a></a>.
+  // Проверено на 8 выгрузках в cfsrc: 21 294 119 самозакрывающихся тегов, пробельных 0.
+  if (spec.selfClose === 'tight') {
+    const spaced = text.match(/<[\w:.]+[^<>]*?\s\/>/g);
+    if (spaced) errs.push(`preserves: expected tight self-closing, got ${spaced.length}× spaced (e.g. ${spaced[0].slice(0, 60)})`);
+  }
+  if (spec.noEmptyPairs) {
+    const pairs = text.match(/<([\w:.]+)([^<>]*)><\/\1>/g);
+    if (pairs) errs.push(`preserves: expected self-closing, got ${pairs.length}× empty pair (e.g. ${pairs[0].slice(0, 60)})`);
+  }
   return errs;
 }
 

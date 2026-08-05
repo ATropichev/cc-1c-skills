@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-info v1.8 — Analyze 1C DCS structure
+# skd-info v1.9 — Analyze 1C DCS structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1802,7 +1802,10 @@ def main():
         if not os.path.isabs(out_path):
             out_path = os.path.join(os.getcwd(), out_path)
         with open(out_path, "w", encoding="utf-8-sig") as fh:
-            fh.write("\n".join(result))
+            # Хвостовой перевод строки — как у PS-порта (WriteAllLines его добавляет).
+            # Это текстовый отчёт, а не XML метаданных: канон Конфигуратора сюда не
+            # относится, важен лишь паритет портов.
+            fh.write("\n".join(result) + "\n")
         print(f"Written {total_lines} lines to {args.OutFile}")
         sys.exit(0)
 

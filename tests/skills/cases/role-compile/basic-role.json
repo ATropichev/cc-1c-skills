@@ -24,6 +24,16 @@
     "files": [
       "Roles/Кладовщик.xml",
       "Roles/Кладовщик/Ext/Rights.xml"
-    ]
+    ],
+    "preserves": {
+      "file": "Roles/Кладовщик/Ext/Rights.xml",
+      "bom": true,
+      "eol": "crlf",
+      "encoding": "UTF-8",
+      "finalNewline": false,
+      "noCR13": true,
+      "selfClose": "tight",
+      "noEmptyPairs": true
+    }
   }
 }

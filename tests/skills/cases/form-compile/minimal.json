@@ -3,17 +3,40 @@
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "DataProcessor", "name": "Минимальная" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "input": {
+        "type": "DataProcessor",
+        "name": "Минимальная"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "form-add/scripts/form-add",
-      "args": { "-ObjectPath": "{workDir}/DataProcessors/Минимальная.xml", "-FormName": "Форма" }
+      "args": {
+        "-ObjectPath": "{workDir}/DataProcessors/Минимальная.xml",
+        "-FormName": "Форма"
+      }
     }
   ],
-  "params": { "outputPath": "DataProcessors/Минимальная/Forms/Форма/Ext/Form.xml" },
+  "params": {
+    "outputPath": "DataProcessors/Минимальная/Forms/Форма/Ext/Form.xml"
+  },
   "validatePath": "DataProcessors/Минимальная/Forms/Форма/Ext/Form.xml",
   "input": {
     "title": "Минимальная форма"
+  },
+  "expect": {
+    "preserves": {
+      "file": "DataProcessors/Минимальная/Forms/Форма/Ext/Form.xml",
+      "bom": true,
+      "eol": "crlf",
+      "encoding": "UTF-8",
+      "finalNewline": false,
+      "noCR13": true,
+      "selfClose": "tight",
+      "noEmptyPairs": true
+    }
   }
 }

@@ -7,12 +7,12 @@
 		</v8:item>
 	</Title>
 	<AutoTitle>false</AutoTitle>
-	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1" />
+	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
 	<ChildItems>
 		<Button name="Выполнить" id="1">
 			<CommandName>Form.Command.Выполнить</CommandName>
 			<DefaultButton>true</DefaultButton>
-			<ExtendedTooltip name="ВыполнитьРасширеннаяПодсказка" id="2" />
+			<ExtendedTooltip name="ВыполнитьРасширеннаяПодсказка" id="2"/>
 		</Button>
 	</ChildItems>
 	<Attributes>

@@ -1,4 +1,4 @@
-﻿# skd-info v1.8 — Analyze 1C DCS structure
+﻿# skd-info v1.9 — Analyze 1C DCS structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)]
