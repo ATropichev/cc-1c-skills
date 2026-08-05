@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.77 — Compile 1C metadata object from JSON
+# meta-compile v1.78 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -4360,7 +4360,7 @@ if obj_type == 'WebService':
 X(f'\t</{obj_type}>')
 X('</MetaDataObject>')
 
-metadata_xml = '\n'.join(lines) + '\n'
+metadata_xml = '\n'.join(lines)
 
 # ---------------------------------------------------------------------------
 # 16. Write files

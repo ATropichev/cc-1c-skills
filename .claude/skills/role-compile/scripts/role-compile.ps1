@@ -1,4 +1,4 @@
-﻿# role-compile v1.11 — Compile 1C role from JSON
+﻿# role-compile v1.12 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -799,8 +799,8 @@ if (-not (Test-Path $extDir)) {
 }
 
 $enc = New-Object System.Text.UTF8Encoding($true)
-[System.IO.File]::WriteAllText($metadataPath, $metadataXml, $enc)
-[System.IO.File]::WriteAllText($rightsPath, $rightsXml, $enc)
+[System.IO.File]::WriteAllText($metadataPath, $metadataXml.TrimEnd("`r", "`n"), $enc)
+[System.IO.File]::WriteAllText($rightsPath, $rightsXml.TrimEnd("`r", "`n"), $enc)
 
 # --- 12. Register in Configuration.xml ---
 

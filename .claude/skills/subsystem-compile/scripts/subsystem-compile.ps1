@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.12 — Create 1C subsystem from JSON definition
+﻿# subsystem-compile v1.13 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -240,7 +240,7 @@ function Write-ChildSubsystemStub([string]$childPath, [string]$childName, [strin
 	[void]$sb.AppendLine("`t`t<ChildObjects/>")
 	[void]$sb.AppendLine("`t</Subsystem>")
 	[void]$sb.AppendLine('</MetaDataObject>')
-	[System.IO.File]::WriteAllText($childPath, $sb.ToString(), $utf8Bom)
+	[System.IO.File]::WriteAllText($childPath, $sb.ToString().TrimEnd("`r", "`n"), $utf8Bom)
 }
 
 # --- 3. Content type normalization (plural→singular, Russian→English) ---
@@ -543,7 +543,7 @@ $targetXml = Join-Path $subsDir "$objName.xml"
 # Write XML
 $xmlContent = $script:xml.ToString()
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
-[System.IO.File]::WriteAllText($targetXml, $xmlContent, $utf8Bom)
+[System.IO.File]::WriteAllText($targetXml, $xmlContent.TrimEnd("`r", "`n"), $utf8Bom)
 Write-Host "[OK] Created: $targetXml"
 
 # Create subdirectory and stub files for children if they exist

@@ -1,4 +1,4 @@
-﻿# form-compile v1.177 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.178 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -6622,7 +6622,7 @@ if (-not (Test-Path $outDir)) {
 }
 
 $enc = New-Object System.Text.UTF8Encoding($true)
-[System.IO.File]::WriteAllText($outPath, $xml.ToString(), $enc)
+[System.IO.File]::WriteAllText($outPath, $xml.ToString().TrimEnd("`r", "`n"), $enc)
 
 # --- 13b. Auto-register form in parent object XML ---
 

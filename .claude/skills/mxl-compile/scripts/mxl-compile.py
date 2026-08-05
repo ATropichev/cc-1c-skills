@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mxl-compile v1.5 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.6 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -802,7 +802,7 @@ def main():
     if out_dir and not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
 
-    content = '\n'.join(lines) + '\n'
+    content = '\n'.join(lines)
     write_utf8_bom(out_path, content)
 
     # --- 9. Summary ---

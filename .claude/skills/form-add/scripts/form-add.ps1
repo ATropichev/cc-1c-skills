@@ -1,4 +1,4 @@
-﻿# form-add v1.13 — Add managed form to 1C config object
+﻿# form-add v1.14 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -337,7 +337,7 @@ $formMetaXml = @"
 </MetaDataObject>
 "@
 
-[System.IO.File]::WriteAllText($formMetaPath, $formMetaXml, $encBom)
+[System.IO.File]::WriteAllText($formMetaPath, $formMetaXml.TrimEnd("`r", "`n"), $encBom)
 
 # --- 3b. Form.xml ---
 
@@ -444,7 +444,7 @@ if ($Purpose -eq "List" -or $Purpose -eq "Choice") {
 if (Test-Path $formXmlPath) {
 	Write-Host "[SKIP] Form.xml already exists: $formXmlPath — not overwriting"
 } else {
-	[System.IO.File]::WriteAllText($formXmlPath, $formXml, $encBom)
+	[System.IO.File]::WriteAllText($formXmlPath, $formXml.TrimEnd("`r", "`n"), $encBom)
 }
 
 # --- 3c. Module.bsl ---

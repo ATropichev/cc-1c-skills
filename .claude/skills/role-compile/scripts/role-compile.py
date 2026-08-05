@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.11 — Compile 1C role from JSON
+# role-compile v1.12 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -708,7 +708,7 @@ def main():
     lines.append('    </Role>')
     lines.append('</MetaDataObject>')
 
-    metadata_xml = '\n'.join(lines) + '\n'
+    metadata_xml = '\n'.join(lines)
 
     # --- 5. Emit Rights XML (Roles/Name/Ext/Rights.xml) ---
     lines = []
@@ -756,7 +756,7 @@ def main():
 
     lines.append('</Rights>')
 
-    rights_xml = '\n'.join(lines) + '\n'
+    rights_xml = '\n'.join(lines)
 
     # --- 6. Write output files ---
     out_dir = args.OutputDir

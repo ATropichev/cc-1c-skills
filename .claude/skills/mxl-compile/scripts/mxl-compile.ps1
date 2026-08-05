@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.5 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.6 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -855,7 +855,7 @@ X '</document>'
 $enc = New-Object System.Text.UTF8Encoding($true)
 $resolvedPath = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path (Get-Location) $OutputPath }
 Assert-EditAllowed $resolvedPath 'editable'
-[System.IO.File]::WriteAllText($resolvedPath, $xml.ToString(), $enc)
+[System.IO.File]::WriteAllText($resolvedPath, $xml.ToString().TrimEnd("`r", "`n"), $enc)
 
 # --- 9. Summary ---
 

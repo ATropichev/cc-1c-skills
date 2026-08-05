@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.177 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.178 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -6580,7 +6580,7 @@ def main():
     if out_dir and not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
 
-    content = '\n'.join(lines) + '\n'
+    content = '\n'.join(lines)
     write_utf8_bom(out_path, content)
 
     # --- 4. Auto-register form in parent object XML ---

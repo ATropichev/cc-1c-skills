@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-add v1.13 — Add managed form to 1C config object
+# form-add v1.14 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse

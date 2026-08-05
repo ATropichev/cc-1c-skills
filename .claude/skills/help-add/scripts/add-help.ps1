@@ -1,4 +1,4 @@
-﻿# help-add v1.10 — Add built-in help to 1C object
+﻿# help-add v1.11 — Add built-in help to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -195,7 +195,7 @@ $helpXml = @"
 </Help>
 "@
 
-[System.IO.File]::WriteAllText($helpXmlPath, $helpXml, $encBom)
+[System.IO.File]::WriteAllText($helpXmlPath, $helpXml.TrimEnd("`r", "`n"), $encBom)
 
 # --- 2. Help/<lang>.html ---
 

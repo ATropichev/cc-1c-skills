@@ -1,4 +1,4 @@
-﻿# skd-compile v1.109 — Compile 1C DCS from JSON
+﻿# skd-compile v1.110 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -3687,7 +3687,7 @@ if ($parentDir -and -not (Test-Path $parentDir)) {
 
 $content = $script:xml.ToString()
 $utf8Bom = New-Object System.Text.UTF8Encoding $true
-[System.IO.File]::WriteAllText($OutputPath, $content, $utf8Bom)
+[System.IO.File]::WriteAllText($OutputPath, $content.TrimEnd("`r", "`n"), $utf8Bom)
 
 # --- 14. Statistics ---
 

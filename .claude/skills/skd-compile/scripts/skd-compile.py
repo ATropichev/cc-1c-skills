@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.109 — Compile 1C DCS from JSON
+# skd-compile v1.110 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -3069,7 +3069,7 @@ def main():
     if parent_dir and not os.path.exists(parent_dir):
         os.makedirs(parent_dir, exist_ok=True)
 
-    content = '\n'.join(lines) + '\n'
+    content = '\n'.join(lines)
     write_utf8_bom(output_path, content)
 
     # --- 5. Statistics ---
