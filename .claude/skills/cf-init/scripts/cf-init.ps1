@@ -1,4 +1,4 @@
-﻿# cf-init v1.4 — Create empty 1C configuration scaffold
+﻿# cf-init v1.5 — Create empty 1C configuration scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -240,11 +240,20 @@ if (-not (Test-Path $extDir)) {
 # --- Write files with UTF-8 BOM ---
 $enc = New-Object System.Text.UTF8Encoding($true)
 
-[System.IO.File]::WriteAllText($cfgFile, $cfgXml, $enc)
+# Канон выгрузки Конфигуратора: CRLF в разделителях строк, без перевода в конце
+# файла. Скелет собирается here-string'ами, а .ps1 хранится с LF — отсюда LF и
+# смешанный EOL. Нормализация здесь безопасна: многострочных текстовых узлов в
+# скелете нет. Модули .bsl и текстовые макеты через эту функцию НЕ пишутся.
+function Write-XmlFile([string]$path, [string]$text, $encoding) {
+	$t = ($text -replace "`r`n", "`n") -replace "`n", "`r`n"
+	[System.IO.File]::WriteAllText($path, $t.TrimEnd("`r", "`n"), $encoding)
+}
+
+Write-XmlFile $cfgFile $cfgXml $enc
 $langFile = Join-Path $langDir "Русский.xml"
-[System.IO.File]::WriteAllText($langFile, $langXml, $enc)
+Write-XmlFile $langFile $langXml $enc
 $caiFile = Join-Path $extDir "ClientApplicationInterface.xml"
-[System.IO.File]::WriteAllText($caiFile, $caiXml, $enc)
+Write-XmlFile $caiFile $caiXml $enc
 
 # --- Output ---
 Write-Host "[OK] Создана конфигурация: $Name"

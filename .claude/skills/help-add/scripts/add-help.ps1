@@ -1,4 +1,4 @@
-﻿# help-add v1.11 — Add built-in help to 1C object
+﻿# help-add v1.12 — Add built-in help to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -195,7 +195,16 @@ $helpXml = @"
 </Help>
 "@
 
-[System.IO.File]::WriteAllText($helpXmlPath, $helpXml.TrimEnd("`r", "`n"), $encBom)
+# Канон выгрузки Конфигуратора: CRLF в разделителях строк, без перевода в конце
+# файла. Скелет собирается here-string'ами, а .ps1 хранится с LF — отсюда LF и
+# смешанный EOL. Нормализация здесь безопасна: многострочных текстовых узлов в
+# скелете нет. Модули .bsl и текстовые макеты через эту функцию НЕ пишутся.
+function Write-XmlFile([string]$path, [string]$text, $encoding) {
+	$t = ($text -replace "`r`n", "`n") -replace "`n", "`r`n"
+	[System.IO.File]::WriteAllText($path, $t.TrimEnd("`r", "`n"), $encoding)
+}
+
+Write-XmlFile $helpXmlPath $helpXml $encBom
 
 # --- 2. Help/<lang>.html ---
 

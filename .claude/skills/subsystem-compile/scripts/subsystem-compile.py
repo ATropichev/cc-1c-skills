@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-compile v1.13 — Create 1C subsystem from JSON definition
+# subsystem-compile v1.15 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -204,6 +204,12 @@ def detect_format_version(d):
     return "2.17"
 
 
+def detect_eol(text):
+    # Перевод строки ВСТАВКИ берём из самого файла: канон CRLF относится к файлам,
+    # которые мы создаём, а правка существующего сохраняет его стиль (#44/#46/#47).
+    crlf = text.count('\r\n')
+    return '\r\n' if crlf and crlf >= text.count('\n') - crlf else '\n'
+
 def esc_xml(s):
     """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
     (92142 сырых кавычки на корпус, ни одной &quot;); &quot; она принимает, но нормализует обратно."""
@@ -279,7 +285,7 @@ def write_child_subsystem_stub(child_path, child_name, format_version):
     lines.append('\t\t<ChildObjects/>')
     lines.append('\t</Subsystem>')
     lines.append('</MetaDataObject>')
-    write_utf8_bom(child_path, '\n'.join(lines))
+    write_utf8_bom(child_path, '\r\n'.join(lines))
 
 
 def main():
@@ -525,7 +531,7 @@ def main():
     target_xml = os.path.join(subs_dir, f'{obj_name}.xml')
 
     # Write XML
-    xml_content = '\n'.join(lines)
+    xml_content = '\r\n'.join(lines)
     write_utf8_bom(target_xml, xml_content)
     print(f"[OK] Created: {target_xml}")
 
@@ -555,9 +561,12 @@ def main():
             parent_xml_path = config_xml
 
     if parent_xml_path and os.path.exists(parent_xml_path):
-        with open(parent_xml_path, 'r', encoding='utf-8-sig') as f:
+        # newline='' => без трансляции переводов строк: иначе CRLF молча схлопнется
+        # в LF при чтении и файл будет переписан в LF (#44/#46/#47).
+        with open(parent_xml_path, 'r', encoding='utf-8-sig', newline='') as f:
             raw_text = f.read()
 
+        eol = detect_eol(raw_text)
         doc = ET.ElementTree(ET.fromstring(raw_text))
         root = doc.getroot()
         md_ns = 'http://v8.1c.ru/8.3/MDClasses'
@@ -593,10 +602,10 @@ def main():
             if not already_exists:
                 # Use raw text manipulation to preserve formatting
                 if '<ChildObjects/>' in raw_text:
-                    replacement = f'<ChildObjects>\n\t\t\t<Subsystem>{esc_xml(obj_name)}</Subsystem>\n\t\t</ChildObjects>'
+                    replacement = ('<ChildObjects>' + eol + f'\t\t\t<Subsystem>{esc_xml(obj_name)}</Subsystem>' + eol + '\t\t</ChildObjects>')
                     raw_text = raw_text.replace('<ChildObjects/>', replacement, 1)
                 elif '</ChildObjects>' in raw_text:
-                    insert_line = f'\t\t\t<Subsystem>{esc_xml(obj_name)}</Subsystem>\n'
+                    insert_line = f'\t\t\t<Subsystem>{esc_xml(obj_name)}</Subsystem>' + eol
                     raw_text = raw_text.replace('</ChildObjects>', insert_line + '\t\t</ChildObjects>', 1)
 
                 write_utf8_bom(parent_xml_path, raw_text)

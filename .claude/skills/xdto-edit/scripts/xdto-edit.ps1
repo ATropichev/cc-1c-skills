@@ -1,4 +1,4 @@
-﻿# xdto-edit v1.1 — Point edits of a 1C XDTO package
+﻿# xdto-edit v1.2 — Point edits of a 1C XDTO package
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)]

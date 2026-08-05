@@ -1,4 +1,4 @@
-﻿# cf-edit v1.12 — Edit 1C configuration root (Configuration.xml)
+﻿# cf-edit v1.14 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$ConfigPath,
@@ -163,6 +163,11 @@ function Assert-EditAllowed([string]$targetPath, [string]$require) {
 Assert-EditAllowed $resolvedPath 'editable'
 
 # --- Load XML with PreserveWhitespace ---
+# EOL исходного файла запоминаем ДО разбора: парсер XML по спецификации схлопывает
+# CRLF в LF, а вставки ниже собираются с явным CRLF — без восстановления в точке
+# записи LF-файл стал бы смешанным. Канон CRLF относится к файлам, которые мы
+# СОЗДАЁМ; правка существующего сохраняет его стиль (#44/#46/#47).
+$script:srcEol = if (([System.IO.File]::ReadAllText($resolvedPath)) -match "`r`n") { "`r`n" } else { "`n" }
 $script:xmlDoc = New-Object System.Xml.XmlDocument
 $script:xmlDoc.PreserveWhitespace = $true
 $script:xmlDoc.Load($resolvedPath)
@@ -691,7 +696,8 @@ $bodyBlock$declarations
 	if (-not (Test-Path $extDir)) { New-Item -ItemType Directory -Path $extDir -Force | Out-Null }
 	$caiPath = Join-Path $extDir "ClientApplicationInterface.xml"
 	$utf8Bom = New-Object System.Text.UTF8Encoding($true)
-	[System.IO.File]::WriteAllText($caiPath, $caiXml, $utf8Bom)
+	# Файл создаём мы — канон: CRLF в разделителях, без перевода строки в конце.
+	[System.IO.File]::WriteAllText($caiPath, (($caiXml -replace "`r`n", "`n") -replace "`n", "`r`n").TrimEnd("`r", "`n"), $utf8Bom)
 	$script:modifyCount++
 	Info "Wrote panel layout: $caiPath"
 }
@@ -880,7 +886,8 @@ $rightXml
 	if (-not (Test-Path $extDir)) { New-Item -ItemType Directory -Path $extDir -Force | Out-Null }
 	$hpPath = Join-Path $extDir "HomePageWorkArea.xml"
 	$utf8Bom = New-Object System.Text.UTF8Encoding($true)
-	[System.IO.File]::WriteAllText($hpPath, $hpXml, $utf8Bom)
+	# Файл создаём мы — канон: CRLF в разделителях, без перевода строки в конце.
+	[System.IO.File]::WriteAllText($hpPath, (($hpXml -replace "`r`n", "`n") -replace "`n", "`r`n").TrimEnd("`r", "`n"), $utf8Bom)
 	$script:modifyCount++
 	Info "Wrote home page layout: $hpPath"
 }
@@ -985,6 +992,8 @@ $text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
 # Пустой элемент: XmlWriter пишет `<a />`, Конфигуратор — `<a/>`. Гард на CDATA/комментарии:
 # только там `>` не экранируется, и ` />` может быть содержимым, а не концом тега.
 if ($text -notmatch '<!\[CDATA\[|<!--') { $text = [regex]::Replace($text, '(?<=\S) />', '/>') }
+# Возвращаем EOL исходного файла: вставки собраны с CRLF, а сам документ мог быть LF.
+$text = ($text -replace "`r`n", "`n") -replace "`n", $script:srcEol
 
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
 [System.IO.File]::WriteAllText($resolvedPath, $text, $utf8Bom)

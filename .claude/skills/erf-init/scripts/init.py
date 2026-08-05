@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# erf-init v1.1 — Init 1C external report scaffold
+# erf-init v1.2 — Init 1C external report scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C external report."""
 import sys, os, argparse, uuid
@@ -14,6 +14,13 @@ def write_utf8_bom(path, content):
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         f.write(content)
 
+def write_xml_file(path, content):
+    # Канон выгрузки Конфигуратора: CRLF в разделителях строк, без перевода в конце
+    # файла. Скелет собирается тройными кавычками, а .py хранится с LF — отсюда LF и
+    # смешанный EOL. Нормализация здесь безопасна: многострочных текстовых узлов в
+    # скелете нет. Модули .bsl и текстовые макеты через неё НЕ пишутся.
+    text = content.replace('\r\n', '\n').replace('\n', '\r\n').rstrip('\r\n')
+    write_utf8_bom(path, text)
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -90,7 +97,7 @@ def main():
     ext_dir = os.path.join(report_dir, "Ext")
     os.makedirs(ext_dir, exist_ok=True)
 
-    write_utf8_bom(os.path.join(os.path.abspath(src_dir), f"{name}.xml"), xml)
+    write_xml_file(os.path.join(os.path.abspath(src_dir), f"{name}.xml"), xml)
 
     # --- Модуль объекта ---
     module_bsl = """\
@@ -140,7 +147,7 @@ def main():
 \t</Template>
 </MetaDataObject>'''
 
-        write_utf8_bom(skd_meta_path, skd_meta_xml)
+        write_xml_file(skd_meta_path, skd_meta_xml)
 
         skd_content = '''<?xml version="1.0" encoding="UTF-8"?>
 <DataCompositionSchema xmlns="http://v8.1c.ru/8.1/data-composition-system/schema"
@@ -158,7 +165,7 @@ def main():
 </DataCompositionSchema>'''
 
         skd_file_path = os.path.join(skd_ext_dir, "Template.xml")
-        write_utf8_bom(skd_file_path, skd_content)
+        write_xml_file(skd_file_path, skd_content)
 
         print(f"     СКД:     {skd_meta_path}")
         print(f"     Тело:    {skd_file_path}")

@@ -1,4 +1,4 @@
-﻿# form-compile v1.178 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.180 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,

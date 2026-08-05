@@ -1,4 +1,4 @@
-﻿# form-add v1.14 — Add managed form to 1C config object
+﻿# form-add v1.16 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -337,7 +337,16 @@ $formMetaXml = @"
 </MetaDataObject>
 "@
 
-[System.IO.File]::WriteAllText($formMetaPath, $formMetaXml.TrimEnd("`r", "`n"), $encBom)
+# Канон выгрузки Конфигуратора: CRLF в разделителях строк, без перевода в конце
+# файла. Скелет собирается here-string'ами, а .ps1 хранится с LF — отсюда LF и
+# смешанный EOL. Нормализация здесь безопасна: многострочных текстовых узлов в
+# скелете нет. Модули .bsl и текстовые макеты через эту функцию НЕ пишутся.
+function Write-XmlFile([string]$path, [string]$text, $encoding) {
+	$t = ($text -replace "`r`n", "`n") -replace "`n", "`r`n"
+	[System.IO.File]::WriteAllText($path, $t.TrimEnd("`r", "`n"), $encoding)
+}
+
+Write-XmlFile $formMetaPath $formMetaXml $encBom
 
 # --- 3b. Form.xml ---
 
@@ -444,7 +453,7 @@ if ($Purpose -eq "List" -or $Purpose -eq "Choice") {
 if (Test-Path $formXmlPath) {
 	Write-Host "[SKIP] Form.xml already exists: $formXmlPath — not overwriting"
 } else {
-	[System.IO.File]::WriteAllText($formXmlPath, $formXml.TrimEnd("`r", "`n"), $encBom)
+	Write-XmlFile $formXmlPath $formXml $encBom
 }
 
 # --- 3c. Module.bsl ---

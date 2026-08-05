@@ -1,4 +1,4 @@
-﻿# cfe-init v1.2 — Create 1C configuration extension scaffold (CFE)
+﻿# cfe-init v1.3 — Create 1C configuration extension scaffold (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -252,9 +252,18 @@ if (-not (Test-Path $langDir)) {
 # --- Write files with UTF-8 BOM ---
 $enc = New-Object System.Text.UTF8Encoding($true)
 
-[System.IO.File]::WriteAllText($cfgFile, $cfgXml, $enc)
+# Канон выгрузки Конфигуратора: CRLF в разделителях строк, без перевода в конце
+# файла. Скелет собирается here-string'ами, а .ps1 хранится с LF — отсюда LF и
+# смешанный EOL. Нормализация здесь безопасна: многострочных текстовых узлов в
+# скелете нет. Модули .bsl и текстовые макеты через эту функцию НЕ пишутся.
+function Write-XmlFile([string]$path, [string]$text, $encoding) {
+	$t = ($text -replace "`r`n", "`n") -replace "`n", "`r`n"
+	[System.IO.File]::WriteAllText($path, $t.TrimEnd("`r", "`n"), $encoding)
+}
+
+Write-XmlFile $cfgFile $cfgXml $enc
 $langFile = Join-Path $langDir "Русский.xml"
-[System.IO.File]::WriteAllText($langFile, $langXml, $enc)
+Write-XmlFile $langFile $langXml $enc
 
 # --- Role ---
 if (-not $NoRole) {
@@ -263,7 +272,7 @@ if (-not $NoRole) {
 		New-Item -ItemType Directory -Path $roleDir -Force | Out-Null
 	}
 	$roleFile = Join-Path $roleDir "$roleName.xml"
-	[System.IO.File]::WriteAllText($roleFile, $roleXml, $enc)
+	Write-XmlFile $roleFile $roleXml $enc
 }
 
 # --- Output ---

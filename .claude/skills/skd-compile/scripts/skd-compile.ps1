@@ -1,4 +1,4 @@
-﻿# skd-compile v1.110 — Compile 1C DCS from JSON
+﻿# skd-compile v1.111 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,

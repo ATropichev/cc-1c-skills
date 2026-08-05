@@ -1,4 +1,4 @@
-﻿# meta-compile v1.78 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.80 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -161,7 +161,10 @@ if ($def -is [array] -or ($null -ne $def -and $def.GetType().BaseType.Name -eq '
 	$idx = 0
 	foreach ($item in $def) {
 		$idx++
-		$tmpJson = Join-Path ([System.IO.Path]::GetTempPath()) "meta-compile-batch-$idx.json"
+		# Имя с GUID, а не "batch-$idx": фиксированное имя в общем %TEMP% сталкивало
+		# два параллельных запуска навыка на одной машине — Set-Content падал с
+		# «file is being used by another process». py-порт уже брал mkstemp.
+		$tmpJson = Join-Path ([System.IO.Path]::GetTempPath()) "meta-compile-batch-$idx-$([guid]::NewGuid().ToString('N')).json"
 		try {
 			$item | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 $tmpJson
 			$proc = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoProfile -File `"$PSCommandPath`" -JsonPath `"$tmpJson`" -OutputDir `"$OutputDir`"" -NoNewWindow -Wait -PassThru
@@ -4611,7 +4614,7 @@ function Build-PredefinedXml {
 	[void]$sb.Append("<PredefinedData xmlns=`"http://v8.1c.ru/8.3/xcf/predef`" xmlns:v8=`"http://v8.1c.ru/8.1/data/core`" xmlns:xr=`"http://v8.1c.ru/8.3/xcf/readable`" xmlns:xs=`"http://www.w3.org/2001/XMLSchema`" xmlns:xsi=`"http://www.w3.org/2001/XMLSchema-instance`" xsi:type=`"$xsiType`" version=`"$($script:formatVersion)`">`n")
 	foreach ($it in $items) { Emit-PredefItem $sb $it "`t" $codeType }
 	[void]$sb.Append("</PredefinedData>`n")
-	return $sb.ToString()
+	return ($sb.ToString() -replace "`r`n", "`n") -replace "`n", "`r`n"
 }
 
 # --- Предопределённые СЧЕТА Плана счетов (отдельная грамматика: AccountType/OffBalance/Order/AccountingFlags/
@@ -4699,7 +4702,7 @@ function Build-PredefinedAccountXml {
 	[void]$sb.Append("<PredefinedData xmlns=`"http://v8.1c.ru/8.3/xcf/predef`" xmlns:v8=`"http://v8.1c.ru/8.1/data/core`" xmlns:xr=`"http://v8.1c.ru/8.3/xcf/readable`" xmlns:xs=`"http://www.w3.org/2001/XMLSchema`" xmlns:xsi=`"http://www.w3.org/2001/XMLSchema-instance`" xsi:type=`"ChartOfAccountsPredefinedItems`" version=`"$($script:formatVersion)`">`n")
 	foreach ($it in $items) { Emit-PredefAccount $sb $it "`t" $objName $acctFlagNames $extDimFlagNames $extDimTypesRef }
 	[void]$sb.Append("</PredefinedData>`n")
-	return $sb.ToString()
+	return ($sb.ToString() -replace "`r`n", "`n") -replace "`n", "`r`n"
 }
 
 # --- Предопределённые ВИДЫ РАСЧЁТА (плоские: Name/Code/Description/ActionPeriodIsBase). Строка "(Код) Имя [Наим]"
@@ -4726,7 +4729,7 @@ function Build-PredefinedCalcTypeXml {
 	[void]$sb.Append("<PredefinedData xmlns=`"http://v8.1c.ru/8.3/xcf/predef`" xmlns:v8=`"http://v8.1c.ru/8.1/data/core`" xmlns:xr=`"http://v8.1c.ru/8.3/xcf/readable`" xmlns:xs=`"http://www.w3.org/2001/XMLSchema`" xmlns:xsi=`"http://www.w3.org/2001/XMLSchema-instance`" xsi:type=`"CalculationTypePredefinedItems`" version=`"$($script:formatVersion)`">`n")
 	foreach ($it in $items) { Emit-PredefCalcType $sb $it "`t" }
 	[void]$sb.Append("</PredefinedData>`n")
-	return $sb.ToString()
+	return ($sb.ToString() -replace "`r`n", "`n") -replace "`n", "`r`n"
 }
 
 $extDir = Join-Path $objSubDir "Ext"
@@ -4743,13 +4746,18 @@ if ($objType -notin $typesNoSubDir) {
 $enc = New-Object System.Text.UTF8Encoding($true)
 
 # Единая точка записи XML. Конфигуратор не пишет перевод строки в конце файла —
-# последний байт `>`; сборка через AppendLine (и через явный `n в билдерах
-# Predefined/Content) добавляла лишний. Модули .bsl сюда НЕ идут: у них свой хвост.
-function Write-XmlFile([string]$path, [string]$text, $encoding) {
+# последний байт `>`; сборка через AppendLine добавляла лишний.
+# KeepEol в имени — отличие от одноимённой функции в скелетных навыках
+# (cf-init и др.): та ЕЩЁ и нормализует EOL к CRLF, а здесь этого делать
+# НЕЛЬЗЯ — в объектном XML бывают многострочные текстовые узлы (запрос,
+# синоним, значение заполнения), и сплошная нормализация меняла бы содержимое.
+# Разделители тут и так CRLF: документ собран через AppendLine.
+# Модули .bsl сюда НЕ идут: у них свой хвост.
+function Write-XmlFileKeepEol([string]$path, [string]$text, $encoding) {
 	[System.IO.File]::WriteAllText($path, $text.TrimEnd("`r", "`n"), $encoding)
 }
 
-Write-XmlFile $mainXmlPath $metadataXml $enc
+Write-XmlFileKeepEol $mainXmlPath $metadataXml $enc
 
 # Module files
 $modulesCreated = @()
@@ -4830,8 +4838,8 @@ if ($objType -eq "CommonForm") {
 	$cfFormXmlPath = Join-Path $extDir "Form.xml"
 	if (-not (Test-Path $cfFormXmlPath)) {
 		$cfFormNs = 'xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:dcscor="http://v8.1c.ru/8.1/data-composition-system/core" xmlns:dcsset="http://v8.1c.ru/8.1/data-composition-system/settings" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
-		$cfFormXml = "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`n<Form $cfFormNs version=`"$($script:formatVersion)`">`n`t<AutoCommandBar name=`"ФормаКоманднаяПанель`" id=`"-1`">`n`t`t<Autofill>true</Autofill>`n`t</AutoCommandBar>`n`t<ChildItems/>`n</Form>`n"
-		Write-XmlFile $cfFormXmlPath $cfFormXml $enc
+		$cfFormXml = "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<Form $cfFormNs version=`"$($script:formatVersion)`">`r`n`t<AutoCommandBar name=`"ФормаКоманднаяПанель`" id=`"-1`">`r`n`t`t<Autofill>true</Autofill>`r`n`t</AutoCommandBar>`r`n`t<ChildItems/>`r`n</Form>`r`n"
+		Write-XmlFileKeepEol $cfFormXmlPath $cfFormXml $enc
 		$modulesCreated += $cfFormXmlPath
 	}
 	$cfModuleDir = Join-Path $extDir "Form"
@@ -4884,7 +4892,7 @@ if ($objType -eq "ExchangePlan") {
 			[void]$sbC.Append("`t</Item>`r`n")
 		}
 		[void]$sbC.Append("</ExchangePlanContent>`r`n")
-		Write-XmlFile $contentPath $sbC.ToString() $enc
+		Write-XmlFileKeepEol $contentPath $sbC.ToString() $enc
 		$modulesCreated += $contentPath
 	} elseif (-not (Test-Path $contentPath)) {
 		# При пустом составе платформа всё равно пишет пустой <ExchangePlanContent/> — проверено на
@@ -4892,7 +4900,7 @@ if ($objType -eq "ExchangePlan") {
 		# (Единственный план обмена БЕЗ файла найден в УТ — хвостовая аномалия конфигурации, не правило.)
 		Ensure-ExtDir
 		$contentXml = "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<ExchangePlanContent $xepNs version=`"$($script:formatVersion)`"/>`r`n"
-		Write-XmlFile $contentPath $contentXml $enc
+		Write-XmlFileKeepEol $contentPath $contentXml $enc
 		$modulesCreated += $contentPath
 	}
 }
@@ -4901,7 +4909,7 @@ if ($objType -eq "BusinessProcess") {
 	if (-not (Test-Path $flowchartPath)) {
 		Ensure-ExtDir
 		$flowchartXml = "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<Flowchart xmlns=`"http://v8.1c.ru/8.3/MDClasses`" version=`"$($script:formatVersion)`"/>`r`n"
-		Write-XmlFile $flowchartPath $flowchartXml $enc
+		Write-XmlFileKeepEol $flowchartPath $flowchartXml $enc
 		$modulesCreated += $flowchartPath
 	}
 }
@@ -4916,20 +4924,20 @@ if ($objType -eq 'ChartOfAccounts' -and $def.predefined -and @($def.predefined).
 	$edtRef = if ($def.extDimensionTypes) { Resolve-TypePrefixSyn "$($def.extDimensionTypes)" } else { '' }
 	$predefXml = Build-PredefinedAccountXml @($def.predefined) $objName $afNames $edfNames $edtRef
 	$predefPath = Join-Path $extDir "Predefined.xml"
-	Write-XmlFile $predefPath $predefXml $enc
+	Write-XmlFileKeepEol $predefPath $predefXml $enc
 	$modulesCreated += $predefPath
 } elseif ($objType -eq 'ChartOfCalculationTypes' -and $def.predefined -and @($def.predefined).Count -gt 0) {
 	Ensure-ExtDir
 	$predefXml = Build-PredefinedCalcTypeXml @($def.predefined)
 	$predefPath = Join-Path $extDir "Predefined.xml"
-	Write-XmlFile $predefPath $predefXml $enc
+	Write-XmlFileKeepEol $predefPath $predefXml $enc
 	$modulesCreated += $predefPath
 } elseif ($predefRootByType.ContainsKey($objType) -and $def.predefined -and @($def.predefined).Count -gt 0) {
 	Ensure-ExtDir
 	$catCodeType = if ($def.codeType) { "$($def.codeType)" } else { 'String' }
 	$predefXml = Build-PredefinedXml @($def.predefined) $predefRootByType[$objType] $catCodeType
 	$predefPath = Join-Path $extDir "Predefined.xml"
-	Write-XmlFile $predefPath $predefXml $enc
+	Write-XmlFileKeepEol $predefPath $predefXml $enc
 	$modulesCreated += $predefPath
 }
 

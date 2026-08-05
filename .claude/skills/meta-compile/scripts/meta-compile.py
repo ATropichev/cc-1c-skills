@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.78 — Compile 1C metadata object from JSON
+# meta-compile v1.80 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -208,6 +208,16 @@ def new_uuid():
 def write_utf8_bom(path, content):
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         f.write(content)
+
+def write_xml_file_keep_eol(path, content):
+    # Единая точка записи XML. Конфигуратор не пишет перевод строки в конце файла —
+    # последний байт `>`.
+    # keep_eol в имени — отличие от одноимённой функции в скелетных навыках
+    # (cf-init и др.): та ЕЩЁ и нормализует EOL к CRLF, а здесь этого делать
+    # НЕЛЬЗЯ — в объектном XML бывают многострочные текстовые узлы (запрос,
+    # синоним, значение заполнения). Разделители и так CRLF — их даёт join строк.
+    # Модули .bsl сюда НЕ идут: у них свой хвост.
+    write_utf8_bom(path, content.rstrip('\r\n'))
 
 # ---------------------------------------------------------------------------
 # XML builder (lines list)
@@ -4360,7 +4370,7 @@ if obj_type == 'WebService':
 X(f'\t</{obj_type}>')
 X('</MetaDataObject>')
 
-metadata_xml = '\n'.join(lines)
+metadata_xml = '\r\n'.join(lines)
 
 # ---------------------------------------------------------------------------
 # 16. Write files
@@ -4422,7 +4432,7 @@ os.makedirs(type_dir, exist_ok=True)
 if obj_type not in types_no_sub_dir:
     os.makedirs(obj_sub_dir, exist_ok=True)
 
-write_utf8_bom(main_xml_path, metadata_xml)
+write_xml_file_keep_eol(main_xml_path, metadata_xml)
 
 # Module files
 modules_created = []
@@ -4498,10 +4508,10 @@ if obj_type == 'CommonForm':
                  'xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" '
                  'xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" '
                  'xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"')
-        cf_form_xml = ('<?xml version="1.0" encoding="UTF-8"?>\n<Form ' + cf_ns + ' version="' + format_version + '">\n'
-                       '\t<AutoCommandBar name="ФормаКоманднаяПанель" id="-1">\n\t\t<Autofill>true</Autofill>\n\t</AutoCommandBar>\n'
-                       '\t<ChildItems/>\n</Form>\n')
-        write_utf8_bom(cf_form_xml_path, cf_form_xml)
+        cf_form_xml = ('<?xml version="1.0" encoding="UTF-8"?>\r\n<Form ' + cf_ns + ' version="' + format_version + '">\r\n'
+                       '\t<AutoCommandBar name="ФормаКоманднаяПанель" id="-1">\r\n\t\t<Autofill>true</Autofill>\r\n\t</AutoCommandBar>\r\n'
+                       '\t<ChildItems/>\r\n</Form>\r\n')
+        write_xml_file_keep_eol(cf_form_xml_path, cf_form_xml)
         modules_created.append(cf_form_xml_path)
     cf_module_dir = os.path.join(ext_dir, 'Form')
     os.makedirs(cf_module_dir, exist_ok=True)
@@ -4592,7 +4602,7 @@ def build_predefined_xml(items, xsi_type, code_type):
     for it in items:
         emit_predef_item(out, it, '\t', code_type)
     out.append('</PredefinedData>')
-    return '\n'.join(out) + '\n'
+    return '\r\n'.join(out)
 
 # --- Предопределённые СЧЕТА Плана счетов (отдельная грамматика: AccountType/OffBalance/Order/AccountingFlags/
 # ExtDimensionTypes/ChildItems). Флаги перечисляем по def-порядку признаков плана; в DSL — только TRUE. ---
@@ -4690,7 +4700,7 @@ def build_predefined_account_xml(items, obj_nm, acct_flag_names, ext_dim_flag_na
     for it in items:
         emit_predef_account(out, it, '\t', obj_nm, acct_flag_names, ext_dim_flag_names, ext_dim_types_ref)
     out.append('</PredefinedData>')
-    return '\n'.join(out) + '\n'
+    return '\r\n'.join(out)
 
 # Предопределённые ВИДЫ РАСЧЁТА (плоские: Name/Code/Description/ActionPeriodIsBase).
 def emit_predef_calc_type(out, val, indent):
@@ -4712,7 +4722,7 @@ def build_predefined_calc_type_xml(items):
     for it in items:
         emit_predef_calc_type(out, it, '\t')
     out.append('</PredefinedData>')
-    return '\n'.join(out) + '\n'
+    return '\r\n'.join(out)
 
 # Special files
 # --- Состав плана обмена (ExchangePlan, Ext/Content.xml). Ключ `content`/`Состав`:
@@ -4766,7 +4776,7 @@ if obj_type == 'ExchangePlan':
             parts.append(f'\t\t<AutoRecord>{it["autoRecord"]}</AutoRecord>\r\n')
             parts.append('\t</Item>\r\n')
         parts.append('</ExchangePlanContent>\r\n')
-        write_utf8_bom(content_path, ''.join(parts))
+        write_xml_file_keep_eol(content_path, ''.join(parts))
         modules_created.append(content_path)
     elif not os.path.isfile(content_path):
         # При пустом составе платформа всё равно пишет пустой <ExchangePlanContent/> — проверено на
@@ -4774,7 +4784,7 @@ if obj_type == 'ExchangePlan':
         # (Единственный план обмена БЕЗ файла найден в УТ — хвостовая аномалия конфигурации, не правило.)
         ensure_ext_dir()
         content_xml = f'<?xml version="1.0" encoding="UTF-8"?>\r\n<ExchangePlanContent {xep_ns} version="{format_version}"/>\r\n'
-        write_utf8_bom(content_path, content_xml)
+        write_xml_file_keep_eol(content_path, content_xml)
         modules_created.append(content_path)
 
 if obj_type == 'BusinessProcess':
@@ -4782,7 +4792,7 @@ if obj_type == 'BusinessProcess':
     if not os.path.isfile(flowchart_path):
         ensure_ext_dir()
         flowchart_xml = f'<?xml version="1.0" encoding="UTF-8"?>\r\n<Flowchart xmlns="http://v8.1c.ru/8.3/MDClasses" version="{format_version}"/>\r\n'
-        write_utf8_bom(flowchart_path, flowchart_xml)
+        write_xml_file_keep_eol(flowchart_path, flowchart_xml)
         modules_created.append(flowchart_path)
 
 # Предопределённые элементы (Ext/Predefined.xml). Root-элемент по типу.
@@ -4795,20 +4805,20 @@ if obj_type == 'ChartOfAccounts' and defn.get('predefined'):
     edt_ref = resolve_type_prefix_syn(str(defn['extDimensionTypes'])) if defn.get('extDimensionTypes') else ''
     predef_xml = build_predefined_account_xml(defn['predefined'], obj_name, af_names, edf_names, edt_ref)
     predef_path = os.path.join(ext_dir, 'Predefined.xml')
-    write_utf8_bom(predef_path, predef_xml)
+    write_xml_file_keep_eol(predef_path, predef_xml)
     modules_created.append(predef_path)
 elif obj_type == 'ChartOfCalculationTypes' and defn.get('predefined'):
     ensure_ext_dir()
     predef_xml = build_predefined_calc_type_xml(defn['predefined'])
     predef_path = os.path.join(ext_dir, 'Predefined.xml')
-    write_utf8_bom(predef_path, predef_xml)
+    write_xml_file_keep_eol(predef_path, predef_xml)
     modules_created.append(predef_path)
 elif obj_type in predef_root_by_type and defn.get('predefined'):
     ensure_ext_dir()
     cat_code_type = str(defn['codeType']) if defn.get('codeType') else 'String'
     predef_xml = build_predefined_xml(defn['predefined'], predef_root_by_type[obj_type], cat_code_type)
     predef_path = os.path.join(ext_dir, 'Predefined.xml')
-    write_utf8_bom(predef_path, predef_xml)
+    write_xml_file_keep_eol(predef_path, predef_xml)
     modules_created.append(predef_path)
 
 # Модули команд (Commands/<Имя>/Ext/CommandModule.bsl) — заготовка обработчика.

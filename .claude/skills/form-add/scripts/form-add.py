@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-add v1.14 — Add managed form to 1C config object
+# form-add v1.16 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -259,8 +259,20 @@ def save_xml_with_bom(tree, path):
 
 def write_text_with_bom(path, text):
     """Write text to file with UTF-8 BOM."""
-    with open(path, "w", encoding="utf-8-sig") as f:
+    # newline="" => без трансляции: в текстовом режиме Python на Windows превратил
+    # бы \n в \r\n, а на macOS оставил \n — вывод зависел бы от ОС.
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
         f.write(text)
+
+
+def write_xml_file(path, text):
+    """XML в каноне выгрузки Конфигуратора: CRLF, без перевода строки в конце.
+
+    Скелет формы собирается литералами с \n. Сплошная нормализация здесь
+    безопасна: многострочных текстовых узлов в скелете нет. Модуль .bsl
+    пишется отдельно, через write_text_with_bom.
+    """
+    write_text_with_bom(path, text.replace("\r\n", "\n").replace("\n", "\r\n").rstrip("\r\n"))
 
 
 def main():
@@ -428,7 +440,7 @@ def main():
         '</MetaDataObject>'
     )
 
-    write_text_with_bom(form_meta_path, form_meta_xml)
+    write_xml_file(form_meta_path, form_meta_xml)
 
     # --- 3b. Form.xml ---
 
@@ -551,7 +563,7 @@ def main():
     if os.path.exists(form_xml_path):
         print(f"[SKIP] Form.xml already exists: {form_xml_path} — not overwriting")
     else:
-        write_text_with_bom(form_xml_path, form_xml)
+        write_xml_file(form_xml_path, form_xml)
 
     # --- 3c. Module.bsl ---
 

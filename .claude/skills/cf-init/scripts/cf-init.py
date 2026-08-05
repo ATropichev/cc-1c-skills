@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-init v1.4 — Create empty 1C configuration scaffold
+# cf-init v1.5 — Create empty 1C configuration scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration."""
 import sys, os, argparse, uuid
@@ -14,6 +14,13 @@ def write_utf8_bom(path, content):
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         f.write(content)
 
+def write_xml_file(path, content):
+    # Канон выгрузки Конфигуратора: CRLF в разделителях строк, без перевода в конце
+    # файла. Скелет собирается тройными кавычками, а .py хранится с LF — отсюда LF и
+    # смешанный EOL. Нормализация здесь безопасна: многострочных текстовых узлов в
+    # скелете нет. Модули .bsl и текстовые макеты через неё НЕ пишутся.
+    text = content.replace('\r\n', '\n').replace('\n', '\r\n').rstrip('\r\n')
+    write_utf8_bom(path, text)
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -222,11 +229,11 @@ def main():
     os.makedirs(ext_dir, exist_ok=True)
 
     # --- Write files ---
-    write_utf8_bom(cfg_file, cfg_xml)
+    write_xml_file(cfg_file, cfg_xml)
     lang_file = os.path.join(lang_dir, "Русский.xml")
-    write_utf8_bom(lang_file, lang_xml)
+    write_xml_file(lang_file, lang_xml)
     cai_file = os.path.join(ext_dir, "ClientApplicationInterface.xml")
-    write_utf8_bom(cai_file, cai_xml)
+    write_xml_file(cai_file, cai_xml)
 
     print(f"[OK] Создана конфигурация: {name}")
     print(f"     Каталог:            {output_dir}")

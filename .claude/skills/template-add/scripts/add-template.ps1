@@ -1,4 +1,4 @@
-﻿# template-add v1.12 — Add template to 1C object
+﻿# template-add v1.14 — Add template to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -260,7 +260,16 @@ $templateMetaXml = @"
 </MetaDataObject>
 "@
 
-[System.IO.File]::WriteAllText($templateMetaPath, $templateMetaXml, $encBom)
+# Канон выгрузки Конфигуратора: CRLF в разделителях строк, без перевода в конце
+# файла. Скелет собирается here-string'ами, а .ps1 хранится с LF — отсюда LF и
+# смешанный EOL. Нормализация здесь безопасна: многострочных текстовых узлов в
+# скелете нет. Модули .bsl и текстовые макеты через эту функцию НЕ пишутся.
+function Write-XmlFile([string]$path, [string]$text, $encoding) {
+	$t = ($text -replace "`r`n", "`n") -replace "`n", "`r`n"
+	[System.IO.File]::WriteAllText($path, $t.TrimEnd("`r", "`n"), $encoding)
+}
+
+Write-XmlFile $templateMetaPath $templateMetaXml $encBom
 
 # --- 2. Содержимое макета (Templates/<TemplateName>/Ext/Template.<ext>) ---
 
@@ -290,7 +299,7 @@ switch ($TemplateType) {
 <SpreadsheetDocument xmlns="http://v8.1c.ru/spreadsheet/document" xmlns:ss="http://v8.1c.ru/spreadsheet/document" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:xs="http://www.w3.org/2001/XMLSchema">
 </SpreadsheetDocument>
 "@
-		[System.IO.File]::WriteAllText($templateFilePath, $content, $encBom)
+		Write-XmlFile $templateFilePath $content $encBom
 	}
 	"BinaryData" {
 		[System.IO.File]::WriteAllBytes($templateFilePath, @())
@@ -312,7 +321,7 @@ switch ($TemplateType) {
 	</dataSource>
 </DataCompositionSchema>
 "@
-		[System.IO.File]::WriteAllText($templateFilePath, $content, $encBom)
+		Write-XmlFile $templateFilePath $content $encBom
 	}
 }
 

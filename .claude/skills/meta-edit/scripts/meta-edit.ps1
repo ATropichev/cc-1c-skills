@@ -1,4 +1,4 @@
-﻿# meta-edit v1.25 — Edit existing 1C metadata object XML
+﻿# meta-edit v1.26 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -3138,7 +3138,8 @@ function Add-PredefinedItems($items) {
 		$hdr = "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<PredefinedData xmlns=`"http://v8.1c.ru/8.3/xcf/predef`" xmlns:v8=`"http://v8.1c.ru/8.1/data/core`" xmlns:xr=`"http://v8.1c.ru/8.3/xcf/readable`" xmlns:xs=`"http://www.w3.org/2001/XMLSchema`" xmlns:xsi=`"http://www.w3.org/2001/XMLSchema-instance`" xsi:type=`"$xsiType`" version=`"$version`">`r`n"
 		$text = "$hdr$itemsXml</PredefinedData>`r`n"
 	}
-	[System.IO.File]::WriteAllText($path, $text, $utf8Bom)
+	# Создаваемый файл — по канону: без перевода строки в конце.
+	[System.IO.File]::WriteAllText($path, $text.TrimEnd("`r", "`n"), $utf8Bom)
 	$n = @($items).Count
 	Info "Added $n predefined item(s) → $path"
 	$script:addCount += $n

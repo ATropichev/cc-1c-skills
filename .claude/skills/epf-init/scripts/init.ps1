@@ -1,4 +1,4 @@
-﻿# epf-init v1.1 — Init 1C external data processor scaffold
+﻿# epf-init v1.2 — Init 1C external data processor scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -64,7 +64,16 @@ $extDir = Join-Path $processorDir "Ext"
 New-Item -ItemType Directory -Path $extDir -Force | Out-Null
 
 $enc = New-Object System.Text.UTF8Encoding($true)
-[System.IO.File]::WriteAllText((Resolve-Path $SrcDir | Join-Path -ChildPath "$Name.xml"), $xml, $enc)
+# Канон выгрузки Конфигуратора: CRLF в разделителях строк, без перевода в конце
+# файла. Скелет собирается here-string'ами, а .ps1 хранится с LF — отсюда LF и
+# смешанный EOL. Нормализация здесь безопасна: многострочных текстовых узлов в
+# скелете нет. Модули .bsl и текстовые макеты через эту функцию НЕ пишутся.
+function Write-XmlFile([string]$path, [string]$text, $encoding) {
+	$t = ($text -replace "`r`n", "`n") -replace "`n", "`r`n"
+	[System.IO.File]::WriteAllText($path, $t.TrimEnd("`r", "`n"), $encoding)
+}
+
+Write-XmlFile (Resolve-Path $SrcDir | Join-Path -ChildPath "$Name.xml") $xml $enc
 
 # --- Модуль объекта ---
 

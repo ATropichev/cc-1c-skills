@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-edit v1.10 — Edit existing 1C subsystem XML
+# subsystem-edit v1.11 — Edit existing 1C subsystem XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -242,7 +242,7 @@ def write_child_subsystem_stub(child_path, child_name, format_version):
     lines.append('\t\t<ChildObjects/>')
     lines.append('\t</Subsystem>')
     lines.append('</MetaDataObject>')
-    write_utf8_bom(child_path, '\n'.join(lines))
+    write_utf8_bom(child_path, '\r\n'.join(lines))
 
 MD_NS = "http://v8.1c.ru/8.3/MDClasses"
 XR_NS = "http://v8.1c.ru/8.3/xcf/readable"

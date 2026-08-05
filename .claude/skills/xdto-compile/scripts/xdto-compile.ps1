@@ -1,4 +1,4 @@
-﻿# xdto-compile v1.3 — Build a 1C XDTO package from an XML Schema (XSD)
+﻿# xdto-compile v1.4 — Build a 1C XDTO package from an XML Schema (XSD)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true, ParameterSetName='File')]

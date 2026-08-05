@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.12 — Compile 1C role from JSON
+# role-compile v1.14 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -202,6 +202,12 @@ def detect_format_version(d):
         d = parent
     return "2.17"
 
+
+def detect_eol(text):
+    # Перевод строки ВСТАВКИ берём из самого файла: канон CRLF относится к файлам,
+    # которые мы создаём, а правка существующего сохраняет его стиль (#44/#46/#47).
+    crlf = text.count('\r\n')
+    return '\r\n' if crlf and crlf >= text.count('\n') - crlf else '\n'
 
 def esc_xml(s):
     """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
@@ -708,7 +714,7 @@ def main():
     lines.append('    </Role>')
     lines.append('</MetaDataObject>')
 
-    metadata_xml = '\n'.join(lines)
+    metadata_xml = '\r\n'.join(lines)
 
     # --- 5. Emit Rights XML (Roles/Name/Ext/Rights.xml) ---
     lines = []
@@ -756,7 +762,7 @@ def main():
 
     lines.append('</Rights>')
 
-    rights_xml = '\n'.join(lines)
+    rights_xml = '\r\n'.join(lines)
 
     # --- 6. Write output files ---
     out_dir = args.OutputDir
@@ -791,8 +797,12 @@ def main():
     reg_result = None
 
     if os.path.exists(config_xml_path):
-        with open(config_xml_path, 'r', encoding='utf-8-sig') as f:
+        # newline='' => без трансляции переводов строк: иначе CRLF молча схлопнется
+        # в LF при чтении и файл будет переписан в LF (#44/#46/#47).
+        with open(config_xml_path, 'r', encoding='utf-8-sig', newline='') as f:
             raw_text = f.read()
+
+        eol = detect_eol(raw_text)
 
         # Check if already registered
         if f'<Role>{role_name}</Role>' in raw_text:
@@ -807,10 +817,10 @@ def main():
                 # Insert after last existing <Role>
                 last_match = matches[-1]
                 insert_pos = last_match.end()
-                raw_text = raw_text[:insert_pos] + f'\n\t\t\t{new_role_tag}' + raw_text[insert_pos:]
+                raw_text = raw_text[:insert_pos] + eol + f'\t\t\t{new_role_tag}' + raw_text[insert_pos:]
             else:
                 # No existing roles — insert before </ChildObjects>
-                raw_text = raw_text.replace('</ChildObjects>', f'\t\t\t{new_role_tag}\n\t\t</ChildObjects>')
+                raw_text = raw_text.replace('</ChildObjects>', f'\t\t\t{new_role_tag}' + eol + '\t\t</ChildObjects>')
 
             write_utf8_bom(config_xml_path, raw_text)
             reg_result = 'added'

@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.6 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.7 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

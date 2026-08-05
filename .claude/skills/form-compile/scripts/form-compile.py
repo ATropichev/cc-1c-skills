@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.178 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.180 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -6580,7 +6580,7 @@ def main():
     if out_dir and not os.path.exists(out_dir):
         os.makedirs(out_dir, exist_ok=True)
 
-    content = '\n'.join(lines)
+    content = '\r\n'.join(lines)
     write_utf8_bom(out_path, content)
 
     # --- 4. Auto-register form in parent object XML ---
@@ -6598,17 +6598,22 @@ def main():
     if forms_leaf == 'Forms':
         object_xml_path = os.path.join(type_plural_dir, f'{object_name}.xml')
         if os.path.exists(object_xml_path):
-            with open(object_xml_path, 'r', encoding='utf-8-sig') as f:
+            # newline='' => без трансляции переводов строк: иначе CRLF молча
+            # схлопнется в LF при чтении и файл будет переписан в LF (#44/#46/#47).
+            with open(object_xml_path, 'r', encoding='utf-8-sig', newline='') as f:
                 raw_text = f.read()
+            # Перевод строки вставки берём из самого файла, а не из канона:
+            # правка существующего файла сохраняет его стиль.
+            eol = '\r\n' if '\r\n' in raw_text else '\n'
 
             # Check if already registered
             if f'<Form>{form_name}</Form>' not in raw_text:
                 # Insert before </ChildObjects>
                 if '</ChildObjects>' in raw_text:
-                    insert_line = f'\t\t\t<Form>{form_name}</Form>\n'
+                    insert_line = f'\t\t\t<Form>{form_name}</Form>' + eol
                     raw_text = raw_text.replace('</ChildObjects>', insert_line + '\t\t</ChildObjects>', 1)
                 elif '<ChildObjects/>' in raw_text:
-                    replacement = f'<ChildObjects>\n\t\t\t<Form>{form_name}</Form>\n\t\t</ChildObjects>'
+                    replacement = ('<ChildObjects>' + eol + f'\t\t\t<Form>{form_name}</Form>' + eol + '\t\t</ChildObjects>')
                     raw_text = raw_text.replace('<ChildObjects/>', replacement, 1)
 
                 write_utf8_bom(object_xml_path, raw_text)
