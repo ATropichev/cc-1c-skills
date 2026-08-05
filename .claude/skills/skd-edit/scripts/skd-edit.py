@@ -1,4 +1,4 @@
-# skd-edit v1.31 — Atomic 1C DCS editor (Python port)
+# skd-edit v1.32 — Atomic 1C DCS editor (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -3441,11 +3441,11 @@ xml_text = xml_bytes.decode("utf-8")
 if raw_root_opening:
     xml_text = re.sub(r"<DataCompositionSchema\b[^>]*>", lambda m: raw_root_opening, xml_text, count=1, flags=re.DOTALL)
 # Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>` (lxml и так
-# пишет плотно — правка защитная, чтобы порты оставались байт-эквивалентны). Гард на
-# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть содержимым,
-# а не концом тега.
-if "<![CDATA[" not in xml_text and "<!--" not in xml_text:
-    xml_text = re.sub(r"(?<=\S) />", "/>", xml_text)
+# пишет плотно — правка защитная, чтобы порты оставались байт-эквивалентны). Внутри
+# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+xml_text = re.sub(r"(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />",
+                  lambda m: "/>" if m.group(0) == " />" else m.group(0), xml_text)
 
 # Канонизировать переносы к LF (убирает возможный &#13;), затем к стилю источника.
 xml_text = xml_text.replace("&#13;\n", "\n").replace("&#13;", "").replace("\r\n", "\n").replace("\r", "\n")

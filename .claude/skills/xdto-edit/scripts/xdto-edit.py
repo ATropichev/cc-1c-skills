@@ -1,4 +1,4 @@
-# xdto-edit v1.3 — Point edits of a 1C XDTO package (Python port)
+# xdto-edit v1.4 — Point edits of a 1C XDTO package (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -194,10 +194,13 @@ def invoke_sibling(script, argv, what):
 
 def save_xml(doc, path):
     raw = etree.tostring(doc, xml_declaration=True, encoding="UTF-8")
+    # lxml пишет декларацию в ОДИНАРНЫХ кавычках, платформа и PS-порт — в двойных.
+    raw = raw.replace(b"<?xml version='1.0' encoding='UTF-8'?>",
+                      b'<?xml version="1.0" encoding="UTF-8"?>')
     # Парсер XML по спецификации схлопывает CRLF в LF, поэтому tostring отдаёт
-    # LF-документ. Возвращаем EOL исходного файла: правка существующего файла
-    # сохраняет его стиль (#44/#46/#47), а .NET-порт делает это через
-    # NewLineHandling — иначе порты расходятся побайтово.
+    # LF-документ. Возвращаем EOL файла-назначения: правка существующего файла
+    # сохраняет его стиль (#44/#46/#47), новый получает канон CRLF. Правило то же,
+    # что у _detect_xml_style и у $targetEol в PS-порту: есть CRLF → CRLF.
     src_eol = b"\r\n"
     try:
         with open(path, "rb") as f:

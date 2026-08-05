@@ -1,4 +1,4 @@
-﻿# form-compile v1.181 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.182 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -6677,6 +6677,7 @@ if ($formsLeaf -eq 'Forms') {
 				$regSettings = New-Object System.Xml.XmlWriterSettings
 				$regSettings.Encoding = $regEnc
 				$regSettings.Indent = $false
+				$regSettings.NewLineHandling = [System.Xml.NewLineHandling]::None
 				# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
 				$regMem = New-Object System.IO.MemoryStream
 				$regWriter = [System.Xml.XmlWriter]::Create($regMem, $regSettings)
@@ -6687,10 +6688,14 @@ if ($formsLeaf -eq 'Forms') {
 				$regMem.Close()
 				if ($regText.Length -gt 0 -and $regText[0] -eq [char]0xFEFF) { $regText = $regText.Substring(1) }
 				$regText = $regText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-				# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-				# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-				# содержимым, а не концом тега.
-				if ($regText -notmatch '<!\[CDATA\[|<!--') { $regText = [regex]::Replace($regText, '(?<=\S) />', '/>') }
+				# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+				# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+				# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+				$regText = [regex]::Replace($regText, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+				# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+				# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+				$targetEol = if ((Test-Path -LiteralPath $objectXmlPath) -and ([System.IO.File]::ReadAllText($objectXmlPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+				$regText = ($regText -replace "`r`n", "`n") -replace "`n", $targetEol
 				[System.IO.File]::WriteAllText($objectXmlPath, $regText, $regEnc)
 
 				Write-Host "     Registered: <Form>$formName</Form> in $objectName.xml"

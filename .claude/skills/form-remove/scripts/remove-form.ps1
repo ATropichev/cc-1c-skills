@@ -1,4 +1,4 @@
-﻿# form-remove v1.6 — Remove form from 1C object
+﻿# form-remove v1.7 — Remove form from 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -83,6 +83,7 @@ $encBom = New-Object System.Text.UTF8Encoding($true)
 $settings = New-Object System.Xml.XmlWriterSettings
 $settings.Encoding = $encBom
 $settings.Indent = $false
+$settings.NewLineHandling = [System.Xml.NewLineHandling]::None
 
 # Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
 $memStream = New-Object System.IO.MemoryStream
@@ -94,10 +95,14 @@ $xmlText = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
 $memStream.Close()
 if ($xmlText.Length -gt 0 -and $xmlText[0] -eq [char]0xFEFF) { $xmlText = $xmlText.Substring(1) }
 $xmlText = $xmlText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-# содержимым, а не концом тега.
-if ($xmlText -notmatch '<!\[CDATA\[|<!--') { $xmlText = [regex]::Replace($xmlText, '(?<=\S) />', '/>') }
+# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+$xmlText = [regex]::Replace($xmlText, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+$targetEol = if ((Test-Path -LiteralPath $rootXmlFull.Path) -and ([System.IO.File]::ReadAllText($rootXmlFull.Path) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+$xmlText = ($xmlText -replace "`r`n", "`n") -replace "`n", $targetEol
 [System.IO.File]::WriteAllText($rootXmlFull.Path, $xmlText, $encBom)
 
 Write-Host "[OK] Форма $FormName удалена из $rootXmlPath"

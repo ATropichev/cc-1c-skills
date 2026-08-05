@@ -1,4 +1,4 @@
-﻿# xdto-edit v1.3 — Point edits of a 1C XDTO package
+﻿# xdto-edit v1.4 — Point edits of a 1C XDTO package
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)]
@@ -221,6 +221,7 @@ function Edit-Metadata([string]$field, [string]$newValue) {
 	$settings = New-Object System.Xml.XmlWriterSettings
 	$settings.Encoding = $encBom
 	$settings.Indent = $false
+	$settings.NewLineHandling = [System.Xml.NewLineHandling]::None
 	# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
 	$memStream = New-Object System.IO.MemoryStream
 	$writer = [System.Xml.XmlWriter]::Create($memStream, $settings)
@@ -231,10 +232,14 @@ function Edit-Metadata([string]$field, [string]$newValue) {
 	$memStream.Close()
 	if ($mdText.Length -gt 0 -and $mdText[0] -eq [char]0xFEFF) { $mdText = $mdText.Substring(1) }
 	$mdText = $mdText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-	# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-	# содержимым, а не концом тега.
-	if ($mdText -notmatch '<!\[CDATA\[|<!--') { $mdText = [regex]::Replace($mdText, '(?<=\S) />', '/>') }
+	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+	# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+	# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+	$mdText = [regex]::Replace($mdText, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+	# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+	# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+	$targetEol = if ((Test-Path -LiteralPath $mdFile) -and ([System.IO.File]::ReadAllText($mdFile) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+	$mdText = ($mdText -replace "`r`n", "`n") -replace "`n", $targetEol
 	[System.IO.File]::WriteAllText($mdFile, $mdText, $encBom)
 }
 
@@ -263,6 +268,7 @@ function Rename-Package([string]$newName) {
 		if ($found) {
 			$s = New-Object System.Xml.XmlWriterSettings
 			$s.Encoding = $encBom; $s.Indent = $false
+			$s.NewLineHandling = [System.Xml.NewLineHandling]::None
 			# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
 			$mem = New-Object System.IO.MemoryStream
 			$w = [System.Xml.XmlWriter]::Create($mem, $s)
@@ -271,10 +277,14 @@ function Rename-Package([string]$newName) {
 			$mem.Close()
 			if ($cfgText.Length -gt 0 -and $cfgText[0] -eq [char]0xFEFF) { $cfgText = $cfgText.Substring(1) }
 			$cfgText = $cfgText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-			# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-			# содержимым, а не концом тега.
-			if ($cfgText -notmatch '<!\[CDATA\[|<!--') { $cfgText = [regex]::Replace($cfgText, '(?<=\S) />', '/>') }
+			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+			# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+			# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+			$cfgText = [regex]::Replace($cfgText, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+			# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+			# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+			$targetEol = if ((Test-Path -LiteralPath $configXml) -and ([System.IO.File]::ReadAllText($configXml) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+			$cfgText = ($cfgText -replace "`r`n", "`n") -replace "`n", $targetEol
 			[System.IO.File]::WriteAllText($configXml, $cfgText, $encBom)
 			Write-Host "  Configuration.xml: <XDTOPackage> переименован в $newName"
 		} else {

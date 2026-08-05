@@ -1,4 +1,4 @@
-﻿# cf-edit v1.15 — Edit 1C configuration root (Configuration.xml)
+﻿# cf-edit v1.16 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$ConfigPath,
@@ -163,11 +163,8 @@ function Assert-EditAllowed([string]$targetPath, [string]$require) {
 Assert-EditAllowed $resolvedPath 'editable'
 
 # --- Load XML with PreserveWhitespace ---
-# EOL исходного файла запоминаем ДО разбора: парсер XML по спецификации схлопывает
-# CRLF в LF, а вставки ниже собираются с явным CRLF — без восстановления в точке
-# записи LF-файл стал бы смешанным. Канон CRLF относится к файлам, которые мы
-# СОЗДАЁМ; правка существующего сохраняет его стиль (#44/#46/#47).
-$script:srcEol = if (([System.IO.File]::ReadAllText($resolvedPath)) -match "`r`n") { "`r`n" } else { "`n" }
+# NB: парсер XML по спецификации схлопывает CRLF в LF, а вставки ниже собираются с
+# явным CRLF — поэтому EOL приводится к целевому в точке записи (см. финализацию).
 $script:xmlDoc = New-Object System.Xml.XmlDocument
 $script:xmlDoc.PreserveWhitespace = $true
 $script:xmlDoc.Load($resolvedPath)
@@ -991,12 +988,14 @@ $memStream.Close()
 $text = [System.Text.Encoding]::UTF8.GetString($bytes)
 if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
 $text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-# содержимым, а не концом тега.
-if ($text -notmatch '<!\[CDATA\[|<!--') { $text = [regex]::Replace($text, '(?<=\S) />', '/>') }
-# Возвращаем EOL исходного файла: вставки собраны с CRLF, а сам документ мог быть LF.
-$text = ($text -replace "`r`n", "`n") -replace "`n", $script:srcEol
+# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+$text = [regex]::Replace($text, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+$targetEol = if ((Test-Path -LiteralPath $resolvedPath) -and ([System.IO.File]::ReadAllText($resolvedPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+$text = ($text -replace "`r`n", "`n") -replace "`n", $targetEol
 
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
 [System.IO.File]::WriteAllText($resolvedPath, $text, $utf8Bom)

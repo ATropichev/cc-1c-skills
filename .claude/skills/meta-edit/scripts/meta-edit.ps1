@@ -1,4 +1,4 @@
-﻿# meta-edit v1.28 — Edit existing 1C metadata object XML
+﻿# meta-edit v1.29 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -3209,13 +3209,17 @@ if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) {
 	$text = $text.Substring(1)
 }
 $text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-# содержимым, а не концом тега.
-if ($text -notmatch '<!\[CDATA\[|<!--') { $text = [regex]::Replace($text, '(?<=\S) />', '/>') }
+# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+$text = [regex]::Replace($text, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
 
 # Write with BOM
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+$targetEol = if ((Test-Path -LiteralPath $resolvedPath) -and ([System.IO.File]::ReadAllText($resolvedPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+$text = ($text -replace "`r`n", "`n") -replace "`n", $targetEol
 [System.IO.File]::WriteAllText($resolvedPath, $text, $utf8Bom)
 
 Info "Saved: $resolvedPath"

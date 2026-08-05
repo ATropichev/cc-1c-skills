@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-compile v1.16 — Create 1C subsystem from JSON definition
+# subsystem-compile v1.17 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -207,8 +207,10 @@ def detect_format_version(d):
 def detect_eol(text):
     # Перевод строки ВСТАВКИ берём из самого файла: канон CRLF относится к файлам,
     # которые мы создаём, а правка существующего сохраняет его стиль (#44/#46/#47).
-    crlf = text.count('\r\n')
-    return '\r\n' if crlf and crlf >= text.count('\n') - crlf else '\n'
+    # Семантика та же, что у _detect_xml_style в остальных портах: есть CRLF → CRLF.
+    # Мажоритарное правило здесь было расхождением — на смешанном входе оно давало
+    # другой ответ, чем канон, при том же назначении.
+    return '\r\n' if '\r\n' in text else '\n'
 
 def esc_xml(s):
     """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
@@ -605,8 +607,12 @@ def main():
                     replacement = ('<ChildObjects>' + eol + f'\t\t\t<Subsystem>{esc_xml(obj_name)}</Subsystem>' + eol + '\t\t</ChildObjects>')
                     raw_text = raw_text.replace('<ChildObjects/>', replacement, 1)
                 elif '</ChildObjects>' in raw_text:
-                    insert_line = f'\t\t\t<Subsystem>{esc_xml(obj_name)}</Subsystem>' + eol
-                    raw_text = raw_text.replace('</ChildObjects>', insert_line + '\t\t</ChildObjects>', 1)
+                    # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
+                    # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
+                    # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
+                    raw_text = re.sub(r'([ \t]*)</ChildObjects>',
+                                      lambda m: m.group(1) + '\t' + f'<Subsystem>{esc_xml(obj_name)}</Subsystem>' + eol + m.group(1) + '</ChildObjects>',
+                                      raw_text, count=1)
 
                 write_utf8_bom(parent_xml_path, raw_text)
                 print(f"[OK] Registered in: {parent_xml_path}")

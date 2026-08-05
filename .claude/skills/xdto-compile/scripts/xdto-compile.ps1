@@ -1,4 +1,4 @@
-﻿# xdto-compile v1.5 — Build a 1C XDTO package from an XML Schema (XSD)
+﻿# xdto-compile v1.6 — Build a 1C XDTO package from an XML Schema (XSD)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true, ParameterSetName='File')]
@@ -948,6 +948,7 @@ if (Test-Path $configXmlPath) {
 			$cfgSettings = New-Object System.Xml.XmlWriterSettings
 			$cfgSettings.Encoding = New-Object System.Text.UTF8Encoding($true)
 			$cfgSettings.Indent = $false
+			$cfgSettings.NewLineHandling = [System.Xml.NewLineHandling]::None
 			# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
 			$memStream = New-Object System.IO.MemoryStream
 			$writer = [System.Xml.XmlWriter]::Create($memStream, $cfgSettings)
@@ -958,10 +959,14 @@ if (Test-Path $configXmlPath) {
 			$memStream.Close()
 			if ($cfgText.Length -gt 0 -and $cfgText[0] -eq [char]0xFEFF) { $cfgText = $cfgText.Substring(1) }
 			$cfgText = $cfgText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-			# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-			# содержимым, а не концом тега.
-			if ($cfgText -notmatch '<!\[CDATA\[|<!--') { $cfgText = [regex]::Replace($cfgText, '(?<=\S) />', '/>') }
+			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+			# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+			# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+			$cfgText = [regex]::Replace($cfgText, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+			# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+			# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+			$targetEol = if ((Test-Path -LiteralPath $configXmlPath) -and ([System.IO.File]::ReadAllText($configXmlPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+			$cfgText = ($cfgText -replace "`r`n", "`n") -replace "`n", $targetEol
 			[System.IO.File]::WriteAllText($configXmlPath, $cfgText, (New-Object System.Text.UTF8Encoding($true)))
 			$regResult = "added"
 		}

@@ -1,4 +1,4 @@
-# xdto-compile v1.5 — Build a 1C XDTO package from an XML Schema (XSD) (Python port)
+# xdto-compile v1.6 — Build a 1C XDTO package from an XML Schema (XSD) (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -960,10 +960,13 @@ if os.path.exists(config_xml):
             else:
                 new_elem.tail = child_objects.text
             data = etree.tostring(cfg_doc, xml_declaration=True, encoding="UTF-8")
+            # lxml пишет декларацию в ОДИНАРНЫХ кавычках, платформа и PS-порт — в двойных.
+            data = data.replace(b"<?xml version='1.0' encoding='UTF-8'?>",
+                                b'<?xml version="1.0" encoding="UTF-8"?>')
             # Парсер XML по спецификации схлопывает CRLF в LF, поэтому tostring отдаёт
             # LF-документ. Возвращаем EOL исходного файла: правка существующего файла
-            # сохраняет его стиль (#44/#46/#47), а .NET-порт делает это через
-            # NewLineHandling — иначе порты расходятся побайтово.
+            # сохраняет его стиль (#44/#46/#47). Правило то же, что у _detect_xml_style
+            # и у $targetEol в PS-порту: есть CRLF → CRLF.
             src_eol = b"\r\n" if b"\r\n" in raw else b"\n"
             data = data.replace(b"\r\n", b"\n").replace(b"\n", src_eol)
             if had_bom:

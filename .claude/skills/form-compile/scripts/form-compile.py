@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.181 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.182 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -6610,8 +6610,12 @@ def main():
             if f'<Form>{form_name}</Form>' not in raw_text:
                 # Insert before </ChildObjects>
                 if '</ChildObjects>' in raw_text:
-                    insert_line = f'\t\t\t<Form>{form_name}</Form>' + eol
-                    raw_text = raw_text.replace('</ChildObjects>', insert_line + '\t\t</ChildObjects>', 1)
+                    # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
+                    # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
+                    # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
+                    raw_text = re.sub(r'([ \t]*)</ChildObjects>',
+                                      lambda m: m.group(1) + '\t' + f'<Form>{form_name}</Form>' + eol + m.group(1) + '</ChildObjects>',
+                                      raw_text, count=1)
                 elif '<ChildObjects/>' in raw_text:
                     replacement = ('<ChildObjects>' + eol + f'\t\t\t<Form>{form_name}</Form>' + eol + '\t\t</ChildObjects>')
                     raw_text = raw_text.replace('<ChildObjects/>', replacement, 1)

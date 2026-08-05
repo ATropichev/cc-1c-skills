@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.16 — Create 1C subsystem from JSON definition
+﻿# subsystem-compile v1.17 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -657,10 +657,14 @@ if ($parentXmlPath -and (Test-Path $parentXmlPath)) {
 			$text = [System.Text.Encoding]::UTF8.GetString($bytes)
 			if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
 			$text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-			# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-			# содержимым, а не концом тега.
-			if ($text -notmatch '<!\[CDATA\[|<!--') { $text = [regex]::Replace($text, '(?<=\S) />', '/>') }
+			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+			# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+			# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+			$text = [regex]::Replace($text, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+			# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+			# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+			$targetEol = if ((Test-Path -LiteralPath $parentXmlPath) -and ([System.IO.File]::ReadAllText($parentXmlPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+			$text = ($text -replace "`r`n", "`n") -replace "`n", $targetEol
 			[System.IO.File]::WriteAllText($parentXmlPath, $text, $utf8Bom)
 
 			Write-Host "[OK] Registered in: $parentXmlPath"

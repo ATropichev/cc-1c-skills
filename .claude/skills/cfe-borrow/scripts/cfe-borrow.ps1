@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.14 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.15 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -917,12 +917,14 @@ function Borrow-Form {
 		New-Item -ItemType Directory -Path $formXmlDir -Force | Out-Null
 	}
 	$formXmlFile = Join-Path $formXmlDir "Form.xml"
-	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-	# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-	# содержимым, а не концом тега.
+	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+	# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+	# поэтому они идут первыми ветками альтернации и возвращаются как есть.
 	# Здесь источник не XmlWriter, а OuterXml исходного документа — спацовывает так же.
 	$formXmlText = $formXmlSb.ToString()
-	if ($formXmlText -notmatch '<!\[CDATA\[|<!--') { $formXmlText = [regex]::Replace($formXmlText, '(?<=\S) />', '/>') }
+	$formXmlText = [regex]::Replace($formXmlText, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+	# Файл создаём мы — канон выгрузки: CRLF в разделителях строк.
+	$formXmlText = ($formXmlText -replace "`r`n", "`n") -replace "`n", "`r`n"
 	[System.IO.File]::WriteAllText($formXmlFile, $formXmlText, $enc)
 	Info "  Created: $formXmlFile"
 
@@ -1029,12 +1031,16 @@ function Register-FormInObject {
 	$text2 = [System.Text.Encoding]::UTF8.GetString($bytes2)
 	if ($text2.Length -gt 0 -and $text2[0] -eq [char]0xFEFF) { $text2 = $text2.Substring(1) }
 	$text2 = $text2.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-	# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-	# содержимым, а не концом тега.
-	if ($text2 -notmatch '<!\[CDATA\[|<!--') { $text2 = [regex]::Replace($text2, '(?<=\S) />', '/>') }
+	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+	# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+	# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+	$text2 = [regex]::Replace($text2, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
 
 	$utf8Bom2 = New-Object System.Text.UTF8Encoding($true)
+	# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+	# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+	$targetEol = if ((Test-Path -LiteralPath $objFile) -and ([System.IO.File]::ReadAllText($objFile) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+	$text2 = ($text2 -replace "`r`n", "`n") -replace "`n", $targetEol
 	[System.IO.File]::WriteAllText($objFile, $text2, $utf8Bom2)
 	Info "  Registered form in: $objFile"
 }
@@ -1423,13 +1429,17 @@ function Merge-AttributesIntoObject {
 		# Insert attributes before </ChildObjects>
 		$text3 = $text3 -replace '</ChildObjects>', "${allAttrXml}`r`n`t`t</ChildObjects>"
 
-		# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-		# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-		# содержимым, а не концом тега.
+		# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+		# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+		# поэтому они идут первыми ветками альтернации и возвращаются как есть.
 		# Стоит ПОСЛЕ вставки реквизитов, чтобы накрыть и их.
-		if ($text3 -notmatch '<!\[CDATA\[|<!--') { $text3 = [regex]::Replace($text3, '(?<=\S) />', '/>') }
+		$text3 = [regex]::Replace($text3, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
 
 		$utf8Bom3 = New-Object System.Text.UTF8Encoding($true)
+		# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+		# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+		$targetEol = if ((Test-Path -LiteralPath $objFile) -and ([System.IO.File]::ReadAllText($objFile) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+		$text3 = ($text3 -replace "`r`n", "`n") -replace "`n", $targetEol
 		[System.IO.File]::WriteAllText($objFile, $text3, $utf8Bom3)
 		Info "  Merged $added attribute(s) into: $objFile"
 	}
@@ -1893,12 +1903,16 @@ $memStream.Close()
 $text = [System.Text.Encoding]::UTF8.GetString($bytes)
 if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
 $text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-# содержимым, а не концом тега.
-if ($text -notmatch '<!\[CDATA\[|<!--') { $text = [regex]::Replace($text, '(?<=\S) />', '/>') }
+# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+$text = [regex]::Replace($text, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
 
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+$targetEol = if ((Test-Path -LiteralPath $extResolvedPath) -and ([System.IO.File]::ReadAllText($extResolvedPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+$text = ($text -replace "`r`n", "`n") -replace "`n", $targetEol
 [System.IO.File]::WriteAllText($extResolvedPath, $text, $utf8Bom)
 Info "Saved: $extResolvedPath"
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.15 — Compile 1C role from JSON
+# role-compile v1.16 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -206,8 +206,10 @@ def detect_format_version(d):
 def detect_eol(text):
     # Перевод строки ВСТАВКИ берём из самого файла: канон CRLF относится к файлам,
     # которые мы создаём, а правка существующего сохраняет его стиль (#44/#46/#47).
-    crlf = text.count('\r\n')
-    return '\r\n' if crlf and crlf >= text.count('\n') - crlf else '\n'
+    # Семантика та же, что у _detect_xml_style в остальных портах: есть CRLF → CRLF.
+    # Мажоритарное правило здесь было расхождением — на смешанном входе оно давало
+    # другой ответ, чем канон, при том же назначении.
+    return '\r\n' if '\r\n' in text else '\n'
 
 def esc_xml(s):
     """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
@@ -820,7 +822,12 @@ def main():
                 raw_text = raw_text[:insert_pos] + eol + f'\t\t\t{new_role_tag}' + raw_text[insert_pos:]
             else:
                 # No existing roles — insert before </ChildObjects>
-                raw_text = raw_text.replace('</ChildObjects>', f'\t\t\t{new_role_tag}' + eol + '\t\t</ChildObjects>')
+                # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
+                # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
+                # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
+                raw_text = re.sub(r'([ \t]*)</ChildObjects>',
+                                  lambda m: m.group(1) + '\t' + new_role_tag + eol + m.group(1) + '</ChildObjects>',
+                                  raw_text, count=1)
 
             write_utf8_bom(config_xml_path, raw_text)
             reg_result = 'added'

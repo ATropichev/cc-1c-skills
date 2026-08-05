@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# template-add v1.16 — Add template to 1C object
+# template-add v1.17 — Add template to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -215,21 +215,22 @@ def _detect_xml_style(path):
 
 
 def _finalize_xml_bytes(xml_bytes, style):
-    """Привести сериализованные байты к стилю оригинала (или к дефолту, если style is None)."""
-    enc_decl = style["enc"] if style else "utf-8"
+    """Привести байты к стилю оригинала; для НОВОГО файла (style is None) — к канону
+    выгрузки Конфигуратора: encoding="UTF-8", CRLF в разделителях, без перевода в конце."""
+    enc_decl = style["enc"] if style else "UTF-8"
     xml_bytes = xml_bytes.replace(
         b"<?xml version='1.0' encoding='UTF-8'?>",
         b'<?xml version="1.0" encoding="' + enc_decl.encode("ascii") + b'"?>')
     # Канонизировать переносы к LF (убирает &#13; от \r в tail'ах)
     xml_bytes = (xml_bytes.replace(b"&#13;\n", b"\n").replace(b"&#13;", b"")
                  .replace(b"\r\n", b"\n").replace(b"\r", b"\n"))
-    # Финальный перенос — как в оригинале (новый файл → есть)
-    want_final_nl = style["final_nl"] if style else True
+    # Финальный перенос — как в оригинале (новый файл → нет, канон #57)
+    want_final_nl = style["final_nl"] if style else False
     xml_bytes = xml_bytes.rstrip(b"\n")
     if want_final_nl:
         xml_bytes += b"\n"
-    # EOL — как в оригинале (новый файл → LF, текущее поведение)
-    if style and style["crlf"]:
+    # EOL — как в оригинале (новый файл → CRLF, канон #57)
+    if (style["crlf"] if style else True):
         xml_bytes = xml_bytes.replace(b"\n", b"\r\n")
     return xml_bytes
 

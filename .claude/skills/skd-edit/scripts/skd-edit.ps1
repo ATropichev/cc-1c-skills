@@ -1,4 +1,4 @@
-﻿# skd-edit v1.31 — Atomic 1C DCS editor
+﻿# skd-edit v1.32 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: парный .py собирает выражения автодат вне f-string ради совместимости с python 3.9 (PEP 701).
 param(
@@ -2192,7 +2192,6 @@ if ($rootOpenMatch.Success) { $script:RawRootOpening = $rootOpenMatch.Value } el
 
 # Detect line ending convention so save can normalize back to whatever the source used.
 # 1С Designer writes CRLF on Windows; LF-edited files should stay LF.
-$script:LineEnding = if ($script:RawOriginal.Contains("`r`n")) { "`r`n" } else { "`n" }
 
 $xmlDoc = New-Object System.Xml.XmlDocument
 $xmlDoc.PreserveWhitespace = $true
@@ -4045,18 +4044,16 @@ if ($script:RawRootOpening) {
 	$content = [regex]::Replace($content, '<DataCompositionSchema\b[^>]*>', { param($m) $script:RawRootOpening })
 }
 
-#   (2) Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-#       CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-#       содержимым, а не концом тега.
-if ($content -notmatch '<!\[CDATA\[|<!--') { $content = [regex]::Replace($content, '(?<=\S) />', '/>') }
+#   (2) Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+#       CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+#       поэтому они идут первыми ветками альтернации и возвращаются как есть.
+$content = [regex]::Replace($content, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
 
-#   (3) normalize line endings to match source — operations may mix LF (from new
-#       fragments) with whatever the source used (CRLF on Windows, LF on Linux/git).
-if ($script:LineEnding -eq "`r`n") {
-	$content = $content -replace '(?<!\r)\n', "`r`n"
-} else {
-	$content = $content -replace "`r`n", "`n"
-}
+#   (3) Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+#       новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+#       Нужно потому, что операции подмешивают LF (новые фрагменты) к стилю источника.
+$targetEol = if ((Test-Path -LiteralPath $resolvedPath) -and ([System.IO.File]::ReadAllText($resolvedPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+$content = ($content -replace "`r`n", "`n") -replace "`n", $targetEol
 
 $enc = New-Object System.Text.UTF8Encoding($true)
 [System.IO.File]::WriteAllText($resolvedPath, $content, $enc)

@@ -1,4 +1,4 @@
-﻿# form-edit v1.8 — Edit 1C managed form elements
+﻿# form-edit v1.9 — Edit 1C managed form elements
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1387,12 +1387,16 @@ if ($def.elementEvents -and $def.elementEvents.Count -gt 0) {
 $content = $xmlDoc.OuterXml
 # Ensure encoding declaration is uppercase UTF-8
 $content = $content -replace '^<\?xml version="1.0" encoding="utf-8"\?>', '<?xml version="1.0" encoding="UTF-8"?>'
-# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-# содержимым, а не концом тега.
-if ($content -notmatch '<!\[CDATA\[|<!--') { $content = [regex]::Replace($content, '(?<=\S) />', '/>') }
+# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+$content = [regex]::Replace($content, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
 
 $enc = New-Object System.Text.UTF8Encoding($true)
+# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+$targetEol = if ((Test-Path -LiteralPath $resolvedFormPath) -and ([System.IO.File]::ReadAllText($resolvedFormPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+$content = ($content -replace "`r`n", "`n") -replace "`n", $targetEol
 [System.IO.File]::WriteAllText($resolvedFormPath, $content, $enc)
 
 # === 14. Summary ===

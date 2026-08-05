@@ -1,4 +1,4 @@
-﻿# interface-edit v1.12 — Edit 1C CommandInterface.xml
+﻿# interface-edit v1.13 — Edit 1C CommandInterface.xml
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$CIPath,
@@ -679,12 +679,16 @@ $memStream.Close()
 $text = [System.Text.Encoding]::UTF8.GetString($bytes)
 if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
 $text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
-# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
-# содержимым, а не концом тега.
-if ($text -notmatch '<!\[CDATA\[|<!--') { $text = [regex]::Replace($text, '(?<=\S) />', '/>') }
+# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+$text = [regex]::Replace($text, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
 
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+$targetEol = if ((Test-Path -LiteralPath $resolvedPath) -and ([System.IO.File]::ReadAllText($resolvedPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+$text = ($text -replace "`r`n", "`n") -replace "`n", $targetEol
 [System.IO.File]::WriteAllText($resolvedPath, $text, $utf8Bom)
 Info "Saved: $resolvedPath"
 
