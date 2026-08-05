@@ -1,4 +1,4 @@
-# form-edit v1.7 — Edit 1C managed form elements (Python port)
+# form-edit v1.8 — Edit 1C managed form elements (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json

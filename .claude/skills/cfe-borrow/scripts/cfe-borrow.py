@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.13 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.14 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1017,7 +1017,7 @@ def main():
             return
 
         # newline="" => без трансляции: иначе CRLF молча схлопнется в LF при чтении
-        # и файл будет переписан в LF (#44/#46/#47).
+        # и файл будет переписан в LF.
         with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
             obj_content = fh.read()
 
@@ -1078,7 +1078,7 @@ def main():
 
         # Read existing object XML (needed for dedup + enrichment)
         # newline="" => без трансляции: иначе CRLF молча схлопнется в LF при чтении
-        # и файл будет переписан в LF (#44/#46/#47).
+        # и файл будет переписан в LF.
         with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
             obj_content = fh.read()
 

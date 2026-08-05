@@ -1,4 +1,4 @@
-﻿# xdto-compile v1.4 — Build a 1C XDTO package from an XML Schema (XSD)
+﻿# xdto-compile v1.5 — Build a 1C XDTO package from an XML Schema (XSD)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true, ParameterSetName='File')]
@@ -948,9 +948,7 @@ if (Test-Path $configXmlPath) {
 			$cfgSettings = New-Object System.Xml.XmlWriterSettings
 			$cfgSettings.Encoding = New-Object System.Text.UTF8Encoding($true)
 			$cfgSettings.Indent = $false
-			# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки —
-			# XmlWriter отдаёт `encoding="utf-8"` и `<a />`, Конфигуратор пишет
-			# `encoding="UTF-8"` и `<a/>`.
+			# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
 			$memStream = New-Object System.IO.MemoryStream
 			$writer = [System.Xml.XmlWriter]::Create($memStream, $cfgSettings)
 			$configDoc.Save($writer)
@@ -960,7 +958,9 @@ if (Test-Path $configXmlPath) {
 			$memStream.Close()
 			if ($cfgText.Length -gt 0 -and $cfgText[0] -eq [char]0xFEFF) { $cfgText = $cfgText.Substring(1) }
 			$cfgText = $cfgText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-			# Гард на CDATA/комментарии: только там ` />` может быть содержимым.
+			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+			# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+			# содержимым, а не концом тега.
 			if ($cfgText -notmatch '<!\[CDATA\[|<!--') { $cfgText = [regex]::Replace($cfgText, '(?<=\S) />', '/>') }
 			[System.IO.File]::WriteAllText($configXmlPath, $cfgText, (New-Object System.Text.UTF8Encoding($true)))
 			$regResult = "added"

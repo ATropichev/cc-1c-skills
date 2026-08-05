@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-edit v1.14 — Edit 1C configuration root (Configuration.xml)
+# cf-edit v1.15 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse

@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.15 — Create 1C subsystem from JSON definition
+﻿# subsystem-compile v1.16 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -657,8 +657,9 @@ if ($parentXmlPath -and (Test-Path $parentXmlPath)) {
 			$text = [System.Text.Encoding]::UTF8.GetString($bytes)
 			if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
 			$text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-			# Пустой элемент: XmlWriter пишет `<a />`, Конфигуратор — `<a/>`. Гард на CDATA/комментарии:
-			# только там `>` не экранируется, и ` />` может быть содержимым, а не концом тега.
+			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+			# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+			# содержимым, а не концом тега.
 			if ($text -notmatch '<!\[CDATA\[|<!--') { $text = [regex]::Replace($text, '(?<=\S) />', '/>') }
 			[System.IO.File]::WriteAllText($parentXmlPath, $text, $utf8Bom)
 

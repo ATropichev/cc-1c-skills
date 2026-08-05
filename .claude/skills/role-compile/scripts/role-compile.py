@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.14 — Compile 1C role from JSON
+# role-compile v1.15 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -798,7 +798,7 @@ def main():
 
     if os.path.exists(config_xml_path):
         # newline='' => без трансляции переводов строк: иначе CRLF молча схлопнется
-        # в LF при чтении и файл будет переписан в LF (#44/#46/#47).
+        # в LF при чтении и файл будет переписан в LF.
         with open(config_xml_path, 'r', encoding='utf-8-sig', newline='') as f:
             raw_text = f.read()
 

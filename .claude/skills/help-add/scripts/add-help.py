@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# help-add v1.13 — Add built-in help to 1C object
+# help-add v1.14 — Add built-in help to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse

@@ -1,4 +1,4 @@
-﻿# form-remove v1.5 — Remove form from 1C object
+﻿# form-remove v1.6 — Remove form from 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -84,8 +84,7 @@ $settings = New-Object System.Xml.XmlWriterSettings
 $settings.Encoding = $encBom
 $settings.Indent = $false
 
-# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки — XmlWriter
-# отдаёт `encoding="utf-8"` и `<a />`, Конфигуратор пишет `encoding="UTF-8"` и `<a/>`.
+# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
 $memStream = New-Object System.IO.MemoryStream
 $writer = [System.Xml.XmlWriter]::Create($memStream, $settings)
 $xmlDoc.Save($writer)
@@ -95,7 +94,9 @@ $xmlText = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
 $memStream.Close()
 if ($xmlText.Length -gt 0 -and $xmlText[0] -eq [char]0xFEFF) { $xmlText = $xmlText.Substring(1) }
 $xmlText = $xmlText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-# Гард на CDATA/комментарии: только там `>` не экранируется, и ` />` может быть содержимым.
+# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+# содержимым, а не концом тега.
 if ($xmlText -notmatch '<!\[CDATA\[|<!--') { $xmlText = [regex]::Replace($xmlText, '(?<=\S) />', '/>') }
 [System.IO.File]::WriteAllText($rootXmlFull.Path, $xmlText, $encBom)
 

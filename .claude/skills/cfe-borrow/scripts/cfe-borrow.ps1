@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.13 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.14 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -917,9 +917,10 @@ function Borrow-Form {
 		New-Item -ItemType Directory -Path $formXmlDir -Force | Out-Null
 	}
 	$formXmlFile = Join-Path $formXmlDir "Form.xml"
-	# Куски формы берутся из OuterXml исходного документа, а он — как и XmlWriter —
-	# отдаёт `<a />`; Конфигуратор пишет `<a/>`. Гард на CDATA/комментарии: только там
-	# `>` не экранируется, и ` />` может быть содержимым, а не концом тега.
+	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+	# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+	# содержимым, а не концом тега.
+	# Здесь источник не XmlWriter, а OuterXml исходного документа — спацовывает так же.
 	$formXmlText = $formXmlSb.ToString()
 	if ($formXmlText -notmatch '<!\[CDATA\[|<!--') { $formXmlText = [regex]::Replace($formXmlText, '(?<=\S) />', '/>') }
 	[System.IO.File]::WriteAllText($formXmlFile, $formXmlText, $enc)
@@ -1028,8 +1029,9 @@ function Register-FormInObject {
 	$text2 = [System.Text.Encoding]::UTF8.GetString($bytes2)
 	if ($text2.Length -gt 0 -and $text2[0] -eq [char]0xFEFF) { $text2 = $text2.Substring(1) }
 	$text2 = $text2.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-	# Пустой элемент: XmlWriter пишет `<a />`, Конфигуратор — `<a/>`. Гард на CDATA/комментарии:
-	# только там `>` не экранируется, и ` />` может быть содержимым, а не концом тега.
+	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+	# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+	# содержимым, а не концом тега.
 	if ($text2 -notmatch '<!\[CDATA\[|<!--') { $text2 = [regex]::Replace($text2, '(?<=\S) />', '/>') }
 
 	$utf8Bom2 = New-Object System.Text.UTF8Encoding($true)
@@ -1421,8 +1423,10 @@ function Merge-AttributesIntoObject {
 		# Insert attributes before </ChildObjects>
 		$text3 = $text3 -replace '</ChildObjects>', "${allAttrXml}`r`n`t`t</ChildObjects>"
 
-		# Пустой элемент: XmlWriter пишет `<a />`, Конфигуратор — `<a/>`. После вставки реквизитов,
-		# чтобы накрыть и их. Гард на CDATA/комментарии: только там ` />` может быть содержимым.
+		# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+		# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+		# содержимым, а не концом тега.
+		# Стоит ПОСЛЕ вставки реквизитов, чтобы накрыть и их.
 		if ($text3 -notmatch '<!\[CDATA\[|<!--') { $text3 = [regex]::Replace($text3, '(?<=\S) />', '/>') }
 
 		$utf8Bom3 = New-Object System.Text.UTF8Encoding($true)
@@ -1889,8 +1893,9 @@ $memStream.Close()
 $text = [System.Text.Encoding]::UTF8.GetString($bytes)
 if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
 $text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-# Пустой элемент: XmlWriter пишет `<a />`, Конфигуратор — `<a/>`. Гард на CDATA/комментарии:
-# только там `>` не экранируется, и ` />` может быть содержимым, а не концом тега.
+# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+# содержимым, а не концом тега.
 if ($text -notmatch '<!\[CDATA\[|<!--') { $text = [regex]::Replace($text, '(?<=\S) />', '/>') }
 
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)

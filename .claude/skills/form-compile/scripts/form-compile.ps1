@@ -1,4 +1,4 @@
-﻿# form-compile v1.180 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.181 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -6677,8 +6677,7 @@ if ($formsLeaf -eq 'Forms') {
 				$regSettings = New-Object System.Xml.XmlWriterSettings
 				$regSettings.Encoding = $regEnc
 				$regSettings.Indent = $false
-				# Через MemoryStream: нужен шаг пост-обработки строки — XmlWriter отдаёт
-				# `encoding="utf-8"` и `<a />`, Конфигуратор пишет `encoding="UTF-8"` и `<a/>`.
+				# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
 				$regMem = New-Object System.IO.MemoryStream
 				$regWriter = [System.Xml.XmlWriter]::Create($regMem, $regSettings)
 				$objDoc.Save($regWriter)
@@ -6688,7 +6687,9 @@ if ($formsLeaf -eq 'Forms') {
 				$regMem.Close()
 				if ($regText.Length -gt 0 -and $regText[0] -eq [char]0xFEFF) { $regText = $regText.Substring(1) }
 				$regText = $regText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-				# Гард на CDATA/комментарии: только там ` />` может быть содержимым.
+				# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+				# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+				# содержимым, а не концом тега.
 				if ($regText -notmatch '<!\[CDATA\[|<!--') { $regText = [regex]::Replace($regText, '(?<=\S) />', '/>') }
 				[System.IO.File]::WriteAllText($objectXmlPath, $regText, $regEnc)
 

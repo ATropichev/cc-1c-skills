@@ -1,4 +1,4 @@
-﻿# cf-edit v1.14 — Edit 1C configuration root (Configuration.xml)
+﻿# cf-edit v1.15 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$ConfigPath,
@@ -697,7 +697,8 @@ $bodyBlock$declarations
 	$caiPath = Join-Path $extDir "ClientApplicationInterface.xml"
 	$utf8Bom = New-Object System.Text.UTF8Encoding($true)
 	# Файл создаём мы — канон: CRLF в разделителях, без перевода строки в конце.
-	[System.IO.File]::WriteAllText($caiPath, (($caiXml -replace "`r`n", "`n") -replace "`n", "`r`n").TrimEnd("`r", "`n"), $utf8Bom)
+	$caiXml = ($caiXml -replace "`r`n", "`n") -replace "`n", "`r`n"
+	[System.IO.File]::WriteAllText($caiPath, $caiXml.TrimEnd("`r", "`n"), $utf8Bom)
 	$script:modifyCount++
 	Info "Wrote panel layout: $caiPath"
 }
@@ -887,7 +888,8 @@ $rightXml
 	$hpPath = Join-Path $extDir "HomePageWorkArea.xml"
 	$utf8Bom = New-Object System.Text.UTF8Encoding($true)
 	# Файл создаём мы — канон: CRLF в разделителях, без перевода строки в конце.
-	[System.IO.File]::WriteAllText($hpPath, (($hpXml -replace "`r`n", "`n") -replace "`n", "`r`n").TrimEnd("`r", "`n"), $utf8Bom)
+	$hpXml = ($hpXml -replace "`r`n", "`n") -replace "`n", "`r`n"
+	[System.IO.File]::WriteAllText($hpPath, $hpXml.TrimEnd("`r", "`n"), $utf8Bom)
 	$script:modifyCount++
 	Info "Wrote home page layout: $hpPath"
 }
@@ -989,8 +991,9 @@ $memStream.Close()
 $text = [System.Text.Encoding]::UTF8.GetString($bytes)
 if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
 $text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-# Пустой элемент: XmlWriter пишет `<a />`, Конфигуратор — `<a/>`. Гард на CDATA/комментарии:
-# только там `>` не экранируется, и ` />` может быть содержимым, а не концом тега.
+# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+# содержимым, а не концом тега.
 if ($text -notmatch '<!\[CDATA\[|<!--') { $text = [regex]::Replace($text, '(?<=\S) />', '/>') }
 # Возвращаем EOL исходного файла: вставки собраны с CRLF, а сам документ мог быть LF.
 $text = ($text -replace "`r`n", "`n") -replace "`n", $script:srcEol

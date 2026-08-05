@@ -1,4 +1,4 @@
-﻿# meta-remove v1.6 — Remove metadata object from 1C configuration dump
+﻿# meta-remove v1.7 — Remove metadata object from 1C configuration dump
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -493,9 +493,7 @@ if (-not $cfgNode) {
 	# Save Configuration.xml
 	if ($actions -gt 0 -and -not $DryRun) {
 		$enc = New-Object System.Text.UTF8Encoding $true
-		# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки —
-		# XmlWriter отдаёт `encoding="utf-8"` и `<a />`, Конфигуратор пишет
-		# `encoding="UTF-8"` и `<a/>`.
+		# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
 		$settings = New-Object System.Xml.XmlWriterSettings
 		$settings.Encoding = $enc
 		$settings.Indent = $false
@@ -508,7 +506,9 @@ if (-not $cfgNode) {
 		$memStream.Close()
 		if ($xmlText.Length -gt 0 -and $xmlText[0] -eq [char]0xFEFF) { $xmlText = $xmlText.Substring(1) }
 		$xmlText = $xmlText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-		# Гард на CDATA/комментарии: только там ` />` может быть содержимым.
+		# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+		# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+		# содержимым, а не концом тега.
 		if ($xmlText -notmatch '<!\[CDATA\[|<!--') { $xmlText = [regex]::Replace($xmlText, '(?<=\S) />', '/>') }
 		[System.IO.File]::WriteAllText($configXml, $xmlText, $enc)
 		Write-Host "[OK]    Configuration.xml saved"
@@ -574,8 +574,7 @@ function Remove-FromSubsystems {
 
 		if ($modified -and -not $DryRun) {
 			$enc = New-Object System.Text.UTF8Encoding $true
-			# Через MemoryStream: нужен шаг пост-обработки строки — XmlWriter отдаёт
-			# `encoding="utf-8"` и `<a />`, Конфигуратор пишет `encoding="UTF-8"` и `<a/>`.
+			# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
 			$settings = New-Object System.Xml.XmlWriterSettings
 			$settings.Encoding = $enc
 			$settings.Indent = $false
@@ -588,7 +587,9 @@ function Remove-FromSubsystems {
 			$memStream.Close()
 			if ($xmlText.Length -gt 0 -and $xmlText[0] -eq [char]0xFEFF) { $xmlText = $xmlText.Substring(1) }
 			$xmlText = $xmlText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-			# Гард на CDATA/комментарии: только там ` />` может быть содержимым.
+			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+			# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+			# содержимым, а не концом тега.
 			if ($xmlText -notmatch '<!\[CDATA\[|<!--') { $xmlText = [regex]::Replace($xmlText, '(?<=\S) />', '/>') }
 			[System.IO.File]::WriteAllText($xmlFile.FullName, $xmlText, $enc)
 		}

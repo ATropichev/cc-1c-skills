@@ -1,4 +1,4 @@
-﻿# meta-compile v1.81 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.82 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -5024,8 +5024,9 @@ if (Test-Path $configXmlPath) {
 			$memStream.Close()
 			if ($cfgText.Length -gt 0 -and $cfgText[0] -eq [char]0xFEFF) { $cfgText = $cfgText.Substring(1) }
 			$cfgText = $cfgText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-			# Гард на CDATA/комментарии: только там `>` не экранируется, и ` />` может
-			# быть содержимым, а не концом тега.
+			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+			# CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+			# содержимым, а не концом тега.
 			if ($cfgText -notmatch '<!\[CDATA\[|<!--') { $cfgText = [regex]::Replace($cfgText, '(?<=\S) />', '/>') }
 			[System.IO.File]::WriteAllText($configXmlPath, $cfgText, (New-Object System.Text.UTF8Encoding($true)))
 

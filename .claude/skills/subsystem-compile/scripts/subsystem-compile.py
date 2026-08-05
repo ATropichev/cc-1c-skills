@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-compile v1.15 — Create 1C subsystem from JSON definition
+# subsystem-compile v1.16 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -562,7 +562,7 @@ def main():
 
     if parent_xml_path and os.path.exists(parent_xml_path):
         # newline='' => без трансляции переводов строк: иначе CRLF молча схлопнется
-        # в LF при чтении и файл будет переписан в LF (#44/#46/#47).
+        # в LF при чтении и файл будет переписан в LF.
         with open(parent_xml_path, 'r', encoding='utf-8-sig', newline='') as f:
             raw_text = f.read()
 
