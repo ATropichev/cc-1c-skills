@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-add v1.16 — Add managed form to 1C config object
+# form-add v1.17 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -594,7 +594,10 @@ def main():
     if os.path.exists(module_path):
         print(f"[SKIP] Module.bsl already exists: {module_path} — not overwriting")
     else:
-        write_text_with_bom(module_path, module_bsl)
+        # Модуль пишем в каноне платформы: CRLF в разделителях строк (корпус: 2643 CRLF,
+        # чисто-LF 0 из 3001). Хвостовой перевод НЕ навязываем — у платформы он
+        # неканоничен (1235 модулей с ним, 766 без).
+        write_text_with_bom(module_path, module_bsl.replace('\r\n', '\n').replace('\n', '\r\n'))
 
     # --- Phase 4: Register in parent object ---
 

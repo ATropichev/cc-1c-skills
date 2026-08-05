@@ -19,15 +19,22 @@
   },
   "validatePath": "Catalogs/Товары/Forms/ФормаЭлемента",
   "expect": {
-    "preserves": {
-      "file": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml",
-      "bom": true,
-      "eol": "crlf",
-      "encoding": "UTF-8",
-      "finalNewline": false,
-      "noCR13": true,
-      "selfClose": "tight",
-      "noEmptyPairs": true
-    }
+    "preserves": [
+      {
+        "file": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml",
+        "bom": true,
+        "eol": "crlf",
+        "encoding": "UTF-8",
+        "finalNewline": false,
+        "noCR13": true,
+        "selfClose": "tight",
+        "noEmptyPairs": true
+      },
+      {
+        "file": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form/Module.bsl",
+        "bom": true,
+        "eol": "crlf"
+      }
+    ]
   }
 }

@@ -1,4 +1,4 @@
-﻿# epf-init v1.2 — Init 1C external data processor scaffold
+﻿# epf-init v1.3 — Init 1C external data processor scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -92,6 +92,11 @@ $moduleBsl = @"
 "@
 
 $modulePath = Join-Path $extDir "ObjectModule.bsl"
+# Модуль пишем в каноне платформы: CRLF в разделителях строк (корпус: 2643 CRLF,
+# чисто-LF 0 из 3001). Хвостовой перевод НЕ навязываем — у платформы он
+# неканоничен (1235 модулей с ним, 766 без). Шаблон берёт переводы строк из
+# самого скрипта, а он в репозитории хранится с LF.
+$moduleBsl = ($moduleBsl -replace "`r`n", "`n") -replace "`n", "`r`n"
 [System.IO.File]::WriteAllText($modulePath, $moduleBsl, $enc)
 
 Write-Host "[OK] Создана обработка: $rootFile"

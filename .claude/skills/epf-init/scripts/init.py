@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# epf-init v1.2 — Init 1C external data processor scaffold
+# epf-init v1.3 — Init 1C external data processor scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C external data processor."""
 import sys, os, argparse, uuid
@@ -96,7 +96,10 @@ def main():
 #КонецОбласти"""
 
     module_path = os.path.join(ext_dir, "ObjectModule.bsl")
-    write_utf8_bom(module_path, module_bsl)
+    # Модуль пишем в каноне платформы: CRLF в разделителях строк (корпус: 2643 CRLF,
+    # чисто-LF 0 из 3001). Хвостовой перевод НЕ навязываем — у платформы он
+    # неканоничен (1235 модулей с ним, 766 без).
+    write_utf8_bom(module_path, module_bsl.replace('\r\n', '\n').replace('\n', '\r\n'))
 
     print(f"[OK] Создана обработка: {root_file}")
     print(f"     Каталог: {processor_dir}")
