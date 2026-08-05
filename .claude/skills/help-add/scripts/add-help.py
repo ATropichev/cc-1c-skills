@@ -263,12 +263,16 @@ def write_text_with_bom(path, text):
         f.write(text)
 
 
-def write_xml_file(path, text):
-    """XML в каноне выгрузки Конфигуратора: CRLF, без перевода строки в конце.
+def write_xml_file(path, content):
+    """XML в каноне выгрузки Конфигуратора: CRLF в разделителях, без перевода в конце.
 
-    Для Help.xml. HTML-страница сюда НЕ идёт — у неё свой канон (LF).
+    Копия этой функции есть в каждом навыке-эмиттере (навыки автономны). Держать
+    копии одинаковыми — сознательно: разошедшиеся копии сводят на нет весь смысл.
+
+    HTML-страница сюда НЕ идёт — платформа хранит её с LF.
     """
-    write_text_with_bom(path, text.replace("\r\n", "\n").replace("\n", "\r\n").rstrip("\r\n"))
+    text = content.replace('\r\n', '\n').replace('\n', '\r\n').rstrip('\r\n')
+    write_text_with_bom(path, text)
 
 
 def main():
