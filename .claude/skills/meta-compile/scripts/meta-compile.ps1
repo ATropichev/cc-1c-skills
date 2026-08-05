@@ -1,4 +1,4 @@
-﻿# meta-compile v1.80 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.81 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -3043,7 +3043,9 @@ function Emit-ScheduledJobProperties {
 	if ($description) { X "$i<Description>$(Esc-XmlText $description)</Description>" } else { X "$i<Description/>" }
 
 	$key = if ($def.key) { "$($def.key)" } else { "" }
-	X "$i<Key>$(Esc-XmlText $key)</Key>"
+	# Пустое значение → самозакрывающийся, как у <Description> выше: Конфигуратор
+	# не пишет пустых пар.
+	if ($key) { X "$i<Key>$(Esc-XmlText $key)</Key>" } else { X "$i<Key/>" }
 
 	$use = if ($def.use -eq $true) { "true" } else { "false" }
 	X "$i<Use>$use</Use>"
@@ -3843,7 +3845,8 @@ function Emit-WebServiceProperties {
 	if ($def.comment) { X "$i<Comment>$(Esc-XmlText "$($def.comment)")</Comment>" } else { X "$i<Comment/>" }
 
 	$namespace = if ($def.namespace) { "$($def.namespace)" } else { "" }
-	X "$i<Namespace>$(Esc-XmlText $namespace)</Namespace>"
+	# Пустое значение → самозакрывающийся, как у <Comment> выше.
+	if ($namespace) { X "$i<Namespace>$(Esc-XmlText $namespace)</Namespace>" } else { X "$i<Namespace/>" }
 
 	# XDTOPackages — СПИСОК элементов, а не скаляр: значение либо ссылка на пакет конфигурации
 	# (xr:MDObjectRef "XDTOPackage.Имя"), либо URI внешнего пространства имён (xs:string).

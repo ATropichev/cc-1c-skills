@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-init v1.5 — Create empty 1C configuration scaffold
+# cf-init v1.6 — Create empty 1C configuration scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration."""
 import sys, os, argparse, uuid
@@ -87,8 +87,10 @@ def main():
     if synonym:
         synonym_xml = f"\r\n\t\t\t\t<v8:item>\r\n\t\t\t\t\t<v8:lang>ru</v8:lang>\r\n\t\t\t\t\t<v8:content>{esc_xml(synonym)}</v8:content>\r\n\t\t\t\t</v8:item>\r\n\t\t\t"
 
-    vendor_xml = esc_xml(vendor) if vendor else ""
-    version_xml = esc_xml(version) if version else ""
+    # Элемент целиком, а не значение внутри пары: при пустом значении Конфигуратор
+    # пишет <Vendor/>, а не <Vendor></Vendor>.
+    vendor_el = f"<Vendor>{esc_xml(vendor)}</Vendor>" if vendor else "<Vendor/>"
+    version_el = f"<Version>{esc_xml(version)}</Version>" if version else "<Version/>"
 
     class_ids = [
         "9cd510cd-abfc-11d4-9434-004095e12fc7",
@@ -124,8 +126,8 @@ def main():
 \t\t\t</UsePurposes>
 \t\t\t<ScriptVariant>Russian</ScriptVariant>
 \t\t\t<DefaultRoles/>
-\t\t\t<Vendor>{vendor_xml}</Vendor>
-\t\t\t<Version>{version_xml}</Version>
+\t\t\t{vendor_el}
+\t\t\t{version_el}
 \t\t\t<UpdateCatalogAddress/>
 \t\t\t<IncludeHelpInContents>false</IncludeHelpInContents>
 \t\t\t<UseManagedFormInOrdinaryApplication>false</UseManagedFormInOrdinaryApplication>

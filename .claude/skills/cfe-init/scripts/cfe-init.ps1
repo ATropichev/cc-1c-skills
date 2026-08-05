@@ -1,4 +1,4 @@
-﻿# cfe-init v1.3 — Create 1C configuration extension scaffold (CFE)
+﻿# cfe-init v1.4 — Create 1C configuration extension scaffold (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -125,16 +125,19 @@ if ($Synonym) {
 }
 
 # --- Optional properties ---
-$vendorXml = if ($Vendor) { [System.Security.SecurityElement]::Escape($Vendor) } else { "" }
-$versionXml = if ($Version) { [System.Security.SecurityElement]::Escape($Version) } else { "" }
+# Элемент целиком, а не значение внутри пары: при пустом значении Конфигуратор
+# пишет <Vendor/>, а не <Vendor></Vendor>.
+$vendorEl = if ($Vendor) { "<Vendor>$([System.Security.SecurityElement]::Escape($Vendor))</Vendor>" } else { "<Vendor/>" }
+$versionEl = if ($Version) { "<Version>$([System.Security.SecurityElement]::Escape($Version))</Version>" } else { "<Version/>" }
 
 # --- Role name ---
 $roleName = "${NamePrefix}ОсновнаяРоль"
 
 # --- DefaultRoles XML ---
-$defaultRolesXml = ""
+# Элемент целиком: без роли Конфигуратор пишет <DefaultRoles/>, а не пустую пару.
+$defaultRolesEl = "<DefaultRoles/>"
 if (-not $NoRole) {
-	$defaultRolesXml = "`r`n`t`t`t`t<xr:Item xsi:type=`"xr:MDObjectRef`">Role.$roleName</xr:Item>`r`n`t`t`t"
+	$defaultRolesEl = "<DefaultRoles>`r`n`t`t`t`t<xr:Item xsi:type=`"xr:MDObjectRef`">Role.$roleName</xr:Item>`r`n`t`t`t</DefaultRoles>"
 }
 
 # --- ChildObjects ---
@@ -193,9 +196,9 @@ $cfgXml = @"
 				<v8:Value xsi:type="app:ApplicationUsePurpose">PlatformApplication</v8:Value>
 			</UsePurposes>
 			<ScriptVariant>Russian</ScriptVariant>
-			<DefaultRoles>$defaultRolesXml</DefaultRoles>
-			<Vendor>$vendorXml</Vendor>
-			<Version>$versionXml</Version>
+			$defaultRolesEl
+			$vendorEl
+			$versionEl
 			<DefaultLanguage>Language.Русский</DefaultLanguage>
 			<BriefInformation/>
 			<DetailedInformation/>

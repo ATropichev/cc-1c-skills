@@ -12,7 +12,7 @@
 			<Comment/>
 			<MethodName>CommonModule.ОбменДаннымиСервер.Выполнить</MethodName>
 			<Description/>
-			<Key></Key>
+			<Key/>
 			<Use>false</Use>
 			<Predefined>false</Predefined>
 			<RestartCountOnFailure>3</RestartCountOnFailure>

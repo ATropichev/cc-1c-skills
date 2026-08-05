@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-init v1.3 — Create 1C configuration extension scaffold (CFE)
+# cfe-init v1.4 — Create 1C configuration extension scaffold (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration extension."""
 import sys, os, argparse, uuid
@@ -22,6 +22,8 @@ def write_xml_file(path, content):
     # скелете нет. Модули .bsl и текстовые макеты через неё НЕ пишутся.
     text = content.replace('\r\n', '\n').replace('\n', '\r\n').rstrip('\r\n')
     write_utf8_bom(path, text)
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -135,16 +137,21 @@ def main():
     if synonym:
         synonym_xml = f"\r\n\t\t\t\t<v8:item>\r\n\t\t\t\t\t<v8:lang>ru</v8:lang>\r\n\t\t\t\t\t<v8:content>{esc_xml(synonym)}</v8:content>\r\n\t\t\t\t</v8:item>\r\n\t\t\t"
 
-    vendor_xml = esc_xml(vendor) if vendor else ""
-    version_xml = esc_xml(version) if version else ""
+    # Элемент целиком, а не значение внутри пары: при пустом значении Конфигуратор
+    # пишет <Vendor/>, а не <Vendor></Vendor>.
+    vendor_el = f"<Vendor>{esc_xml(vendor)}</Vendor>" if vendor else "<Vendor/>"
+    version_el = f"<Version>{esc_xml(version)}</Version>" if version else "<Version/>"
 
     # --- Role name ---
     role_name = f"{name_prefix}ОсновнаяРоль"
 
     # --- DefaultRoles XML ---
-    default_roles_xml = ""
+    # Элемент целиком: без роли Конфигуратор пишет <DefaultRoles/>, а не пустую пару.
+    default_roles_el = "<DefaultRoles/>"
     if not args.NoRole:
-        default_roles_xml = f'\r\n\t\t\t\t<xr:Item xsi:type="xr:MDObjectRef">Role.{role_name}</xr:Item>\r\n\t\t\t'
+        default_roles_el = ('<DefaultRoles>\r\n\t\t\t\t'
+                            f'<xr:Item xsi:type="xr:MDObjectRef">Role.{role_name}</xr:Item>'
+                            '\r\n\t\t\t</DefaultRoles>')
 
     # --- ChildObjects ---
     child_objects_xml = f"\r\n\t\t\t<Language>Русский</Language>"
@@ -188,9 +195,9 @@ def main():
 \t\t\t\t<v8:Value xsi:type="app:ApplicationUsePurpose">PlatformApplication</v8:Value>
 \t\t\t</UsePurposes>
 \t\t\t<ScriptVariant>Russian</ScriptVariant>
-\t\t\t<DefaultRoles>{default_roles_xml}</DefaultRoles>
-\t\t\t<Vendor>{vendor_xml}</Vendor>
-\t\t\t<Version>{version_xml}</Version>
+\t\t\t{default_roles_el}
+\t\t\t{vendor_el}
+\t\t\t{version_el}
 \t\t\t<DefaultLanguage>Language.Русский</DefaultLanguage>
 \t\t\t<BriefInformation/>
 \t\t\t<DetailedInformation/>

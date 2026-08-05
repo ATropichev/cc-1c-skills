@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.80 — Compile 1C metadata object from JSON
+# meta-compile v1.81 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -3079,7 +3079,12 @@ def emit_scheduled_job_properties(indent):
     else:
         X(f'{i}<Description/>')
     key = str(defn['key']) if defn.get('key') else ''
-    X(f'{i}<Key>{esc_xml_text(key)}</Key>')
+    # Пустое значение → самозакрывающийся, как у <Description> выше: Конфигуратор
+    # не пишет пустых пар.
+    if key:
+        X(f'{i}<Key>{esc_xml_text(key)}</Key>')
+    else:
+        X(f'{i}<Key/>')
     use = 'true' if defn.get('use') is True else 'false'
     X(f'{i}<Use>{use}</Use>')
     predefined = 'true' if defn.get('predefined') is True else 'false'
@@ -3770,7 +3775,8 @@ def emit_web_service_properties(indent):
     emit_mltext(i, 'Synonym', synonym)
     X(f'{i}<Comment>{esc_xml_text(str(defn["comment"]))}</Comment>' if defn.get('comment') else f'{i}<Comment/>')
     namespace = str(defn['namespace']) if defn.get('namespace') else ''
-    X(f'{i}<Namespace>{esc_xml_text(namespace)}</Namespace>')
+    # Пустое значение → самозакрывающийся, как у <Comment> выше.
+    X(f'{i}<Namespace>{esc_xml_text(namespace)}</Namespace>' if namespace else f'{i}<Namespace/>')
     # XDTOPackages — СПИСОК элементов: ссылка на пакет конфигурации (xr:MDObjectRef) либо URI
     # внешнего пространства имён (xs:string). Presentation пуст, CheckState 0 (корпус: 19/19).
     pkgs = defn.get('xdtoPackages') or []

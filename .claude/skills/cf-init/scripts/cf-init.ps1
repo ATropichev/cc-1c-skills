@@ -1,4 +1,4 @@
-﻿# cf-init v1.5 — Create empty 1C configuration scaffold
+﻿# cf-init v1.6 — Create empty 1C configuration scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -72,8 +72,10 @@ if ($Synonym) {
 }
 
 # --- Optional properties ---
-$vendorXml = if ($Vendor) { [System.Security.SecurityElement]::Escape($Vendor) } else { "" }
-$versionXml = if ($Version) { [System.Security.SecurityElement]::Escape($Version) } else { "" }
+# Элемент целиком, а не значение внутри пары: при пустом значении Конфигуратор
+# пишет <Vendor/>, а не <Vendor></Vendor>.
+$vendorEl = if ($Vendor) { "<Vendor>$([System.Security.SecurityElement]::Escape($Vendor))</Vendor>" } else { "<Vendor/>" }
+$versionEl = if ($Version) { "<Version>$([System.Security.SecurityElement]::Escape($Version))</Version>" } else { "<Version/>" }
 
 # --- Configuration.xml ---
 $cfgXml = @"
@@ -122,8 +124,8 @@ $cfgXml = @"
 			</UsePurposes>
 			<ScriptVariant>Russian</ScriptVariant>
 			<DefaultRoles/>
-			<Vendor>$vendorXml</Vendor>
-			<Version>$versionXml</Version>
+			$vendorEl
+			$versionEl
 			<UpdateCatalogAddress/>
 			<IncludeHelpInContents>false</IncludeHelpInContents>
 			<UseManagedFormInOrdinaryApplication>false</UseManagedFormInOrdinaryApplication>
