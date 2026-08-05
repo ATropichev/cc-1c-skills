@@ -1,4 +1,4 @@
-﻿# xdto-edit v1.0 — Point edits of a 1C XDTO package
+﻿# xdto-edit v1.1 — Point edits of a 1C XDTO package
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)]
@@ -221,10 +221,21 @@ function Edit-Metadata([string]$field, [string]$newValue) {
 	$settings = New-Object System.Xml.XmlWriterSettings
 	$settings.Encoding = $encBom
 	$settings.Indent = $false
-	$stream = New-Object System.IO.FileStream($mdFile, [System.IO.FileMode]::Create)
-	$writer = [System.Xml.XmlWriter]::Create($stream, $settings)
+	# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки —
+	# XmlWriter отдаёт `encoding="utf-8"` и `<a />`, Конфигуратор пишет
+	# `encoding="UTF-8"` и `<a/>`.
+	$memStream = New-Object System.IO.MemoryStream
+	$writer = [System.Xml.XmlWriter]::Create($memStream, $settings)
 	$doc.Save($writer)
-	$writer.Close(); $stream.Close()
+	$writer.Flush(); $writer.Close()
+
+	$mdText = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
+	$memStream.Close()
+	if ($mdText.Length -gt 0 -and $mdText[0] -eq [char]0xFEFF) { $mdText = $mdText.Substring(1) }
+	$mdText = $mdText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
+	# Гард на CDATA/комментарии: только там ` />` может быть содержимым.
+	if ($mdText -notmatch '<!\[CDATA\[|<!--') { $mdText = [regex]::Replace($mdText, '(?<=\S) />', '/>') }
+	[System.IO.File]::WriteAllText($mdFile, $mdText, $encBom)
 }
 
 function Rename-Package([string]$newName) {
@@ -252,9 +263,18 @@ function Rename-Package([string]$newName) {
 		if ($found) {
 			$s = New-Object System.Xml.XmlWriterSettings
 			$s.Encoding = $encBom; $s.Indent = $false
-			$st = New-Object System.IO.FileStream($configXml, [System.IO.FileMode]::Create)
-			$w = [System.Xml.XmlWriter]::Create($st, $s)
-			$cfg.Save($w); $w.Close(); $st.Close()
+			# Через MemoryStream: нужен шаг пост-обработки строки — XmlWriter отдаёт
+			# `encoding="utf-8"` и `<a />`, Конфигуратор пишет `encoding="UTF-8"` и `<a/>`.
+			$mem = New-Object System.IO.MemoryStream
+			$w = [System.Xml.XmlWriter]::Create($mem, $s)
+			$cfg.Save($w); $w.Flush(); $w.Close()
+			$cfgText = [System.Text.Encoding]::UTF8.GetString($mem.ToArray())
+			$mem.Close()
+			if ($cfgText.Length -gt 0 -and $cfgText[0] -eq [char]0xFEFF) { $cfgText = $cfgText.Substring(1) }
+			$cfgText = $cfgText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
+			# Гард на CDATA/комментарии: только там ` />` может быть содержимым.
+			if ($cfgText -notmatch '<!\[CDATA\[|<!--') { $cfgText = [regex]::Replace($cfgText, '(?<=\S) />', '/>') }
+			[System.IO.File]::WriteAllText($configXml, $cfgText, $encBom)
 			Write-Host "  Configuration.xml: <XDTOPackage> переименован в $newName"
 		} else {
 			Write-Warning "В Configuration.xml не найдена запись <XDTOPackage>$pkgName</XDTOPackage> — зарегистрируйте пакет вручную"

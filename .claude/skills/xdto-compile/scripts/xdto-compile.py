@@ -1,4 +1,4 @@
-# xdto-compile v1.2 — Build a 1C XDTO package from an XML Schema (XSD) (Python port)
+# xdto-compile v1.3 — Build a 1C XDTO package from an XML Schema (XSD) (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json

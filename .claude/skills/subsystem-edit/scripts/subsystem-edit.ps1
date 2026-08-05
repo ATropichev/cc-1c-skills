@@ -1,4 +1,4 @@
-﻿# subsystem-edit v1.8 — Edit existing 1C subsystem XML
+﻿# subsystem-edit v1.9 — Edit existing 1C subsystem XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$SubsystemPath,
@@ -655,6 +655,9 @@ $memStream.Close()
 $text = [System.Text.Encoding]::UTF8.GetString($bytes)
 if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
 $text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
+# Пустой элемент: XmlWriter пишет `<a />`, Конфигуратор — `<a/>`. Гард на CDATA/комментарии:
+# только там `>` не экранируется, и ` />` может быть содержимым, а не концом тега.
+if ($text -notmatch '<!\[CDATA\[|<!--') { $text = [regex]::Replace($text, '(?<=\S) />', '/>') }
 
 $utf8Bom = New-Object System.Text.UTF8Encoding($true)
 [System.IO.File]::WriteAllText($resolvedPath, $text, $utf8Bom)

@@ -7,11 +7,11 @@
 		</v8:item>
 	</Title>
 	<AutoTitle>false</AutoTitle>
-	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1" />
+	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
 	<ChildItems>
 		<InputField name="Артикул" id="1">
-			<ContextMenu name="АртикулКонтекстноеМеню" id="2" />
-			<ExtendedTooltip name="АртикулРасширеннаяПодсказка" id="3" />
+			<ContextMenu name="АртикулКонтекстноеМеню" id="2"/>
+			<ExtendedTooltip name="АртикулРасширеннаяПодсказка" id="3"/>
 		</InputField>
 	</ChildItems>
 	<Attributes/>
@@ -23,11 +23,11 @@
 		</v8:item>
 	</Title>
 		<AutoTitle>false</AutoTitle>
-		<AutoCommandBar name="ФормаКоманднаяПанель" id="-1" />
+		<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
 		<ChildItems>
 			<InputField name="Артикул" id="1">
-				<ContextMenu name="АртикулКонтекстноеМеню" id="2" />
-				<ExtendedTooltip name="АртикулРасширеннаяПодсказка" id="3" />
+				<ContextMenu name="АртикулКонтекстноеМеню" id="2"/>
+				<ExtendedTooltip name="АртикулРасширеннаяПодсказка" id="3"/>
 			</InputField>
 		</ChildItems>
 		<Attributes/>

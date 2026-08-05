@@ -40,7 +40,7 @@
 					<v8:content>Тест</v8:content>
 				</v8:item>
 			</Synonym>
-			<Comment />
+			<Comment/>
 			<ConfigurationExtensionPurpose>Customization</ConfigurationExtensionPurpose>
 			<KeepMappingToExtendedConfigurationObjectsByIDs>true</KeepMappingToExtendedConfigurationObjectsByIDs>
 			<NamePrefix>Тест_</NamePrefix>
@@ -56,11 +56,11 @@
 			<Vendor></Vendor>
 			<Version></Version>
 			<DefaultLanguage>Language.Русский</DefaultLanguage>
-			<BriefInformation />
-			<DetailedInformation />
-			<Copyright />
-			<VendorInformationAddress />
-			<ConfigurationInformationAddress />
+			<BriefInformation/>
+			<DetailedInformation/>
+			<Copyright/>
+			<VendorInformationAddress/>
+			<ConfigurationInformationAddress/>
 			<InterfaceCompatibilityMode>TaxiEnableVersion8_2</InterfaceCompatibilityMode>
 		</Properties>
 		<ChildObjects>

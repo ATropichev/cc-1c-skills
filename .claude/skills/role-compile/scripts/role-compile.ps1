@@ -1,4 +1,4 @@
-﻿# role-compile v1.10 — Compile 1C role from JSON
+﻿# role-compile v1.11 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -856,11 +856,21 @@ if (Test-Path $configXmlPath) {
 			$cfgSettings = New-Object System.Xml.XmlWriterSettings
 			$cfgSettings.Encoding = New-Object System.Text.UTF8Encoding($true)
 			$cfgSettings.Indent = $false
-			$stream = New-Object System.IO.FileStream($configXmlPath, [System.IO.FileMode]::Create)
-			$writer = [System.Xml.XmlWriter]::Create($stream, $cfgSettings)
+			# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки —
+			# XmlWriter отдаёт `encoding="utf-8"` и `<a />`, Конфигуратор пишет
+			# `encoding="UTF-8"` и `<a/>`.
+			$memStream = New-Object System.IO.MemoryStream
+			$writer = [System.Xml.XmlWriter]::Create($memStream, $cfgSettings)
 			$configDoc.Save($writer)
-			$writer.Close()
-			$stream.Close()
+			$writer.Flush(); $writer.Close()
+
+			$cfgText = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
+			$memStream.Close()
+			if ($cfgText.Length -gt 0 -and $cfgText[0] -eq [char]0xFEFF) { $cfgText = $cfgText.Substring(1) }
+			$cfgText = $cfgText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
+			# Гард на CDATA/комментарии: только там ` />` может быть содержимым.
+			if ($cfgText -notmatch '<!\[CDATA\[|<!--') { $cfgText = [regex]::Replace($cfgText, '(?<=\S) />', '/>') }
+			[System.IO.File]::WriteAllText($configXmlPath, $cfgText, (New-Object System.Text.UTF8Encoding($true)))
 
 			$regResult = "added"
 		}
