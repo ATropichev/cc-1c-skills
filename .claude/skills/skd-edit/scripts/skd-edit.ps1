@@ -1,4 +1,4 @@
-﻿# skd-edit v1.30 — Atomic 1C DCS editor
+﻿# skd-edit v1.31 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: парный .py собирает выражения автодат вне f-string ради совместимости с python 3.9 (PEP 701).
 param(
@@ -4045,9 +4045,10 @@ if ($script:RawRootOpening) {
 	$content = [regex]::Replace($content, '<DataCompositionSchema\b[^>]*>', { param($m) $script:RawRootOpening })
 }
 
-#   (2) normalize self-closing tags: `.NET XmlDocument` adds a space before `/>`
-#       (`<foo bar="x" />`) but 1C-Designer writes `<foo bar="x"/>`. Strip the space.
-$content = [regex]::Replace($content, '(?<=\S) />', '/>')
+#   (2) Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Гард на
+#       CDATA/комментарии: только там `>` не экранируется, и ` />` может быть
+#       содержимым, а не концом тега.
+if ($content -notmatch '<!\[CDATA\[|<!--') { $content = [regex]::Replace($content, '(?<=\S) />', '/>') }
 
 #   (3) normalize line endings to match source — operations may mix LF (from new
 #       fragments) with whatever the source used (CRLF on Windows, LF on Linux/git).
