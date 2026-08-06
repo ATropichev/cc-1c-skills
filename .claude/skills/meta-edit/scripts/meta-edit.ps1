@@ -1,4 +1,4 @@
-﻿# meta-edit v1.30 — Edit existing 1C metadata object XML
+﻿# meta-edit v1.31 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -318,6 +318,12 @@ $root = $script:xmlDoc.DocumentElement
 # Ищем по объявлениям корня, а не через GetPrefixOfNamespace: ссылочный тип живёт в
 # ТЕКСТЕ узла, поэтому XML-слой этот префикс не отслеживает. $null = корень URI не
 # объявляет → эмиттер остаётся на самодостаточной локальной форме.
+# Версия формата правимого файла — из его же корня. Нужна эмиттерам: часть свойств
+# появилась в поздних версиях (напр. <Color> у значения перечисления — в 2.21).
+$script:formatVersion = $root.GetAttribute("version")
+if (-not $script:formatVersion) { $script:formatVersion = "2.17" }
+$script:isFormat221 = ($script:formatVersion -match '^(\d+)\.(\d+)$') -and ([int]$Matches[1] * 100 + [int]$Matches[2]) -ge 221
+
 $script:cfgUri = 'http://v8.1c.ru/8.1/data/enterprise/current-config'
 $script:cfgPrefix = $null
 foreach ($a in $root.Attributes) {
@@ -1300,6 +1306,9 @@ function Build-EnumValueFragment {
 	$sb.AppendLine("$indent`t`t<Name>$(Esc-XmlText $parsed.name)</Name>") | Out-Null
 	$sb.AppendLine($(Build-MLTextXml "$indent`t`t" "Synonym" $parsed.synonym)) | Out-Null
 	$sb.AppendLine("$indent`t`t<Comment/>") | Out-Null
+	# Цвет значения — свойство формата 2.21 (8.5). Без него добавленное значение
+	# отличалось бы от соседних, написанных платформой.
+	if ($script:isFormat221) { $sb.AppendLine("$indent`t`t<Color>auto</Color>") | Out-Null }
 	$sb.AppendLine("$indent`t</Properties>") | Out-Null
 	$sb.Append("$indent</EnumValue>") | Out-Null
 	return $sb.ToString()

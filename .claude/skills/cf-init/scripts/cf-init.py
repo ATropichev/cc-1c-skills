@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# cf-init v1.6 — Create empty 1C configuration scaffold
+# cf-init v1.7 — Create empty 1C configuration scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration."""
-import sys, os, argparse, uuid
+import sys, os, argparse, re, uuid
 
 def esc_xml(s):
     return s.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;')
@@ -105,6 +105,30 @@ def main():
         "fb282519-d103-4dd3-bc12-cb271d631dfc",
     ]
 
+    # Свойства и пространство имён формата 2.21 (платформа 8.5). Значения и ПОЗИЦИИ сняты
+    # с выгрузки 8.5.1 (debug/fmt221/dump_v851): те же исходники, выгруженные с 8.3.27 и
+    # с 8.5.1, различаются ровно этим. Порядок важен — вставки идут на своё место.
+    _fm = re.match(r'^(\d+)\.(\d+)$', args.FormatVersion)
+    is_221 = bool(_fm) and int(_fm.group(1)) * 100 + int(_fm.group(2)) >= 221
+    pal_ns = ""
+    f221_aux_forms = f221_window_variant = f221_open_variant = f221_captions = f221_migration = ""
+    if is_221:
+        pal_ns = ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette"'
+        f221_aux_forms = "\r\n" + "\r\n".join(
+            f"\t\t\t{t}" for t in (
+                "<AuxiliaryReportForm/>", "<AuxiliaryReportVariantForm/>", "<AuxiliaryReportSettingsForm/>",
+                "<AuxiliaryDynamicListSettingsForm/>", "<AuxiliaryDataHistoryChangeHistoryForm/>",
+                "<AuxiliaryDataHistoryVersionDataForm/>", "<AuxiliaryDataHistoryVersionDifferencesForm/>",
+                "<AuxiliaryCollaborationSystemUsersChoiceForm/>"))
+        f221_window_variant = ("\r\n\t\t\t<MainClientApplicationWindowInterfaceVariant>NavigationLeft"
+                               "</MainClientApplicationWindowInterfaceVariant>"
+                               "\r\n\t\t\t<ClientApplicationTheme>Auto</ClientApplicationTheme>")
+        f221_open_variant = ("\r\n\t\t\t<ClientApplicationWindowsOpenVariant>OpenDataInDialogs"
+                             "</ClientApplicationWindowsOpenVariant>")
+        f221_captions = "\r\n\t\t\t<Caption/>\r\n\t\t\t<ShortCaption/>"
+        f221_migration = ("\r\n\t\t\t<Version85InterfaceMigrationMode>DontUse"
+                          "</Version85InterfaceMigrationMode>")
+
     contained_objects = ""
     for i in range(7):
         contained_objects += f"""\t\t\t<xr:ContainedObject>
@@ -113,7 +137,7 @@ def main():
 \t\t\t</xr:ContainedObject>\n"""
 
     cfg_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
-<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="{args.FormatVersion}">
+<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"{pal_ns} xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="{args.FormatVersion}">
 \t<Configuration uuid="{uuid_cfg}">
 \t\t<InternalInfo>
 {contained_objects}\t\t</InternalInfo>
@@ -152,15 +176,15 @@ def main():
 \t\t\t<DefaultDataHistoryChangeHistoryForm/>
 \t\t\t<DefaultDataHistoryVersionDataForm/>
 \t\t\t<DefaultDataHistoryVersionDifferencesForm/>
-\t\t\t<DefaultCollaborationSystemUsersChoiceForm/>
+\t\t\t<DefaultCollaborationSystemUsersChoiceForm/>{f221_aux_forms}
 \t\t\t<RequiredMobileApplicationPermissions/>
 \t\t\t<UsedMobileApplicationFunctionalities>{mobile_xml}
 \t\t\t</UsedMobileApplicationFunctionalities>
 \t\t\t<StandaloneConfigurationRestrictionRoles/>
 \t\t\t<MobileApplicationURLs/>
-\t\t\t<AllowedIncomingShareRequestTypes/>
-\t\t\t<MainClientApplicationWindowMode>Normal</MainClientApplicationWindowMode>
-\t\t\t<DefaultInterface/>
+\t\t\t<AllowedIncomingShareRequestTypes/>{f221_window_variant}
+\t\t\t<MainClientApplicationWindowMode>Normal</MainClientApplicationWindowMode>{f221_open_variant}
+\t\t\t<DefaultInterface/>{f221_captions}
 \t\t\t<DefaultStyle/>
 \t\t\t<DefaultLanguage>Language.Русский</DefaultLanguage>
 \t\t\t<BriefInformation/>
@@ -172,7 +196,7 @@ def main():
 \t\t\t<ObjectAutonumerationMode>NotAutoFree</ObjectAutonumerationMode>
 \t\t\t<ModalityUseMode>DontUse</ModalityUseMode>
 \t\t\t<SynchronousPlatformExtensionAndAddInCallUseMode>DontUse</SynchronousPlatformExtensionAndAddInCallUseMode>
-\t\t\t<InterfaceCompatibilityMode>TaxiEnableVersion8_2</InterfaceCompatibilityMode>
+\t\t\t<InterfaceCompatibilityMode>TaxiEnableVersion8_2</InterfaceCompatibilityMode>{f221_migration}
 \t\t\t<DatabaseTablespacesUseMode>DontUse</DatabaseTablespacesUseMode>
 \t\t\t<CompatibilityMode>{compat}</CompatibilityMode>
 \t\t\t<DefaultConstantsForm/>
@@ -185,7 +209,7 @@ def main():
 
     # --- Languages/Русский.xml ---
     lang_xml = f'''<?xml version="1.0" encoding="UTF-8"?>
-<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="{args.FormatVersion}">
+<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"{pal_ns} xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="{args.FormatVersion}">
 \t<Language uuid="{uuid_lang}">
 \t\t<Properties>
 \t\t\t<Name>Русский</Name>

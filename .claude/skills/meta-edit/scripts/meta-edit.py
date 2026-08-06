@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.30 — Edit existing 1C metadata object XML
+# meta-edit v1.31 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -198,6 +198,9 @@ V8_NS = "http://v8.1c.ru/8.1/data/core"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 XS_NS = "http://www.w3.org/2001/XMLSchema"
 CFG_NS = "http://v8.1c.ru/8.1/data/enterprise/current-config"
+# Версия формата правимого файла — из его же корня. Нужна эмиттерам: часть свойств
+# появилась в поздних версиях (напр. <Color> у значения перечисления — в 2.21).
+is_format_221 = False
 # Префикс current-config, объявленный в КОРНЕ правимого файла (у платформы — cfg).
 # None = корень его не объявляет → эмиттер ссылочных типов остаётся на локальной форме.
 cfg_prefix = None
@@ -1266,6 +1269,10 @@ def build_enum_value_fragment(parsed, indent):
     lines.append(f"{indent}\t\t<Name>{esc_xml_text(parsed['name'])}</Name>")
     lines.append(build_mltext_xml(f"{indent}\t\t", "Synonym", parsed["synonym"]))
     lines.append(f"{indent}\t\t<Comment/>")
+    # Цвет значения — свойство формата 2.21 (8.5). Без него добавленное значение
+    # отличалось бы от соседних, написанных платформой.
+    if is_format_221:
+        lines.append(f"{indent}\t\t<Color>auto</Color>")
     lines.append(f"{indent}\t</Properties>")
     lines.append(f"{indent}</EnumValue>")
     return "\r\n".join(lines)
@@ -3207,8 +3214,11 @@ def main():
     xml_root = xml_tree.getroot()
 
     # Префикс current-config берём из объявлений корня — им и пишем ссылочные типы.
-    global cfg_prefix
+    global cfg_prefix, is_format_221
     cfg_prefix = next((p for p, u in (xml_root.nsmap or {}).items() if u == CFG_NS and p), None)
+    _fv = xml_root.get("version") or "2.17"
+    _m = re.match(r'^(\d+)\.(\d+)$', _fv)
+    is_format_221 = bool(_m) and int(_m.group(1)) * 100 + int(_m.group(2)) >= 221
 
     # --- Detect object type ---
     if localname(xml_root) != "MetaDataObject":

@@ -1,4 +1,4 @@
-﻿# cf-init v1.6 — Create empty 1C configuration scaffold
+﻿# cf-init v1.7 — Create empty 1C configuration scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -77,10 +77,35 @@ if ($Synonym) {
 $vendorEl = if ($Vendor) { "<Vendor>$([System.Security.SecurityElement]::Escape($Vendor))</Vendor>" } else { "<Vendor/>" }
 $versionEl = if ($Version) { "<Version>$([System.Security.SecurityElement]::Escape($Version))</Version>" } else { "<Version/>" }
 
+# --- Свойства и пространство имён формата 2.21 (платформа 8.5) ---
+# Значения и ПОЗИЦИИ сняты с выгрузки 8.5.1 (debug/fmt221/dump_v851): те же исходники,
+# выгруженные с 8.3.27 и с 8.5.1, различаются ровно этим. Порядок важен — вставки идут
+# на своё место, а не в конец.
+$is221 = (($FormatVersion -match '^(\d+)\.(\d+)$') -and ([int]$Matches[1] * 100 + [int]$Matches[2]) -ge 221)
+$nl = "`r`n"
+$f221AuxForms = ""; $f221WindowVariant = ""; $f221OpenVariant = ""; $f221Captions = ""; $f221Migration = ""
+$palNs = ""
+if ($is221) {
+	$palNs = ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette"'
+	# Скобки вокруг -join обязательны: без них `$nl + (массив) -join $nl` разбирается как
+	# `($nl + массив) -join $nl`, массив склеивается пробелами и все теги уезжают в одну строку.
+	$f221AuxForms = $nl + ((@(
+		"<AuxiliaryReportForm/>", "<AuxiliaryReportVariantForm/>", "<AuxiliaryReportSettingsForm/>",
+		"<AuxiliaryDynamicListSettingsForm/>", "<AuxiliaryDataHistoryChangeHistoryForm/>",
+		"<AuxiliaryDataHistoryVersionDataForm/>", "<AuxiliaryDataHistoryVersionDifferencesForm/>",
+		"<AuxiliaryCollaborationSystemUsersChoiceForm/>"
+	) | ForEach-Object { "`t`t`t$_" }) -join $nl)
+	$f221WindowVariant = $nl + "`t`t`t<MainClientApplicationWindowInterfaceVariant>NavigationLeft</MainClientApplicationWindowInterfaceVariant>" +
+		$nl + "`t`t`t<ClientApplicationTheme>Auto</ClientApplicationTheme>"
+	$f221OpenVariant = $nl + "`t`t`t<ClientApplicationWindowsOpenVariant>OpenDataInDialogs</ClientApplicationWindowsOpenVariant>"
+	$f221Captions = $nl + "`t`t`t<Caption/>" + $nl + "`t`t`t<ShortCaption/>"
+	$f221Migration = $nl + "`t`t`t<Version85InterfaceMigrationMode>DontUse</Version85InterfaceMigrationMode>"
+}
+
 # --- Configuration.xml ---
 $cfgXml = @"
 <?xml version="1.0" encoding="UTF-8"?>
-<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="$FormatVersion">
+<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"$palNs xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="$FormatVersion">
 	<Configuration uuid="$uuidCfg">
 		<InternalInfo>
 			<xr:ContainedObject>
@@ -147,15 +172,15 @@ $cfgXml = @"
 			<DefaultDataHistoryChangeHistoryForm/>
 			<DefaultDataHistoryVersionDataForm/>
 			<DefaultDataHistoryVersionDifferencesForm/>
-			<DefaultCollaborationSystemUsersChoiceForm/>
+			<DefaultCollaborationSystemUsersChoiceForm/>$f221AuxForms
 			<RequiredMobileApplicationPermissions/>
 			<UsedMobileApplicationFunctionalities>$mobileXml
 			</UsedMobileApplicationFunctionalities>
 			<StandaloneConfigurationRestrictionRoles/>
 			<MobileApplicationURLs/>
-			<AllowedIncomingShareRequestTypes/>
-			<MainClientApplicationWindowMode>Normal</MainClientApplicationWindowMode>
-			<DefaultInterface/>
+			<AllowedIncomingShareRequestTypes/>$f221WindowVariant
+			<MainClientApplicationWindowMode>Normal</MainClientApplicationWindowMode>$f221OpenVariant
+			<DefaultInterface/>$f221Captions
 			<DefaultStyle/>
 			<DefaultLanguage>Language.Русский</DefaultLanguage>
 			<BriefInformation/>
@@ -167,7 +192,7 @@ $cfgXml = @"
 			<ObjectAutonumerationMode>NotAutoFree</ObjectAutonumerationMode>
 			<ModalityUseMode>DontUse</ModalityUseMode>
 			<SynchronousPlatformExtensionAndAddInCallUseMode>DontUse</SynchronousPlatformExtensionAndAddInCallUseMode>
-			<InterfaceCompatibilityMode>TaxiEnableVersion8_2</InterfaceCompatibilityMode>
+			<InterfaceCompatibilityMode>TaxiEnableVersion8_2</InterfaceCompatibilityMode>$f221Migration
 			<DatabaseTablespacesUseMode>DontUse</DatabaseTablespacesUseMode>
 			<CompatibilityMode>$CompatibilityMode</CompatibilityMode>
 			<DefaultConstantsForm/>
@@ -182,7 +207,7 @@ $cfgXml = @"
 # --- Languages/Русский.xml ---
 $langXml = @"
 <?xml version="1.0" encoding="UTF-8"?>
-<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="$FormatVersion">
+<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"$palNs xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="$FormatVersion">
 	<Language uuid="$uuidLang">
 		<Properties>
 			<Name>Русский</Name>

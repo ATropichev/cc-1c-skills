@@ -1,4 +1,4 @@
-﻿# meta-validate v1.13 — Validate 1C metadata object structure (+корневой <Type>: скаляр без структуры = ошибка)
+﻿# meta-validate v1.14 — Validate 1C metadata object structure (+корневой <Type>: скаляр без структуры = ошибка)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -344,9 +344,10 @@ if ($root.NamespaceURI -ne $expectedNs) {
 $version = $root.GetAttribute("version")
 if (-not $version) {
 	Report-Warn "1. Missing version attribute on MetaDataObject"
-} elseif ($version -notin @("2.17", "2.18", "2.19", "2.20")) {
-	# Лестница версий формата: 2.17 (8.3.20-8.3.24), 2.18 (8.3.25), 2.19 (8.3.26), 2.20 (8.3.27).
-	Report-Warn "1. Unusual version '$version' (expected 2.17-2.20)"
+} elseif ($version -notin @("2.17", "2.18", "2.19", "2.20", "2.21")) {
+	# Лестница версий формата: 2.17 (8.3.20-8.3.24), 2.18 (8.3.25), 2.19 (8.3.26),
+	# 2.20 (8.3.27), 2.21 (8.5). Версию задаёт платформа ВЫГРУЗКИ, а не режим совместимости.
+	Report-Warn "1. Unusual version '$version' (expected 2.17-2.21)"
 }
 
 # Detect type element — exactly one child element in md namespace
@@ -1502,6 +1503,10 @@ if ($script:configDir) {
 $versionedProps = @{
 	"TypeReductionMode" = "2.18"   # режим приведения типов (стандартные реквизиты, измерения РС)
 	"LineNumberLength"  = "2.20"   # длина номера строки ТЧ (5..9)
+	# 2.21 (8.5): подтверждено синтетикой — одни исходники, выгрузка с 8.3.27 и с 8.5.1.
+	"Color"                          = "2.21"   # цвет значения перечисления
+	"AuxiliaryVariantForm"           = "2.21"   # вспомогательная форма варианта отчёта
+	"UseInInterfaceCompatibilityMode" = "2.21"  # использование общей формы в режиме совместимости интерфейса
 }
 # Версия формата как число: "2.20" → 220. Строковое сравнение неверно ("2.9" > "2.17").
 function Get-FormatRank([string]$v) {

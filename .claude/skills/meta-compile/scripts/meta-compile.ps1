@@ -1,4 +1,4 @@
-﻿# meta-compile v1.87 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.88 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -2224,6 +2224,11 @@ function Emit-EnumValue {
 	X "$indent`t`t<Name>$(Esc-XmlText $parsed.name)</Name>"
 	Emit-MLText "$indent`t`t" "Synonym" $parsed.synonym
 	if ($parsed.comment) { X "$indent`t`t<Comment>$(Esc-XmlText $parsed.comment)</Comment>" } else { X "$indent`t`t<Comment/>" }
+	# Цвет значения перечисления — свойство формата 2.21 (8.5), последним в Properties.
+	if ($script:isFormat221) {
+		$color = if ($parsed.color) { "$($parsed.color)" } else { "auto" }
+		X "$indent`t`t<Color>$(Esc-XmlText $color)</Color>"
+	}
 	X "$indent`t</Properties>"
 	X "$indent</EnumValue>"
 }
@@ -2890,6 +2895,11 @@ function Emit-CommonFormProperties {
 	} else {
 		X "$i<UsePurposes/>"
 	}
+	# Использование в режиме совместимости интерфейса — свойство формата 2.21 (8.5),
+	# между UsePurposes и UseStandardCommands.
+	if ($script:isFormat221) {
+		X "$i<UseInInterfaceCompatibilityMode>$(Get-EnumProp 'UseInInterfaceCompatibilityMode' 'useInInterfaceCompatibilityMode' 'Any')</UseInInterfaceCompatibilityMode>"
+	}
 	$useStdCmds = if (Get-BoolProp "useStandardCommands" $false) { "true" } else { "false" }
 	X "$i<UseStandardCommands>$useStdCmds</UseStandardCommands>"
 	Emit-MLText $i "ExtendedPresentation" $def.extendedPresentation
@@ -3200,6 +3210,8 @@ function Emit-ReportProperties {
 	Emit-VerbatimRef $i "DefaultSettingsForm"      $def.defaultSettingsForm
 	Emit-VerbatimRef $i "AuxiliarySettingsForm"    $def.auxiliarySettingsForm
 	Emit-VerbatimRef $i "DefaultVariantForm"       $def.defaultVariantForm
+	# Вспомогательная форма варианта отчёта — свойство формата 2.21 (8.5).
+	if ($script:isFormat221) { Emit-VerbatimRef $i "AuxiliaryVariantForm" $def.auxiliaryVariantForm }
 	Emit-VerbatimRef $i "VariantsStorage"          $def.variantsStorage
 	Emit-VerbatimRef $i "SettingsStorage"          $def.settingsStorage
 	$inclHelp = if (Get-BoolProp "includeHelpInContents" $false) { "true" } else { "false" }
@@ -4239,6 +4251,15 @@ $script:compatMode = Detect-CompatibilityMode $OutputDir
 # глушил бы TypeReductionMode, который платформа этих версий пишет, и роундтрип бы разъезжался.
 $script:isFormat218 = (Get-FormatRank $script:formatVersion) -ge 218
 $script:isFormat220 = (Get-FormatRank $script:formatVersion) -ge 220
+$script:isFormat221 = (Get-FormatRank $script:formatVersion) -ge 221
+# 2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
+# Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту.
+# Только для шапок MetaDataObject и Form — в файлах с корнем extrnprops
+# (Ext/ClientApplicationInterface.xml и т.п.) платформа его не пишет.
+if ($script:isFormat221) {
+	$palNs = ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette"'
+	$script:xmlnsDecl = $script:xmlnsDecl -replace ' xmlns:style=', "$palNs xmlns:style="
+}
 # Дефолт длины номера строки ТЧ: с режима 8.3.27 платформа заводит новые ТЧ с 9 разрядами.
 $script:lineNumberLengthDefault = if ((Get-CompatModeRank $script:compatMode) -ge 80327) { 9 } else { 5 }
 
@@ -4953,6 +4974,8 @@ if ($objType -eq "CommonForm") {
 	$cfFormXmlPath = Join-Path $extDir "Form.xml"
 	if (-not (Test-Path $cfFormXmlPath)) {
 		$cfFormNs = 'xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:dcscor="http://v8.1c.ru/8.1/data-composition-system/core" xmlns:dcsset="http://v8.1c.ru/8.1/data-composition-system/settings" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+		# Шапка Form на 2.21 тоже несёт палитру — см. комментарий у $script:xmlnsDecl.
+		if ($script:isFormat221) { $cfFormNs = $cfFormNs -replace ' xmlns:style=', ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=' }
 		$cfFormXml = "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<Form $cfFormNs version=`"$($script:formatVersion)`">`r`n`t<AutoCommandBar name=`"ФормаКоманднаяПанель`" id=`"-1`">`r`n`t`t<Autofill>true</Autofill>`r`n`t</AutoCommandBar>`r`n`t<ChildItems/>`r`n</Form>`r`n"
 		Write-XmlFileKeepEol $cfFormXmlPath $cfFormXml $enc
 		$modulesCreated += $cfFormXmlPath

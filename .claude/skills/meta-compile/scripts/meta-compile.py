@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.87 — Compile 1C metadata object from JSON
+# meta-compile v1.88 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -2296,6 +2296,10 @@ def emit_enum_value(indent, parsed):
         X(f'{indent}\t\t<Comment>{esc_xml_text(parsed["comment"])}</Comment>')
     else:
         X(f'{indent}\t\t<Comment/>')
+    # Цвет значения перечисления — свойство формата 2.21 (8.5), последним в Properties.
+    if is_format_221:
+        color = str(parsed['color']) if parsed.get('color') else 'auto'
+        X(f'{indent}\t\t<Color>{esc_xml_text(color)}</Color>')
     X(f'{indent}\t</Properties>')
     X(f'{indent}</EnumValue>')
 
@@ -2920,6 +2924,12 @@ def emit_common_form_properties(indent):
         X(f'{i}</UsePurposes>')
     else:
         X(f'{i}<UsePurposes/>')
+    # Использование в режиме совместимости интерфейса — свойство формата 2.21 (8.5),
+    # между UsePurposes и UseStandardCommands.
+    if is_format_221:
+        X(f'{i}<UseInInterfaceCompatibilityMode>'
+          f'{get_enum_prop("UseInInterfaceCompatibilityMode", "useInInterfaceCompatibilityMode", "Any")}'
+          f'</UseInInterfaceCompatibilityMode>')
     use_std_cmds = 'true' if get_bool_prop('useStandardCommands', False) else 'false'
     X(f'{i}<UseStandardCommands>{use_std_cmds}</UseStandardCommands>')
     emit_mltext(i, 'ExtendedPresentation', defn.get('extendedPresentation'))
@@ -3237,6 +3247,9 @@ def emit_report_properties(indent):
     emit_verbatim_ref(i, 'DefaultSettingsForm', defn.get('defaultSettingsForm'))
     emit_verbatim_ref(i, 'AuxiliarySettingsForm', defn.get('auxiliarySettingsForm'))
     emit_verbatim_ref(i, 'DefaultVariantForm', defn.get('defaultVariantForm'))
+    # Вспомогательная форма варианта отчёта — свойство формата 2.21 (8.5).
+    if is_format_221:
+        emit_verbatim_ref(i, 'AuxiliaryVariantForm', defn.get('auxiliaryVariantForm'))
     emit_verbatim_ref(i, 'VariantsStorage', defn.get('variantsStorage'))
     emit_verbatim_ref(i, 'SettingsStorage', defn.get('settingsStorage'))
     incl_help = 'true' if get_bool_prop('includeHelpInContents', False) else 'false'
@@ -4149,6 +4162,15 @@ compat_mode = detect_compatibility_mode(output_dir)
 # глушил бы TypeReductionMode, который платформа этих версий пишет, и роундтрип бы разъезжался.
 is_format_218 = format_rank(format_version) >= 218
 is_format_220 = format_rank(format_version) >= 220
+is_format_221 = format_rank(format_version) >= 221
+# 2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
+# Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту.
+# Только для шапок MetaDataObject и Form — в файлах с корнем extrnprops
+# (Ext/ClientApplicationInterface.xml и т.п.) платформа его не пишет.
+if is_format_221:
+    xmlns_decl = xmlns_decl.replace(
+        ' xmlns:style=',
+        ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
 # Дефолт длины номера строки ТЧ: с режима 8.3.27 платформа заводит новые ТЧ с 9 разрядами.
 line_number_length_default = 9 if compat_mode_rank(compat_mode) >= 80327 else 5
 
@@ -4622,6 +4644,10 @@ if obj_type == 'CommonForm':
                  'xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" '
                  'xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" '
                  'xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"')
+        # Шапка Form на 2.21 тоже несёт палитру — см. комментарий у xmlns_decl.
+        if is_format_221:
+            cf_ns = cf_ns.replace(' xmlns:style=',
+                                  ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
         cf_form_xml = ('<?xml version="1.0" encoding="UTF-8"?>\r\n<Form ' + cf_ns + ' version="' + format_version + '">\r\n'
                        '\t<AutoCommandBar name="ФормаКоманднаяПанель" id="-1">\r\n\t\t<Autofill>true</Autofill>\r\n\t</AutoCommandBar>\r\n'
                        '\t<ChildItems/>\r\n</Form>\r\n')

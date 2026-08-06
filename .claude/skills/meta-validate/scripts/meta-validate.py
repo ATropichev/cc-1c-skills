@@ -1,4 +1,4 @@
-# meta-validate v1.13 — Validate 1C metadata object structure (Python port) (+корневой <Type>: скаляр без структуры = ошибка)
+# meta-validate v1.14 — Validate 1C metadata object structure (Python port) (+корневой <Type>: скаляр без структуры = ошибка)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -371,9 +371,10 @@ if root_ns != expected_ns:
 version = root.get("version", "")
 if not version:
     report_warn("1. Missing version attribute on MetaDataObject")
-elif version not in ("2.17", "2.18", "2.19", "2.20"):
-    # Лестница версий формата: 2.17 (8.3.20-8.3.24), 2.18 (8.3.25), 2.19 (8.3.26), 2.20 (8.3.27).
-    report_warn(f"1. Unusual version '{version}' (expected 2.17-2.20)")
+elif version not in ("2.17", "2.18", "2.19", "2.20", "2.21"):
+    # Лестница версий формата: 2.17 (8.3.20-8.3.24), 2.18 (8.3.25), 2.19 (8.3.26),
+    # 2.20 (8.3.27), 2.21 (8.5). Версию задаёт платформа ВЫГРУЗКИ, а не режим совместимости.
+    report_warn(f"1. Unusual version '{version}' (expected 2.17-2.21)")
 
 # Detect type element -- exactly one child element in md namespace
 type_node = None
@@ -1404,6 +1405,10 @@ if config_dir:
 versioned_props = {
     "TypeReductionMode": "2.18",   # режим приведения типов (стандартные реквизиты, измерения РС)
     "LineNumberLength": "2.20",    # длина номера строки ТЧ (5..9)
+    # 2.21 (8.5): подтверждено синтетикой — одни исходники, выгрузка с 8.3.27 и с 8.5.1.
+    "Color": "2.21",                            # цвет значения перечисления
+    "AuxiliaryVariantForm": "2.21",             # вспомогательная форма варианта отчёта
+    "UseInInterfaceCompatibilityMode": "2.21",  # использование общей формы в режиме совместимости интерфейса
 }
 
 
