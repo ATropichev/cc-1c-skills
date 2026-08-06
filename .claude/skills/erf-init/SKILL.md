@@ -18,20 +18,21 @@ allowed-tools:
 ## Usage
 
 ```
-/erf-init <Name> [Synonym] [SrcDir] [--with-skd]
+/erf-init <Name> [Synonym] [SrcDir] [FormatVersion] [--with-skd]
 ```
 
-| Параметр  | Обязательный | По умолчанию | Описание                              |
-|-----------|:------------:|--------------|---------------------------------------|
-| Name      | да           | —            | Имя отчёта (латиница/кириллица)       |
-| Synonym   | нет          | = Name       | Синоним (отображаемое имя)            |
-| SrcDir    | нет          | `src`        | Каталог исходников относительно CWD   |
-| --WithSKD | нет          | —            | Создать пустую СКД и привязать к MainDataCompositionSchema |
+| Параметр      | Обязательный | По умолчанию | Описание                              |
+|---------------|:------------:|--------------|---------------------------------------|
+| Name          | да           | —            | Имя отчёта (латиница/кириллица)       |
+| Synonym       | нет          | = Name       | Синоним (отображаемое имя)            |
+| SrcDir        | нет          | `src`        | Каталог исходников относительно CWD   |
+| FormatVersion | нет          | `2.17`       | Версия формата: 2.20 — платформа 8.3.27, 2.21 — 8.5. Дефолт открывается любой платформой |
+| --WithSKD     | нет          | —            | Создать пустую СКД и привязать к MainDataCompositionSchema |
 
 ## Команда
 
 ```powershell
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/init.ps1" -Name "<Name>" [-Synonym "<Synonym>"] [-SrcDir "<SrcDir>"] [-WithSKD]
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/init.ps1" -Name "<Name>" [-Synonym "<Synonym>"] [-SrcDir "<SrcDir>"] [-FormatVersion "<2.17|2.18|2.19|2.20|2.21>"] [-WithSKD]
 ```
 
 ## Дальнейшие шаги

@@ -1,4 +1,4 @@
-﻿# form-add v1.21 — Add managed form to 1C config object
+﻿# form-add v1.22 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -154,6 +154,14 @@ function Assert-EditAllowed([string]$targetPath, [string]$require) {
 function Detect-FormatVersion([string]$dir) {
 	$d = $dir
 	while ($d) {
+		# Автономная внешняя обработка/отчёт: своего Configuration.xml у неё нет, версию несёт
+		# корень самой обработки. Без этого форма и макет внутри обработки 2.21 писались бы 2.17.
+		$extPath = "$d.xml"
+		if (Test-Path $extPath) {
+			$extText = [System.IO.File]::ReadAllText($extPath, [System.Text.Encoding]::UTF8)
+			$extHead = $extText.Substring(0, [Math]::Min(2000, $extText.Length))
+			if ($extHead -match '<(ExternalDataProcessor|ExternalReport)[ >]' -and $extHead -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { return $Matches[1] }
+		}
 		$cfgPath = Join-Path $d "Configuration.xml"
 		if (Test-Path $cfgPath) {
 			$cfgText = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
@@ -197,7 +205,13 @@ if (-not (Test-Path $ObjectPath)) {
 
 $objectXmlFull = Resolve-Path $ObjectPath
 Assert-EditAllowed $objectXmlFull.Path 'editable'
-$script:formatVersion = Detect-FormatVersion (Split-Path $objectXmlFull.Path -Parent)
+# Версию берём прежде всего из корня самого объекта — он её несёт всегда, а у автономной
+# внешней обработки/отчёта подниматься к Configuration.xml просто некуда.
+$script:formatVersion = $null
+$objHead = [System.IO.File]::ReadAllText($objectXmlFull.Path, [System.Text.Encoding]::UTF8)
+$objHead = $objHead.Substring(0, [Math]::Min(2000, $objHead.Length))
+if ($objHead -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { $script:formatVersion = $Matches[1] }
+if (-not $script:formatVersion) { $script:formatVersion = Detect-FormatVersion (Split-Path $objectXmlFull.Path -Parent) }
 
 # Объявления пространств имён — одной переменной на корень: места эмиссии их только
 # интерполируют. Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.

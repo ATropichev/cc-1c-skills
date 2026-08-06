@@ -18,19 +18,20 @@ allowed-tools:
 ## Usage
 
 ```
-/epf-init <Name> [Synonym] [SrcDir]
+/epf-init <Name> [Synonym] [SrcDir] [FormatVersion]
 ```
 
-| Параметр  | Обязательный | По умолчанию | Описание                            |
-|-----------|:------------:|--------------|-------------------------------------|
-| Name      | да           | —            | Имя обработки (латиница/кириллица)  |
-| Synonym   | нет          | = Name       | Синоним (отображаемое имя)          |
-| SrcDir    | нет          | `src`        | Каталог исходников относительно CWD |
+| Параметр      | Обязательный | По умолчанию | Описание                                       |
+|---------------|:------------:|--------------|------------------------------------------------|
+| Name          | да           | —            | Имя обработки (латиница/кириллица)             |
+| Synonym       | нет          | = Name       | Синоним (отображаемое имя)                     |
+| SrcDir        | нет          | `src`        | Каталог исходников относительно CWD            |
+| FormatVersion | нет          | `2.17`       | Версия формата: 2.20 — платформа 8.3.27, 2.21 — 8.5. Дефолт открывается любой платформой |
 
 ## Команда
 
 ```powershell
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/init.ps1" -Name "<Name>" [-Synonym "<Synonym>"] [-SrcDir "<SrcDir>"]
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/init.ps1" -Name "<Name>" [-Synonym "<Synonym>"] [-SrcDir "<SrcDir>"] [-FormatVersion "<2.17|2.18|2.19|2.20|2.21>"]
 ```
 
 ## Дальнейшие шаги

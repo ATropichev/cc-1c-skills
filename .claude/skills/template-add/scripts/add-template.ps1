@@ -1,4 +1,4 @@
-﻿# template-add v1.20 — Add template to 1C object
+﻿# template-add v1.21 — Add template to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -220,6 +220,14 @@ $encBom = New-Object System.Text.UTF8Encoding($true)
 function Detect-FormatVersion([string]$dir) {
 	$d = $dir
 	while ($d) {
+		# Автономная внешняя обработка/отчёт: своего Configuration.xml у неё нет, версию несёт
+		# корень самой обработки. Без этого форма и макет внутри обработки 2.21 писались бы 2.17.
+		$extPath = "$d.xml"
+		if (Test-Path $extPath) {
+			$extText = [System.IO.File]::ReadAllText($extPath, [System.Text.Encoding]::UTF8)
+			$extHead = $extText.Substring(0, [Math]::Min(2000, $extText.Length))
+			if ($extHead -match '<(ExternalDataProcessor|ExternalReport)[ >]' -and $extHead -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { return $Matches[1] }
+		}
 		$cfgPath = Join-Path $d "Configuration.xml"
 		if (Test-Path $cfgPath) {
 			$cfgText = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
@@ -235,7 +243,13 @@ function Detect-FormatVersion([string]$dir) {
 	return "2.17"
 }
 
-$formatVersion = Detect-FormatVersion (Resolve-Path $SrcDir).Path
+# Версию берём прежде всего из корня самого объекта — он её несёт всегда, а у автономной
+# внешней обработки/отчёта подниматься к Configuration.xml просто некуда.
+$formatVersion = $null
+$objHead = [System.IO.File]::ReadAllText((Resolve-Path $rootXmlPath).Path, [System.Text.Encoding]::UTF8)
+$objHead = $objHead.Substring(0, [Math]::Min(2000, $objHead.Length))
+if ($objHead -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { $formatVersion = $Matches[1] }
+if (-not $formatVersion) { $formatVersion = Detect-FormatVersion (Resolve-Path $SrcDir).Path }
 
 # Объявления пространств имён — одной переменной: место эмиссии её только интерполирует.
 # Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.

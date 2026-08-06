@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# epf-init v1.3 — Init 1C external data processor scaffold
+# epf-init v1.4 — Init 1C external data processor scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C external data processor."""
-import sys, os, argparse, uuid
+import sys, os, re, argparse, uuid
 
 def esc_xml(s):
     return s.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;')
@@ -24,6 +24,12 @@ def write_xml_file(path, content):
     write_utf8_bom(path, text)
 
 
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -31,6 +37,11 @@ def main():
     parser.add_argument('-Name', dest='Name', required=True)
     parser.add_argument('-Synonym', dest='Synonym', default=None)
     parser.add_argument('-SrcDir', dest='SrcDir', default='src')
+    # Версия формата выгрузки. Своей конфигурации у автономного объекта нет, наследовать
+    # версию неоткуда — поэтому её задают явно. Формы, макеты и справку внутри объекта
+    # навыки берут уже отсюда: их детектор читает version из корня этого файла.
+    parser.add_argument('-FormatVersion', dest='FormatVersion', default='2.17',
+                        choices=['2.17', '2.18', '2.19', '2.20', '2.21'])
     args = parser.parse_args()
 
     name = args.Name
@@ -42,8 +53,36 @@ def main():
     uuid3 = new_uuid()
     uuid4 = new_uuid()
 
+    # Объявления пространств имён — одной переменной: места эмиссии её только подставляют.
+    xmlns_decl = (
+        'xmlns="http://v8.1c.ru/8.3/MDClasses"'
+        ' xmlns:app="http://v8.1c.ru/8.2/managed-application/core"'
+        ' xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config"'
+        ' xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi"'
+        ' xmlns:ent="http://v8.1c.ru/8.1/data/enterprise"'
+        ' xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"'
+        ' xmlns:style="http://v8.1c.ru/8.1/data/ui/style"'
+        ' xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system"'
+        ' xmlns:v8="http://v8.1c.ru/8.1/data/core"'
+        ' xmlns:v8ui="http://v8.1c.ru/8.1/data/ui"'
+        ' xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web"'
+        ' xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows"'
+        ' xmlns:xen="http://v8.1c.ru/8.3/xcf/enums"'
+        ' xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef"'
+        ' xmlns:xr="http://v8.1c.ru/8.3/xcf/readable"'
+        ' xmlns:xs="http://www.w3.org/2001/XMLSchema"'
+        ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+    )
+    format_version = args.FormatVersion
+    # 2.21 (8.5) добавила в шапку пространство палитры. Вставляем НА МЕСТО (после lf, перед
+    # style): платформа держит объявления по алфавиту, дописать в конец нельзя.
+    if format_rank(format_version) >= 221:
+        xmlns_decl = xmlns_decl.replace(
+            ' xmlns:style=',
+            ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
+
     xml = f'''<?xml version="1.0" encoding="UTF-8"?>
-<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17">
+<MetaDataObject {xmlns_decl} version="{format_version}">
 \t<ExternalDataProcessor uuid="{uuid1}">
 \t\t<InternalInfo>
 \t\t\t<xr:ContainedObject>

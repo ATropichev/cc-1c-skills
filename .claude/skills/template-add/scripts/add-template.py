@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# template-add v1.20 — Add template to 1C object
+# template-add v1.21 — Add template to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -271,6 +271,16 @@ def write_xml_file(path, content):
 
 def detect_format_version(d):
     while d:
+        # Автономная внешняя обработка/отчёт: своего Configuration.xml у неё нет, версию несёт
+        # корень самой обработки. Без этого форма и макет внутри обработки 2.21 писались бы 2.17.
+        ext_path = d + ".xml"
+        if os.path.isfile(ext_path):
+            with open(ext_path, "r", encoding="utf-8-sig") as f:
+                ext_head = f.read(2000)
+            if re.search(r'<(ExternalDataProcessor|ExternalReport)[ >]', ext_head):
+                m = re.search(r'<MetaDataObject[^>]+version="(\d+\.\d+)"', ext_head)
+                if m:
+                    return m.group(1)
         cfg_path = os.path.join(d, "Configuration.xml")
         if os.path.isfile(cfg_path):
             with open(cfg_path, "r", encoding="utf-8-sig") as f:
@@ -313,37 +323,6 @@ def main():
 
     tmpl = TYPE_MAP[template_type]
 
-    format_version = detect_format_version(os.path.abspath(src_dir))
-
-    # Объявления пространств имён — одной переменной: место эмиссии её только подставляет.
-    # Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.
-    xmlns_decl = (
-        'xmlns="http://v8.1c.ru/8.3/MDClasses"'
-        ' xmlns:app="http://v8.1c.ru/8.2/managed-application/core"'
-        ' xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config"'
-        ' xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi"'
-        ' xmlns:ent="http://v8.1c.ru/8.1/data/enterprise"'
-        ' xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"'
-        ' xmlns:style="http://v8.1c.ru/8.1/data/ui/style"'
-        ' xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system"'
-        ' xmlns:v8="http://v8.1c.ru/8.1/data/core"'
-        ' xmlns:v8ui="http://v8.1c.ru/8.1/data/ui"'
-        ' xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web"'
-        ' xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows"'
-        ' xmlns:xen="http://v8.1c.ru/8.3/xcf/enums"'
-        ' xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef"'
-        ' xmlns:xr="http://v8.1c.ru/8.3/xcf/readable"'
-        ' xmlns:xs="http://www.w3.org/2001/XMLSchema"'
-        ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
-    )
-
-    # 2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
-    # Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту,
-    # дописать в конец нельзя.
-    if format_rank(format_version) >= 221:
-        xmlns_decl = xmlns_decl.replace(
-            ' xmlns:style=',
-            ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
 
     # --- Checks ---
 
@@ -384,6 +363,47 @@ def main():
         sys.exit(1)
 
     assert_edit_allowed(root_xml_path, "editable")
+
+    # Версию берём прежде всего из корня самого объекта — он её несёт всегда, а у автономной
+    # внешней обработки/отчёта подниматься к Configuration.xml просто некуда.
+    format_version = None
+    with open(root_xml_path, "r", encoding="utf-8-sig") as f:
+        obj_head = f.read(2000)
+    m_ver = re.search(r'<MetaDataObject[^>]+version="(\d+\.\d+)"', obj_head)
+    if m_ver:
+        format_version = m_ver.group(1)
+    if not format_version:
+        format_version = detect_format_version(os.path.abspath(src_dir))
+
+    # Объявления пространств имён — одной переменной: место эмиссии её только подставляет.
+    # Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.
+    xmlns_decl = (
+        'xmlns="http://v8.1c.ru/8.3/MDClasses"'
+        ' xmlns:app="http://v8.1c.ru/8.2/managed-application/core"'
+        ' xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config"'
+        ' xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi"'
+        ' xmlns:ent="http://v8.1c.ru/8.1/data/enterprise"'
+        ' xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"'
+        ' xmlns:style="http://v8.1c.ru/8.1/data/ui/style"'
+        ' xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system"'
+        ' xmlns:v8="http://v8.1c.ru/8.1/data/core"'
+        ' xmlns:v8ui="http://v8.1c.ru/8.1/data/ui"'
+        ' xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web"'
+        ' xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows"'
+        ' xmlns:xen="http://v8.1c.ru/8.3/xcf/enums"'
+        ' xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef"'
+        ' xmlns:xr="http://v8.1c.ru/8.3/xcf/readable"'
+        ' xmlns:xs="http://www.w3.org/2001/XMLSchema"'
+        ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+    )
+
+    # 2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
+    # Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту,
+    # дописать в конец нельзя.
+    if format_rank(format_version) >= 221:
+        xmlns_decl = xmlns_decl.replace(
+            ' xmlns:style=',
+            ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
 
     # --- Create directories ---
 

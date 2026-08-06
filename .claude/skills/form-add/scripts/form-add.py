@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-add v1.21 — Add managed form to 1C config object
+# form-add v1.22 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -196,6 +196,16 @@ NSMAP = {
 
 def detect_format_version(d):
     while d:
+        # Автономная внешняя обработка/отчёт: своего Configuration.xml у неё нет, версию несёт
+        # корень самой обработки. Без этого форма и макет внутри обработки 2.21 писались бы 2.17.
+        ext_path = d + ".xml"
+        if os.path.isfile(ext_path):
+            with open(ext_path, "r", encoding="utf-8-sig") as f:
+                ext_head = f.read(2000)
+            if re.search(r'<(ExternalDataProcessor|ExternalReport)[ >]', ext_head):
+                m = re.search(r'<MetaDataObject[^>]+version="(\d+\.\d+)"', ext_head)
+                if m:
+                    return m.group(1)
         cfg_path = os.path.join(d, "Configuration.xml")
         if os.path.isfile(cfg_path):
             with open(cfg_path, "r", encoding="utf-8-sig") as f:
@@ -320,7 +330,16 @@ def main():
 
     object_xml_full = os.path.abspath(object_path)
     assert_edit_allowed(object_xml_full, "editable")
-    format_version = detect_format_version(os.path.dirname(object_xml_full))
+    # Версию берём прежде всего из корня самого объекта — он её несёт всегда, а у автономной
+    # внешней обработки/отчёта подниматься к Configuration.xml просто некуда.
+    format_version = None
+    with open(object_xml_full, "r", encoding="utf-8-sig") as f:
+        obj_head = f.read(2000)
+    m_ver = re.search(r'<MetaDataObject[^>]+version="(\d+\.\d+)"', obj_head)
+    if m_ver:
+        format_version = m_ver.group(1)
+    if not format_version:
+        format_version = detect_format_version(os.path.dirname(object_xml_full))
 
     # Объявления пространств имён — одной переменной на корень: места эмиссии их только
     # подставляют. Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.
