@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-add v1.20 — Add managed form to 1C config object
+# form-add v1.21 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -210,6 +210,12 @@ def detect_format_version(d):
     return "2.17"
 
 
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
 def _detect_xml_style(path):
     """Стиль существующего файла для round-trip-сохранения: BOM / EOL / регистр encoding /
     финальный перенос. None → файл новый (сохранить текущее поведение)."""
@@ -355,6 +361,14 @@ def main():
         ' xmlns:xs="http://www.w3.org/2001/XMLSchema"'
         ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
     )
+
+    # 2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
+    # Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту,
+    # дописать в конец нельзя.
+    if format_rank(format_version) >= 221:
+        pal = ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style='
+        xmlns_decl = xmlns_decl.replace(' xmlns:style=', pal)
+        form_ns_decl = form_ns_decl.replace(' xmlns:style=', pal)
 
     parser_xml = etree.XMLParser(remove_blank_text=False)
     tree = etree.parse(object_xml_full, parser_xml)

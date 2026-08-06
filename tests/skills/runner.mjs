@@ -311,21 +311,18 @@ const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
 // was about (PS wrote `<a />` plus a trailing newline, python wrote `<a/>` without one),
 // so port parity was being checked through the mask. Do not bring them back: the byte
 // canon itself is now asserted per case via `preserves`.
-function normalizeXmlContent(text, opts = {}) {
+//
+// Четвёртый шаг — вырезание объявлений xmlns — снят по той же причине: он прятал
+// целый класс расхождений (лишнее/недостающее объявление в шапке, как xmlns:pal
+// формата 2.21) и к моменту снятия был мёртвым — ни один кейс на него не опирался.
+function normalizeXmlContent(text) {
   let s = text;
   // 1. XML declaration: normalize quotes and encoding case
   s = s.replace(
     /<\?xml\s+version=['"]1\.0['"]\s+encoding=['"]([^'"]+)['"]\s*\?>/gi,
     (_, enc) => `<?xml version="1.0" encoding="${enc.toLowerCase()}"?>`
   );
-  // 2. Strip xmlns declarations (Python etree strips unused ones).
-  //    Skipped for Configuration.xml: those declarations are load-bearing (they back
-  //    xsi:type values like app:ApplicationUsePurpose in UsePurposes) and dropping them
-  //    is exactly the corruption of issue #38 — keeping them lets the test guard against it.
-  if (!opts.keepXmlns) {
-    s = s.replace(/\s+xmlns(?::[\w]+)?="[^"]*"/g, '');
-  }
-  // 3. Collapse whitespace between tags: ">  \n\t  <" → "><". Kept: the ports indent a
+  // 2. Collapse whitespace between tags: ">  \n\t  <" → "><". Kept: the ports indent a
   //    few blocks differently, which is formatting rather than the byte canon.
   s = s.replace(/>\s+</g, '><');
   return s;
@@ -338,8 +335,7 @@ function normalizeContent(text, config, relFile) {
   s = s.replace(/\r\n/g, '\n');
   // Normalize XML differences (Python etree serialization quirks)
   if (config?.runtime === 'python') {
-    const base = relFile ? relFile.split(/[\\/]/).pop() : '';
-    s = normalizeXmlContent(s, { keepXmlns: base === 'Configuration.xml' });
+    s = normalizeXmlContent(s);
   }
 
   // Normalize UUIDs
@@ -357,6 +353,42 @@ function normalizeContent(text, config, relFile) {
   }
 
   return s;
+}
+
+// ─── Проверка содержимого файла по СЫРЫМ байтам ────────────────────────────
+// Снэпшотное сравнение в py-прогоне режет объявления xmlns (normalizeXmlContent),
+// поэтому наличие/отсутствие конкретного объявления через снэпшот не проверить —
+// он совпадёт при любом исходе. Эта проверка читает файл как есть.
+// spec: { file, text } | { file, text: [...] }. Возвращает массив ошибок.
+function checkFileContains(workDir, spec, expectPresent) {
+  const errs = [];
+  const target = join(workDir, spec.file);
+  if (!existsSync(target)) {
+    errs.push(`${expectPresent ? 'fileContains' : 'fileNotContains'}: file not found: ${spec.file}`);
+    return errs;
+  }
+  const text = readFileSync(target).toString('utf8').replace(/^﻿/, '');
+  const needles = Array.isArray(spec.text) ? spec.text : [spec.text];
+  for (const needle of needles) {
+    const found = text.includes(needle);
+    if (expectPresent && !found) errs.push(`${spec.file} does not contain "${needle}"`);
+    if (!expectPresent && found) errs.push(`${spec.file} unexpectedly contains "${needle}"`);
+  }
+  return errs;
+}
+
+// Ключи expect, которые раннер действительно умеет. Неизвестный ключ = кейс,
+// который молча ничего не проверяет (так уже было с 9 кейсами meta-edit) —
+// поэтому он ошибка, а не игнор.
+const KNOWN_EXPECT_KEYS = new Set([
+  'files', 'stdoutContains', 'stdoutNotContains', 'preserves',
+  'fileContains', 'fileNotContains',
+]);
+
+function checkExpectKeys(caseData) {
+  if (!caseData.expect) return [];
+  const unknown = Object.keys(caseData.expect).filter(k => !KNOWN_EXPECT_KEYS.has(k));
+  return unknown.map(k => `expect.${k}: раннер такого ключа не знает — кейс ничего не проверяет`);
 }
 
 // ─── Byte-style preservation check (round-trip #44/#46/#47, канон #57) ──────
@@ -709,6 +741,7 @@ async function runCaseAsync(testCase, opts) {
 
     // Assertions
     const errors = [];
+    errors.push(...checkExpectKeys(caseData));
     if (caseData.expectError) {
       if (exitCode === 0) errors.push('Expected error (non-zero exit) but got exitCode=0');
       if (typeof caseData.expectError === 'string' && !stderr.includes(caseData.expectError)) {
@@ -747,6 +780,16 @@ async function runCaseAsync(testCase, opts) {
         const specs = Array.isArray(caseData.expect.preserves)
           ? caseData.expect.preserves : [caseData.expect.preserves];
         for (const spec of specs) errors.push(...checkPreserves(workDir, spec));
+      }
+      if (caseData.expect?.fileContains) {
+        const specs = Array.isArray(caseData.expect.fileContains)
+          ? caseData.expect.fileContains : [caseData.expect.fileContains];
+        for (const spec of specs) errors.push(...checkFileContains(workDir, spec, true));
+      }
+      if (caseData.expect?.fileNotContains) {
+        const specs = Array.isArray(caseData.expect.fileNotContains)
+          ? caseData.expect.fileNotContains : [caseData.expect.fileNotContains];
+        for (const spec of specs) errors.push(...checkFileContains(workDir, spec, false));
       }
       if (errors.length === 0 && !caseData.expectError && !workspace.readOnly) {
         const snapshotConfig = { ...skillConfig.snapshot, runtime: opts.runtime };
@@ -898,6 +941,7 @@ function runCase(testCase, opts) {
 
     // 4. Assertions
     const errors = [];
+    errors.push(...checkExpectKeys(caseData));
 
     if (caseData.expectError) {
       // Negative case — expect failure
@@ -948,6 +992,16 @@ function runCase(testCase, opts) {
         const specs = Array.isArray(caseData.expect.preserves)
           ? caseData.expect.preserves : [caseData.expect.preserves];
         for (const spec of specs) errors.push(...checkPreserves(workDir, spec));
+      }
+      if (caseData.expect?.fileContains) {
+        const specs = Array.isArray(caseData.expect.fileContains)
+          ? caseData.expect.fileContains : [caseData.expect.fileContains];
+        for (const spec of specs) errors.push(...checkFileContains(workDir, spec, true));
+      }
+      if (caseData.expect?.fileNotContains) {
+        const specs = Array.isArray(caseData.expect.fileNotContains)
+          ? caseData.expect.fileNotContains : [caseData.expect.fileNotContains];
+        for (const spec of specs) errors.push(...checkFileContains(workDir, spec, false));
       }
 
       // Snapshot comparison (skip for external/read-only workspaces)

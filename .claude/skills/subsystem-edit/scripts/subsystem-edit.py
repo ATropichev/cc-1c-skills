@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-edit v1.14 — Edit existing 1C subsystem XML
+# subsystem-edit v1.15 — Edit existing 1C subsystem XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -224,6 +224,23 @@ XMLNS_DECL = (
     ' xmlns:xs="http://www.w3.org/2001/XMLSchema"'
     ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
 )
+
+
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
+def apply_pal_ns(format_version):
+    """2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
+    Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту,
+    дописать в конец нельзя."""
+    global XMLNS_DECL
+    if format_rank(format_version) >= 221:
+        XMLNS_DECL = XMLNS_DECL.replace(
+            ' xmlns:style=',
+            ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
 
 
 def write_child_subsystem_stub(child_path, child_name, format_version):
@@ -543,6 +560,7 @@ def main():
     tree = etree.parse(resolved_path, xml_parser)
     xml_root = tree.getroot()
     format_version = xml_root.get("version") or "2.17"
+    apply_pal_ns(format_version)
 
     add_count = 0
     remove_count = 0

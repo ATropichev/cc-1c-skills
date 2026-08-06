@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-compile v1.18 — Create 1C subsystem from JSON definition
+# subsystem-compile v1.19 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -203,6 +203,12 @@ def detect_format_version(d):
         d = parent
     return "2.17"
 
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
 
 def detect_eol(text):
     # Перевод строки ВСТАВКИ берём из самого файла: канон CRLF относится к файлам,
@@ -269,6 +275,17 @@ XMLNS_DECL = (
     ' xmlns:xs="http://www.w3.org/2001/XMLSchema"'
     ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
 )
+
+
+def apply_pal_ns(format_version):
+    """2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
+    Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту,
+    дописать в конец нельзя."""
+    global XMLNS_DECL
+    if format_rank(format_version) >= 221:
+        XMLNS_DECL = XMLNS_DECL.replace(
+            ' xmlns:style=',
+            ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
 
 
 def write_child_subsystem_stub(child_path, child_name, format_version):
@@ -422,6 +439,7 @@ def main():
         return f'{type_part}.{name_part}'
 
     format_version = detect_format_version(output_dir)
+    apply_pal_ns(format_version)
     xmlns_decl = XMLNS_DECL
 
     # --- 3. Resolve defaults ---

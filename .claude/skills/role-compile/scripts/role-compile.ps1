@@ -1,4 +1,4 @@
-﻿# role-compile v1.16 — Compile 1C role from JSON
+﻿# role-compile v1.17 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -659,7 +659,14 @@ function Detect-FormatVersion([string]$dir) {
 	return "2.17"
 }
 
-$resolvedOutputDir = if ([System.IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path (Get-Location) $OutputDir }
+# Версия формата как число для сравнений: "2.20" → 220, "2.9" → 209.
+# Строковое сравнение здесь неверно ("2.9" > "2.17" лексикографически) — известная ловушка.
+function Get-FormatRank([string]$ver) {
+	if ($ver -match '^(\d+)\.(\d+)$') { return [int]$Matches[1] * 100 + [int]$Matches[2] }
+	return 0
+}
+
+$resolvedOutputDir =if ([System.IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path (Get-Location) $OutputDir }
 Assert-EditAllowed $resolvedOutputDir 'editable'
 $formatVersion = Detect-FormatVersion $resolvedOutputDir
 
@@ -678,6 +685,11 @@ X '        xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config"'
 X '        xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi"'
 X '        xmlns:ent="http://v8.1c.ru/8.1/data/enterprise"'
 X '        xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"'
+# 2.21 (8.5) добавила в шапку пространство палитры. Место строгое — после lf, перед style:
+# платформа держит объявления по алфавиту. В Rights.xml палитра НЕ идёт (проверено по выгрузке 8.5).
+if ((Get-FormatRank $formatVersion) -ge 221) {
+	X '        xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette"'
+}
 X '        xmlns:style="http://v8.1c.ru/8.1/data/ui/style"'
 X '        xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system"'
 X '        xmlns:v8="http://v8.1c.ru/8.1/data/core"'

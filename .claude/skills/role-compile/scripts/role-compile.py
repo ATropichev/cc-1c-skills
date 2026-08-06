@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.16 — Compile 1C role from JSON
+# role-compile v1.17 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -201,6 +201,12 @@ def detect_format_version(d):
             break
         d = parent
     return "2.17"
+
+
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
 
 
 def detect_eol(text):
@@ -687,6 +693,10 @@ def main():
     lines.append('        xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi"')
     lines.append('        xmlns:ent="http://v8.1c.ru/8.1/data/enterprise"')
     lines.append('        xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"')
+    # 2.21 (8.5) добавила в шапку пространство палитры. Место строгое — после lf, перед style:
+    # платформа держит объявления по алфавиту. В Rights.xml палитра НЕ идёт (проверено по выгрузке 8.5).
+    if format_rank(format_version) >= 221:
+        lines.append('        xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette"')
     lines.append('        xmlns:style="http://v8.1c.ru/8.1/data/ui/style"')
     lines.append('        xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system"')
     lines.append('        xmlns:v8="http://v8.1c.ru/8.1/data/core"')

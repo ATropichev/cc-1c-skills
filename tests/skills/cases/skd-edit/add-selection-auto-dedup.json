@@ -26,6 +26,6 @@
     "value": "Auto ;; Поле1 ;; Поле2"
   },
   "expect": {
-    "stdout": "WARN.*SelectedItemAuto already exists"
+    "stdoutContains": "[WARN] SelectedItemAuto already exists in variant \"Основной\""
   }
 }

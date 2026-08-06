@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.18 — Create 1C subsystem from JSON definition
+﻿# subsystem-compile v1.19 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -450,6 +450,20 @@ $formatVersion = Detect-FormatVersion $OutputDir
 # Объявления пространств имён — одной переменной: места эмиссии её только интерполируют.
 # Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.
 $script:xmlnsDecl = 'xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+
+# Версия формата как число для сравнений: "2.20" → 220, "2.9" → 209.
+# Строковое сравнение здесь неверно ("2.9" > "2.17" лексикографически) — известная ловушка.
+function Get-FormatRank([string]$ver) {
+	if ($ver -match '^(\d+)\.(\d+)$') { return [int]$Matches[1] * 100 + [int]$Matches[2] }
+	return 0
+}
+
+# 2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
+# Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту,
+# дописать в конец нельзя.
+if ((Get-FormatRank $formatVersion) -ge 221) {
+	$script:xmlnsDecl = $script:xmlnsDecl -replace ' xmlns:style=', ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style='
+}
 
 # --- 4. Build XML ---
 $uuid = New-Guid-String

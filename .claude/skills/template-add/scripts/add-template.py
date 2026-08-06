@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# template-add v1.19 — Add template to 1C object
+# template-add v1.20 — Add template to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -284,6 +284,12 @@ def detect_format_version(d):
         d = parent
     return "2.17"
 
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
@@ -330,6 +336,14 @@ def main():
         ' xmlns:xs="http://www.w3.org/2001/XMLSchema"'
         ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
     )
+
+    # 2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
+    # Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту,
+    # дописать в конец нельзя.
+    if format_rank(format_version) >= 221:
+        xmlns_decl = xmlns_decl.replace(
+            ' xmlns:style=',
+            ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
 
     # --- Checks ---
 

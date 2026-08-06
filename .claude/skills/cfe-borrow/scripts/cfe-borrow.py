@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.15 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.16 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -323,6 +323,23 @@ def detect_format_version(d):
     return "2.17"
 
 
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
+def apply_pal_ns(format_version):
+    """2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
+    Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту,
+    дописать в конец нельзя."""
+    global XMLNS_DECL
+    if format_rank(format_version) >= 221:
+        XMLNS_DECL = XMLNS_DECL.replace(
+            ' xmlns:style=',
+            ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
+
+
 def get_child_indent(container):
     if container.text and "\n" in container.text:
         after_nl = container.text.rsplit("\n", 1)[-1]
@@ -491,6 +508,7 @@ def main():
     cfg_dir = os.path.dirname(cfg_resolved)
 
     format_version = detect_format_version(ext_dir)
+    apply_pal_ns(format_version)
 
     # --- 2. Load extension Configuration.xml ---
     xml_parser = etree.XMLParser(remove_blank_text=False)
@@ -1509,7 +1527,10 @@ def main():
                     else:
                         warn(f"  Enum.{enum_name} not found in source config")
 
-        # Extract the <Form ...> opening tag from source text
+        # Открывающий тег <Form ...> берём из исходной формы — ради её объявлений пространств
+        # имён, но version подставляем СВОЮ: форма обязана нести версию расширения, иначе
+        # платформа отвергает импорт (форма 2.13 внутри расширения 2.17). Раньше тег
+        # копировался целиком, и версия источника молча побеждала.
         xml_decl = '<?xml version="1.0" encoding="UTF-8"?>'
         form_tag = f'<Form version="{form_version}">'
         m_decl = re.search(r'^(<\?xml[^?]*\?>)', src_form_content)
@@ -1517,7 +1538,15 @@ def main():
             xml_decl = m_decl.group(1)
         m_tag = re.search(r'(<Form[^>]*>)', src_form_content)
         if m_tag:
-            form_tag = m_tag.group(1)
+            src_ns = re.sub(r'^<Form\s*', '', m_tag.group(1))
+            src_ns = re.sub(r'\s*/?>$', '', src_ns)
+            src_ns = re.sub(r'\s*version="[^"]*"', '', src_ns)
+            # 2.21 (8.5): пространство палитры. Место строгое — после lf, перед style.
+            if format_rank(form_version) >= 221 and 'xmlns:pal=' not in src_ns:
+                src_ns = src_ns.replace(
+                    ' xmlns:style=',
+                    ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
+            form_tag = f'<Form {src_ns} version="{form_version}">' if src_ns else f'<Form version="{form_version}">'
 
         # Build output
         parts = []
