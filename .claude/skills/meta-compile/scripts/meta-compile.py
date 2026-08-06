@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.83 — Compile 1C metadata object from JSON
+# meta-compile v1.84 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -674,10 +674,46 @@ def emit_type_content(indent, type_str):
     if not type_str:
         return
     # Composite type: "Type1 + Type2 + Type3"
+    # Платформа пишет сначала ВСЕ <v8:Type>/<v8:TypeSet>, и только потом блоки
+    # квалификаторов — а рекурсия ниже печатала бы каждую часть целиком (тип вместе со
+    # своими квалификаторами). На одиночном типе оба порядка совпадают, поэтому
+    # расхождение вылезало только на составном.
+    # Порядок самих блоков квалификаторов тоже канонический и НЕ зеркалит порядок типов:
+    # Number, String, Date (корпус acc+erp, контрпримеров нет — при типах
+    # boolean,string,dateTime,decimal квалификаторы идут Number,String,Date).
+    # Порядок типов при этом сохраняем как в DSL: он и есть порядок источника.
     if ' + ' in type_str:
         parts = [p.strip() for p in type_str.split('+')]
+        type_lines = []
+        qual_blocks = {}
         for part in parts:
+            # X добавляет в список lines, поэтому «перехват» — это срез и откат хвоста.
+            # В PS-порту X пишет в StringBuilder и тот же алгоритм выражен через
+            # Length/Remove — различие рантаймов, не логики.
+            before = len(lines)
             emit_type_content(indent, part)
+            chunk = lines[before:]
+            del lines[before:]
+            cur_qual = None
+            for line in chunk:
+                if not line:
+                    continue
+                m = re.search(r'<v8:(String|Number|Date)Qualifiers>', line)
+                if m:
+                    cur_qual = m.group(1)
+                    qual_blocks[cur_qual] = []
+                if cur_qual:
+                    qual_blocks[cur_qual].append(line)
+                    if re.search(r'</v8:(String|Number|Date)Qualifiers>', line):
+                        cur_qual = None
+                else:
+                    type_lines.append(line)
+        for line in type_lines:
+            X(line)
+        for q in ('Number', 'String', 'Date'):
+            if q in qual_blocks:
+                for line in qual_blocks[q]:
+                    X(line)
         return
     type_str = resolve_type_str(type_str)
     # Boolean
@@ -1288,7 +1324,10 @@ standard_attributes_by_type = {
     'ChartOfCalculationTypes': ['PredefinedDataName', 'Predefined', 'Ref', 'DeletionMark', 'ActionPeriodIsBasic', 'Description', 'Code'],
     'BusinessProcess': ['Ref', 'DeletionMark', 'Date', 'Number', 'Started', 'Completed', 'HeadTask'],
     'Task': ['Ref', 'DeletionMark', 'Date', 'Number', 'Executed', 'Description', 'RoutePoint', 'BusinessProcess'],
-    'ExchangePlan': ['Ref', 'DeletionMark', 'Code', 'Description', 'ThisNode', 'SentNo', 'ReceivedNo'],
+    # Порядок снят с выгрузки: у плана обмена блок начинается с ThisNode, а не с Ref
+    # (acc+erp, 8 объектов, разброса нет). Прочие типы в этой таблице совпадают с
+    # платформой — расхождений порядка по ним корпусный раундтрип не показал.
+    'ExchangePlan': ['ThisNode', 'ReceivedNo', 'SentNo', 'Ref', 'DeletionMark', 'Description', 'Code'],
     'DocumentJournal': ['Type', 'Ref', 'Date', 'Posted', 'DeletionMark', 'Number'],
 }
 
@@ -4261,18 +4300,27 @@ if obj_type in ('InformationRegister', 'AccumulationRegister', 'AccountingRegist
         # Все семейства регистров: ресурсы/измерения — через богатый emit_attribute (общий слой object-свойств).
         dim_res_ctx = {'InformationRegister': 'register-info', 'AccumulationRegister': 'register-accum',
                        'CalculationRegister': 'register-calc', 'AccountingRegister': 'register-account'}.get(obj_type)
-        for r in resources:
-            if dim_res_ctx:
-                emit_attribute('\t\t\t', r, dim_res_ctx, 'Resource')
+        # Порядок видов детей — канон выгрузки, снят с корпуса (acc+erp, разброса внутри
+        # типа нет): у большинства регистров Resource, Attribute, Dimension, а у
+        # бухгалтерского — Dimension, Resource, Attribute. Команды у платформы идут
+        # последними, как и здесь.
+        kind_order = ['dim', 'res', 'attr'] if obj_type == 'AccountingRegister' else ['res', 'attr', 'dim']
+        for kind in kind_order:
+            if kind == 'res':
+                for r in resources:
+                    if dim_res_ctx:
+                        emit_attribute('\t\t\t', r, dim_res_ctx, 'Resource')
+                    else:
+                        emit_resource('\t\t\t', r, obj_type)
+            elif kind == 'dim':
+                for d in dims:
+                    if dim_res_ctx:
+                        emit_attribute('\t\t\t', d, dim_res_ctx, 'Dimension')
+                    else:
+                        emit_dimension('\t\t\t', d, obj_type)
             else:
-                emit_resource('\t\t\t', r, obj_type)
-        for d in dims:
-            if dim_res_ctx:
-                emit_attribute('\t\t\t', d, dim_res_ctx, 'Dimension')
-            else:
-                emit_dimension('\t\t\t', d, obj_type)
-        for a in reg_attrs:
-            emit_attribute('\t\t\t', a, reg_ctx)
+                for a in reg_attrs:
+                    emit_attribute('\t\t\t', a, reg_ctx)
         for cmd in reg_commands:
             emit_command('\t\t\t', cmd['name'], cmd['def'])
         X('\t\t</ChildObjects>')

@@ -1,4 +1,4 @@
-﻿# meta-compile v1.83 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.84 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -608,10 +608,44 @@ function Emit-TypeContent {
 	if (-not $typeStr) { return }
 
 	# Composite type: "Type1 + Type2 + Type3"
+	# Платформа пишет сначала ВСЕ <v8:Type>/<v8:TypeSet>, и только потом блоки
+	# квалификаторов — а рекурсия ниже печатала бы каждую часть целиком (тип вместе со
+	# своими квалификаторами). На одиночном типе оба порядка совпадают, поэтому
+	# расхождение вылезало только на составном.
+	# Порядок самих блоков квалификаторов тоже канонический и НЕ зеркалит порядок типов:
+	# Number, String, Date (корпус acc+erp, контрпримеров нет — при типах
+	# boolean,string,dateTime,decimal квалификаторы идут Number,String,Date).
+	# Порядок типов при этом сохраняем как в DSL: он и есть порядок источника.
 	if ($typeStr.Contains(' + ')) {
 		$parts = $typeStr -split '\s*\+\s*'
+		$typeLines = New-Object System.Collections.ArrayList
+		$qualBlocks = @{}   # 'Number'|'String'|'Date' → строки блока
 		foreach ($part in $parts) {
+			# X пишет в StringBuilder, поэтому «перехват» — это запомнить длину, вызвать
+			# эмиттер и откатить добавленное. В py-порту X добавляет в список, и там тот
+			# же алгоритм выражен срезом — различие рантаймов, не логики.
+			$before = $script:xml.Length
 			Emit-TypeContent $indent $part.Trim()
+			$chunk = $script:xml.ToString($before, $script:xml.Length - $before)
+			[void]$script:xml.Remove($before, $script:xml.Length - $before)
+			$curQual = $null
+			foreach ($line in ($chunk -split "`r?`n")) {
+				if ($line -eq '') { continue }
+				if ($line -match '<v8:(String|Number|Date)Qualifiers>') {
+					$curQual = $Matches[1]
+					$qualBlocks[$curQual] = New-Object System.Collections.ArrayList
+				}
+				if ($curQual) {
+					[void]$qualBlocks[$curQual].Add($line)
+					if ($line -match '</v8:(String|Number|Date)Qualifiers>') { $curQual = $null }
+				} else {
+					[void]$typeLines.Add($line)
+				}
+			}
+		}
+		foreach ($line in $typeLines) { X $line }
+		foreach ($q in @('Number', 'String', 'Date')) {
+			if ($qualBlocks.ContainsKey($q)) { foreach ($line in $qualBlocks[$q]) { X $line } }
 		}
 		return
 	}
@@ -1256,7 +1290,10 @@ $script:standardAttributesByType = @{
 	"ChartOfCalculationTypes" = @("PredefinedDataName","Predefined","Ref","DeletionMark","ActionPeriodIsBasic","Description","Code")
 	"BusinessProcess" = @("Ref","DeletionMark","Date","Number","Started","Completed","HeadTask")
 	"Task" = @("Ref","DeletionMark","Date","Number","Executed","Description","RoutePoint","BusinessProcess")
-	"ExchangePlan" = @("Ref","DeletionMark","Code","Description","ThisNode","SentNo","ReceivedNo")
+	# Порядок снят с выгрузки: у плана обмена блок начинается с ThisNode, а не с Ref
+	# (acc+erp, 8 объектов, разброса нет). Прочие типы в этой таблице совпадают с
+	# платформой — расхождений порядка по ним корпусный раундтрип не показал.
+	"ExchangePlan" = @("ThisNode","ReceivedNo","SentNo","Ref","DeletionMark","Description","Code")
 	"DocumentJournal" = @("Type","Ref","Date","Posted","DeletionMark","Number")
 }
 
@@ -4362,16 +4399,31 @@ if ($objType -in @("InformationRegister","AccumulationRegister","AccountingRegis
 		$regCtx = switch ($objType) { "InformationRegister" { "register-info" } "CalculationRegister" { "register-calc" } default { "register-other" } }
 		# Все семейства регистров: ресурсы/измерения — через богатый Emit-Attribute (общий слой object-свойств).
 		$dimResCtx = switch ($objType) { "InformationRegister" { "register-info" } "AccumulationRegister" { "register-accum" } "CalculationRegister" { "register-calc" } "AccountingRegister" { "register-account" } default { $null } }
-		foreach ($r in $resources) {
-			if ($dimResCtx) { Emit-Attribute "`t`t`t" $r $dimResCtx "Resource" }
-			else { Emit-Resource "`t`t`t" $r $objType }
-		}
-		foreach ($d in $dims) {
-			if ($dimResCtx) { Emit-Attribute "`t`t`t" $d $dimResCtx "Dimension" }
-			else { Emit-Dimension "`t`t`t" $d $objType }
-		}
-		foreach ($a in $regAttrs) {
-			Emit-Attribute "`t`t`t" $a $regCtx
+		# Порядок видов детей — канон выгрузки, снят с корпуса (acc+erp, разброса внутри
+		# типа нет): у большинства регистров Resource, Attribute, Dimension, а у
+		# бухгалтерского — Dimension, Resource, Attribute. Команды у платформы идут
+		# последними, как и здесь.
+		$kindOrder = if ($objType -eq "AccountingRegister") { @('dim','res','attr') } else { @('res','attr','dim') }
+		foreach ($kind in $kindOrder) {
+			switch ($kind) {
+				'res' {
+					foreach ($r in $resources) {
+						if ($dimResCtx) { Emit-Attribute "`t`t`t" $r $dimResCtx "Resource" }
+						else { Emit-Resource "`t`t`t" $r $objType }
+					}
+				}
+				'dim' {
+					foreach ($d in $dims) {
+						if ($dimResCtx) { Emit-Attribute "`t`t`t" $d $dimResCtx "Dimension" }
+						else { Emit-Dimension "`t`t`t" $d $objType }
+					}
+				}
+				'attr' {
+					foreach ($a in $regAttrs) {
+						Emit-Attribute "`t`t`t" $a $regCtx
+					}
+				}
+			}
 		}
 		foreach ($cmd in $regCommands) {
 			Emit-Command "`t`t`t" $cmd.name $cmd.def
