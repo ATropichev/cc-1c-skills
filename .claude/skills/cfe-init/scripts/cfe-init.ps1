@@ -1,4 +1,4 @@
-﻿# cfe-init v1.6 — Create 1C configuration extension scaffold (CFE)
+﻿# cfe-init v1.7 — Create 1C configuration extension scaffold (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -161,8 +161,12 @@ function Get-FormatRank([string]$ver) {
 # 2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
 # Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту,
 # дописать в конец нельзя.
+# Caption/ShortCaption — свойства корня из того же формата 2.21, между Version и
+# DefaultLanguage (позиция снята с выгрузки расширения из базы 8.5).
+$f221Captions = ""
 if ((Get-FormatRank $formatVersion) -ge 221) {
 	$xmlnsDecl = $xmlnsDecl -replace ' xmlns:style=', ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style='
+	$f221Captions = "`r`n`t`t`t<Caption/>`r`n`t`t`t<ShortCaption/>"
 }
 
 # --- Configuration.xml ---
@@ -216,7 +220,7 @@ $cfgXml = @"
 			<ScriptVariant>Russian</ScriptVariant>
 			$defaultRolesEl
 			$vendorEl
-			$versionEl
+			$versionEl$f221Captions
 			<DefaultLanguage>Language.Русский</DefaultLanguage>
 			<BriefInformation/>
 			<DetailedInformation/>

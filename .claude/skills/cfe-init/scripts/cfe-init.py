@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-init v1.6 — Create 1C configuration extension scaffold (CFE)
+# cfe-init v1.7 — Create 1C configuration extension scaffold (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration extension."""
 import sys, os, re, argparse, uuid
@@ -203,10 +203,14 @@ def main():
     # 2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
     # Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту,
     # дописать в конец нельзя.
+    # Caption/ShortCaption — свойства корня из того же формата 2.21, между Version и
+    # DefaultLanguage (позиция снята с выгрузки расширения из базы 8.5).
+    f221_captions = ""
     if format_rank(format_version) >= 221:
         xmlns_decl = xmlns_decl.replace(
             ' xmlns:style=',
             ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
+        f221_captions = "\r\n\t\t\t<Caption/>\r\n\t\t\t<ShortCaption/>"
     for i in range(7):
         contained_objects += f"""\t\t\t<xr:ContainedObject>
 \t\t\t\t<xr:ClassId>{class_ids[i]}</xr:ClassId>
@@ -234,7 +238,7 @@ def main():
 \t\t\t<ScriptVariant>Russian</ScriptVariant>
 \t\t\t{default_roles_el}
 \t\t\t{vendor_el}
-\t\t\t{version_el}
+\t\t\t{version_el}{f221_captions}
 \t\t\t<DefaultLanguage>Language.Русский</DefaultLanguage>
 \t\t\t<BriefInformation/>
 \t\t\t<DetailedInformation/>

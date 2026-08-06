@@ -55,6 +55,8 @@
 			</DefaultRoles>
 			<Vendor/>
 			<Version/>
+			<Caption/>
+			<ShortCaption/>
 			<DefaultLanguage>Language.Русский</DefaultLanguage>
 			<BriefInformation/>
 			<DetailedInformation/>

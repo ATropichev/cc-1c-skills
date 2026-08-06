@@ -12,7 +12,9 @@
         "file": "ext/Configuration.xml",
         "text": [
           "xmlns:lf=\"http://v8.1c.ru/8.2/managed-application/logform\" xmlns:pal=\"http://v8.1c.ru/8.1/data/ui/colors/palette\" xmlns:style=",
-          "version=\"2.21\""
+          "version=\"2.21\"",
+          "<Caption/>",
+          "<ShortCaption/>"
         ]
       },
       {
