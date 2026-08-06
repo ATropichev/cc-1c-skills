@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.84 — Compile 1C metadata object from JSON
+# meta-compile v1.85 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -806,10 +806,16 @@ def emit_type_content(indent, type_str):
         X(f'{indent}<v8:Type>cfg:{type_str}</v8:Type>')
         return
 
-    # Reference types — use local xmlns declaration for 1C compatibility
+    # Ссылочные типы — корневой cfg:, как пишет платформа. Раньше здесь объявлялся
+    # ЛОКАЛЬНЫЙ xmlns:d5p1 на тот же URI, что уже объявлен в шапке: формально
+    # эквивалентно (значим URI, не префикс) и платформой принималось, но первый же
+    # цикл «загрузить в базу → выгрузить» переписывал каждый ссылочный тип в cfg: —
+    # то есть давал diff-шум на ровном месте. Форма пришла из СКД, где cfg:
+    # действительно не работает; в метаданных такого ограничения нет.
+    # NB: локальная xmlns остаётся законной для ЧУЖИХ пространств — см. type_namespace_map.
     m = re.match(r'^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|ExchangePlanRef|BusinessProcessRef|BusinessProcessRoutePointRef|TaskRef)\.(.+)$', type_str)
     if m:
-        X(f'{indent}<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:{type_str}</v8:Type>')
+        X(f'{indent}<v8:Type>cfg:{type_str}</v8:Type>')
         return
     # Fallback
     X(f'{indent}<v8:Type>{type_str}</v8:Type>')

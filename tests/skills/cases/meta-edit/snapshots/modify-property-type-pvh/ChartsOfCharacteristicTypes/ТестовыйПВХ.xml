@@ -46,7 +46,7 @@
 					<v8:Length>20</v8:Length>
 					<v8:AllowedLength>Variable</v8:AllowedLength>
 				</v8:StringQualifiers>
-				<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:ChartOfCharacteristicTypesRef.ДругойПВХ</v8:Type>
+				<v8:Type>cfg:ChartOfCharacteristicTypesRef.ДругойПВХ</v8:Type>
 			</Type>
 			<Hierarchical>false</Hierarchical>
 			<FoldersOnTop>true</FoldersOnTop>

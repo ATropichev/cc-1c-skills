@@ -44,7 +44,7 @@
 				<v8:Type>xs:decimal</v8:Type>
 				<v8:Type>xs:boolean</v8:Type>
 				<v8:Type>xs:dateTime</v8:Type>
-				<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:CatalogRef.ЗначенияСвойств</v8:Type>
+				<v8:Type>cfg:CatalogRef.ЗначенияСвойств</v8:Type>
 				<v8:NumberQualifiers>
 					<v8:Digits>15</v8:Digits>
 					<v8:FractionDigits>2</v8:FractionDigits>

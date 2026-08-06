@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.29 — Edit existing 1C metadata object XML
+# meta-edit v1.30 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -198,6 +198,9 @@ V8_NS = "http://v8.1c.ru/8.1/data/core"
 XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 XS_NS = "http://www.w3.org/2001/XMLSchema"
 CFG_NS = "http://v8.1c.ru/8.1/data/enterprise/current-config"
+# Префикс current-config, объявленный в КОРНЕ правимого файла (у платформы — cfg).
+# None = корень его не объявляет → эмиттер ссылочных типов остаётся на локальной форме.
+cfg_prefix = None
 
 NSMAP_WRAPPER = {
     None: MD_NS,
@@ -525,14 +528,23 @@ def build_type_content_xml(indent, type_str):
         lines.append(f"{indent}<v8:TypeSet>cfg:DefinedType.{dt_name}</v8:TypeSet>")
         return "\r\n".join(lines)
 
-    # Reference types — use local xmlns declaration for 1C compatibility
+    # Ссылочные типы — префиксом, объявленным в КОРНЕ файла (у платформы это cfg).
+    # Раньше здесь всегда объявлялся локальный xmlns:d5p1 на тот же URI, что уже есть
+    # в шапке: платформа принимала, но при цикле «загрузить в базу → выгрузить»
+    # переписывала каждый ссылочный тип в cfg: — diff-шум на ровном месте.
+    # Если корень URI не объявляет (файл не от платформы), остаёмся на самодостаточной
+    # локальной форме: префикс тут — ТЕКСТ узла, XML-слой про него не знает и сам
+    # объявление не добавит, так что иначе получился бы неразрешимый префикс.
     m = re.match(
         r"^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|"
         r"ChartOfCalculationTypesRef|ExchangePlanRef|BusinessProcessRef|TaskRef)\.(.+)$",
         type_str,
     )
     if m:
-        lines.append(f'{indent}<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:{type_str}</v8:Type>')
+        if cfg_prefix:
+            lines.append(f'{indent}<v8:Type>{cfg_prefix}:{type_str}</v8:Type>')
+        else:
+            lines.append(f'{indent}<v8:Type xmlns:d5p1="{CFG_NS}">d5p1:{type_str}</v8:Type>')
         return "\r\n".join(lines)
 
     # Fallback
@@ -2986,13 +2998,9 @@ def save_xml(tree, path):
     """Save XML tree preserving the existing file's BOM/EOL/encoding-case/final-newline."""
     style = _detect_xml_style(path)
     xml_bytes = etree.tostring(tree, xml_declaration=True, encoding="UTF-8")
-    # Fix d5p1 namespace declarations stripped by lxml (it treats them as unused
-    # because d5p1: appears only in text content, not in element/attribute names)
-    xml_bytes = re.sub(
-        b'(<v8:Type)(?! xmlns:d5p1)(>d5p1:)',
-        b'\\1 xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config"\\2',
-        xml_bytes
-    )
+    # Костыль, возвращавший xmlns:d5p1 (lxml выбрасывал его как неиспользуемый, ведь
+    # префикс встречается только в тексте узла), удалён вместе с переходом на корневой
+    # cfg: — объявление теперь берётся из шапки самого файла и не требует починки.
     xml_bytes = _finalize_xml_bytes(xml_bytes, style)
     with open(path, "wb") as f:
         if style is None or style["bom"]:
@@ -3197,6 +3205,10 @@ def main():
     xml_parser = etree.XMLParser(remove_blank_text=False)
     xml_tree = etree.parse(resolved_path, xml_parser)
     xml_root = xml_tree.getroot()
+
+    # Префикс current-config берём из объявлений корня — им и пишем ссылочные типы.
+    global cfg_prefix
+    cfg_prefix = next((p for p, u in (xml_root.nsmap or {}).items() if u == CFG_NS and p), None)
 
     # --- Detect object type ---
     if localname(xml_root) != "MetaDataObject":

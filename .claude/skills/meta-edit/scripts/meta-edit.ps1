@@ -1,4 +1,4 @@
-﻿# meta-edit v1.29 — Edit existing 1C metadata object XML
+﻿# meta-edit v1.30 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -313,6 +313,17 @@ function Info($msg) {
 # ============================================================
 
 $root = $script:xmlDoc.DocumentElement
+
+# Префикс пространства current-config, объявленный в КОРНЕ файла (у платформы — cfg).
+# Ищем по объявлениям корня, а не через GetPrefixOfNamespace: ссылочный тип живёт в
+# ТЕКСТЕ узла, поэтому XML-слой этот префикс не отслеживает. $null = корень URI не
+# объявляет → эмиттер остаётся на самодостаточной локальной форме.
+$script:cfgUri = 'http://v8.1c.ru/8.1/data/enterprise/current-config'
+$script:cfgPrefix = $null
+foreach ($a in $root.Attributes) {
+	if ($a.Prefix -eq 'xmlns' -and $a.Value -eq $script:cfgUri) { $script:cfgPrefix = $a.LocalName; break }
+}
+
 if ($root.LocalName -ne "MetaDataObject") {
 	Write-Error "Root element must be MetaDataObject, got: $($root.LocalName)"
 	exit 1
@@ -557,9 +568,19 @@ function Build-TypeContentXml {
 		return $sb.ToString().TrimEnd("`r","`n")
 	}
 
-	# Reference types — use local xmlns declaration for 1C compatibility
+	# Ссылочные типы — префиксом, объявленным в КОРНЕ файла (у платформы это cfg).
+	# Раньше здесь всегда объявлялся локальный xmlns:d5p1 на тот же URI, что уже есть
+	# в шапке: платформа принимала, но при цикле «загрузить в базу → выгрузить»
+	# переписывала каждый ссылочный тип в cfg: — diff-шум на ровном месте.
+	# Если корень URI не объявляет (файл не от платформы), остаёмся на самодостаточной
+	# локальной форме: префикс тут — ТЕКСТ узла, XML-слой про него не знает и сам
+	# объявление не добавит, так что иначе получился бы неразрешимый префикс.
 	if ($typeStr -match '^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|ExchangePlanRef|BusinessProcessRef|TaskRef)\.(.+)$') {
-		$sb.AppendLine("$indent<v8:Type xmlns:d5p1=`"http://v8.1c.ru/8.1/data/enterprise/current-config`">d5p1:$typeStr</v8:Type>") | Out-Null
+		if ($script:cfgPrefix) {
+			$sb.AppendLine("$indent<v8:Type>$($script:cfgPrefix):$typeStr</v8:Type>") | Out-Null
+		} else {
+			$sb.AppendLine("$indent<v8:Type xmlns:d5p1=`"$script:cfgUri`">d5p1:$typeStr</v8:Type>") | Out-Null
+		}
 		return $sb.ToString().TrimEnd("`r","`n")
 	}
 

@@ -21,7 +21,7 @@
 			</Synonym>
 			<Comment/>
 			<Type>
-				<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:CatalogRef.Контрагенты</v8:Type>
+				<v8:Type>cfg:CatalogRef.Контрагенты</v8:Type>
 			</Type>
 			<UseStandardCommands>false</UseStandardCommands>
 			<Content>
