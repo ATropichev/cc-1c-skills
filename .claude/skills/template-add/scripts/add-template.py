@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# template-add v1.17 — Add template to 1C object
+# template-add v1.18 — Add template to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -418,13 +418,15 @@ def main():
         write_text_with_bom(template_file_path, "")
 
     elif template_type == "SpreadsheetDocument":
+        # Пустой макет — самозакрывающимся корнем: пустых пар платформа не пишет
+        # ни в одной форме (0 на 65 040 XML выгрузки acc_8.3.27, включая разнесённые
+        # по строкам). Для XML `<A/>` и `<A></A>` тождественны по спецификации.
         content = (
             '<?xml version="1.0" encoding="UTF-8"?>\n'
             '<SpreadsheetDocument xmlns="http://v8.1c.ru/spreadsheet/document"'
             ' xmlns:ss="http://v8.1c.ru/spreadsheet/document"'
             ' xmlns:v8="http://v8.1c.ru/8.1/data/core"'
-            ' xmlns:xs="http://www.w3.org/2001/XMLSchema">\n'
-            '</SpreadsheetDocument>'
+            ' xmlns:xs="http://www.w3.org/2001/XMLSchema"/>'
         )
         write_xml_file(template_file_path, content)
 

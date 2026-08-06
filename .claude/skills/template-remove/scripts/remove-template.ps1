@@ -1,4 +1,4 @@
-﻿# template-remove v1.6 — Remove template from 1C object
+﻿# template-remove v1.7 — Remove template from 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -64,6 +64,10 @@ foreach ($node in $templateNodes) {
 			$parent.RemoveChild($prev) | Out-Null
 		}
 		$parent.RemoveChild($node) | Out-Null
+		# Опустевший контейнер: остаётся отступ-whitespace, и XmlWriter пишет пару
+		# <ChildObjects>\n\t\t</ChildObjects>. Платформа пишет только <ChildObjects/>
+		# (1394 самозакрывающихся на acc+erp, пустых пар ни в одной форме — 0).
+		if ($parent.SelectNodes("*").Count -eq 0) { $parent.IsEmpty = $true }
 		break
 	}
 }

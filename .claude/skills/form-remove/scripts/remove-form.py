@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-remove v1.7 — Remove form from 1C object
+# form-remove v1.8 — Remove form from 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -120,6 +120,10 @@ def main():
                 if parent.text and parent.text.strip() == "":
                     parent.text = ""
             parent.remove(node)
+            # Опустевший контейнер: text="" сериализуется парой <ChildObjects></ChildObjects>,
+            # а нужен <ChildObjects/> — PS-порт через DOM даёт именно его.
+            if len(parent) == 0 and not (parent.text or "").strip():
+                parent.text = None
             break
 
     # Clear any Default*/Auxiliary* form slot that pointed to the removed form
@@ -130,7 +134,9 @@ def main():
         if not isinstance(el.tag, str):
             continue
         if etree.QName(el).localname.endswith("Form") and el.text and ref_re.search(el.text):
-            el.text = ""
+            # text=None, а не "": пустая строка сериализуется парой <Tag></Tag>, а
+            # Конфигуратор пустых пар не пишет (0 на 476 942 XML корпуса) — нужен <Tag/>.
+            el.text = None
 
     # Save with BOM
     save_xml_with_bom(tree, root_xml_full)

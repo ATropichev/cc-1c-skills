@@ -14,6 +14,16 @@
   "objectName": "Catalogs/Товары",
   "formName": "ФормаЭлемента",
   "expect": {
-    "stdoutContains": "Форма ФормаЭлемента удалена"
+    "stdoutContains": "Форма ФормаЭлемента удалена",
+    "preserves": {
+      "file": "Catalogs/Товары.xml",
+      "bom": true,
+      "eol": "crlf",
+      "encoding": "UTF-8",
+      "finalNewline": false,
+      "noCR13": true,
+      "selfClose": "tight",
+      "noEmptyPairs": true
+    }
   }
 }

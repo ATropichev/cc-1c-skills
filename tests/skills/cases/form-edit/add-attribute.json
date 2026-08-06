@@ -25,5 +25,17 @@
       { "name": "СуммаИтого", "type": "decimal(15,2)" },
       { "name": "ДатаНачала", "type": "date" }
     ]
+  },
+  "expect": {
+    "preserves": {
+      "file": "DataProcessors/Реквизиты/Forms/Форма/Ext/Form.xml",
+      "bom": true,
+      "eol": "crlf",
+      "encoding": "UTF-8",
+      "finalNewline": false,
+      "noCR13": true,
+      "selfClose": "tight",
+      "noEmptyPairs": true
+    }
   }
 }

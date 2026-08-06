@@ -17,5 +17,17 @@
     "templatePath": "Template.xml",
     "operation": "add-field",
     "value": "Цена: decimal(15,2)"
+  },
+  "expect": {
+    "preserves": {
+      "file": "Template.xml",
+      "bom": true,
+      "eol": "crlf",
+      "encoding": "UTF-8",
+      "finalNewline": false,
+      "noCR13": true,
+      "selfClose": "tight",
+      "noEmptyPairs": true
+    }
   }
 }

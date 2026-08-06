@@ -10,5 +10,17 @@
       "args": { "-ObjectName": "МояОбработка", "-TemplateName": "Макет", "-TemplateType": "SpreadsheetDocument", "-SrcDir": "{workDir}" }
     }
   ],
-  "params": { "objectName": "МояОбработка", "templateName": "Макет" }
+  "params": { "objectName": "МояОбработка", "templateName": "Макет" },
+  "expect": {
+    "preserves": {
+      "file": "МояОбработка.xml",
+      "bom": true,
+      "eol": "crlf",
+      "encoding": "UTF-8",
+      "finalNewline": false,
+      "noCR13": true,
+      "selfClose": "tight",
+      "noEmptyPairs": true
+    }
+  }
 }

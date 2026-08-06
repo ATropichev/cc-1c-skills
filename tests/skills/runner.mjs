@@ -404,8 +404,20 @@ function checkPreserves(workDir, spec) {
     if (spaced) errs.push(`preserves: expected tight self-closing, got ${spaced.length}× spaced (e.g. ${spaced[0].slice(0, 60)})`);
   }
   if (spec.noEmptyPairs) {
-    const pairs = text.match(/<([\w:.]+)([^<>]*)><\/\1>/g);
-    if (pairs) errs.push(`preserves: expected self-closing, got ${pairs.length}× empty pair (e.g. ${pairs[0].slice(0, 60)})`);
+    const pairs = text.match(/<([\w:.]+)([^<>]*)><\/\1>/g) || [];
+    // Плюс пара, разнесённая по строкам: опустевший контейнер выглядит как
+    // `<ChildObjects>\n\t\t</ChildObjects>` и смежной проверкой НЕ ловился — так
+    // прошёл незамеченным дефект form-remove/template-remove. Платформа пишет
+    // только `<ChildObjects/>` (1394 на acc+erp, пустых пар 0 в обеих формах).
+    // Дискриминатор — перевод строки внутри: значащий пробельный текст-узел
+    // (`<xr:FillValue xsi:type="xs:string">   </xr:FillValue>`) его не содержит,
+    // поэтому под проверку не попадает.
+    const multiline = text.match(/<([\w:.]+)([^<>]*)>[ \t]*\r?\n\s*<\/\1>/g) || [];
+    const all = [...pairs, ...multiline];
+    if (all.length) {
+      const sample = all[0].replace(/\s+/g, ' ').slice(0, 60);
+      errs.push(`preserves: expected self-closing, got ${all.length}× empty pair (e.g. ${sample})`);
+    }
   }
   return errs;
 }

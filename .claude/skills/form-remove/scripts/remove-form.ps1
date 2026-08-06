@@ -1,4 +1,4 @@
-﻿# form-remove v1.7 — Remove form from 1C object
+﻿# form-remove v1.8 — Remove form from 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -64,6 +64,10 @@ foreach ($node in $formNodes) {
 			$parent.RemoveChild($prev) | Out-Null
 		}
 		$parent.RemoveChild($node) | Out-Null
+		# Опустевший контейнер: остаётся отступ-whitespace, и XmlWriter пишет пару
+		# <ChildObjects>\n\t\t</ChildObjects>. Платформа пишет только <ChildObjects/>
+		# (1394 самозакрывающихся на acc+erp, пустых пар ни в одной форме — 0).
+		if ($parent.SelectNodes("*").Count -eq 0) { $parent.IsEmpty = $true }
 		break
 	}
 }
@@ -74,7 +78,9 @@ foreach ($node in $formNodes) {
 $formRefRe = "Form\.$([regex]::Escape($FormName))$"
 foreach ($node in $xmlDoc.SelectNodes("//md:*", $nsMgr)) {
 	if ($node.LocalName -like "*Form" -and $node.InnerText -and $node.InnerText -match $formRefRe) {
-		$node.InnerText = ""
+		# IsEmpty, а не InnerText="": пустая строка сериализуется парой <Tag></Tag>, а
+		# Конфигуратор пустых пар не пишет (0 на 476 942 XML корпуса) — нужен <Tag/>.
+		$node.IsEmpty = $true
 	}
 }
 

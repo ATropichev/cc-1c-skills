@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# template-remove v1.6 — Remove template from 1C object
+# template-remove v1.7 — Remove template from 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -120,6 +120,10 @@ def main():
                 if parent.text and parent.text.strip() == "":
                     parent.text = ""
             parent.remove(node)
+            # Опустевший контейнер: text="" сериализуется парой <ChildObjects></ChildObjects>,
+            # а нужен <ChildObjects/> — PS-порт через DOM даёт именно его.
+            if len(parent) == 0 and not (parent.text or "").strip():
+                parent.text = None
             break
 
     # Clear MainDataCompositionSchema if it pointed to this template

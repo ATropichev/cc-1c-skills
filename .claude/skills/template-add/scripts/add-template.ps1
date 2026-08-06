@@ -1,4 +1,4 @@
-﻿# template-add v1.17 — Add template to 1C object
+﻿# template-add v1.18 — Add template to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -296,10 +296,12 @@ switch ($TemplateType) {
 		[System.IO.File]::WriteAllText($templateFilePath, "", $encBom)
 	}
 	"SpreadsheetDocument" {
+		# Пустой макет — самозакрывающимся корнем: пустых пар платформа не пишет
+		# ни в одной форме (0 на 65 040 XML выгрузки acc_8.3.27, включая разнесённые
+		# по строкам). Для XML `<A/>` и `<A></A>` тождественны по спецификации.
 		$content = @"
 <?xml version="1.0" encoding="UTF-8"?>
-<SpreadsheetDocument xmlns="http://v8.1c.ru/spreadsheet/document" xmlns:ss="http://v8.1c.ru/spreadsheet/document" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:xs="http://www.w3.org/2001/XMLSchema">
-</SpreadsheetDocument>
+<SpreadsheetDocument xmlns="http://v8.1c.ru/spreadsheet/document" xmlns:ss="http://v8.1c.ru/spreadsheet/document" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:xs="http://www.w3.org/2001/XMLSchema"/>
 "@
 		Write-XmlFile $templateFilePath $content $encBom
 	}

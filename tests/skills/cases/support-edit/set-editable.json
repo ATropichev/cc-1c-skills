@@ -9,6 +9,10 @@
     "editable"
   ],
   "expect": {
-    "stdoutContains": "редактируется с сохранением поддержки"
+    "stdoutContains": "редактируется с сохранением поддержки",
+    "preserves": {
+      "file": "Ext/ParentConfigurations.bin",
+      "bom": true
+    }
   }
 }

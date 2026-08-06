@@ -8,5 +8,17 @@
     }
   ],
   "params": { "object": "Catalog.Удалить" },
-  "args_extra": ["-Force"]
+  "args_extra": ["-Force"],
+  "expect": {
+    "preserves": {
+      "file": "Configuration.xml",
+      "bom": true,
+      "eol": "crlf",
+      "encoding": "UTF-8",
+      "finalNewline": false,
+      "noCR13": true,
+      "selfClose": "tight",
+      "noEmptyPairs": true
+    }
+  }
 }

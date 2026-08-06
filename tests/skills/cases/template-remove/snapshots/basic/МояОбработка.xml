@@ -23,7 +23,6 @@
 			<DefaultForm/>
 			<AuxiliaryForm/>
 		</Properties>
-		<ChildObjects>
-		</ChildObjects>
+		<ChildObjects/>
 	</ExternalDataProcessor>
 </MetaDataObject>

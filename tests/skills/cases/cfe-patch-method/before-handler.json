@@ -27,5 +27,12 @@
     "methodName": "ПриЗаписи",
     "interceptorType": "Before"
   },
-  "expect": { "stdoutContains": "&Перед(\"ПриЗаписи\")" }
+  "expect": {
+    "stdoutContains": "&Перед(\"ПриЗаписи\")",
+    "preserves": {
+      "file": "Ext/Catalogs/Товары/Ext/ObjectModule.bsl",
+      "bom": true,
+      "eol": "crlf"
+    }
+  }
 }
