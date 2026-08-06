@@ -132,6 +132,8 @@ function ensureSetup(setupName, runtime, skillCasesDir) {
     'empty-config-218': ['-FormatVersion', '2.18', '-CompatibilityMode', 'Version8_3_24'],
     'empty-config-220': ['-FormatVersion', '2.20', '-CompatibilityMode', 'Version8_3_27'],
     'empty-config-220-compat24': ['-FormatVersion', '2.20', '-CompatibilityMode', 'Version8_3_24'],
+    // 2.21 (8.5) — в шапках MetaDataObject и Form появляется xmlns:pal.
+    'empty-config-221': ['-FormatVersion', '2.21', '-CompatibilityMode', 'Version8_3_27'],
   };
   if (EMPTY_CONFIGS[setupName]) {
     const cached = join(CACHE, setupName);
