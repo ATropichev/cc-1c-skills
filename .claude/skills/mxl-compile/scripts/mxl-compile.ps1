@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.7 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.8 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -854,6 +854,11 @@ X '</document>'
 
 $enc = New-Object System.Text.UTF8Encoding($true)
 $resolvedPath = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path (Get-Location) $OutputPath }
+# Каталог назначения создаём сами: типовой путь — Templates/<Имя>/Ext/Template.xml,
+# и его может ещё не быть. Так делают и form-compile, и skd-compile, и py-порт этого
+# навыка; без этого PS-порт падал на «Could not find a part of the path».
+$outDir = [System.IO.Path]::GetDirectoryName($resolvedPath)
+if ($outDir -and -not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
 Assert-EditAllowed $resolvedPath 'editable'
 [System.IO.File]::WriteAllText($resolvedPath, $xml.ToString().TrimEnd("`r", "`n"), $enc)
 
