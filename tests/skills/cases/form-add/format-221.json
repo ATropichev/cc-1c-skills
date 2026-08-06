@@ -23,7 +23,10 @@
     "fileContains": [
       {
         "file": "Catalogs/Товары/Forms/ФормаЭлемента.xml",
-        "text": "xmlns:lf=\"http://v8.1c.ru/8.2/managed-application/logform\" xmlns:pal=\"http://v8.1c.ru/8.1/data/ui/colors/palette\" xmlns:style="
+        "text": [
+          "xmlns:lf=\"http://v8.1c.ru/8.2/managed-application/logform\" xmlns:pal=\"http://v8.1c.ru/8.1/data/ui/colors/palette\" xmlns:style=",
+          "<UseInInterfaceCompatibilityMode>Any</UseInInterfaceCompatibilityMode>"
+        ]
       },
       {
         "file": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml",

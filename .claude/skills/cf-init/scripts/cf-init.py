@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-init v1.7 — Create empty 1C configuration scaffold
+# cf-init v1.8 — Create empty 1C configuration scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration."""
 import sys, os, argparse, re, uuid
@@ -64,6 +64,10 @@ def main():
     co = [new_uuid() for _ in range(7)]
 
     # --- Mobile functionalities ---
+    # Версия формата как число — по ней ниже включаются вставки 2.21.
+    _fm = re.match(r'^(\d+)\.(\d+)$', args.FormatVersion)
+    is_221 = bool(_fm) and int(_fm.group(1)) * 100 + int(_fm.group(2)) >= 221
+
     mobile_funcs = [
         ("Biometrics","true"), ("Location","false"), ("BackgroundLocation","false"),
         ("BluetoothPrinters","false"), ("WiFiPrinters","false"), ("Contacts","false"),
@@ -80,6 +84,10 @@ def main():
         ("DocumentScanning","false"), ("SpeechToText","false"), ("Geofences","false"),
         ("IncomingShareRequests","false"), ("AllIncomingShareRequestsTypesProcessing","false"),
     ]
+    # TextToSpeech — возможность мобильного приложения, добавленная форматом 2.21 (8.5),
+    # последней в списке. На младших форматах платформа её не пишет.
+    if is_221:
+        mobile_funcs.append(("TextToSpeech", "false"))
 
     mobile_xml = ""
     for func_name, func_use in mobile_funcs:
@@ -108,8 +116,6 @@ def main():
     # Свойства и пространство имён формата 2.21 (платформа 8.5). Значения и ПОЗИЦИИ сняты
     # с выгрузки 8.5.1 (debug/fmt221/dump_v851): те же исходники, выгруженные с 8.3.27 и
     # с 8.5.1, различаются ровно этим. Порядок важен — вставки идут на своё место.
-    _fm = re.match(r'^(\d+)\.(\d+)$', args.FormatVersion)
-    is_221 = bool(_fm) and int(_fm.group(1)) * 100 + int(_fm.group(2)) >= 221
     pal_ns = ""
     f221_aux_forms = f221_window_variant = f221_open_variant = f221_captions = f221_migration = ""
     if is_221:

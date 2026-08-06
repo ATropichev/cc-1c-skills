@@ -1,4 +1,4 @@
-﻿# cf-init v1.7 — Create empty 1C configuration scaffold
+﻿# cf-init v1.8 — Create empty 1C configuration scaffold
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -43,6 +43,9 @@ $co6 = [guid]::NewGuid().ToString()
 $co7 = [guid]::NewGuid().ToString()
 
 # --- Mobile functionalities ---
+# Версия формата как число — по ней ниже включаются вставки 2.21.
+$is221 = (($FormatVersion -match '^(\d+)\.(\d+)$') -and ([int]$Matches[1] * 100 + [int]$Matches[2]) -ge 221)
+
 $mobileFuncs = @(
 	@("Biometrics","true"), @("Location","false"), @("BackgroundLocation","false"),
 	@("BluetoothPrinters","false"), @("WiFiPrinters","false"), @("Contacts","false"),
@@ -59,6 +62,9 @@ $mobileFuncs = @(
 	@("DocumentScanning","false"), @("SpeechToText","false"), @("Geofences","false"),
 	@("IncomingShareRequests","false"), @("AllIncomingShareRequestsTypesProcessing","false")
 )
+# TextToSpeech — возможность мобильного приложения, добавленная форматом 2.21 (8.5),
+# последней в списке. На младших форматах платформа её не пишет.
+if ($is221) { $mobileFuncs += ,@("TextToSpeech","false") }
 
 $mobileXml = ""
 foreach ($mf in $mobileFuncs) {
@@ -81,7 +87,6 @@ $versionEl = if ($Version) { "<Version>$([System.Security.SecurityElement]::Esca
 # Значения и ПОЗИЦИИ сняты с выгрузки 8.5.1 (debug/fmt221/dump_v851): те же исходники,
 # выгруженные с 8.3.27 и с 8.5.1, различаются ровно этим. Порядок важен — вставки идут
 # на своё место, а не в конец.
-$is221 = (($FormatVersion -match '^(\d+)\.(\d+)$') -and ([int]$Matches[1] * 100 + [int]$Matches[2]) -ge 221)
 $nl = "`r`n"
 $f221AuxForms = ""; $f221WindowVariant = ""; $f221OpenVariant = ""; $f221Captions = ""; $f221Migration = ""
 $palNs = ""

@@ -1,4 +1,4 @@
-﻿# form-add v1.22 — Add managed form to 1C config object
+﻿# form-add v1.23 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -347,6 +347,13 @@ if ($objectType -in $processorLikeTypes) {
 	$extPresentationLine = "`n`t`t`t<ExtendedPresentation/>"
 }
 
+# Использование в режиме совместимости интерфейса — свойство формата 2.21 (8.5),
+# сразу после UsePurposes (проверено по выгрузке 8.5, до ExtendedPresentation).
+$useInIfcLine = ""
+if ((Get-FormatRank $script:formatVersion) -ge 221) {
+	$useInIfcLine = "`n`t`t`t<UseInInterfaceCompatibilityMode>Any</UseInInterfaceCompatibilityMode>"
+}
+
 $formMetaXml = @"
 <?xml version="1.0" encoding="UTF-8"?>
 <MetaDataObject $($script:xmlnsDecl) version="$($script:formatVersion)">
@@ -365,7 +372,7 @@ $formMetaXml = @"
 			<UsePurposes>
 				<v8:Value xsi:type="app:ApplicationUsePurpose">PlatformApplication</v8:Value>
 				<v8:Value xsi:type="app:ApplicationUsePurpose">MobilePlatformApplication</v8:Value>
-			</UsePurposes>$extPresentationLine
+			</UsePurposes>$useInIfcLine$extPresentationLine
 		</Properties>
 	</Form>
 </MetaDataObject>

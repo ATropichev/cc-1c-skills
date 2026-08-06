@@ -20,6 +20,10 @@
       {
         "file": "Languages/Русский.xml",
         "text": "xmlns:lf=\"http://v8.1c.ru/8.2/managed-application/logform\" xmlns:pal=\"http://v8.1c.ru/8.1/data/ui/colors/palette\" xmlns:style="
+      },
+      {
+        "file": "Configuration.xml",
+        "text": "<app:functionality>TextToSpeech</app:functionality>"
       }
     ],
     "fileNotContains": {

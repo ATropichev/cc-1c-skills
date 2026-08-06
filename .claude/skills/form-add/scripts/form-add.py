@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-add v1.22 — Add managed form to 1C config object
+# form-add v1.23 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -493,6 +493,10 @@ def main():
         '\t\t\t\t<v8:Value xsi:type="app:ApplicationUsePurpose">PlatformApplication</v8:Value>\n'
         '\t\t\t\t<v8:Value xsi:type="app:ApplicationUsePurpose">MobilePlatformApplication</v8:Value>\n'
         '\t\t\t</UsePurposes>\n'
+        # Использование в режиме совместимости интерфейса — свойство формата 2.21 (8.5),
+        # сразу после UsePurposes (проверено по выгрузке 8.5, до ExtendedPresentation).
+        + ('\t\t\t<UseInInterfaceCompatibilityMode>Any</UseInInterfaceCompatibilityMode>\n'
+           if format_rank(format_version) >= 221 else '')
         + ('\t\t\t<ExtendedPresentation/>\n' if object_type in processor_like_types else '')
         + '\t\t</Properties>\n'
         '\t</Form>\n'
