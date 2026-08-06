@@ -637,6 +637,10 @@ type_namespace_map = {
     "SpreadsheetDocument": {"ns": "http://v8.1c.ru/8.2/data/spreadsheet",                  "prefix": "mxl"},
 }
 # Типы current-config пространства (cfg:, объявлено в корне): голые и объектные. Ссылочные — отдельно (d5p1).
+# Префикс current-config для ссылочных типов. 'cfg' — для файлов, чья шапка его объявляет
+# (объектный XML, Ext/Form.xml общей формы). None на время сборки Ext/Predefined.xml, чья
+# шапка его НЕ объявляет: там и платформа уходит на локальное объявление.
+cfg_prefix = 'cfg'
 cfg_bare_types = {"ConstantsSet", "ReportBuilder", "FilterCriterion"}
 cfg_object_kinds = {"Catalog", "Document", "Enum", "ChartOfAccounts", "ChartOfCharacteristicTypes",
     "ChartOfCalculationTypes", "ExchangePlan", "BusinessProcess", "Task", "InformationRegister",
@@ -813,9 +817,15 @@ def emit_type_content(indent, type_str):
     # то есть давал diff-шум на ровном месте. Форма пришла из СКД, где cfg:
     # действительно не работает; в метаданных такого ограничения нет.
     # NB: локальная xmlns остаётся законной для ЧУЖИХ пространств — см. type_namespace_map.
+    # cfg_prefix = None означает «пишем файл, корень которого cfg НЕ объявляет»
+    # (Ext/Predefined.xml — его шапка это predef/v8/xr/xs/xsi). Там платформа сама уходит
+    # на локальную форму: в корпусе `<v8:Type xmlns:d6p1="…current-config">d6p1:CatalogRef.Валюты`.
     m = re.match(r'^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|ExchangePlanRef|BusinessProcessRef|BusinessProcessRoutePointRef|TaskRef)\.(.+)$', type_str)
     if m:
-        X(f'{indent}<v8:Type>cfg:{type_str}</v8:Type>')
+        if cfg_prefix:
+            X(f'{indent}<v8:Type>{cfg_prefix}:{type_str}</v8:Type>')
+        else:
+            X(f'{indent}<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:{type_str}</v8:Type>')
         return
     # Fallback
     X(f'{indent}<v8:Type>{type_str}</v8:Type>')
@@ -4659,8 +4669,16 @@ def emit_predef_item(out, val, indent, code_type):
 def build_predefined_xml(items, xsi_type, code_type):
     out = ['<?xml version="1.0" encoding="UTF-8"?>']
     out.append(f'<PredefinedData xmlns="http://v8.1c.ru/8.3/xcf/predef" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="{xsi_type}" version="{format_version}">')
-    for it in items:
-        emit_predef_item(out, it, '\t', code_type)
+    # Шапка Predefined.xml не объявляет cfg (predef/v8/xr/xs/xsi) — на время сборки этого
+    # файла ссылочный тип уходит на локальную форму, как делает и платформа.
+    global cfg_prefix
+    saved_cfg_prefix = cfg_prefix
+    cfg_prefix = None
+    try:
+        for it in items:
+            emit_predef_item(out, it, '\t', code_type)
+    finally:
+        cfg_prefix = saved_cfg_prefix
     out.append('</PredefinedData>')
     return '\r\n'.join(out)
 
@@ -4757,8 +4775,15 @@ def emit_predef_account(out, val, indent, obj_nm, acct_flag_names, ext_dim_flag_
 def build_predefined_account_xml(items, obj_nm, acct_flag_names, ext_dim_flag_names, ext_dim_types_ref=''):
     out = ['<?xml version="1.0" encoding="UTF-8"?>']
     out.append(f'<PredefinedData xmlns="http://v8.1c.ru/8.3/xcf/predef" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:type="ChartOfAccountsPredefinedItems" version="{format_version}">')
-    for it in items:
-        emit_predef_account(out, it, '\t', obj_nm, acct_flag_names, ext_dim_flag_names, ext_dim_types_ref)
+    # См. build_predefined_xml: шапка этого файла cfg не объявляет.
+    global cfg_prefix
+    saved_cfg_prefix = cfg_prefix
+    cfg_prefix = None
+    try:
+        for it in items:
+            emit_predef_account(out, it, '\t', obj_nm, acct_flag_names, ext_dim_flag_names, ext_dim_types_ref)
+    finally:
+        cfg_prefix = saved_cfg_prefix
     out.append('</PredefinedData>')
     return '\r\n'.join(out)
 

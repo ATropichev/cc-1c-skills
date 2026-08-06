@@ -547,6 +547,10 @@ $script:typeNamespaceMap = @{
 }
 # Типы current-config пространства (cfg:, объявлено в корне): объектные (CatalogObject.X/DataProcessorObject.X/…)
 # и голые (ConstantsSet/ReportBuilder). Ссылочные (*Ref.X/DefinedType.X) идут ОТДЕЛЬНО через локальный d5p1 (§memory).
+# Префикс current-config для ссылочных типов. 'cfg' — для файлов, чья шапка его объявляет
+# (объектный XML, Ext/Form.xml общей формы). $null на время сборки Ext/Predefined.xml, чья
+# шапка его НЕ объявляет: там и платформа уходит на локальное объявление.
+$script:cfgPrefix = 'cfg'
 $script:cfgBareTypes = @("ConstantsSet", "ReportBuilder", "FilterCriterion")
 $script:cfgObjectKinds = @("Catalog","Document","Enum","ChartOfAccounts","ChartOfCharacteristicTypes",
 	"ChartOfCalculationTypes","ExchangePlan","BusinessProcess","Task","InformationRegister","AccumulationRegister",
@@ -767,8 +771,15 @@ function Emit-TypeContent {
 	# в cfg: — то есть давал diff-шум на ровном месте. Форма пришла из СКД, где cfg:
 	# действительно не работает; в метаданных такого ограничения нет.
 	# NB: локальная xmlns остаётся законной для ЧУЖИХ пространств — см. $script:typeNamespaceMap.
+	# $script:cfgPrefix = $null означает «пишем файл, корень которого cfg НЕ объявляет»
+	# (Ext/Predefined.xml — его шапка это predef/v8/xr/xs/xsi). Там платформа сама уходит
+	# на локальную форму: в корпусе `<v8:Type xmlns:d6p1="…current-config">d6p1:CatalogRef.Валюты`.
 	if ($typeStr -match '^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|ExchangePlanRef|BusinessProcessRef|BusinessProcessRoutePointRef|TaskRef)\.(.+)$') {
-		X "$indent<v8:Type>cfg:$typeStr</v8:Type>"
+		if ($script:cfgPrefix) {
+			X "$indent<v8:Type>$($script:cfgPrefix):$typeStr</v8:Type>"
+		} else {
+			X "$indent<v8:Type xmlns:d5p1=`"http://v8.1c.ru/8.1/data/enterprise/current-config`">d5p1:$typeStr</v8:Type>"
+		}
 		return
 	}
 
@@ -4673,7 +4684,11 @@ function Build-PredefinedXml {
 	$sb = New-Object System.Text.StringBuilder
 	[void]$sb.Append("<?xml version=`"1.0`" encoding=`"UTF-8`"?>`n")
 	[void]$sb.Append("<PredefinedData xmlns=`"http://v8.1c.ru/8.3/xcf/predef`" xmlns:v8=`"http://v8.1c.ru/8.1/data/core`" xmlns:xr=`"http://v8.1c.ru/8.3/xcf/readable`" xmlns:xs=`"http://www.w3.org/2001/XMLSchema`" xmlns:xsi=`"http://www.w3.org/2001/XMLSchema-instance`" xsi:type=`"$xsiType`" version=`"$($script:formatVersion)`">`n")
-	foreach ($it in $items) { Emit-PredefItem $sb $it "`t" $codeType }
+	# Шапка Predefined.xml не объявляет cfg (predef/v8/xr/xs/xsi) — на время сборки этого
+	# файла ссылочный тип уходит на локальную форму, как делает и платформа.
+	$savedCfgPrefix = $script:cfgPrefix; $script:cfgPrefix = $null
+	try { foreach ($it in $items) { Emit-PredefItem $sb $it "`t" $codeType } }
+	finally { $script:cfgPrefix = $savedCfgPrefix }
 	[void]$sb.Append("</PredefinedData>`n")
 	return ($sb.ToString() -replace "`r`n", "`n") -replace "`n", "`r`n"
 }
@@ -4761,7 +4776,10 @@ function Build-PredefinedAccountXml {
 	$sb = New-Object System.Text.StringBuilder
 	[void]$sb.Append("<?xml version=`"1.0`" encoding=`"UTF-8`"?>`n")
 	[void]$sb.Append("<PredefinedData xmlns=`"http://v8.1c.ru/8.3/xcf/predef`" xmlns:v8=`"http://v8.1c.ru/8.1/data/core`" xmlns:xr=`"http://v8.1c.ru/8.3/xcf/readable`" xmlns:xs=`"http://www.w3.org/2001/XMLSchema`" xmlns:xsi=`"http://www.w3.org/2001/XMLSchema-instance`" xsi:type=`"ChartOfAccountsPredefinedItems`" version=`"$($script:formatVersion)`">`n")
-	foreach ($it in $items) { Emit-PredefAccount $sb $it "`t" $objName $acctFlagNames $extDimFlagNames $extDimTypesRef }
+	# См. Build-PredefinedXml: шапка этого файла cfg не объявляет.
+	$savedCfgPrefix = $script:cfgPrefix; $script:cfgPrefix = $null
+	try { foreach ($it in $items) { Emit-PredefAccount $sb $it "`t" $objName $acctFlagNames $extDimFlagNames $extDimTypesRef } }
+	finally { $script:cfgPrefix = $savedCfgPrefix }
 	[void]$sb.Append("</PredefinedData>`n")
 	return ($sb.ToString() -replace "`r`n", "`n") -replace "`n", "`r`n"
 }
