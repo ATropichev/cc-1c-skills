@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.182 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.183 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -6214,6 +6214,28 @@ def main():
     assert_edit_allowed(out_path_resolved, "editable")
     format_version = detect_format_version(os.path.dirname(out_path_resolved))
 
+    # Объявления пространств имён — одной переменной: место эмиссии её только подставляет.
+    # Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.
+    form_ns_decl = (
+        'xmlns="http://v8.1c.ru/8.3/xcf/logform"'
+        ' xmlns:app="http://v8.1c.ru/8.2/managed-application/core"'
+        ' xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config"'
+        ' xmlns:dcscor="http://v8.1c.ru/8.1/data-composition-system/core"'
+        ' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema"'
+        ' xmlns:dcsset="http://v8.1c.ru/8.1/data-composition-system/settings"'
+        ' xmlns:ent="http://v8.1c.ru/8.1/data/enterprise"'
+        ' xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"'
+        ' xmlns:style="http://v8.1c.ru/8.1/data/ui/style"'
+        ' xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system"'
+        ' xmlns:v8="http://v8.1c.ru/8.1/data/core"'
+        ' xmlns:v8ui="http://v8.1c.ru/8.1/data/ui"'
+        ' xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web"'
+        ' xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows"'
+        ' xmlns:xr="http://v8.1c.ru/8.3/xcf/readable"'
+        ' xmlns:xs="http://www.w3.org/2001/XMLSchema"'
+        ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+    )
+
     # --- 0. From-object mode ---
     if args.FromObject:
         # Resolve object path and purpose from OutputPath convention:
@@ -6464,7 +6486,7 @@ def main():
     lines = []
 
     lines.append('<?xml version="1.0" encoding="UTF-8"?>')
-    lines.append(f'<Form xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:dcscor="http://v8.1c.ru/8.1/data-composition-system/core" xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:dcsset="http://v8.1c.ru/8.1/data-composition-system/settings" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="{format_version}">')
+    lines.append(f'<Form {form_ns_decl} version="{format_version}">')
 
     # Title
     form_title = defn.get('title')

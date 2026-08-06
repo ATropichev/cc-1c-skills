@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# template-add v1.18 — Add template to 1C object
+# template-add v1.19 — Add template to 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -309,6 +309,28 @@ def main():
 
     format_version = detect_format_version(os.path.abspath(src_dir))
 
+    # Объявления пространств имён — одной переменной: место эмиссии её только подставляет.
+    # Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.
+    xmlns_decl = (
+        'xmlns="http://v8.1c.ru/8.3/MDClasses"'
+        ' xmlns:app="http://v8.1c.ru/8.2/managed-application/core"'
+        ' xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config"'
+        ' xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi"'
+        ' xmlns:ent="http://v8.1c.ru/8.1/data/enterprise"'
+        ' xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"'
+        ' xmlns:style="http://v8.1c.ru/8.1/data/ui/style"'
+        ' xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system"'
+        ' xmlns:v8="http://v8.1c.ru/8.1/data/core"'
+        ' xmlns:v8ui="http://v8.1c.ru/8.1/data/ui"'
+        ' xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web"'
+        ' xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows"'
+        ' xmlns:xen="http://v8.1c.ru/8.3/xcf/enums"'
+        ' xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef"'
+        ' xmlns:xr="http://v8.1c.ru/8.3/xcf/readable"'
+        ' xmlns:xs="http://www.w3.org/2001/XMLSchema"'
+        ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+    )
+
     # --- Checks ---
 
     object_type_folders = [
@@ -360,24 +382,7 @@ def main():
 
     template_meta_xml = (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses"'
-        ' xmlns:app="http://v8.1c.ru/8.2/managed-application/core"'
-        ' xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config"'
-        ' xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi"'
-        ' xmlns:ent="http://v8.1c.ru/8.1/data/enterprise"'
-        ' xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"'
-        ' xmlns:style="http://v8.1c.ru/8.1/data/ui/style"'
-        ' xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system"'
-        ' xmlns:v8="http://v8.1c.ru/8.1/data/core"'
-        ' xmlns:v8ui="http://v8.1c.ru/8.1/data/ui"'
-        ' xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web"'
-        ' xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows"'
-        ' xmlns:xen="http://v8.1c.ru/8.3/xcf/enums"'
-        ' xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef"'
-        ' xmlns:xr="http://v8.1c.ru/8.3/xcf/readable"'
-        ' xmlns:xs="http://www.w3.org/2001/XMLSchema"'
-        ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
-        f' version="{format_version}">\n'
+        f'<MetaDataObject {xmlns_decl} version="{format_version}">\n'
         f'\t<Template uuid="{template_uuid}">\n'
         '\t\t<Properties>\n'
         f'\t\t\t<Name>{template_name}</Name>\n'

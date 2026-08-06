@@ -1,4 +1,4 @@
-﻿# xdto-compile v1.6 — Build a 1C XDTO package from an XML Schema (XSD)
+﻿# xdto-compile v1.7 — Build a 1C XDTO package from an XML Schema (XSD)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true, ParameterSetName='File')]
@@ -834,6 +834,10 @@ Assert-EditAllowed $OutputDir
 
 $script:formatVersion = Detect-FormatVersion $OutputDir
 
+# Объявления пространств имён — одной переменной: место эмиссии её только интерполирует.
+# Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.
+$script:xmlnsDecl = 'xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+
 $pkgRoot = Join-Path $OutputDir "XDTOPackages"
 $pkgDir  = Join-Path $pkgRoot $Name
 $extDir  = Join-Path $pkgDir "Ext"
@@ -866,7 +870,7 @@ $uuid = [guid]::NewGuid().ToString()
 $md = New-Object System.Text.StringBuilder
 function M([string]$s) { [void]$md.Append($s); [void]$md.Append("`r`n") }
 M '<?xml version="1.0" encoding="UTF-8"?>'
-M ("<MetaDataObject xmlns=`"http://v8.1c.ru/8.3/MDClasses`" xmlns:app=`"http://v8.1c.ru/8.2/managed-application/core`" xmlns:cfg=`"http://v8.1c.ru/8.1/data/enterprise/current-config`" xmlns:cmi=`"http://v8.1c.ru/8.2/managed-application/cmi`" xmlns:ent=`"http://v8.1c.ru/8.1/data/enterprise`" xmlns:lf=`"http://v8.1c.ru/8.2/managed-application/logform`" xmlns:style=`"http://v8.1c.ru/8.1/data/ui/style`" xmlns:sys=`"http://v8.1c.ru/8.1/data/ui/fonts/system`" xmlns:v8=`"http://v8.1c.ru/8.1/data/core`" xmlns:v8ui=`"http://v8.1c.ru/8.1/data/ui`" xmlns:web=`"http://v8.1c.ru/8.1/data/ui/colors/web`" xmlns:win=`"http://v8.1c.ru/8.1/data/ui/colors/windows`" xmlns:xen=`"http://v8.1c.ru/8.3/xcf/enums`" xmlns:xpr=`"http://v8.1c.ru/8.3/xcf/predef`" xmlns:xr=`"http://v8.1c.ru/8.3/xcf/readable`" xmlns:xs=`"http://www.w3.org/2001/XMLSchema`" xmlns:xsi=`"http://www.w3.org/2001/XMLSchema-instance`" version=`"$script:formatVersion`">")
+M ("<MetaDataObject $($script:xmlnsDecl) version=`"$script:formatVersion`">")
 M "`t<XDTOPackage uuid=`"$uuid`">"
 M "`t`t<Properties>"
 M "`t`t`t<Name>$(EscText $Name)</Name>"
