@@ -1,4 +1,4 @@
-﻿# meta-compile v1.85 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.86 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1300,16 +1300,17 @@ $script:standardAttributesByType = @{
 	"Enum" = @("Order","Ref")
 	"InformationRegister" = @("Active","LineNumber","Recorder","Period")
 	"AccumulationRegister" = @("Active","LineNumber","Recorder","Period")
-	"AccountingRegister" = @("Active","Period","Recorder","LineNumber","Account")
+	"AccountingRegister" = @("Account","Active","LineNumber","Recorder","Period")
 	"CalculationRegister" = @("Active","Recorder","LineNumber","RegistrationPeriod","CalculationType","ReversingEntry")
 	"ChartOfAccounts" = @("PredefinedDataName","Order","OffBalance","Type","Description","Code","Parent","Predefined","DeletionMark","Ref")
-	"ChartOfCharacteristicTypes" = @("PredefinedDataName","Predefined","Ref","DeletionMark","Description","Code","Parent","ValueType")
+	"ChartOfCharacteristicTypes" = @("PredefinedDataName","ValueType","Description","Code","IsFolder","Parent","Predefined","DeletionMark","Ref")
 	"ChartOfCalculationTypes" = @("PredefinedDataName","Predefined","Ref","DeletionMark","ActionPeriodIsBasic","Description","Code")
-	"BusinessProcess" = @("Ref","DeletionMark","Date","Number","Started","Completed","HeadTask")
-	"Task" = @("Ref","DeletionMark","Date","Number","Executed","Description","RoutePoint","BusinessProcess")
-	# Порядок снят с выгрузки: у плана обмена блок начинается с ThisNode, а не с Ref
-	# (acc+erp, 8 объектов, разброса нет). Прочие типы в этой таблице совпадают с
-	# платформой — расхождений порядка по ним корпусный раундтрип не показал.
+	"BusinessProcess" = @("Started","HeadTask","Completed","Ref","DeletionMark","Date","Number")
+	"Task" = @("Executed","Description","RoutePoint","BusinessProcess","Ref","DeletionMark","Date","Number")
+	# Порядок в каждом списке — канон выгрузки, снят с корпуса acc+erp (внутри типа разброса нет).
+	# У ПВХ IsFolder входит в фикс-список: он есть у всех 23 объектов корпуса с этим блоком.
+	# У бухрегистра PeriodAdjustment, наоборот, условен (1 из 3) — он приходит как «лишний»
+	# ключ и эмитится ПЕРЕД фикс-списком, что совпадает с платформой.
 	"ExchangePlan" = @("ThisNode","ReceivedNo","SentNo","Ref","DeletionMark","Description","Code")
 	"DocumentJournal" = @("Type","Ref","Date","Posted","DeletionMark","Number")
 }
@@ -2003,9 +2004,12 @@ function Emit-Attribute {
 		}
 	}
 
-	# Use — only for catalog top-level attributes
+	# Use — у реквизитов справочника и ПВХ. Позиция РАЗНАЯ: справочник пишет Use ПЕРЕД
+	# Indexing, ПВХ — ПОСЛЕ него (корпус acc+erp: Catalog `Use,Indexing,FullTextSearch`,
+	# ПВХ `Indexing,Use,FullTextSearch,DataHistory`). Отсюда отдельный контекст "cct":
+	# структурно реквизит ПВХ совпадает со справочником, расходится только этим порядком.
+	$use = if ($parsed.use) { $parsed.use } else { "ForItem" }
 	if ($context -eq "catalog") {
-		$use = if ($parsed.use) { $parsed.use } else { "ForItem" }
 		X "$indent`t`t<Use>$use</Use>"
 	}
 
@@ -2021,6 +2025,7 @@ function Emit-Attribute {
 				if ($parsed.indexing) { $indexing = $parsed.indexing }
 				X "$indent`t`t<Indexing>$indexing</Indexing>"
 			}
+			if ($context -eq "cct") { X "$indent`t`t<Use>$use</Use>" }
 
 			# Реквизит адресации задачи: AddressingDimension (ссылка на измерение регистра исполнителей), между Indexing и FullTextSearch.
 			if ($context -eq "task-addressing" -and $elemTag -eq "AddressingAttribute") {
@@ -4328,7 +4333,7 @@ if ($objType -in $typesWithAttrTS) {
 			"Catalog"  { "catalog" }
 			"Document" { "document" }
 			{ $_ -in @("DataProcessor","Report") } { "processor" }
-			"ChartOfCharacteristicTypes" { "catalog" }   # реквизиты ПВХ структурно как у справочника (Use/FillFromFillingValue/DataHistory)
+			"ChartOfCharacteristicTypes" { "cct" }   # как catalog (Use/FillFromFillingValue/DataHistory), но Use ПОСЛЕ Indexing
 			{ $_ -in @("ChartOfAccounts","ChartOfCalculationTypes") } { "account" }   # как catalog, но БЕЗ <Use> (реквизиты ПС/ПВР не иерархичны как справочник)
 			default    { "object" }
 		}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.85 — Compile 1C metadata object from JSON
+# meta-compile v1.86 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1333,13 +1333,17 @@ standard_attributes_by_type = {
     'Enum': ['Order', 'Ref'],
     'InformationRegister': ['Active', 'LineNumber', 'Recorder', 'Period'],
     'AccumulationRegister': ['Active', 'LineNumber', 'Recorder', 'Period'],
-    'AccountingRegister': ['Active', 'Period', 'Recorder', 'LineNumber', 'Account'],
+    'AccountingRegister': ['Account', 'Active', 'LineNumber', 'Recorder', 'Period'],
     'CalculationRegister': ['Active', 'Recorder', 'LineNumber', 'RegistrationPeriod', 'CalculationType', 'ReversingEntry'],
     'ChartOfAccounts': ['PredefinedDataName', 'Order', 'OffBalance', 'Type', 'Description', 'Code', 'Parent', 'Predefined', 'DeletionMark', 'Ref'],
-    'ChartOfCharacteristicTypes': ['PredefinedDataName', 'Predefined', 'Ref', 'DeletionMark', 'Description', 'Code', 'Parent', 'ValueType'],
+    'ChartOfCharacteristicTypes': ['PredefinedDataName', 'ValueType', 'Description', 'Code', 'IsFolder', 'Parent', 'Predefined', 'DeletionMark', 'Ref'],
     'ChartOfCalculationTypes': ['PredefinedDataName', 'Predefined', 'Ref', 'DeletionMark', 'ActionPeriodIsBasic', 'Description', 'Code'],
-    'BusinessProcess': ['Ref', 'DeletionMark', 'Date', 'Number', 'Started', 'Completed', 'HeadTask'],
-    'Task': ['Ref', 'DeletionMark', 'Date', 'Number', 'Executed', 'Description', 'RoutePoint', 'BusinessProcess'],
+    # Порядок в каждом списке — канон выгрузки, снят с корпуса acc+erp (внутри типа разброса нет).
+    # У ПВХ IsFolder входит в фикс-список: он есть у всех 23 объектов корпуса с этим блоком.
+    # У бухрегистра PeriodAdjustment, наоборот, условен (1 из 3) — он приходит как «лишний»
+    # ключ и эмитится ПЕРЕД фикс-списком, что совпадает с платформой.
+    'BusinessProcess': ['Started', 'HeadTask', 'Completed', 'Ref', 'DeletionMark', 'Date', 'Number'],
+    'Task': ['Executed', 'Description', 'RoutePoint', 'BusinessProcess', 'Ref', 'DeletionMark', 'Date', 'Number'],
     # Порядок снят с выгрузки: у плана обмена блок начинается с ThisNode, а не с Ref
     # (acc+erp, 8 объектов, разброса нет). Прочие типы в этой таблице совпадают с
     # платформой — расхождений порядка по ним корпусный раундтрип не показал.
@@ -2081,8 +2085,13 @@ def emit_attribute(indent, parsed, context, elem_tag='Attribute'):
                 X(f'{indent}\t\t<ExtDimensionAccountingFlag>{esc_xml_text(str(parsed["extDimensionAccountingFlag"]))}</ExtDimensionAccountingFlag>')
             else:
                 X(f'{indent}\t\t<ExtDimensionAccountingFlag/>')
+    # Use — у реквизитов справочника и ПВХ. Позиция РАЗНАЯ: справочник пишет Use ПЕРЕД
+    # Indexing, ПВХ — ПОСЛЕ него (корпус acc+erp: Catalog `Use,Indexing,FullTextSearch`,
+    # ПВХ `Indexing,Use,FullTextSearch,DataHistory`). Отсюда отдельный контекст 'cct':
+    # структурно реквизит ПВХ совпадает со справочником, расходится только этим порядком.
+    use_value = parsed.get("use") or "ForItem"
     if context == 'catalog':
-        X(f'{indent}\t\t<Use>{parsed.get("use") or "ForItem"}</Use>')
+        X(f'{indent}\t\t<Use>{use_value}</Use>')
     if context not in ('processor', 'processor-tabular'):
         # Признаки учёта ПС (account-flag) не имеют <Indexing>/<FullTextSearch>, но имеют <DataHistory>.
         if context != 'account-flag':
@@ -2096,6 +2105,8 @@ def emit_attribute(indent, parsed, context, elem_tag='Attribute'):
                 if parsed.get('indexing'):
                     indexing = parsed['indexing']
                 X(f'{indent}\t\t<Indexing>{indexing}</Indexing>')
+            if context == 'cct':
+                X(f'{indent}\t\t<Use>{use_value}</Use>')
             # Реквизит адресации задачи: AddressingDimension (между Indexing и FullTextSearch).
             if context == 'task-addressing' and elem_tag == 'AddressingAttribute':
                 if parsed.get('addressingDimension'):
@@ -4245,7 +4256,7 @@ if obj_type in types_with_attr_ts:
         elif obj_type in ('DataProcessor', 'Report'):
             context = 'processor'
         elif obj_type == 'ChartOfCharacteristicTypes':
-            context = 'catalog'   # реквизиты ПВХ структурно как у справочника (Use/FillFromFillingValue/DataHistory)
+            context = 'cct'   # как catalog (Use/FillFromFillingValue/DataHistory), но Use ПОСЛЕ Indexing
         elif obj_type in ('ChartOfAccounts', 'ChartOfCalculationTypes'):
             context = 'account'   # как catalog, но БЕЗ <Use> (реквизиты ПС/ПВР не иерархичны как справочник)
         else:
