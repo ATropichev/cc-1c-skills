@@ -1,4 +1,4 @@
-﻿# role-compile v1.17 — Compile 1C role from JSON
+﻿# role-compile v1.18 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -679,45 +679,30 @@ $uuid = [guid]::NewGuid().ToString()
 $script:xmlBuf = New-Object System.Text.StringBuilder 4096
 
 X '<?xml version="1.0" encoding="UTF-8"?>'
-X '<MetaDataObject xmlns="http://v8.1c.ru/8.3/MDClasses"'
-X '        xmlns:app="http://v8.1c.ru/8.2/managed-application/core"'
-X '        xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config"'
-X '        xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi"'
-X '        xmlns:ent="http://v8.1c.ru/8.1/data/enterprise"'
-X '        xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform"'
-# 2.21 (8.5) добавила в шапку пространство палитры. Место строгое — после lf, перед style:
+# Объявления пространств имён — одной переменной и одной строкой, как пишет платформа.
+$xmlnsDecl = 'xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
+# 2.21 (8.5) добавила в шапку пространство палитры. Вставляем НА МЕСТО (после lf, перед style):
 # платформа держит объявления по алфавиту. В Rights.xml палитра НЕ идёт (проверено по выгрузке 8.5).
 if ((Get-FormatRank $formatVersion) -ge 221) {
-	X '        xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette"'
+	$xmlnsDecl = $xmlnsDecl -replace ' xmlns:style=', ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style='
 }
-X '        xmlns:style="http://v8.1c.ru/8.1/data/ui/style"'
-X '        xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system"'
-X '        xmlns:v8="http://v8.1c.ru/8.1/data/core"'
-X '        xmlns:v8ui="http://v8.1c.ru/8.1/data/ui"'
-X '        xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web"'
-X '        xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows"'
-X '        xmlns:xen="http://v8.1c.ru/8.3/xcf/enums"'
-X '        xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef"'
-X '        xmlns:xr="http://v8.1c.ru/8.3/xcf/readable"'
-X '        xmlns:xs="http://www.w3.org/2001/XMLSchema"'
-X '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
-X "        version=`"$formatVersion`">"
-X "    <Role uuid=`"$uuid`">"
-X '        <Properties>'
-X "            <Name>$roleName</Name>"
-X '            <Synonym>'
-X '                <v8:item>'
-X '                    <v8:lang>ru</v8:lang>'
-X "                    <v8:content>$(Esc-Xml $synonym)</v8:content>"
-X '                </v8:item>'
-X '            </Synonym>'
+X "<MetaDataObject $xmlnsDecl version=`"$formatVersion`">"
+X "`t<Role uuid=`"$uuid`">"
+X "`t`t<Properties>"
+X "`t`t`t<Name>$roleName</Name>"
+X "`t`t`t<Synonym>"
+X "`t`t`t`t<v8:item>"
+X "`t`t`t`t`t<v8:lang>ru</v8:lang>"
+X "`t`t`t`t`t<v8:content>$(Esc-Xml $synonym)</v8:content>"
+X "`t`t`t`t</v8:item>"
+X "`t`t`t</Synonym>"
 if ($comment) {
-	X "            <Comment>$(Esc-Xml $comment)</Comment>"
+	X "`t`t`t<Comment>$(Esc-Xml $comment)</Comment>"
 } else {
-	X '            <Comment/>'
+	X "`t`t`t<Comment/>"
 }
-X '        </Properties>'
-X '    </Role>'
+X "`t`t</Properties>"
+X "`t</Role>"
 X '</MetaDataObject>'
 
 $metadataXml = $script:xmlBuf.ToString()
@@ -727,48 +712,45 @@ $metadataXml = $script:xmlBuf.ToString()
 $script:xmlBuf = New-Object System.Text.StringBuilder 8192
 
 X '<?xml version="1.0" encoding="UTF-8"?>'
-X '<Rights xmlns="http://v8.1c.ru/8.2/roles"'
-X '        xmlns:xs="http://www.w3.org/2001/XMLSchema"'
-X '        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
-X "        xsi:type=`"Rights`" version=`"$formatVersion`">"
+X "<Rights xmlns=`"http://v8.1c.ru/8.2/roles`" xmlns:xs=`"http://www.w3.org/2001/XMLSchema`" xmlns:xsi=`"http://www.w3.org/2001/XMLSchema-instance`" xsi:type=`"Rights`" version=`"$formatVersion`">"
 
 # Global flags (defaults match typical 1C roles)
 $sfno = if ($null -ne $def.setForNewObjects) { "$($def.setForNewObjects)".ToLower() } else { "false" }
 $sfab = if ($null -ne $def.setForAttributesByDefault) { "$($def.setForAttributesByDefault)".ToLower() } else { "true" }
 $irco = if ($null -ne $def.independentRightsOfChildObjects) { "$($def.independentRightsOfChildObjects)".ToLower() } else { "false" }
 
-X "    <setForNewObjects>$sfno</setForNewObjects>"
-X "    <setForAttributesByDefault>$sfab</setForAttributesByDefault>"
-X "    <independentRightsOfChildObjects>$irco</independentRightsOfChildObjects>"
+X "`t<setForNewObjects>$sfno</setForNewObjects>"
+X "`t<setForAttributesByDefault>$sfab</setForAttributesByDefault>"
+X "`t<independentRightsOfChildObjects>$irco</independentRightsOfChildObjects>"
 
 # Object blocks
 $totalRights = 0
 foreach ($obj in $parsedObjects) {
-	X '    <object>'
-	X "        <name>$($obj.Name)</name>"
+	X "`t<object>"
+	X "`t`t<name>$($obj.Name)</name>"
 	foreach ($right in $obj.Rights) {
-		X '        <right>'
-		X "            <name>$($right.Name)</name>"
-		X "            <value>$($right.Value)</value>"
+		X "`t`t<right>"
+		X "`t`t`t<name>$($right.Name)</name>"
+		X "`t`t`t<value>$($right.Value)</value>"
 		if ($right.Condition) {
-			X '            <restrictionByCondition>'
-			X "                <condition>$(Esc-Xml $right.Condition)</condition>"
-			X '            </restrictionByCondition>'
+			X "`t`t`t<restrictionByCondition>"
+			X "`t`t`t`t<condition>$(Esc-Xml $right.Condition)</condition>"
+			X "`t`t`t</restrictionByCondition>"
 		}
-		X '        </right>'
+		X "`t`t</right>"
 		$totalRights++
 	}
-	X '    </object>'
+	X "`t</object>"
 }
 
 # RLS restriction templates
 $templateCount = 0
 if ($def.templates) {
 	foreach ($tpl in $def.templates) {
-		X '    <restrictionTemplate>'
-		X "        <name>$(Esc-Xml "$($tpl.name)")</name>"
-		X "        <condition>$(Esc-Xml "$($tpl.condition)")</condition>"
-		X '    </restrictionTemplate>'
+		X "`t<restrictionTemplate>"
+		X "`t`t<name>$(Esc-Xml "$($tpl.name)")</name>"
+		X "`t`t<condition>$(Esc-Xml "$($tpl.condition)")</condition>"
+		X "`t</restrictionTemplate>"
 		$templateCount++
 	}
 }
