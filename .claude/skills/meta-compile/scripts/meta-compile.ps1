@@ -1,4 +1,4 @@
-﻿# meta-compile v1.86 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.87 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1300,7 +1300,7 @@ $script:standardAttributesByType = @{
 	"Enum" = @("Order","Ref")
 	"InformationRegister" = @("Active","LineNumber","Recorder","Period")
 	"AccumulationRegister" = @("Active","LineNumber","Recorder","Period")
-	"AccountingRegister" = @("Account","Active","LineNumber","Recorder","Period")
+	"AccountingRegister" = @("PeriodAdjustment","Account","Active","LineNumber","Recorder","Period")
 	"CalculationRegister" = @("Active","Recorder","LineNumber","RegistrationPeriod","CalculationType","ReversingEntry")
 	"ChartOfAccounts" = @("PredefinedDataName","Order","OffBalance","Type","Description","Code","Parent","Predefined","DeletionMark","Ref")
 	"ChartOfCharacteristicTypes" = @("PredefinedDataName","ValueType","Description","Code","IsFolder","Parent","Predefined","DeletionMark","Ref")
@@ -1308,6 +1308,8 @@ $script:standardAttributesByType = @{
 	"BusinessProcess" = @("Started","HeadTask","Completed","Ref","DeletionMark","Date","Number")
 	"Task" = @("Executed","Description","RoutePoint","BusinessProcess","Ref","DeletionMark","Date","Number")
 	# Порядок в каждом списке — канон выгрузки, снят с корпуса acc+erp (внутри типа разброса нет).
+	# Условные члены перечислены в $script:stdAttrOptional — они эмитятся только при наличии
+	# ключа в DSL, но позицию берут отсюда.
 	# У ПВХ IsFolder входит в фикс-список: он есть у всех 23 объектов корпуса с этим блоком.
 	# У бухрегистра PeriodAdjustment, наоборот, условен (1 из 3) — он приходит как «лишний»
 	# ключ и эмитится ПЕРЕД фикс-списком, что совпадает с платформой.
@@ -1430,6 +1432,20 @@ function Emit-StandardAttribute {
 #  - stdAttrProfile[тип]: профиль материализованного блока (пусто = schema-дефолт), поверх — DSL-override.
 # Миграция типа = добавить его в stdAttrConditionalTypes + stdAttrProfile и переснять снэпшоты; КОД НЕ ТРОГАЕМ.
 $script:stdAttrConditionalTypes = @('Catalog', 'ExchangePlan', 'ChartOfCharacteristicTypes', 'ChartOfAccounts', 'ChartOfCalculationTypes', 'Document')
+
+# Условные члены списка типа: позиция берётся из $script:standardAttributesByType, а сам
+# реквизит эмитится только при наличии ключа в DSL (у бухрегистра PeriodAdjustment — 2 из 5).
+$script:stdAttrOptional = @{
+	"AccountingRegister" = @("PeriodAdjustment")
+}
+
+# Хвостовая группа: реквизиты, которых нет в списке типа и которые идут ПОСЛЕ него.
+# У бухрегистра это пары субконто. Именами их не перечислить: их количество задаётся
+# свойством MaxExtDimensionCount плана счетов, а не константой (в корпусе везде 3, но
+# это однородность выборки, а не правило). Поэтому — шаблон, а не список.
+$script:stdAttrTailPattern = @{
+	"AccountingRegister" = '^ExtDimension(Type)?\d+$'
+}
 function Emit-StandardAttributes {
 	param([string]$indent, [string]$objectType)
 	$attrs = $script:standardAttributesByType[$objectType]
@@ -1439,12 +1455,27 @@ function Emit-StandardAttributes {
 	if ($conditional -and $null -eq $sa) { return }   # условный тип без кастомизации → блока нет
 	if ($sa -is [string] -and $sa -eq '') { return }  # opt-out `standardAttributes:""` (дом-конвенция суппресса, ~5% регистров опускают all-default блок — правило не выводимо)
 	$profile = $script:stdAttrProfile[$objectType]; if (-not $profile) { $profile = @{} }
-	# Доп. (опциональные) стандартные реквизиты вне фикс-списка типа — напр. ExchangeDate у части ПланОбмена
-	# (легаси, присутствие не выводится из свойств). Эмитим по факту наличия ключа в DSL, ПЕРЕД фикс-списком (их позиция).
-	$extra = @()
-	if ($sa) { foreach ($k in $sa.PSObject.Properties.Name) { if ($attrs -notcontains $k) { $extra += $k } } }
+	# Список типа задаёт ПОРЯДОК всех известных стандартных реквизитов, включая условные:
+	# их позиция бывает и до, и после обязательных (у бухрегистра PeriodAdjustment идёт
+	# перед Account, а ExtDimension1..3/ExtDimensionType1..3 — после Period), поэтому
+	# «условные скопом вперёд» не выражает канон. Условный эмитим по факту наличия в DSL.
+	$optional = $script:stdAttrOptional[$objectType]; if (-not $optional) { $optional = @() }
+	# Ключи, которых нет в списке типа ВООБЩЕ. По умолчанию их позиция — ПЕРЕД списком
+	# (легаси вроде ExchangeDate у части планов обмена). Подходящие под хвостовой шаблон
+	# типа идут ПОСЛЕ, в порядке номера, а внутри номера — сначала ExtDimensionN, затем
+	# ExtDimensionTypeN (порядок платформы).
+	$tailRe = $script:stdAttrTailPattern[$objectType]
+	$extra = @(); $tail = @()
+	if ($sa) {
+		foreach ($k in $sa.PSObject.Properties.Name) {
+			if ($attrs -contains $k) { continue }
+			if ($tailRe -and $k -match $tailRe) { $tail += $k } else { $extra += $k }
+		}
+	}
+	$tail = @($tail | Sort-Object @{e={[int]([regex]::Match($_, '\d+').Value)}}, @{e={ if ($_ -match 'Type\d+$') { 1 } else { 0 } }})
 	X "$indent<StandardAttributes>"
-	foreach ($a in ($extra + $attrs)) {
+	foreach ($a in ($extra + $attrs + $tail)) {
+		if (($optional -contains $a) -and (-not ($sa -and $sa.PSObject.Properties[$a]))) { continue }
 		$ov = @{}
 		if ($profile.ContainsKey($a)) { foreach ($k in $profile[$a].Keys) { $ov[$k] = $profile[$a][$k] } }
 		if ($sa) {   # DSL-override применяем всегда при наличии ключа (для не-условных типов тоже, напр. ExchangePlan)

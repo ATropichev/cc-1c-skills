@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.86 — Compile 1C metadata object from JSON
+# meta-compile v1.87 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1333,7 +1333,7 @@ standard_attributes_by_type = {
     'Enum': ['Order', 'Ref'],
     'InformationRegister': ['Active', 'LineNumber', 'Recorder', 'Period'],
     'AccumulationRegister': ['Active', 'LineNumber', 'Recorder', 'Period'],
-    'AccountingRegister': ['Account', 'Active', 'LineNumber', 'Recorder', 'Period'],
+    'AccountingRegister': ['PeriodAdjustment', 'Account', 'Active', 'LineNumber', 'Recorder', 'Period'],
     'CalculationRegister': ['Active', 'Recorder', 'LineNumber', 'RegistrationPeriod', 'CalculationType', 'ReversingEntry'],
     'ChartOfAccounts': ['PredefinedDataName', 'Order', 'OffBalance', 'Type', 'Description', 'Code', 'Parent', 'Predefined', 'DeletionMark', 'Ref'],
     'ChartOfCharacteristicTypes': ['PredefinedDataName', 'ValueType', 'Description', 'Code', 'IsFolder', 'Parent', 'Predefined', 'DeletionMark', 'Ref'],
@@ -1467,6 +1467,20 @@ def emit_standard_attribute(indent, attr_name, ov=None):
 # std_attr_conditional_types: типы, где блок только при кастомизации (DSL-ключ standardAttributes).
 # Прочие типы → блок всегда (текущее поведение). Миграция типа = +строчка в оба справочника + снэпшоты.
 std_attr_conditional_types = {'Catalog', 'ExchangePlan', 'ChartOfCharacteristicTypes', 'ChartOfAccounts', 'ChartOfCalculationTypes', 'Document'}
+
+# Условные члены списка типа: позиция берётся из standard_attributes_by_type, а сам
+# реквизит эмитится только при наличии ключа в DSL (у бухрегистра PeriodAdjustment — 2 из 5).
+std_attr_optional = {
+    'AccountingRegister': ('PeriodAdjustment',),
+}
+
+# Хвостовая группа: реквизиты, которых нет в списке типа и которые идут ПОСЛЕ него.
+# У бухрегистра это пары субконто. Именами их не перечислить: их количество задаётся
+# свойством MaxExtDimensionCount плана счетов, а не константой (в корпусе везде 3, но
+# это однородность выборки, а не правило). Поэтому — шаблон, а не список.
+std_attr_tail_pattern = {
+    'AccountingRegister': r'^ExtDimension(Type)?\d+$',
+}
 def emit_standard_attributes(indent, object_type):
     attrs = standard_attributes_by_type.get(object_type)
     if not attrs:
@@ -1478,11 +1492,30 @@ def emit_standard_attributes(indent, object_type):
     if isinstance(sa, str) and sa == '':
         return  # opt-out `standardAttributes:""` (дом-конвенция суппресса, ~5% регистров опускают all-default блок)
     profile = std_attr_profile.get(object_type, {})
-    # Доп. (опциональные) стандартные реквизиты вне фикс-списка — напр. ExchangeDate у части ПланОбмена
-    # (легаси, присутствие не выводится). Эмитим по факту ключа в DSL, ПЕРЕД фикс-списком (их позиция).
-    extra = [k for k in sa if k not in attrs] if isinstance(sa, dict) else []
+    # Список типа задаёт ПОРЯДОК всех известных стандартных реквизитов, включая условные:
+    # их позиция бывает и до, и после обязательных (у бухрегистра PeriodAdjustment идёт
+    # перед Account, а ExtDimension1..3/ExtDimensionType1..3 — после Period), поэтому
+    # «условные скопом вперёд» не выражает канон. Условный эмитим по факту наличия в DSL.
+    optional = std_attr_optional.get(object_type, ())
+    # Ключи, которых нет в списке типа ВООБЩЕ. По умолчанию их позиция — ПЕРЕД списком
+    # (легаси вроде ExchangeDate у части планов обмена). Подходящие под хвостовой шаблон
+    # типа идут ПОСЛЕ, в порядке номера, а внутри номера — сначала ExtDimensionN, затем
+    # ExtDimensionTypeN (порядок платформы).
+    tail_re = std_attr_tail_pattern.get(object_type)
+    extra, tail = [], []
+    if isinstance(sa, dict):
+        for k in sa:
+            if k in attrs:
+                continue
+            if tail_re and re.match(tail_re, k):
+                tail.append(k)
+            else:
+                extra.append(k)
+    tail.sort(key=lambda k: (int(re.search(r'\d+', k).group()), 1 if re.search(r'Type\d+$', k) else 0))
     X(f'{indent}<StandardAttributes>')
-    for a in extra + list(attrs):
+    for a in extra + list(attrs) + tail:
+        if a in optional and not (isinstance(sa, dict) and a in sa):
+            continue
         ov = dict(profile.get(a, {}))
         if isinstance(sa, dict):
             d = sa.get(a)
