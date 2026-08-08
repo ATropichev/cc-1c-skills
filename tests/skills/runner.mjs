@@ -5,6 +5,7 @@
 import { execFileSync, execFile } from 'child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync,
          readdirSync, statSync, cpSync, copyFileSync } from 'fs';
+import { createHash } from 'crypto';
 import { join, resolve, dirname, relative, basename, extname } from 'path';
 import { tmpdir, cpus } from 'os';
 
@@ -127,6 +128,17 @@ function ensureSetup(setupName, runtime, skillCasesDir) {
   // (<=8_3_26 → 5, >=8_3_27 → 9). Отсюда две 2.20-фикстуры с разными режимами.
   // Фикстура 2.18 (8.3.25) держит границу между свойствами: TypeReductionMode там уже есть,
   // а LineNumberLength ещё нет — он появился только в 2.20.
+  // Отпечаток фикстуры: аргументы плюс содержимое ОБОИХ портов cf-init. Порты берём оба,
+  // чтобы каталог, собранный одним рантаймом, не пережил правку другого.
+  const fixtureStamp = (args) => {
+    const parts = [args.join(' ')];
+    for (const ext of ['.ps1', '.py']) {
+      const p = resolve(REPO_ROOT, '.claude/skills/cf-init/scripts/cf-init' + ext);
+      parts.push(existsSync(p) ? createHash('sha1').update(readFileSync(p)).digest('hex') : 'нет');
+    }
+    return parts.join('\n');
+  };
+
   const EMPTY_CONFIGS = {
     'empty-config': [],
     'empty-config-218': ['-FormatVersion', '2.18', '-CompatibilityMode', 'Version8_3_24'],
@@ -137,12 +149,21 @@ function ensureSetup(setupName, runtime, skillCasesDir) {
   };
   if (EMPTY_CONFIGS[setupName]) {
     const cached = join(CACHE, setupName);
-    if (existsSync(cached)) return cached;
+    // Кэш инвалидируется по содержимому cf-init: без этого правка навыка не доходила до
+    // фикстуры — старый каталог жил вечно, снэпшоты записывались с ним, и расхождение
+    // всплывало только на машине с пустым кэшем (поймано на маке, свойство TextToSpeech).
+    const stamp = join(cached, '.fixture-stamp');
+    const want = fixtureStamp(EMPTY_CONFIGS[setupName]);
+    if (existsSync(cached)) {
+      if (existsSync(stamp) && readFileSync(stamp, 'utf8') === want) return cached;
+      rmSync(cached, { recursive: true, force: true });
+    }
 
     mkdirSync(cached, { recursive: true });
     const script = resolveScript('cf-init/scripts/cf-init', runtime);
     try {
       execSkillRaw(runtime, script, ['-Name', 'TestConfig', '-OutputDir', cached, ...EMPTY_CONFIGS[setupName]]);
+      writeFileSync(stamp, want, 'utf8');
     } catch (e) {
       rmSync(cached, { recursive: true, force: true });
       throw new Error(`Failed to create ${setupName} fixture: ${e.message}`);
