@@ -16,8 +16,8 @@
        base="/appname"
        ib="connection-string">
     <standardOdata enable="true"/>
-    <ws pointEnableCommon="true"/>
-    <httpServices publishByDefault="true"/>
+    <ws pointEnableCommon="true" publishExtensionsByDefault="true"/>
+    <httpServices publishByDefault="true" publishExtensionsByDefault="true"/>
 </point>
 ```
 
@@ -61,6 +61,22 @@ URL: `/{AppName}/ws/{WebServiceName}?wsdl`
 #### `<httpServices>`
 Публикация HTTP-сервисов. `publishByDefault="true"` публикует все сервисы из конфигурации.
 URL: `/{AppName}/hs/{RootUrl}/...`
+
+#### Сервисы расширений — `publishExtensionsByDefault`
+
+Атрибут `publishExtensionsByDefault="true"` на `<ws>` и `<httpServices>` публикует сервисы,
+поставляемые **расширениями** конфигурации. По умолчанию платформа их не публикует: без атрибута
+HTTP-сервис расширения отдаёт **404**, web-сервис — **500 «Сервис не найден»**. Атрибуты
+`pointEnableCommon` / `publishByDefault` на сервисы расширений не распространяются.
+
+Проверено E2E на 8.3.24: A/B на одном и том же дескрипторе — с атрибутами `/hs/...` и `/ws/...?wsdl`
+отдают 200, без них 404/500. Перезапуск Apache для смены дескриптора не нужен, vrd читается на запрос.
+
+> Расширение должно быть применено к базе данных (`/db-update -Extension <имя>`), иначе его сервисы
+> недоступны независимо от дескриптора.
+
+> **Побочный эффект.** Атрибут действует на все подключённые расширения: любое расширение,
+> загруженное в ИБ, автоматически выставляет свои сервисы наружу.
 
 ### Расположение
 

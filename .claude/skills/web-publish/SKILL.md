@@ -84,6 +84,10 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/web-publish.ps1" <�
 3. Если нужно протестировать сервис — помоги составить запрос
 4. Если база не зарегистрирована — предложи `/db-list add`
 
+Публикуются и сервисы расширений — по `publishExtensionsByDefault` в дескрипторе. Если сервис
+расширения всё же отдаёт 404 (HTTP) или 500 «Сервис не найден» (SOAP), расширение не применено
+к базе данных: `/db-update -Extension <имя>`.
+
 ## Примеры
 
 ```powershell
