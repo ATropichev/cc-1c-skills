@@ -1,4 +1,4 @@
-﻿# interface-validate v1.1 — Validate 1C CommandInterface.xml structure
+﻿# interface-validate v1.2 — Validate 1C CommandInterface.xml structure (+Report-*: общий эталон вывода валидаторов)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$CIPath,
@@ -55,12 +55,16 @@ function Report-OK([string]$msg) {
 	$script:okCount++
 	if ($Detailed) { Out-Line "[OK]    $msg" }
 }
-function Report-Error([string]$msg) {
+function Report-Error {
+	param([string]$msg)
 	$script:errors++
 	Out-Line "[ERROR] $msg"
-	if ($script:errors -ge $MaxErrors) { $script:stopped = $true }
+	if ($script:errors -ge $MaxErrors) {
+		$script:stopped = $true
+	}
 }
-function Report-Warn([string]$msg) {
+function Report-Warn {
+	param([string]$msg)
 	$script:warnings++
 	Out-Line "[WARN]  $msg"
 }

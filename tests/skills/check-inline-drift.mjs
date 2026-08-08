@@ -111,6 +111,40 @@ const FAMILIES = [
     ],
   },
 
+  // ─── Отчёт валидаторов ───────────────────────────────────────────────────
+  // Два варианта по способу вывода: буферизованный Out-Line копит отчёт в $script:output, что даёт
+  // -OutFile (та же выдача в файл) и вставку заголовка в начало; потоковый Write-Host этого не умеет.
+  // Для модели-потребителя stdout одинаков: на успешном прогоне обе ветки дают одну строку.
+  {
+    name: 'validate: report_error', py: null, ps1: 'Report-Error',
+    variants: [
+      { id: 'buffered', authority: 'cf-validate',
+        consumers: ['cfe-validate', 'epf-validate', 'interface-validate', 'meta-validate',
+          'role-validate', 'skd-validate', 'subsystem-validate', 'xdto-validate'] },
+      { id: 'streamed', authority: 'form-validate', consumers: ['mxl-validate'],
+        why: 'потоковый вывод вместо буферизованного — эти навыки не поддерживают -OutFile' },
+    ],
+  },
+  {
+    name: 'validate: report_warn', py: null, ps1: 'Report-Warn',
+    variants: [
+      { id: 'buffered', authority: 'cf-validate',
+        consumers: ['cfe-validate', 'epf-validate', 'interface-validate', 'meta-validate',
+          'role-validate', 'skd-validate', 'subsystem-validate', 'xdto-validate'] },
+      { id: 'streamed', authority: 'form-validate', consumers: ['mxl-validate'],
+        why: 'потоковый вывод вместо буферизованного — эти навыки не поддерживают -OutFile' },
+    ],
+  },
+  {
+    name: 'validate: report_ok', py: null, ps1: 'Report-OK',
+    variants: [
+      { id: 'buffered', authority: 'cf-validate',
+        consumers: ['cfe-validate', 'epf-validate', 'meta-validate', 'role-validate', 'skd-validate'] },
+      { id: 'streamed', authority: 'form-validate', consumers: ['mxl-validate'],
+        why: 'потоковый вывод вместо буферизованного — эти навыки не поддерживают -OutFile' },
+    ],
+  },
+
   // ─── Прощающий ввод: разбор строки типа ──────────────────────────────────
   {
     name: 'resolve_type_str', py: 'resolve_type_str', ps1: 'Resolve-TypeStr',
@@ -229,9 +263,6 @@ const FAMILIES = [
 const DRIFTED = [
   { name: 'emit_mltext', py: 'emit_mltext', ps1: 'Emit-MLText', maxVariants: { py: 5, ps1: 5 } },
   { name: 'get_ml_text', py: 'get_ml_text', ps1: 'Get-MLText', maxVariants: { py: 7, ps1: 6 } },
-  { name: 'validate: report_error', py: null, ps1: 'Report-Error', maxVariants: { ps1: 3 } },
-  { name: 'validate: report_warn', py: null, ps1: 'Report-Warn', maxVariants: { ps1: 3 } },
-  { name: 'validate: report_ok', py: null, ps1: 'Report-OK', maxVariants: { ps1: 3 } },
   { name: 'import_fragment', py: 'import_fragment', ps1: 'Import-Fragment', maxVariants: { py: 5, ps1: 4 } },
   { name: 'get_child_indent', py: 'get_child_indent', ps1: 'Get-ChildIndent', maxVariants: { py: 4, ps1: 3 } },
   { name: 'write_xml_file', py: 'write_xml_file', ps1: null, maxVariants: { py: 3 } },
