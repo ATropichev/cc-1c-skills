@@ -107,6 +107,17 @@ const FAMILIES = [
     ],
   },
 
+  // ─── Прощающий ввод: разбор строки типа ──────────────────────────────────
+  {
+    name: 'resolve_type_str', py: 'resolve_type_str', ps1: 'Resolve-TypeStr',
+    // Тело одинаково во всех навыках, а словари синонимов разные — навык объявляет алиас
+    // TYPE_SYNONYMS / $script:typeSynonyms на свой локальный словарь.
+    variants: [
+      { id: 'base', authority: 'meta-compile',
+        consumers: ['form-compile', 'form-edit', 'meta-edit', 'skd-compile', 'skd-edit'] },
+    ],
+  },
+
   // ─── Экранирование XML ───────────────────────────────────────────────────
   {
     name: 'esc_xml', py: 'esc_xml', ps1: 'Esc-Xml',
@@ -195,8 +206,6 @@ const FAMILIES = [
 // число групп не должно расти. Фаза 2 сводит семью к одному телу и переносит её в FAMILIES.
 
 const DRIFTED = [
-  { name: 'resolve_type_str', py: 'resolve_type_str', ps1: 'Resolve-TypeStr', maxVariants: { py: 6, ps1: 4 },
-    note: 'алгоритм один, отличия редакторские; отдельно — срезание префикса cfg: только в form-compile' },
   { name: 'emit_mltext', py: 'emit_mltext', ps1: 'Emit-MLText', maxVariants: { py: 5, ps1: 5 } },
   { name: 'get_ml_text', py: 'get_ml_text', ps1: 'Get-MLText', maxVariants: { py: 7, ps1: 6 } },
   { name: 'validate: report_error', py: null, ps1: 'Report-Error', maxVariants: { ps1: 3 } },

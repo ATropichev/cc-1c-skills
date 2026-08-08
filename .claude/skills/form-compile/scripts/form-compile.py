@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.185 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.186 — Compile 1C managed form from JSON or object metadata (+resolve_type_str: срезание префикса cfg:/d5p1:)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -3757,26 +3757,47 @@ _FORM_TYPE_SYNONYMS = {
 }
 
 
+# Алиас на локальный словарь: тело resolve_type_str ниже — общая реализация,
+# одинаковая во всех навыках (реестр в tests/skills/check-inline-drift.mjs).
+TYPE_SYNONYMS = _FORM_TYPE_SYNONYMS
+
+
 def resolve_type_str(type_str):
     if not type_str:
         return type_str
-    # Lenient: strip leading cfg: prefix if user passed it (canonical form is without prefix)
+    # Прощающий ввод: ведущий префикс приходит копипастой из выгрузки. Без срезания он ломает
+    # поиск в словаре — русское имя типа остаётся непереведённым, и платформа отвечает
+    # «Неизвестное имя типа». cfg: снимаем всегда (однозначно = текущая конфигурация), d5p1: —
+    # только у ССЫЛОЧНЫХ типов (с точкой): сам по себе префикс неоднозначен, в формах d5p1:Chart,
+    # d5p1:TextDocument, d5p1:GeographicalSchema и др. адресуют свои пространства имён, и там он
+    # часть канонического значения.
     if type_str.startswith('cfg:'):
         type_str = type_str[4:]
+    elif type_str.startswith('d5p1:') and '.' in type_str:
+        type_str = type_str[5:]
+    # Параметризованные типы: Number(15,2), Строка(100)
     m = re.match(r'^([^(]+)\((.+)\)$', type_str)
     if m:
-        base, params = m.group(1).strip(), m.group(2)
-        r = _FORM_TYPE_SYNONYMS.get(base.lower())
-        return f"{r}({params})" if r else type_str
+        base_name = m.group(1).strip()
+        params = m.group(2)
+        resolved = TYPE_SYNONYMS.get(base_name.lower())
+        if resolved:
+            return f'{resolved}({params})'
+        return type_str
+    # Ссылочные типы: СправочникСсылка.Организации -> CatalogRef.Организации
     if '.' in type_str:
-        i = type_str.index('.')
-        prefix, suffix = type_str[:i], type_str[i:]
-        r = _FORM_TYPE_SYNONYMS.get(prefix.lower())
-        return f"{r}{suffix}" if r else type_str
-    r = _FORM_TYPE_SYNONYMS.get(type_str.lower())
-    return r if r else type_str
-
-
+        dot_idx = type_str.index('.')
+        prefix = type_str[:dot_idx]
+        suffix = type_str[dot_idx:]  # includes the dot
+        resolved = TYPE_SYNONYMS.get(prefix.lower())
+        if resolved:
+            return f'{resolved}{suffix}'
+        return type_str
+    # Простое имя
+    resolved = TYPE_SYNONYMS.get(type_str.lower())
+    if resolved:
+        return resolved
+    return type_str
 def emit_single_type(lines, type_str, indent):
     type_str = resolve_type_str(type_str)
     # TypeId — тип, заданный глобальным стабильным GUID (<v8:TypeId>, не <v8:Type>). Платформа так

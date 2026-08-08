@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.32 — Edit existing 1C metadata object XML (+ReuseSessions: Use)
+# meta-edit v1.33 — Edit existing 1C metadata object XML (+resolve_type_str: срезание префикса cfg:/d5p1:)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -416,37 +416,47 @@ type_synonyms = {
 # ============================================================
 
 
+# Алиас на локальный словарь: тело resolve_type_str ниже — общая реализация,
+# одинаковая во всех навыках (реестр в tests/skills/check-inline-drift.mjs).
+TYPE_SYNONYMS = type_synonyms
+
+
 def resolve_type_str(type_str):
     if not type_str:
         return type_str
-
-    # Parameterized: Number(15,2), Строка(100)
-    m = re.match(r"^([^(]+)\((.+)\)$", type_str)
+    # Прощающий ввод: ведущий префикс приходит копипастой из выгрузки. Без срезания он ломает
+    # поиск в словаре — русское имя типа остаётся непереведённым, и платформа отвечает
+    # «Неизвестное имя типа». cfg: снимаем всегда (однозначно = текущая конфигурация), d5p1: —
+    # только у ССЫЛОЧНЫХ типов (с точкой): сам по себе префикс неоднозначен, в формах d5p1:Chart,
+    # d5p1:TextDocument, d5p1:GeographicalSchema и др. адресуют свои пространства имён, и там он
+    # часть канонического значения.
+    if type_str.startswith('cfg:'):
+        type_str = type_str[4:]
+    elif type_str.startswith('d5p1:') and '.' in type_str:
+        type_str = type_str[5:]
+    # Параметризованные типы: Number(15,2), Строка(100)
+    m = re.match(r'^([^(]+)\((.+)\)$', type_str)
     if m:
         base_name = m.group(1).strip()
         params = m.group(2)
-        resolved = type_synonyms.get(base_name.lower())
+        resolved = TYPE_SYNONYMS.get(base_name.lower())
         if resolved:
-            return f"{resolved}({params})"
+            return f'{resolved}({params})'
         return type_str
-
-    # Reference: СправочникСсылка.Организации
-    if "." in type_str:
-        dot_idx = type_str.index(".")
+    # Ссылочные типы: СправочникСсылка.Организации -> CatalogRef.Организации
+    if '.' in type_str:
+        dot_idx = type_str.index('.')
         prefix = type_str[:dot_idx]
-        suffix = type_str[dot_idx:]
-        resolved = type_synonyms.get(prefix.lower())
+        suffix = type_str[dot_idx:]  # includes the dot
+        resolved = TYPE_SYNONYMS.get(prefix.lower())
         if resolved:
-            return f"{resolved}{suffix}"
+            return f'{resolved}{suffix}'
         return type_str
-
-    # Simple
-    resolved = type_synonyms.get(type_str.lower())
+    # Простое имя
+    resolved = TYPE_SYNONYMS.get(type_str.lower())
     if resolved:
         return resolved
     return type_str
-
-
 def build_type_content_xml(indent, type_str):
     if not type_str:
         return ""

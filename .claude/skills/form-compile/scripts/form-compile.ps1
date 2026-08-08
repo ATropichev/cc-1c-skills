@@ -1,4 +1,4 @@
-﻿# form-compile v1.185 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.186 — Compile 1C managed form from JSON or object metadata (+resolve_type_str: срезание префикса cfg:/d5p1:)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -2397,26 +2397,48 @@ $script:knownInvalidTypes = @{
 	"FormTable"             = "UI element type, not a data type"
 }
 
+# Алиас на локальный словарь: тело Resolve-TypeStr ниже — общая реализация,
+# одинаковая во всех навыках (реестр в tests/skills/check-inline-drift.mjs).
+$script:typeSynonyms = $script:formTypeSynonyms
+
 function Resolve-TypeStr {
 	param([string]$typeStr)
 	if (-not $typeStr) { return $typeStr }
-	# Lenient: strip leading cfg: prefix if user passed it (canonical form is without prefix)
-	if ($typeStr -match '^cfg:(.+)$') { $typeStr = $Matches[1] }
+
+	# Прощающий ввод: ведущий префикс приходит копипастой из выгрузки. Без срезания он ломает
+	# поиск в словаре — русское имя типа остаётся непереведённым, и платформа отвечает
+	# «Неизвестное имя типа». cfg: снимаем всегда (однозначно = текущая конфигурация), d5p1: —
+	# только у ССЫЛОЧНЫХ типов (с точкой): сам по себе префикс неоднозначен, в формах d5p1:Chart,
+	# d5p1:TextDocument, d5p1:GeographicalSchema и др. адресуют свои пространства имён, и там он
+	# часть канонического значения.
+	if ($typeStr.StartsWith('cfg:')) {
+		$typeStr = $typeStr.Substring(4)
+	} elseif ($typeStr.StartsWith('d5p1:') -and $typeStr.Contains('.')) {
+		$typeStr = $typeStr.Substring(5)
+	}
+
+	# Параметризованные типы: Number(15,2), Строка(100)
 	if ($typeStr -match '^([^(]+)\((.+)\)$') {
-		$base = $Matches[1].Trim(); $params = $Matches[2]
-		$r = $script:formTypeSynonyms[$base.ToLower()]
-		if ($r) { return "$r($params)" }
+		$baseName = $Matches[1].Trim()
+		$params = $Matches[2]
+		$resolved = $script:typeSynonyms[$baseName.ToLower()]
+		if ($resolved) { return "$resolved($params)" }
 		return $typeStr
 	}
+
+	# Ссылочные типы: СправочникСсылка.Организации → CatalogRef.Организации
 	if ($typeStr.Contains('.')) {
-		$i = $typeStr.IndexOf('.')
-		$prefix = $typeStr.Substring(0, $i); $suffix = $typeStr.Substring($i)
-		$r = $script:formTypeSynonyms[$prefix.ToLower()]
-		if ($r) { return "$r$suffix" }
+		$dotIdx = $typeStr.IndexOf('.')
+		$prefix = $typeStr.Substring(0, $dotIdx)
+		$suffix = $typeStr.Substring($dotIdx)  # includes the dot
+		$resolved = $script:typeSynonyms[$prefix.ToLower()]
+		if ($resolved) { return "$resolved$suffix" }
 		return $typeStr
 	}
-	$r = $script:formTypeSynonyms[$typeStr.ToLower()]
-	if ($r) { return $r }
+
+	# Простое имя
+	$resolved = $script:typeSynonyms[$typeStr.ToLower()]
+	if ($resolved) { return $resolved }
 	return $typeStr
 }
 

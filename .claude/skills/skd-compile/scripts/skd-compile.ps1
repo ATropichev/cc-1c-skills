@@ -1,4 +1,4 @@
-﻿# skd-compile v1.111 — Compile 1C DCS from JSON
+﻿# skd-compile v1.112 — Compile 1C DCS from JSON (+resolve_type_str: срезание префикса cfg:/d5p1:)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -348,19 +348,28 @@ function Resolve-TypeStr {
 	param([string]$typeStr)
 	if (-not $typeStr) { return $typeStr }
 
-	# Check for parameterized types: число(15,2), строка(100), etc.
+	# Прощающий ввод: ведущий префикс приходит копипастой из выгрузки. Без срезания он ломает
+	# поиск в словаре — русское имя типа остаётся непереведённым, и платформа отвечает
+	# «Неизвестное имя типа». cfg: снимаем всегда (однозначно = текущая конфигурация), d5p1: —
+	# только у ССЫЛОЧНЫХ типов (с точкой): сам по себе префикс неоднозначен, в формах d5p1:Chart,
+	# d5p1:TextDocument, d5p1:GeographicalSchema и др. адресуют свои пространства имён, и там он
+	# часть канонического значения.
+	if ($typeStr.StartsWith('cfg:')) {
+		$typeStr = $typeStr.Substring(4)
+	} elseif ($typeStr.StartsWith('d5p1:') -and $typeStr.Contains('.')) {
+		$typeStr = $typeStr.Substring(5)
+	}
+
+	# Параметризованные типы: Number(15,2), Строка(100)
 	if ($typeStr -match '^([^(]+)\((.+)\)$') {
 		$baseName = $Matches[1].Trim()
 		$params = $Matches[2]
-
-		# Resolve base name (case-insensitive via .ToLower())
 		$resolved = $script:typeSynonyms[$baseName.ToLower()]
 		if ($resolved) { return "$resolved($params)" }
-
 		return $typeStr
 	}
 
-	# Check for reference types: СправочникСсылка.Организации → CatalogRef.Организации
+	# Ссылочные типы: СправочникСсылка.Организации → CatalogRef.Организации
 	if ($typeStr.Contains('.')) {
 		$dotIdx = $typeStr.IndexOf('.')
 		$prefix = $typeStr.Substring(0, $dotIdx)
@@ -370,10 +379,9 @@ function Resolve-TypeStr {
 		return $typeStr
 	}
 
-	# Simple name lookup (case-insensitive)
+	# Простое имя
 	$resolved = $script:typeSynonyms[$typeStr.ToLower()]
 	if ($resolved) { return $resolved }
-
 	return $typeStr
 }
 

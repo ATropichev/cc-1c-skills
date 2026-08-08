@@ -1,4 +1,4 @@
-﻿# meta-edit v1.32 — Edit existing 1C metadata object XML (+ReuseSessions: Use)
+﻿# meta-edit v1.33 — Edit existing 1C metadata object XML (+resolve_type_str: срезание префикса cfg:/d5p1:)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -461,7 +461,19 @@ function Resolve-TypeStr {
 	param([string]$typeStr)
 	if (-not $typeStr) { return $typeStr }
 
-	# Parameterized: Number(15,2), Строка(100)
+	# Прощающий ввод: ведущий префикс приходит копипастой из выгрузки. Без срезания он ломает
+	# поиск в словаре — русское имя типа остаётся непереведённым, и платформа отвечает
+	# «Неизвестное имя типа». cfg: снимаем всегда (однозначно = текущая конфигурация), d5p1: —
+	# только у ССЫЛОЧНЫХ типов (с точкой): сам по себе префикс неоднозначен, в формах d5p1:Chart,
+	# d5p1:TextDocument, d5p1:GeographicalSchema и др. адресуют свои пространства имён, и там он
+	# часть канонического значения.
+	if ($typeStr.StartsWith('cfg:')) {
+		$typeStr = $typeStr.Substring(4)
+	} elseif ($typeStr.StartsWith('d5p1:') -and $typeStr.Contains('.')) {
+		$typeStr = $typeStr.Substring(5)
+	}
+
+	# Параметризованные типы: Number(15,2), Строка(100)
 	if ($typeStr -match '^([^(]+)\((.+)\)$') {
 		$baseName = $Matches[1].Trim()
 		$params = $Matches[2]
@@ -470,17 +482,17 @@ function Resolve-TypeStr {
 		return $typeStr
 	}
 
-	# Reference: СправочникСсылка.Организации
+	# Ссылочные типы: СправочникСсылка.Организации → CatalogRef.Организации
 	if ($typeStr.Contains('.')) {
 		$dotIdx = $typeStr.IndexOf('.')
 		$prefix = $typeStr.Substring(0, $dotIdx)
-		$suffix = $typeStr.Substring($dotIdx)
+		$suffix = $typeStr.Substring($dotIdx)  # includes the dot
 		$resolved = $script:typeSynonyms[$prefix.ToLower()]
 		if ($resolved) { return "$resolved$suffix" }
 		return $typeStr
 	}
 
-	# Simple
+	# Простое имя
 	$resolved = $script:typeSynonyms[$typeStr.ToLower()]
 	if ($resolved) { return $resolved }
 	return $typeStr
