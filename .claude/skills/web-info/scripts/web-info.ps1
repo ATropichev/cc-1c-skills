@@ -1,4 +1,4 @@
-﻿# web-info v1.2 — Apache & 1C publication status
+﻿# web-info v1.3 — Apache & 1C publication status
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -82,7 +82,24 @@ $port = "—"
 if ($confContent -match '(?m)^Listen\s+(\d+)') {
     $port = $Matches[1]
 }
-Write-Host "Port:   $port"
+# Проверяем именно TCP-порт: запрос к публикации поднял бы сеанс 1С и занял лицензию
+$portState = ""
+if ($port -ne "—") {
+    $client = New-Object System.Net.Sockets.TcpClient
+    try {
+        $async = $client.BeginConnect("127.0.0.1", [int]$port, $null, $null)
+        if ($async.AsyncWaitHandle.WaitOne(1000) -and $client.Connected) {
+            $portState = " (слушается)"
+        } else {
+            $portState = " (не отвечает)"
+        }
+    } catch {
+        $portState = " (не отвечает)"
+    } finally {
+        $client.Close()
+    }
+}
+Write-Host "Port:   $port$portState"
 
 # Extract wsap24 path
 if ($confContent -match 'LoadModule\s+_1cws_module\s+"([^"]+)"') {

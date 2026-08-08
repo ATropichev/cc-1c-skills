@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# web-info v1.2 — Apache & 1C publication status
+# web-info v1.3 — Apache & 1C publication status
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 """
@@ -11,6 +11,7 @@
 import argparse
 import os
 import re
+import socket
 import sys
 
 import psutil
@@ -92,7 +93,15 @@ def main():
     m = re.search(r'(?m)^Listen\s+(\d+)', conf_content)
     if m:
         port = m.group(1)
-    print(f'Port:   {port}')
+    # Проверяем именно TCP-порт: запрос к публикации поднял бы сеанс 1С и занял лицензию
+    port_state = ''
+    if port != '—':
+        try:
+            with socket.create_connection(('127.0.0.1', int(port)), timeout=1):
+                port_state = ' (слушается)'
+        except OSError:
+            port_state = ' (не отвечает)'
+    print(f'Port:   {port}{port_state}')
 
     # Extract wsap24 path
     m = re.search(r'LoadModule\s+_1cws_module\s+"([^"]+)"', conf_content)
