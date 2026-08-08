@@ -152,7 +152,9 @@ function ensureSetup(setupName, runtime, skillCasesDir) {
     // Кэш инвалидируется по содержимому cf-init: без этого правка навыка не доходила до
     // фикстуры — старый каталог жил вечно, снэпшоты записывались с ним, и расхождение
     // всплывало только на машине с пустым кэшем (поймано на маке, свойство TextToSpeech).
-    const stamp = join(cached, '.fixture-stamp');
+    // Отпечаток лежит РЯДОМ с каталогом, а не внутри: фикстура копируется в рабочий каталог
+    // кейса целиком, и файл изнутри неё попал бы в снэпшоты.
+    const stamp = join(CACHE, setupName + '.stamp');
     const want = fixtureStamp(EMPTY_CONFIGS[setupName]);
     if (existsSync(cached)) {
       if (existsSync(stamp) && readFileSync(stamp, 'utf8') === want) return cached;
