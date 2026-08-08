@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# web-info v1.1 — Apache & 1C publication status
+# web-info v1.2 — Apache & 1C publication status
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 """
@@ -151,22 +151,28 @@ def main():
     m_log = re.search(r'(?m)^\s*ErrorLog\s+"?([^"\r\n]+)"?', conf_content)
     if m_log:
         log_path = m_log.group(1).strip()
-        error_log = log_path if os.path.isabs(log_path) else os.path.join(apache_path, log_path)
+        error_log = os.path.normpath(
+            log_path if os.path.isabs(log_path) else os.path.join(apache_path, log_path))
     if not error_log or not os.path.exists(error_log):
         error_log = next((p for p in (os.path.join(apache_path, 'logs', n)
                                       for n in ('error_log', 'error.log'))
                           if os.path.exists(p)), None)
 
     if error_log and os.path.exists(error_log):
+        print(f'Журнал: {error_log}')
         try:
             with open(error_log, 'r', encoding='utf-8-sig', errors='replace') as f:
                 all_lines = f.readlines()
-            tail_lines = all_lines[-5:] if len(all_lines) >= 5 else all_lines
-            if tail_lines:
-                for line in tail_lines:
+            # Только error и выше: warn забит штатным шумом winnt_accept, notice — строки старта.
+            # AH02538 — след нашего же рестарта (родитель убит), пишется как crit при каждой публикации
+            err_lines = [ln for ln in all_lines
+                         if re.search(r'\[[a-z_]+:(error|crit|alert|emerg)\]', ln)
+                         and 'AH02538' not in ln]
+            if err_lines:
+                for line in err_lines[-5:]:
                     print(f'  {line.rstrip()}')
             else:
-                print('(пусто)')
+                print('(ошибок нет)')
         except Exception:
             print('(ошибка чтения)')
     else:

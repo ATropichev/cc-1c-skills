@@ -1,4 +1,4 @@
-﻿# web-info v1.1 — Apache & 1C publication status
+﻿# web-info v1.2 — Apache & 1C publication status
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -162,13 +162,18 @@ if (-not $errorLog -or -not (Test-Path $errorLog)) {
 }
 
 if ($errorLog -and (Test-Path $errorLog)) {
-    $lines = Get-Content $errorLog -Tail 5 -ErrorAction SilentlyContinue
-    if ($lines -and $lines.Count -gt 0) {
+    Write-Host "Журнал: $errorLog" -ForegroundColor DarkGray
+    # Только error и выше: warn забит штатным шумом winnt_accept, notice — строки старта.
+    # AH02538 — след нашего же рестарта (родитель убит), пишется как crit при каждой публикации
+    $lines = Get-Content $errorLog -ErrorAction SilentlyContinue |
+        Where-Object { $_ -match '\[[a-z_]+:(error|crit|alert|emerg)\]' -and $_ -notmatch 'AH02538' } |
+        Select-Object -Last 5
+    if ($lines) {
         foreach ($line in $lines) {
             Write-Host "  $line" -ForegroundColor DarkGray
         }
     } else {
-        Write-Host "(пусто)" -ForegroundColor Green
+        Write-Host "(ошибок нет)" -ForegroundColor Green
     }
 } else {
     Write-Host "(нет файла)" -ForegroundColor Green
