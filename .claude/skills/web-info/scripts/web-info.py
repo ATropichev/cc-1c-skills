@@ -146,8 +146,18 @@ def main():
     print('')
     print('=== Последние ошибки ===')
 
-    error_log = os.path.join(apache_path, 'logs', 'error.log')
-    if os.path.exists(error_log):
+    # Имя файла берём из httpd.conf: сборки Apache расходятся (error.log / error_log)
+    error_log = None
+    m_log = re.search(r'(?m)^\s*ErrorLog\s+"?([^"\r\n]+)"?', conf_content)
+    if m_log:
+        log_path = m_log.group(1).strip()
+        error_log = log_path if os.path.isabs(log_path) else os.path.join(apache_path, log_path)
+    if not error_log or not os.path.exists(error_log):
+        error_log = next((p for p in (os.path.join(apache_path, 'logs', n)
+                                      for n in ('error_log', 'error.log'))
+                          if os.path.exists(p)), None)
+
+    if error_log and os.path.exists(error_log):
         try:
             with open(error_log, 'r', encoding='utf-8-sig', errors='replace') as f:
                 all_lines = f.readlines()

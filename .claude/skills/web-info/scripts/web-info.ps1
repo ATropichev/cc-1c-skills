@@ -144,8 +144,24 @@ if ($pubMatches.Count -eq 0) {
 Write-Host ""
 Write-Host "=== Последние ошибки ===" -ForegroundColor Cyan
 
-$errorLog = Join-Path (Join-Path $ApachePath "logs") "error.log"
-if (Test-Path $errorLog) {
+# Имя файла берём из httpd.conf: сборки Apache расходятся (error.log / error_log)
+$errorLog = $null
+if ($confContent -match '(?m)^\s*ErrorLog\s+"?([^"\r\n]+)"?') {
+    $logPath = $Matches[1].Trim()
+    if ([System.IO.Path]::IsPathRooted($logPath)) {
+        $errorLog = $logPath
+    } else {
+        $errorLog = Join-Path $ApachePath ($logPath -replace '/','\')
+    }
+}
+if (-not $errorLog -or -not (Test-Path $errorLog)) {
+    $errorLog = @("error_log", "error.log") |
+        ForEach-Object { Join-Path (Join-Path $ApachePath "logs") $_ } |
+        Where-Object { Test-Path $_ } |
+        Select-Object -First 1
+}
+
+if ($errorLog -and (Test-Path $errorLog)) {
     $lines = Get-Content $errorLog -Tail 5 -ErrorAction SilentlyContinue
     if ($lines -and $lines.Count -gt 0) {
         foreach ($line in $lines) {
