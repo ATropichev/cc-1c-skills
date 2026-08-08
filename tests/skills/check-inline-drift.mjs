@@ -1,0 +1,455 @@
+#!/usr/bin/env node
+// Анти-дрейф общих inline-реализаций. Навыки автономны (общих runtime-модулей нет, утилиты
+// копируются в каждый .ps1/.py — docs/python-porting-guide.md), поэтому нужен гард от расхождения
+// копий. Реестр семей держим здесь же: реестр про дрейф не должен дрейфовать относительно проверки.
+//
+// Часть расхождений ЗАКОННА (например esc_xml без &quot; в form-* ради раундтрипа), поэтому семья
+// хранит не одно эталонное тело, а список вариантов. У законного варианта обязано быть поле `why`;
+// вариант без `why` — необоснованный, попадает в список долга (WARN).
+//
+// Запуск: node tests/skills/check-inline-drift.mjs [--list]
+// Выход 1 при ERROR, 0 при WARN. Кандидатов в реестр искать: node debug/inline-utils/scan-dupes.mjs
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const SKILLS = join(ROOT, '.claude', 'skills');
+
+// ─── Реестр семей ───────────────────────────────────────────────────────────
+// name    — как называть семью в отчёте
+// py/ps1  — имя функции в соответствующем порте (null, если в порте её нет)
+// variants[].authority — навык-эталон варианта: правку вносим в него и копируем в consumers
+// variants[].why       — обоснование, почему вариант отличается от остальных. Нет why → долг.
+// variants[].consumersPs1 / consumersPy — потребители, которые есть только в этом порте
+// variants[].port — вариант существует только в указанном порте (расхождение одного порта)
+// Заготовку по новой семье печатает: node debug/inline-utils/scan-dupes.mjs --stub <py>:<ps1>
+
+const FAMILIES = [
+  // ─── support-guard: запрет правки объекта на поддержке ───────────────────
+  {
+    name: 'support-guard: assert_edit_allowed', py: 'assert_edit_allowed', ps1: 'Assert-EditAllowed',
+    variants: [
+      { id: 'full', authority: 'cf-edit',
+        consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
+          'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
+          'subsystem-compile', 'subsystem-edit', 'template-add'] },
+      { id: 'xdto-compile-own', authority: 'xdto-compile', consumers: [] },
+      { id: 'xdto-edit-own', authority: 'xdto-edit', consumers: [] },
+      // Итог: xdto-* несут свою урезанную реализацию guard-а вместо общей — см. FINDINGS.md.
+    ],
+  },
+  {
+    name: 'support-guard: get_edit_mode', py: '_sg_get_edit_mode', ps1: 'Get-EditMode',
+    variants: [
+      { id: 'full', authority: 'cf-edit',
+        consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
+          'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
+          'subsystem-compile', 'subsystem-edit', 'template-add'] },
+      // В PY xdto-* держат ту же логику встроенной в assert_edit_allowed, отдельной функции нет.
+      { id: 'xdto-own', authority: 'xdto-compile', consumers: [], consumersPs1: ['xdto-edit'], port: 'ps1' },
+    ],
+  },
+  {
+    name: 'support-guard: is_external_root', py: '_sg_is_external_root', ps1: 'Test-ExternalObjectRoot',
+    variants: [
+      { id: 'full', authority: 'cf-edit',
+        consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
+          'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
+          'subsystem-compile', 'subsystem-edit', 'template-add'],
+        // *-info навыки несут хелпер только в PS1-порте — см. debug/inline-utils/FINDINGS.md.
+        consumersPs1: ['form-info', 'meta-info', 'mxl-info', 'role-info', 'skd-info'] },
+      { id: 'xdto-own', authority: 'xdto-compile', consumers: [], consumersPs1: ['xdto-edit'], port: 'ps1' },
+    ],
+  },
+  {
+    name: 'support-guard: find_v8project', py: '_sg_find_v8project', ps1: 'Find-V8Project',
+    variants: [
+      { id: 'full', authority: 'cf-edit',
+        consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
+          'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
+          'subsystem-compile', 'subsystem-edit', 'template-add'],
+        consumersPs1: ['xdto-compile', 'xdto-edit'] },
+    ],
+  },
+  {
+    name: 'support-guard: root_uuid', py: '_sg_root_uuid', ps1: 'Get-RootUuid',
+    variants: [
+      { id: 'full', authority: 'cf-edit',
+        consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
+          'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
+          'subsystem-compile', 'subsystem-edit', 'template-add'],
+        consumersPs1: ['support-edit', 'xdto-compile'] },
+    ],
+  },
+
+  // ─── Версия формата выгрузки ─────────────────────────────────────────────
+  {
+    name: 'detect_format_version', py: 'detect_format_version', ps1: 'Detect-FormatVersion',
+    variants: [
+      { id: 'config-only', authority: 'meta-compile',
+        consumers: ['cfe-borrow', 'interface-edit', 'role-compile', 'subsystem-compile', 'xdto-compile'] },
+      { id: 'with-external-root', authority: 'form-compile',
+        why: 'EPF/ERF не имеет своего Configuration.xml — версию несёт корень самой обработки',
+        consumers: ['form-add', 'mxl-compile', 'template-add'], consumersPy: ['help-add'] },
+      // Тот же алгоритм, отличается только именем переменной — редакторский дрейф PS1-копии.
+      { id: 'with-external-root-help-add-ps1', authority: 'help-add', consumers: [], port: 'ps1' },
+    ],
+  },
+  {
+    name: 'format_rank', py: 'format_rank', ps1: 'Get-FormatRank',
+    variants: [
+      { id: 'base', authority: 'meta-compile',
+        consumers: ['cfe-borrow', 'cfe-init', 'form-add', 'form-compile', 'mxl-compile', 'role-compile',
+          'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile'],
+        consumersPy: ['epf-init', 'erf-init'] },
+      { id: 'meta-validate-own', authority: 'meta-validate', consumers: [] },
+    ],
+  },
+
+  // ─── Экранирование XML ───────────────────────────────────────────────────
+  {
+    name: 'esc_xml', py: 'esc_xml', ps1: 'Esc-Xml',
+    variants: [
+      { id: 'text-no-quot', authority: 'form-compile',
+        why: 'экранирование ТЕКСТА элемента: платформа кавычки в тексте не экранирует, &quot; ломает раундтрип',
+        consumers: ['form-edit', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit'],
+        consumersPy: ['subsystem-compile', 'subsystem-edit'] },
+      { id: 'text-no-quot-subsystem-ps1', authority: 'subsystem-compile',
+        consumers: [], consumersPs1: ['subsystem-edit'], port: 'ps1' },
+      { id: 'attr-with-quot', authority: 'cf-init', port: 'py',
+        why: 'экранирование ЗНАЧЕНИЯ АТРИБУТА: там &quot; обязателен (init-навыки, PS1-порт функции не имеет)',
+        consumers: ['cfe-init', 'epf-init', 'erf-init'] },
+      { id: 'meta-attr-with-quot', authority: 'meta-compile',
+        why: 'парный esc_xml_text экранирует текст, сам esc_xml применяется только к значениям атрибутов',
+        consumers: ['meta-edit'] },
+      { id: 'meta-edit-own-py', authority: 'meta-edit', consumers: [], port: 'py' },
+    ],
+  },
+  // ─── Сохранение стиля XML при round-trip (#44/#46/#47) ───────────────────
+  {
+    name: 'detect_xml_style', py: '_detect_xml_style', ps1: null,
+    variants: [
+      { id: 'base', authority: 'cf-edit',
+        consumers: ['cfe-borrow', 'form-add', 'form-remove', 'help-add', 'interface-edit', 'meta-edit',
+          'meta-remove', 'subsystem-edit', 'template-add', 'template-remove'] },
+    ],
+  },
+  {
+    name: 'finalize_xml_bytes', py: '_finalize_xml_bytes', ps1: null,
+    variants: [
+      { id: 'base', authority: 'cf-edit',
+        consumers: ['cfe-borrow', 'form-add', 'form-remove', 'help-add', 'interface-edit', 'meta-edit',
+          'meta-remove', 'subsystem-edit', 'template-add', 'template-remove'] },
+    ],
+  },
+
+  // ─── Обвязка вызова платформы 1С (db-* и потребители) ────────────────────
+  {
+    name: 'platform: resolve_extra_args', py: 'resolve_extra_args', ps1: 'Resolve-ExtraArgs',
+    variants: [
+      { id: 'base', authority: 'db-create',
+        consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
+          'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump'] },
+    ],
+  },
+  {
+    name: 'platform: run_v8', py: 'run_v8', ps1: 'Invoke-PlatformProcess',
+    variants: [
+      // db-run запускает Предприятие и не ждёт процесс — общей обвязки запуска не использует.
+      { id: 'base', authority: 'db-create',
+        consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
+          'db-load-xml', 'db-update', 'epf-build', 'epf-dump'] },
+    ],
+  },
+  {
+    name: 'platform: decode_platform_bytes', py: 'decode_platform_bytes', ps1: 'ConvertFrom-PlatformBytes',
+    variants: [
+      { id: 'base', authority: 'db-create',
+        consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
+          'db-load-xml', 'db-update', 'epf-build', 'epf-dump'] },
+    ],
+  },
+  {
+    name: 'platform: redact', py: '_redact', ps1: 'Protect-Secrets',
+    variants: [
+      { id: 'base', authority: 'db-dump-cf',
+        consumers: ['db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
+          'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump'] },
+    ],
+  },
+  {
+    name: 'platform: version_key', py: '_version_key', ps1: null,
+    variants: [
+      { id: 'base', authority: 'db-create',
+        consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
+          'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump'] },
+      { id: 'web-publish-own', authority: 'web-publish', consumers: [] },
+    ],
+  },
+
+];
+
+// ─── Семьи, разъехавшиеся целиком ───────────────────────────────────────────
+// Перечислять «вариант на каждую копию» бессмысленно — эталона у них сейчас нет. Держим храповик:
+// число групп не должно расти. Фаза 2 сводит семью к одному телу и переносит её в FAMILIES.
+
+const DRIFTED = [
+  { name: 'resolve_type_str', py: 'resolve_type_str', ps1: 'Resolve-TypeStr', maxVariants: { py: 6, ps1: 4 },
+    note: 'алгоритм один, отличия редакторские; отдельно — срезание префикса cfg: только в form-compile' },
+  { name: 'emit_mltext', py: 'emit_mltext', ps1: 'Emit-MLText', maxVariants: { py: 5, ps1: 5 } },
+  { name: 'get_ml_text', py: 'get_ml_text', ps1: 'Get-MLText', maxVariants: { py: 7, ps1: 6 } },
+  { name: 'validate: report_error', py: null, ps1: 'Report-Error', maxVariants: { ps1: 3 } },
+  { name: 'validate: report_warn', py: null, ps1: 'Report-Warn', maxVariants: { ps1: 3 } },
+  { name: 'validate: report_ok', py: null, ps1: 'Report-OK', maxVariants: { ps1: 3 } },
+  { name: 'import_fragment', py: 'import_fragment', ps1: 'Import-Fragment', maxVariants: { py: 5, ps1: 4 } },
+  { name: 'get_child_indent', py: 'get_child_indent', ps1: 'Get-ChildIndent', maxVariants: { py: 4, ps1: 3 } },
+  { name: 'write_xml_file', py: 'write_xml_file', ps1: null, maxVariants: { py: 3 } },
+];
+
+// ─── Извлечение тел функций ─────────────────────────────────────────────────
+// PY: от `def name(` до первой строки без отступа.
+// PS1: от `function Name` до первой строки, равной ровно `}` — так отформатирован репозиторий.
+// Балансировка фигурных скобок в PS1 НЕ работает: скобки внутри строк и хэштейблов дают ложные
+// расхождения (18 вариантов из 18 копий Assert-EditAllowed там, где реально 3).
+
+function extractPy(text) {
+  const lines = text.split('\n');
+  const out = new Map();
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^def ([A-Za-z_]\w*)\(/.exec(lines[i]);
+    if (!m) continue;
+    const body = [lines[i]];
+    let j = i + 1;
+    for (; j < lines.length; j++) {
+      const l = lines[j];
+      if (l.trim() === '' || l[0] === ' ' || l[0] === '\t') { body.push(l); continue; }
+      break;
+    }
+    out.set(m[1], body);
+    i = j - 1;
+  }
+  return out;
+}
+
+function extractPs1(text) {
+  const lines = text.split('\n');
+  const out = new Map();
+  for (let i = 0; i < lines.length; i++) {
+    const m = /^function\s+([A-Za-z][\w-]*)/.exec(lines[i]);
+    if (!m) continue;
+    const body = [lines[i]];
+    let j = i + 1;
+    for (; j < lines.length; j++) {
+      body.push(lines[j]);
+      if (lines[j].replace(/\s+$/, '') === '}') break;
+    }
+    out.set(m[1], body);
+    i = j;
+  }
+  return out;
+}
+
+// Docstring-и снимаем наравне с комментариями: одинаковый код с разным описанием — не расхождение.
+function stripDocstrings(lines) {
+  const out = [];
+  let closing = null;
+  for (const l of lines) {
+    const t = l.trim();
+    if (closing) {
+      if (t.endsWith(closing) && t.length >= closing.length) closing = null;
+      continue;
+    }
+    const m = /^(?:[rубf]*)("""|''')/i.exec(t);
+    if (m) {
+      const q = m[1];
+      const rest = t.slice(t.indexOf(q) + q.length);
+      if (!rest.endsWith(q) || rest.length < q.length) closing = q;
+      continue;
+    }
+    out.push(l);
+  }
+  return out;
+}
+
+function hashBody(body, lang) {
+  let lines = body.slice(1);
+  if (lang === 'py') lines = stripDocstrings(lines);
+  const sig = lines.map((l) => l.trim()).filter((l) => l !== '' && !l.startsWith('#'));
+  return createHash('md5').update(sig.join(' ').replace(/\s+/g, ' ')).digest('hex').slice(0, 8);
+}
+
+// ─── Индекс: навык+порт → функции ───────────────────────────────────────────
+
+function buildIndex() {
+  const index = new Map(); // `${skill}|${lang}` -> Map(name -> body)
+  for (const skill of readdirSync(SKILLS)) {
+    const dir = join(SKILLS, skill, 'scripts');
+    if (!existsSync(dir)) continue;
+    for (const file of readdirSync(dir)) {
+      const lang = file.endsWith('.py') ? 'py' : file.endsWith('.ps1') ? 'ps1' : null;
+      if (!lang) continue;
+      const text = readFileSync(join(dir, file), 'utf8').replace(/^﻿/, '');
+      const fns = lang === 'py' ? extractPy(text) : extractPs1(text);
+      const key = `${skill}|${lang}`;
+      const acc = index.get(key) || new Map();
+      for (const [n, b] of fns) if (!acc.has(n)) acc.set(n, b);
+      index.set(key, acc);
+    }
+  }
+  return index;
+}
+
+// ─── Проверка ───────────────────────────────────────────────────────────────
+
+const index = buildIndex();
+const errors = [];
+const warns = [];
+
+function membersOf(v, lang) {
+  const extra = lang === 'ps1' ? v.consumersPs1 : v.consumersPy;
+  return [v.authority, ...v.consumers, ...(extra || [])];
+}
+
+// Варианты, применимые к порту: общие + объявленные именно для него. Навыки, захваченные
+// портовым вариантом, из общих вариантов этого порта исключаются.
+function variantsFor(family, lang) {
+  const applicable = family.variants.filter((v) => !v.port || v.port === lang);
+  const claimed = new Set(applicable.filter((v) => v.port === lang).flatMap((v) => membersOf(v, lang)));
+  return applicable.map((v) => {
+    if (v.port === lang) return { v, members: membersOf(v, lang) };
+    return { v, members: membersOf(v, lang).filter((s) => !claimed.has(s)) };
+  }).filter((e) => e.members.length);
+}
+
+for (const family of FAMILIES) {
+  for (const lang of ['py', 'ps1']) {
+    const fnName = family[lang];
+    if (!fnName) continue;
+    const effective = variantsFor(family, lang);
+    const declared = new Set(effective.flatMap((e) => e.members));
+
+    // 1. Каждый объявленный потребитель содержит функцию, и внутри варианта тела совпадают.
+    const hashByVariant = new Map();
+    for (const { v, members } of effective) {
+      const hashes = new Map();
+      for (const skill of members) {
+        const body = index.get(`${skill}|${lang}`)?.get(fnName);
+        if (!body) {
+          errors.push(`${family.name} [${lang}]: ${skill} объявлен в варианте '${v.id}', но функции ${fnName} в нём нет`);
+          continue;
+        }
+        hashes.set(skill, hashBody(body, lang));
+      }
+      const authorityHash = hashes.get(v.authority);
+      if (authorityHash === undefined) continue;
+      hashByVariant.set(v.id, authorityHash);
+      for (const [skill, h] of hashes) {
+        if (h !== authorityHash) {
+          errors.push(`${family.name} [${lang}]: ${skill} разошёлся с эталоном ${v.authority} (вариант '${v.id}')`);
+        }
+      }
+    }
+
+    // 2. Разные варианты обязаны различаться телом — иначе реестр протух и их пора слить.
+    const seen = new Map();
+    for (const [id, h] of hashByVariant) {
+      if (seen.has(h)) {
+        errors.push(`${family.name} [${lang}]: варианты '${seen.get(h)}' и '${id}' объявлены разными, но тела совпадают — слить в реестре`);
+      }
+      seen.set(h, id);
+    }
+
+    // 3. Навык содержит функцию, но в реестре не объявлен — новая копия проехала мимо.
+    for (const [key, fns] of index) {
+      const [skill, l] = key.split('|');
+      if (l !== lang || declared.has(skill) || !fns.has(fnName)) continue;
+      errors.push(`${family.name} [${lang}]: ${skill} содержит ${fnName}, но в реестре не объявлен`);
+    }
+  }
+
+  // 4. Долг: отклоняющийся вариант без обоснования. Базовым считаем самый массовый — ему
+  // обоснование не нужно, оно нужно тем, кто от него отклонился.
+  if (family.variants.length > 1) {
+    const sized = family.variants.map((v) => ({
+      v, members: [...new Set([...membersOf(v, 'py'), ...membersOf(v, 'ps1')])],
+    })).sort((a, b) => b.members.length - a.members.length);
+    for (const { v, members } of sized.slice(1)) {
+      if (v.why) continue;
+      warns.push(`${family.name}: вариант '${v.id}' (${members.join(', ')}) без обоснования`);
+    }
+  }
+}
+
+// Храповик по разъехавшимся семьям: число групп не должно расти.
+const drift = [];
+for (const family of DRIFTED) {
+  for (const lang of ['py', 'ps1']) {
+    const fnName = family[lang];
+    if (!fnName) continue;
+    const groups = new Map();
+    for (const [key, fns] of index) {
+      const [skill, l] = key.split('|');
+      if (l !== lang || !fns.has(fnName)) continue;
+      const h = hashBody(fns.get(fnName), lang);
+      if (!groups.has(h)) groups.set(h, []);
+      groups.get(h).push(skill);
+    }
+    if (!groups.size) continue;
+    const limit = family.maxVariants[lang];
+    drift.push({ family: family.name, lang, actual: groups.size, limit, groups });
+    if (limit === undefined) {
+      errors.push(`${family.name} [${lang}]: семья не имеет предела вариантов в реестре`);
+    } else if (groups.size > limit) {
+      errors.push(`${family.name} [${lang}]: вариантов стало ${groups.size} при пределе ${limit} — новая копия разошлась`);
+    }
+  }
+}
+
+// ─── Вывод ──────────────────────────────────────────────────────────────────
+
+if (process.argv.includes('--list')) {
+  for (const family of FAMILIES) {
+    const ports = [family.py && `py:${family.py}`, family.ps1 && `ps1:${family.ps1}`].filter(Boolean).join('  ');
+    console.log(`\n${family.name}  (${ports})`);
+    const sized = family.variants.map((v) => ({
+      v, members: [...new Set([...membersOf(v, 'py'), ...membersOf(v, 'ps1')])],
+    })).sort((a, b) => b.members.length - a.members.length);
+    for (const [i, { v, members }] of sized.entries()) {
+      const tag = i === 0 ? 'базовый' : v.why || 'БЕЗ ОБОСНОВАНИЯ';
+      console.log(`  [${v.id}] эталон: ${v.authority}  — ${tag}`);
+      const copies = members.filter((s) => s !== v.authority);
+      if (copies.length) console.log(`      копии: ${copies.join(', ')}`);
+    }
+  }
+  console.log('\nРазъехавшиеся семьи (эталона нет, храповик на число вариантов):');
+  for (const d of DRIFTED) {
+    const limits = ['py', 'ps1'].filter((l) => d[l]).map((l) => `${l}≤${d.maxVariants[l]}`).join(', ');
+    console.log(`  ${d.name}  (${limits})${d.note ? `  — ${d.note}` : ''}`);
+  }
+  process.exit(0);
+}
+
+const copies = FAMILIES.reduce((n, f) => n + f.variants.reduce(
+  (m, v) => m + new Set([...membersOf(v, 'py'), ...membersOf(v, 'ps1')]).size, 0), 0);
+console.log(`Семей с эталоном: ${FAMILIES.length} (объявленных копий: ${copies}), разъехавшихся: ${DRIFTED.length}`);
+
+if (drift.length) {
+  console.log('\nРазъехавшиеся семьи (храповик — число вариантов не должно расти):');
+  for (const d of drift) console.log(`  ${d.family} [${d.lang}]: ${d.actual}/${d.limit}`);
+}
+
+if (warns.length) {
+  console.log(`\nДолг — необоснованные варианты (${warns.length}):`);
+  for (const w of warns) console.log(`  [WARN] ${w}`);
+}
+
+if (errors.length) {
+  console.log(`\n${errors.length} РАСХОЖДЕНИЙ:`);
+  for (const e of errors) console.log(`  [ERROR] ${e}`);
+  console.log('\nПравка общей утилиты: меняем эталон и копируем во всех потребителей варианта.');
+  process.exit(1);
+}
+
+console.log('\nOK — все копии совпадают с эталонами своих вариантов.');
