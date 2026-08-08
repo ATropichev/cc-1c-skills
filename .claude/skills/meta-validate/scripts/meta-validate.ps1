@@ -1,4 +1,4 @@
-﻿# meta-validate v1.14 — Validate 1C metadata object structure (+корневой <Type>: скаляр без структуры = ошибка)
+﻿# meta-validate v1.15 — Validate 1C metadata object structure (+ReuseSessions: Use)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -279,7 +279,7 @@ $validPropertyValues = @{
 	"InformationRegisterPeriodicity" = @("Nonperiodical","Second","Day","Month","Quarter","Year","RecorderPosition")
 	"RegisterType"                   = @("Balance","Turnovers")
 	"ReturnValuesReuse"              = @("DontUse","DuringRequest","DuringSession")
-	"ReuseSessions"                  = @("DontUse","AutoUse")
+	"ReuseSessions"                  = @("DontUse","Use","AutoUse")
 	"FillChecking"                   = @("DontCheck","ShowError","ShowWarning")
 	"Indexing"                       = @("DontIndex","Index","IndexWithAdditionalOrder")
 	"DataHistory"                    = @("Use","DontUse")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.31 — Edit existing 1C metadata object XML
+# meta-edit v1.32 — Edit existing 1C metadata object XML (+ReuseSessions: Use)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -317,7 +317,7 @@ valid_enum_values = {
     'RegisterRecordsDeletion': ['AutoDelete', 'AutoDeleteOnUnpost', 'AutoDeleteOff'],
     'RegisterRecordsWritingOnPost': ['WriteModified', 'WriteSelected', 'WriteAll'],
     'ReturnValuesReuse': ['DontUse', 'DuringRequest', 'DuringSession'],
-    'ReuseSessions': ['DontUse', 'AutoUse'],
+    'ReuseSessions': ['DontUse', 'Use', 'AutoUse'],
     'FillChecking': ['DontCheck', 'ShowError', 'ShowWarning'],
     'Indexing': ['DontIndex', 'Index', 'IndexWithAdditionalOrder'],
 }
