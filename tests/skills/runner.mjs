@@ -340,13 +340,13 @@ const UUID_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
 // формата 2.21) и к моменту снятия был мёртвым — ни один кейс на него не опирался.
 function normalizeXmlContent(text) {
   let s = text;
-  // 1. XML declaration: normalize quotes and encoding case
-  s = s.replace(
-    /<\?xml\s+version=['"]1\.0['"]\s+encoding=['"]([^'"]+)['"]\s*\?>/gi,
-    (_, enc) => `<?xml version="1.0" encoding="${enc.toLowerCase()}"?>`
-  );
-  // 2. Collapse whitespace between tags: ">  \n\t  <" → "><". Kept: the ports indent a
-  //    few blocks differently, which is formatting rather than the byte canon.
+  // Нормализация XML-декларации (регистр encoding) снята: измерением показано, что ни один
+  // кейс на неё не опирался — порты пишут декларацию одинаково. Держать мёртвую маску вредно:
+  // она прячет целый класс расхождений, как это было с вырезанием xmlns.
+  // Единственная оставшаяся нормализация — схлопывание пробелов и переводов строк между тегами.
+  // Она НЕ мертва: без неё падают 58 кейсов в 15 навыках (interface-edit, xdto-*, cfe-borrow и др.) —
+  // порты реально отступают по-разному. Это отдельная задача: расхождения надо не маскировать,
+  // а свести, после чего снять и эту нормализацию.
   s = s.replace(/>\s+</g, '><');
   return s;
 }
