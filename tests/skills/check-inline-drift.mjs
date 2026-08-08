@@ -104,10 +104,10 @@ const FAMILIES = [
     name: 'format_rank', py: 'format_rank', ps1: 'Get-FormatRank',
     variants: [
       { id: 'base', authority: 'meta-compile',
-        consumers: ['cfe-borrow', 'cfe-init', 'form-add', 'form-compile', 'mxl-compile', 'role-compile',
-          'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile'],
+        consumers: ['cfe-borrow', 'cfe-init', 'form-add', 'form-compile', 'meta-validate',
+          'mxl-compile', 'role-compile', 'subsystem-compile', 'subsystem-edit', 'template-add',
+          'xdto-compile'],
         consumersPy: ['epf-init', 'erf-init'] },
-      { id: 'meta-validate-own', authority: 'meta-validate', consumers: [] },
     ],
   },
 
@@ -200,8 +200,23 @@ const FAMILIES = [
     variants: [
       { id: 'base', authority: 'db-create',
         consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
-          'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump'] },
-      { id: 'web-publish-own', authority: 'web-publish', consumers: [] },
+          'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump', 'web-publish'] },
+    ],
+  },
+  {
+    name: 'platform: version_dir', py: '_version_dir', ps1: null,
+    variants: [
+      { id: 'base', authority: 'db-create',
+        consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
+          'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump', 'web-publish'] },
+    ],
+  },
+  {
+    name: 'platform: find_project_v8path', py: '_find_project_v8path', ps1: 'Find-ProjectV8Path',
+    variants: [
+      { id: 'base', authority: 'db-create',
+        consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
+          'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump', 'web-publish'] },
     ],
   },
 
@@ -251,15 +266,18 @@ function extractPs1(text) {
   const lines = text.split('\n');
   const out = new Map();
   for (let i = 0; i < lines.length; i++) {
-    const m = /^function\s+([A-Za-z][\w-]*)/.exec(lines[i]);
+    // Определение может быть вложенным (db-load-git объявляет Find-ProjectV8Path внутри if),
+    // поэтому конец ищем по закрывающей скобке НА ТОМ ЖЕ отступе, что и слово function.
+    const m = /^(\s*)function\s+([A-Za-z][\w-]*)/.exec(lines[i]);
     if (!m) continue;
+    const closing = m[1] + '}';
     const body = [lines[i]];
     let j = i + 1;
     for (; j < lines.length; j++) {
       body.push(lines[j]);
-      if (lines[j].replace(/\s+$/, '') === '}') break;
+      if (lines[j].replace(/\s+$/, '') === closing) break;
     }
-    out.set(m[1], body);
+    if (!out.has(m[2])) out.set(m[2], body);
     i = j;
   }
   return out;

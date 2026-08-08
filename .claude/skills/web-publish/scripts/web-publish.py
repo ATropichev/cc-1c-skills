@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# web-publish v1.5 — Publish 1C infobase via Apache
+# web-publish v1.6 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 """
@@ -46,10 +46,17 @@ def _find_project_v8path():
         d = parent
 
 
+def _version_dir(p):
+    """Version dir for both Windows (.../1cv8/<ver>/bin/1cv8.exe) and *nix (.../1cv8/<ver>/1cv8)."""
+    parent = os.path.dirname(p)
+    if os.path.basename(parent).lower() == "bin":
+        parent = os.path.dirname(parent)
+    return os.path.basename(parent)
+
+
 def _version_key(p):
-    """Numeric sort key from version dir name (.../1cv8/<ver>/bin/1cv8.exe)."""
-    ver = os.path.basename(os.path.dirname(os.path.dirname(p)))
-    return [int(x) for x in re.findall(r"\d+", ver)]
+    """Numeric sort key from version dir name."""
+    return [int(x) for x in re.findall(r"\d+", _version_dir(p))]
 
 
 def get_our_httpd(httpd_exe_norm):

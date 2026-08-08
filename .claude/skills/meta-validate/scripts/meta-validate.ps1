@@ -1,4 +1,4 @@
-﻿# meta-validate v1.15 — Validate 1C metadata object structure (+ReuseSessions: Use)
+﻿# meta-validate v1.16 — Validate 1C metadata object structure (+format_rank: свести к общему эталону)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1509,8 +1509,8 @@ $versionedProps = @{
 	"UseInInterfaceCompatibilityMode" = "2.21"  # использование общей формы в режиме совместимости интерфейса
 }
 # Версия формата как число: "2.20" → 220. Строковое сравнение неверно ("2.9" > "2.17").
-function Get-FormatRank([string]$v) {
-	if ($v -match '^(\d+)\.(\d+)$') { return [int]$Matches[1] * 100 + [int]$Matches[2] }
+function Get-FormatRank([string]$ver) {
+	if ($ver -match '^(\d+)\.(\d+)$') { return [int]$Matches[1] * 100 + [int]$Matches[2] }
 	return 0
 }
 $fileRank = Get-FormatRank $version

@@ -1,4 +1,4 @@
-# meta-validate v1.15 — Validate 1C metadata object structure (Python port) (+ReuseSessions: Use)
+# meta-validate v1.16 — Validate 1C metadata object structure (Python port) (+format_rank: свести к общему эталону)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1412,9 +1412,9 @@ versioned_props = {
 }
 
 
-def format_rank(v):
-    """"2.20" → 220. Строковое сравнение неверно ("2.9" > "2.17")."""
-    m = re.match(r'^(\d+)\.(\d+)$', v or '')
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
     return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
 
 
