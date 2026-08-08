@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# help-add v1.16 — Add built-in help to 1C object
+# help-add v1.17 — Add built-in help to 1C object (+detect_format_version: ветка автономной EPF/ERF)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse

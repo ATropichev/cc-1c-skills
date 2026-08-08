@@ -1,4 +1,4 @@
-﻿# help-add v1.16 — Add built-in help to 1C object
+﻿# help-add v1.17 — Add built-in help to 1C object (+detect_format_version: ветка автономной EPF/ERF)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -159,8 +159,10 @@ function Detect-FormatVersion([string]$dir) {
 		}
 		$cfgPath = Join-Path $d "Configuration.xml"
 		if (Test-Path $cfgPath) {
-			$content = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
-			$head = $content.Substring(0, [Math]::Min(2000, $content.Length))
+			$cfgText = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
+			# Длину среза берём по СТРОКЕ, а не по размеру файла: размер в БАЙТАХ, Substring считает
+			# СИМВОЛЫ, и на кириллице байт больше — короткий Configuration.xml ронял навык исключением.
+			$head = $cfgText.Substring(0, [Math]::Min(2000, $cfgText.Length))
 			if ($head -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { return $Matches[1] }
 		}
 		$parent = Split-Path $d -Parent

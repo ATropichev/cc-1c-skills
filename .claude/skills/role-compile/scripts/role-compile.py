@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.18 — Compile 1C role from JSON
+# role-compile v1.19 — Compile 1C role from JSON (+detect_format_version: ветка автономной EPF/ERF)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -189,6 +189,16 @@ def assert_edit_allowed(target_path, require):
 
 def detect_format_version(d):
     while d:
+        # Автономная внешняя обработка/отчёт: своего Configuration.xml у неё нет, версию несёт
+        # корень самой обработки. Без этого форма и макет внутри обработки 2.21 писались бы 2.17.
+        ext_path = d + ".xml"
+        if os.path.isfile(ext_path):
+            with open(ext_path, "r", encoding="utf-8-sig") as f:
+                ext_head = f.read(2000)
+            if re.search(r'<(ExternalDataProcessor|ExternalReport)[ >]', ext_head):
+                m = re.search(r'<MetaDataObject[^>]+version="(\d+\.\d+)"', ext_head)
+                if m:
+                    return m.group(1)
         cfg_path = os.path.join(d, "Configuration.xml")
         if os.path.isfile(cfg_path):
             with open(cfg_path, "r", encoding="utf-8-sig") as f:

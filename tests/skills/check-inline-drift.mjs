@@ -88,13 +88,12 @@ const FAMILIES = [
   {
     name: 'detect_format_version', py: 'detect_format_version', ps1: 'Detect-FormatVersion',
     variants: [
-      { id: 'config-only', authority: 'meta-compile',
-        consumers: ['cfe-borrow', 'interface-edit', 'role-compile', 'subsystem-compile', 'xdto-compile'] },
-      { id: 'with-external-root', authority: 'form-compile',
-        why: 'EPF/ERF не имеет своего Configuration.xml — версию несёт корень самой обработки',
-        consumers: ['form-add', 'mxl-compile', 'template-add'], consumersPy: ['help-add'] },
-      // Тот же алгоритм, отличается только именем переменной — редакторский дрейф PS1-копии.
-      { id: 'with-external-root-help-add-ps1', authority: 'help-add', consumers: [], port: 'ps1' },
+      // Ветка автономной EPF/ERF безвредна для конфигурационных навыков: она срабатывает только
+      // если <каталог>.xml — корень ExternalDataProcessor/ExternalReport, чего в дереве
+      // конфигурации не бывает. Поэтому вариант один на всех, переключателя не нужно.
+      { id: 'base', authority: 'form-compile',
+        consumers: ['cfe-borrow', 'form-add', 'help-add', 'interface-edit', 'meta-compile',
+          'mxl-compile', 'role-compile', 'subsystem-compile', 'template-add', 'xdto-compile'] },
     ],
   },
   {

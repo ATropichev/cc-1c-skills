@@ -1,4 +1,4 @@
-# xdto-compile v1.8 — Build a 1C XDTO package from an XML Schema (XSD) (Python port)
+# xdto-compile v1.9 — Build a 1C XDTO package from an XML Schema (XSD) (Python port) (+detect_format_version: ветка автономной EPF/ERF)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -106,6 +106,16 @@ def detect_format_version(d):
     Тело — точная копия из остальных навыков (разрешение пути делает вызывающая сторона).
     """
     while d:
+        # Автономная внешняя обработка/отчёт: своего Configuration.xml у неё нет, версию несёт
+        # корень самой обработки. Без этого форма и макет внутри обработки 2.21 писались бы 2.17.
+        ext_path = d + ".xml"
+        if os.path.isfile(ext_path):
+            with open(ext_path, "r", encoding="utf-8-sig") as f:
+                ext_head = f.read(2000)
+            if re.search(r'<(ExternalDataProcessor|ExternalReport)[ >]', ext_head):
+                m = re.search(r'<MetaDataObject[^>]+version="(\d+\.\d+)"', ext_head)
+                if m:
+                    return m.group(1)
         cfg_path = os.path.join(d, "Configuration.xml")
         if os.path.isfile(cfg_path):
             with open(cfg_path, "r", encoding="utf-8-sig") as f:
