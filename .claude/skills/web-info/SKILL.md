@@ -45,11 +45,14 @@ Port:   8081
 Module: C:/Program Files/1cv8/8.3.24.1691/bin/wsap24.dll
 
 === Опубликованные базы ===
-  mydb   http://localhost:8081/mydb   File="C:\Bases\MyDB";
+  mydb   http://localhost:8081/mydb   File="C:\Bases\MyDB";   [WS+ext HTTP+ext OData]
 
 === Последние ошибки ===
 (пусто)
 ```
+
+В скобках — что опубликовано для базы: `WS` (SOAP), `HTTP` (HTTP-сервисы), `OData`.
+Суффикс `+ext` — публикуются и сервисы, поставляемые расширениями конфигурации.
 
 ## Примеры
 

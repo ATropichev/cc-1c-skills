@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# web-info v1.0 — Apache & 1C publication status
+# web-info v1.1 — Apache & 1C publication status
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 """
@@ -124,11 +124,18 @@ def main():
             # Detect published services
             svc_tags = []
             if vrd_content:
-                if re.search(r'<ws\s', vrd_content):
-                    svc_tags.append('WS')
-                if re.search(r'<httpServices\s', vrd_content):
-                    svc_tags.append('HTTP')
-                if re.search(r'enableStandardOdata\s*=\s*"true"', vrd_content):
+                # "+ext" — publishExtensionsByDefault: сервисы расширений тоже опубликованы
+                m_ws = re.search(r'<ws\s[^>]*>', vrd_content)
+                if m_ws:
+                    svc_tags.append('WS+ext' if re.search(
+                        r'publishExtensionsByDefault\s*=\s*"true"', m_ws.group(0)) else 'WS')
+                m_hs = re.search(r'<httpServices\s[^>]*>', vrd_content)
+                if m_hs:
+                    svc_tags.append('HTTP+ext' if re.search(
+                        r'publishExtensionsByDefault\s*=\s*"true"', m_hs.group(0)) else 'HTTP')
+                # Актуальная форма — <standardOdata enable="true"/>; enableStandardOdata — до 8.3.9
+                if (re.search(r'<standardOdata\s[^>]*enable\s*=\s*"true"', vrd_content)
+                        or re.search(r'enableStandardOdata\s*=\s*"true"', vrd_content)):
                     svc_tags.append('OData')
             svc_label = '   [' + ' '.join(svc_tags) + ']' if svc_tags else ''
 

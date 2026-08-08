@@ -1,4 +1,4 @@
-﻿# web-info v1.0 — Apache & 1C publication status
+﻿# web-info v1.1 — Apache & 1C publication status
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -115,9 +115,20 @@ if ($pubMatches.Count -eq 0) {
         # Detect published services
         $svcTags = @()
         if (Test-Path $vrdPath) {
-            if ($vrdContent -match '<ws\s') { $svcTags += "WS" }
-            if ($vrdContent -match '<httpServices\s') { $svcTags += "HTTP" }
-            if ($vrdContent -match 'enableStandardOdata\s*=\s*"true"') { $svcTags += "OData" }
+            # "+ext" — publishExtensionsByDefault: сервисы расширений тоже опубликованы
+            if ($vrdContent -match '<ws\s[^>]*>') {
+                $wsTag = "WS"
+                if ($Matches[0] -match 'publishExtensionsByDefault\s*=\s*"true"') { $wsTag += "+ext" }
+                $svcTags += $wsTag
+            }
+            if ($vrdContent -match '<httpServices\s[^>]*>') {
+                $hsTag = "HTTP"
+                if ($Matches[0] -match 'publishExtensionsByDefault\s*=\s*"true"') { $hsTag += "+ext" }
+                $svcTags += $hsTag
+            }
+            # Актуальная форма — <standardOdata enable="true"/>; enableStandardOdata — до 8.3.9
+            if ($vrdContent -match '<standardOdata\s[^>]*enable\s*=\s*"true"' -or
+                $vrdContent -match 'enableStandardOdata\s*=\s*"true"') { $svcTags += "OData" }
         }
         $svcLabel = if ($svcTags.Count -gt 0) { "   [" + ($svcTags -join " ") + "]" } else { "" }
 
