@@ -1,4 +1,4 @@
-﻿# subsystem-edit v1.15 — Edit existing 1C subsystem XML
+﻿# subsystem-edit v1.16 — Edit existing 1C subsystem XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$SubsystemPath,
@@ -320,9 +320,15 @@ foreach ($child in $script:propsEl.ChildNodes) {
 Info "Subsystem: $($script:objName)"
 
 # --- XML manipulation helpers (from meta-edit pattern) ---
-function Esc-Xml([string]$s) {
-	# Экранирование ТЕКСТА элемента: только & < > . Кавычки в тексте платформа НЕ экранирует —
-	# пишет литерально (92142 сырых кавычки на корпус, ни одной &quot;).
+function Esc-Xml {
+	param([string]$s)
+	# Эскейп ЗНАЧЕНИЯ АТРИБУТА: & < > и кавычка — внутри "..." литеральная " невалидна.
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;').Replace('"','&quot;')
+}
+
+function Esc-XmlText {
+	param([string]$s)
+	# Эскейп ТЕКСТА элемента: только & < > — кавычку и апостроф платформа держит сырыми.
 	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;')
 }
 
@@ -337,7 +343,7 @@ function Write-ChildSubsystemStub([string]$childPath, [string]$childName, [strin
 	[void]$sb.AppendLine("<MetaDataObject $($script:xmlnsDecl) version=`"$formatVersion`">")
 	[void]$sb.AppendLine("`t<Subsystem uuid=`"$childUuid`">")
 	[void]$sb.AppendLine("`t`t<Properties>")
-	[void]$sb.AppendLine("`t`t`t<Name>$(Esc-Xml $childName)</Name>")
+	[void]$sb.AppendLine("`t`t`t<Name>$(Esc-XmlText $childName)</Name>")
 	[void]$sb.AppendLine("`t`t`t<Synonym/>")
 	[void]$sb.AppendLine("`t`t`t<Comment/>")
 	[void]$sb.AppendLine("`t`t`t<IncludeHelpInContents>true</IncludeHelpInContents>")

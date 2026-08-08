@@ -1,4 +1,4 @@
-﻿# epf-init v1.4 — Init 1C external data processor scaffold
+﻿# epf-init v1.5 — Init 1C external data processor scaffold (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -16,6 +16,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Esc-XmlText {
+	param([string]$s)
+	# Эскейп ТЕКСТА элемента: только & < > — кавычку и апостроф платформа держит сырыми.
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;')
+}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::InputEncoding = [System.Text.Encoding]::UTF8
 
@@ -47,11 +53,11 @@ $xml = @"
 			</xr:GeneratedType>
 		</InternalInfo>
 		<Properties>
-			<Name>$Name</Name>
+			<Name>$(Esc-XmlText $Name)</Name>
 			<Synonym>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
-					<v8:content>$Synonym</v8:content>
+					<v8:content>$(Esc-XmlText $Synonym)</v8:content>
 				</v8:item>
 			</Synonym>
 			<Comment/>

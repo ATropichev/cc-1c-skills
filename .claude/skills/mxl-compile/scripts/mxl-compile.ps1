@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.10 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.11 — Compile 1C spreadsheet from JSON (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -477,6 +477,12 @@ foreach ($col in ($colWidthMap.Keys | Sort-Object)) {
 
 # Helper: escape XML special characters
 function Esc-Xml {
+	param([string]$s)
+	# Эскейп ЗНАЧЕНИЯ АТРИБУТА: & < > и кавычка — внутри "..." литеральная " невалидна.
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;').Replace('"','&quot;')
+}
+
+function Esc-XmlText {
 	# Экранирование ТЕКСТА элемента: только & < > . Кавычки в тексте платформа НЕ экранирует —
 	# пишет литерально (проверено: 92142 сырых кавычки на корпус, ни одной &quot;). &quot; платформа
 	# принимает, но при выгрузке нормализует обратно в кавычку → лишний шум в роундтрипе.
@@ -760,7 +766,7 @@ foreach ($area in $def.areas) {
 					X "`t`t`t`t`t<tl>"
 					X "`t`t`t`t`t`t<v8:item>"
 					X "`t`t`t`t`t`t`t<v8:lang>ru</v8:lang>"
-					X "`t`t`t`t`t`t`t<v8:content>$(Esc-Xml $cellInfo.Text)</v8:content>"
+					X "`t`t`t`t`t`t`t<v8:content>$(Esc-XmlText $cellInfo.Text)</v8:content>"
 					X "`t`t`t`t`t`t</v8:item>"
 					X "`t`t`t`t`t</tl>"
 				}
@@ -769,7 +775,7 @@ foreach ($area in $def.areas) {
 					X "`t`t`t`t`t<tl>"
 					X "`t`t`t`t`t`t<v8:item>"
 					X "`t`t`t`t`t`t`t<v8:lang>ru</v8:lang>"
-					X "`t`t`t`t`t`t`t<v8:content>$(Esc-Xml $cellInfo.Template)</v8:content>"
+					X "`t`t`t`t`t`t`t<v8:content>$(Esc-XmlText $cellInfo.Template)</v8:content>"
 					X "`t`t`t`t`t`t</v8:item>"
 					X "`t`t`t`t`t</tl>"
 				}
@@ -885,7 +891,7 @@ foreach ($key in $formatRegistry.Keys) {
 		X "`t`t<format>"
 		X "`t`t`t<v8:item>"
 		X "`t`t`t`t<v8:lang>ru</v8:lang>"
-		X "`t`t`t`t<v8:content>$(Esc-Xml $fmt.NumberFormat)</v8:content>"
+		X "`t`t`t`t<v8:content>$(Esc-XmlText $fmt.NumberFormat)</v8:content>"
 		X "`t`t`t</v8:item>"
 		X "`t`t</format>"
 	}

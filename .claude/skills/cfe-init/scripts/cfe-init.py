@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-# cfe-init v1.7 — Create 1C configuration extension scaffold (CFE)
+# cfe-init v1.8 — Create 1C configuration extension scaffold (CFE) (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration extension."""
 import sys, os, re, argparse, uuid
 from xml.etree import ElementTree as ET
 
-def esc_xml(s):
-    return s.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;')
+def esc_xml_text(s):
+    # Эскейп ТЕКСТА элемента: только & < > — кавычку и апостроф платформа держит сырыми.
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 def new_uuid():
     return str(uuid.uuid4())
@@ -142,12 +143,12 @@ def main():
     # --- Synonym XML ---
     synonym_xml = ""
     if synonym:
-        synonym_xml = f"\r\n\t\t\t\t<v8:item>\r\n\t\t\t\t\t<v8:lang>ru</v8:lang>\r\n\t\t\t\t\t<v8:content>{esc_xml(synonym)}</v8:content>\r\n\t\t\t\t</v8:item>\r\n\t\t\t"
+        synonym_xml = f"\r\n\t\t\t\t<v8:item>\r\n\t\t\t\t\t<v8:lang>ru</v8:lang>\r\n\t\t\t\t\t<v8:content>{esc_xml_text(synonym)}</v8:content>\r\n\t\t\t\t</v8:item>\r\n\t\t\t"
 
     # Элемент целиком, а не значение внутри пары: при пустом значении Конфигуратор
     # пишет <Vendor/>, а не <Vendor></Vendor>.
-    vendor_el = f"<Vendor>{esc_xml(vendor)}</Vendor>" if vendor else "<Vendor/>"
-    version_el = f"<Version>{esc_xml(version)}</Version>" if version else "<Version/>"
+    vendor_el = f"<Vendor>{esc_xml_text(vendor)}</Vendor>" if vendor else "<Vendor/>"
+    version_el = f"<Version>{esc_xml_text(version)}</Version>" if version else "<Version/>"
 
     # --- Role name ---
     role_name = f"{name_prefix}ОсновнаяРоль"
@@ -224,12 +225,12 @@ def main():
 {contained_objects}\t\t</InternalInfo>
 \t\t<Properties>
 \t\t\t<ObjectBelonging>Adopted</ObjectBelonging>
-\t\t\t<Name>{esc_xml(name)}</Name>
+\t\t\t<Name>{esc_xml_text(name)}</Name>
 \t\t\t<Synonym>{synonym_xml}</Synonym>
 \t\t\t<Comment/>
 \t\t\t<ConfigurationExtensionPurpose>{purpose}</ConfigurationExtensionPurpose>
 \t\t\t<KeepMappingToExtendedConfigurationObjectsByIDs>true</KeepMappingToExtendedConfigurationObjectsByIDs>
-\t\t\t<NamePrefix>{esc_xml(name_prefix)}</NamePrefix>
+\t\t\t<NamePrefix>{esc_xml_text(name_prefix)}</NamePrefix>
 \t\t\t<ConfigurationExtensionCompatibilityMode>{compat}</ConfigurationExtensionCompatibilityMode>
 \t\t\t<DefaultRunMode>ManagedApplication</DefaultRunMode>
 \t\t\t<UsePurposes>
@@ -271,7 +272,7 @@ def main():
 <MetaDataObject {xmlns_decl} version="{format_version}">
 \t<Role uuid="{uuid_role}">
 \t\t<Properties>
-\t\t\t<Name>{esc_xml(role_name)}</Name>
+\t\t\t<Name>{esc_xml_text(role_name)}</Name>
 \t\t\t<Synonym/>
 \t\t\t<Comment/>
 \t\t</Properties>

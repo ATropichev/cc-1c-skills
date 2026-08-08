@@ -1,4 +1,4 @@
-﻿# cfe-init v1.7 — Create 1C configuration extension scaffold (CFE)
+﻿# cfe-init v1.8 — Create 1C configuration extension scaffold (CFE) (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -16,6 +16,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+function Esc-XmlText {
+	param([string]$s)
+	# Эскейп ТЕКСТА элемента: только & < > — кавычку и апостроф платформа держит сырыми.
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;')
+}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # --- Default NamePrefix ---
@@ -121,14 +127,14 @@ $co7 = [guid]::NewGuid().ToString()
 # --- Synonym XML ---
 $synonymXml = ""
 if ($Synonym) {
-	$synonymXml = "`r`n`t`t`t`t<v8:item>`r`n`t`t`t`t`t<v8:lang>ru</v8:lang>`r`n`t`t`t`t`t<v8:content>$([System.Security.SecurityElement]::Escape($Synonym))</v8:content>`r`n`t`t`t`t</v8:item>`r`n`t`t`t"
+	$synonymXml = "`r`n`t`t`t`t<v8:item>`r`n`t`t`t`t`t<v8:lang>ru</v8:lang>`r`n`t`t`t`t`t<v8:content>$(Esc-XmlText ($Synonym))</v8:content>`r`n`t`t`t`t</v8:item>`r`n`t`t`t"
 }
 
 # --- Optional properties ---
 # Элемент целиком, а не значение внутри пары: при пустом значении Конфигуратор
 # пишет <Vendor/>, а не <Vendor></Vendor>.
-$vendorEl = if ($Vendor) { "<Vendor>$([System.Security.SecurityElement]::Escape($Vendor))</Vendor>" } else { "<Vendor/>" }
-$versionEl = if ($Version) { "<Version>$([System.Security.SecurityElement]::Escape($Version))</Version>" } else { "<Version/>" }
+$vendorEl = if ($Vendor) { "<Vendor>$(Esc-XmlText ($Vendor))</Vendor>" } else { "<Vendor/>" }
+$versionEl = if ($Version) { "<Version>$(Esc-XmlText ($Version))</Version>" } else { "<Version/>" }
 
 # --- Role name ---
 $roleName = "${NamePrefix}ОсновнаяРоль"
@@ -206,12 +212,12 @@ $cfgXml = @"
 		</InternalInfo>
 		<Properties>
 			<ObjectBelonging>Adopted</ObjectBelonging>
-			<Name>$([System.Security.SecurityElement]::Escape($Name))</Name>
+			<Name>$(Esc-XmlText ($Name))</Name>
 			<Synonym>$synonymXml</Synonym>
 			<Comment/>
 			<ConfigurationExtensionPurpose>$Purpose</ConfigurationExtensionPurpose>
 			<KeepMappingToExtendedConfigurationObjectsByIDs>true</KeepMappingToExtendedConfigurationObjectsByIDs>
-			<NamePrefix>$([System.Security.SecurityElement]::Escape($NamePrefix))</NamePrefix>
+			<NamePrefix>$(Esc-XmlText ($NamePrefix))</NamePrefix>
 			<ConfigurationExtensionCompatibilityMode>$CompatibilityMode</ConfigurationExtensionCompatibilityMode>
 			<DefaultRunMode>ManagedApplication</DefaultRunMode>
 			<UsePurposes>
@@ -257,7 +263,7 @@ $roleXml = @"
 <MetaDataObject $xmlnsDecl version="$formatVersion">
 	<Role uuid="$uuidRole">
 		<Properties>
-			<Name>$([System.Security.SecurityElement]::Escape($roleName))</Name>
+			<Name>$(Esc-XmlText ($roleName))</Name>
 			<Synonym/>
 			<Comment/>
 		</Properties>

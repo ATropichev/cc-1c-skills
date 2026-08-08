@@ -1,4 +1,4 @@
-﻿# meta-edit v1.34 — Edit existing 1C metadata object XML (+resolve_type_str: срезание префикса cfg:/d5p1:)
+﻿# meta-edit v1.35 — Edit existing 1C metadata object XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -2854,7 +2854,11 @@ function Build-ChoiceParametersXml([string]$indent, $cp) {
 $script:fillBoolTrue  = @('true','истина','да')
 $script:fillBoolFalse = @('false','ложь','нет')
 
-function Esc-XmlText([string]$s) { return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;') }
+function Esc-XmlText {
+	param([string]$s)
+	# Эскейп ТЕКСТА элемента: только & < > — кавычку и апостроф платформа держит сырыми.
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;')
+}
 
 function Get-FillTypeCategory([string]$typeStr) {
 	if (-not $typeStr) { return 'String' }

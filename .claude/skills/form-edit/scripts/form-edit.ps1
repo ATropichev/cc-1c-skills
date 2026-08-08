@@ -1,4 +1,4 @@
-﻿# form-edit v1.11 — Edit 1C managed form elements (+resolve_type_str: срезание префикса cfg:/d5p1:)
+﻿# form-edit v1.12 — Edit 1C managed form elements (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -270,6 +270,12 @@ function X {
 }
 
 function Esc-Xml {
+	param([string]$s)
+	# Эскейп ЗНАЧЕНИЯ АТРИБУТА: & < > и кавычка — внутри "..." литеральная " невалидна.
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;').Replace('"','&quot;')
+}
+
+function Esc-XmlText {
 	# Экранирование ТЕКСТА элемента: только & < > . Кавычки в тексте платформа НЕ экранирует —
 	# пишет литерально (проверено: 92142 сырых кавычки на корпус, ни одной &quot;). &quot; платформа
 	# принимает, но при выгрузке нормализует обратно в кавычку → лишний шум в роундтрипе.
@@ -282,7 +288,7 @@ function Emit-MLText {
 	X "$indent<$tag>"
 	X "$indent`t<v8:item>"
 	X "$indent`t`t<v8:lang>ru</v8:lang>"
-	X "$indent`t`t<v8:content>$(Esc-Xml $text)</v8:content>"
+	X "$indent`t`t<v8:content>$(Esc-XmlText $text)</v8:content>"
 	X "$indent`t</v8:item>"
 	X "$indent</$tag>"
 }
@@ -617,7 +623,7 @@ function Emit-Label {
 		X "$inner<Title formatted=`"$formatted`">"
 		X "$inner`t<v8:item>"
 		X "$inner`t`t<v8:lang>ru</v8:lang>"
-		X "$inner`t`t<v8:content>$(Esc-Xml "$($el.title)")</v8:content>"
+		X "$inner`t`t<v8:content>$(Esc-XmlText "$($el.title)")</v8:content>"
 		X "$inner`t</v8:item>"
 		X "$inner</Title>"
 	}

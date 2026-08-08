@@ -1,4 +1,4 @@
-﻿# role-compile v1.19 — Compile 1C role from JSON (+detect_format_version: ветка автономной EPF/ERF)
+﻿# role-compile v1.20 — Compile 1C role from JSON (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -171,6 +171,12 @@ function X {
 }
 
 function Esc-Xml {
+	param([string]$s)
+	# Эскейп ЗНАЧЕНИЯ АТРИБУТА: & < > и кавычка — внутри "..." литеральная " невалидна.
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;').Replace('"','&quot;')
+}
+
+function Esc-XmlText {
 	# Экранирование ТЕКСТА элемента: только & < > . Кавычки в тексте платформа НЕ экранирует —
 	# пишет литерально (проверено: 92142 сырых кавычки на корпус, ни одной &quot;). &quot; платформа
 	# принимает, но при выгрузке нормализует обратно в кавычку → лишний шум в роундтрипе.
@@ -701,11 +707,11 @@ X "`t`t`t<Name>$roleName</Name>"
 X "`t`t`t<Synonym>"
 X "`t`t`t`t<v8:item>"
 X "`t`t`t`t`t<v8:lang>ru</v8:lang>"
-X "`t`t`t`t`t<v8:content>$(Esc-Xml $synonym)</v8:content>"
+X "`t`t`t`t`t<v8:content>$(Esc-XmlText $synonym)</v8:content>"
 X "`t`t`t`t</v8:item>"
 X "`t`t`t</Synonym>"
 if ($comment) {
-	X "`t`t`t<Comment>$(Esc-Xml $comment)</Comment>"
+	X "`t`t`t<Comment>$(Esc-XmlText $comment)</Comment>"
 } else {
 	X "`t`t`t<Comment/>"
 }
@@ -742,7 +748,7 @@ foreach ($obj in $parsedObjects) {
 		X "`t`t`t<value>$($right.Value)</value>"
 		if ($right.Condition) {
 			X "`t`t`t<restrictionByCondition>"
-			X "`t`t`t`t<condition>$(Esc-Xml $right.Condition)</condition>"
+			X "`t`t`t`t<condition>$(Esc-XmlText $right.Condition)</condition>"
 			X "`t`t`t</restrictionByCondition>"
 		}
 		X "`t`t</right>"
@@ -756,8 +762,8 @@ $templateCount = 0
 if ($def.templates) {
 	foreach ($tpl in $def.templates) {
 		X "`t<restrictionTemplate>"
-		X "`t`t<name>$(Esc-Xml "$($tpl.name)")</name>"
-		X "`t`t<condition>$(Esc-Xml "$($tpl.condition)")</condition>"
+		X "`t`t<name>$(Esc-XmlText "$($tpl.name)")</name>"
+		X "`t`t<condition>$(Esc-XmlText "$($tpl.condition)")</condition>"
 		X "`t</restrictionTemplate>"
 		$templateCount++
 	}

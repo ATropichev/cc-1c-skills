@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# cf-init v1.8 — Create empty 1C configuration scaffold
+# cf-init v1.9 — Create empty 1C configuration scaffold (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration."""
 import sys, os, argparse, re, uuid
 
-def esc_xml(s):
-    return s.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;')
+def esc_xml_text(s):
+    # Эскейп ТЕКСТА элемента: только & < > — кавычку и апостроф платформа держит сырыми.
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 def new_uuid():
     return str(uuid.uuid4())
@@ -96,12 +97,12 @@ def main():
     # --- Synonym XML ---
     synonym_xml = ""
     if synonym:
-        synonym_xml = f"\r\n\t\t\t\t<v8:item>\r\n\t\t\t\t\t<v8:lang>ru</v8:lang>\r\n\t\t\t\t\t<v8:content>{esc_xml(synonym)}</v8:content>\r\n\t\t\t\t</v8:item>\r\n\t\t\t"
+        synonym_xml = f"\r\n\t\t\t\t<v8:item>\r\n\t\t\t\t\t<v8:lang>ru</v8:lang>\r\n\t\t\t\t\t<v8:content>{esc_xml_text(synonym)}</v8:content>\r\n\t\t\t\t</v8:item>\r\n\t\t\t"
 
     # Элемент целиком, а не значение внутри пары: при пустом значении Конфигуратор
     # пишет <Vendor/>, а не <Vendor></Vendor>.
-    vendor_el = f"<Vendor>{esc_xml(vendor)}</Vendor>" if vendor else "<Vendor/>"
-    version_el = f"<Version>{esc_xml(version)}</Version>" if version else "<Version/>"
+    vendor_el = f"<Vendor>{esc_xml_text(vendor)}</Vendor>" if vendor else "<Vendor/>"
+    version_el = f"<Version>{esc_xml_text(version)}</Version>" if version else "<Version/>"
 
     class_ids = [
         "9cd510cd-abfc-11d4-9434-004095e12fc7",
@@ -148,7 +149,7 @@ def main():
 \t\t<InternalInfo>
 {contained_objects}\t\t</InternalInfo>
 \t\t<Properties>
-\t\t\t<Name>{esc_xml(name)}</Name>
+\t\t\t<Name>{esc_xml_text(name)}</Name>
 \t\t\t<Synonym>{synonym_xml}</Synonym>
 \t\t\t<Comment/>
 \t\t\t<NamePrefix/>

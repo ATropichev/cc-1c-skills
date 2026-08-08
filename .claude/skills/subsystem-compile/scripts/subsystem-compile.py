@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-compile v1.20 — Create 1C subsystem from JSON definition (+detect_format_version: ветка автономной EPF/ERF)
+# subsystem-compile v1.21 — Create 1C subsystem from JSON definition (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -229,6 +229,11 @@ def detect_eol(text):
     return '\r\n' if '\r\n' in text else '\n'
 
 def esc_xml(s):
+    # Эскейп ЗНАЧЕНИЯ АТРИБУТА: & < > и кавычка — внутри "..." литеральная " невалидна.
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+
+def esc_xml_text(s):
     """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
     (92142 сырых кавычки на корпус, ни одной &quot;); &quot; она принимает, но нормализует обратно."""
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
@@ -241,7 +246,7 @@ def emit_mltext(lines, indent, tag, text):
     lines.append(f"{indent}<{tag}>")
     lines.append(f"{indent}\t<v8:item>")
     lines.append(f"{indent}\t\t<v8:lang>ru</v8:lang>")
-    lines.append(f"{indent}\t\t<v8:content>{esc_xml(text)}</v8:content>")
+    lines.append(f"{indent}\t\t<v8:content>{esc_xml_text(text)}</v8:content>")
     lines.append(f"{indent}\t</v8:item>")
     lines.append(f"{indent}</{tag}>")
 
@@ -305,7 +310,7 @@ def write_child_subsystem_stub(child_path, child_name, format_version):
     lines.append(f'<MetaDataObject {XMLNS_DECL} version="{format_version}">')
     lines.append(f'\t<Subsystem uuid="{child_uuid}">')
     lines.append('\t\t<Properties>')
-    lines.append(f'\t\t\t<Name>{esc_xml(child_name)}</Name>')
+    lines.append(f'\t\t\t<Name>{esc_xml_text(child_name)}</Name>')
     lines.append('\t\t\t<Synonym/>')
     lines.append('\t\t\t<Comment/>')
     lines.append('\t\t\t<IncludeHelpInContents>true</IncludeHelpInContents>')
@@ -493,14 +498,14 @@ def main():
     lines.append('\t\t<Properties>')
 
     # Name
-    lines.append(f'\t\t\t<Name>{esc_xml(obj_name)}</Name>')
+    lines.append(f'\t\t\t<Name>{esc_xml_text(obj_name)}</Name>')
 
     # Synonym
     emit_mltext(lines, '\t\t\t', 'Synonym', synonym)
 
     # Comment
     if comment:
-        lines.append(f'\t\t\t<Comment>{esc_xml(comment)}</Comment>')
+        lines.append(f'\t\t\t<Comment>{esc_xml_text(comment)}</Comment>')
     else:
         lines.append('\t\t\t<Comment/>')
 
@@ -525,7 +530,7 @@ def main():
     if len(content_items) > 0:
         lines.append('\t\t\t<Content>')
         for item in content_items:
-            lines.append(f'\t\t\t\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml(item)}</xr:Item>')
+            lines.append(f'\t\t\t\t<xr:Item xsi:type="xr:MDObjectRef">{esc_xml_text(item)}</xr:Item>')
         lines.append('\t\t\t</Content>')
     else:
         lines.append('\t\t\t<Content/>')
@@ -536,7 +541,7 @@ def main():
     if len(children) > 0:
         lines.append('\t\t<ChildObjects>')
         for ch in children:
-            lines.append(f'\t\t\t<Subsystem>{esc_xml(ch)}</Subsystem>')
+            lines.append(f'\t\t\t<Subsystem>{esc_xml_text(ch)}</Subsystem>')
         lines.append('\t\t</ChildObjects>')
     else:
         lines.append('\t\t<ChildObjects/>')
@@ -637,14 +642,14 @@ def main():
             if not already_exists:
                 # Use raw text manipulation to preserve formatting
                 if '<ChildObjects/>' in raw_text:
-                    replacement = ('<ChildObjects>' + eol + f'\t\t\t<Subsystem>{esc_xml(obj_name)}</Subsystem>' + eol + '\t\t</ChildObjects>')
+                    replacement = ('<ChildObjects>' + eol + f'\t\t\t<Subsystem>{esc_xml_text(obj_name)}</Subsystem>' + eol + '\t\t</ChildObjects>')
                     raw_text = raw_text.replace('<ChildObjects/>', replacement, 1)
                 elif '</ChildObjects>' in raw_text:
                     # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
                     # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
                     # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
                     raw_text = re.sub(r'([ \t]*)</ChildObjects>',
-                                      lambda m: m.group(1) + '\t' + f'<Subsystem>{esc_xml(obj_name)}</Subsystem>' + eol + m.group(1) + '</ChildObjects>',
+                                      lambda m: m.group(1) + '\t' + f'<Subsystem>{esc_xml_text(obj_name)}</Subsystem>' + eol + m.group(1) + '</ChildObjects>',
                                       raw_text, count=1)
 
                 write_utf8_bom(parent_xml_path, raw_text)

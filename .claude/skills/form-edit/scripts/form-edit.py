@@ -1,4 +1,4 @@
-# form-edit v1.11 — Edit 1C managed form elements (Python port) (+resolve_type_str: срезание префикса cfg:/d5p1:)
+# form-edit v1.12 — Edit 1C managed form elements (Python port) (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -226,6 +226,11 @@ def local_name(node):
 # ── helpers ──────────────────────────────────────────────────
 
 def esc_xml(s):
+    # Эскейп ЗНАЧЕНИЯ АТРИБУТА: & < > и кавычка — внутри "..." литеральная " невалидна.
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+
+def esc_xml_text(s):
     """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
     (92142 сырых кавычки на корпус, ни одной &quot;); &quot; она принимает, но нормализует обратно."""
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
@@ -521,7 +526,7 @@ def emit_mltext(tag, text, indent):
     X(f"{indent}<{tag}>")
     X(f"{indent}\t<v8:item>")
     X(f"{indent}\t\t<v8:lang>ru</v8:lang>")
-    X(f"{indent}\t\t<v8:content>{esc_xml(text)}</v8:content>")
+    X(f"{indent}\t\t<v8:content>{esc_xml_text(text)}</v8:content>")
     X(f"{indent}\t</v8:item>")
     X(f"{indent}</{tag}>")
 
@@ -749,7 +754,7 @@ def emit_label(el, name, _id, indent):
         X(f'{inner}<Title formatted="{formatted}">')
         X(f"{inner}\t<v8:item>")
         X(f"{inner}\t\t<v8:lang>ru</v8:lang>")
-        X(f"{inner}\t\t<v8:content>{esc_xml(str(el['title']))}</v8:content>")
+        X(f"{inner}\t\t<v8:content>{esc_xml_text(str(el['title']))}</v8:content>")
         X(f"{inner}\t</v8:item>")
         X(f"{inner}</Title>")
     emit_common_flags(el, inner)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.34 — Edit existing 1C metadata object XML (+resolve_type_str: срезание префикса cfg:/d5p1:)
+# meta-edit v1.35 — Edit existing 1C metadata object XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -258,7 +258,8 @@ def localname(el):
 
 
 def esc_xml(s):
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+    # Эскейп ЗНАЧЕНИЯ АТРИБУТА: & < > и кавычка — внутри "..." литеральная " невалидна.
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
 
 
 # ============================================================

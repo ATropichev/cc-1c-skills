@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-edit v1.15 — Edit existing 1C subsystem XML
+# subsystem-edit v1.16 — Edit existing 1C subsystem XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -193,6 +193,11 @@ def new_uuid():
 
 
 def esc_xml(s):
+    # Эскейп ЗНАЧЕНИЯ АТРИБУТА: & < > и кавычка — внутри "..." литеральная " невалидна.
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+
+def esc_xml_text(s):
     """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
     (92142 сырых кавычки на корпус, ни одной &quot;); &quot; она принимает, но нормализует обратно."""
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
@@ -250,7 +255,7 @@ def write_child_subsystem_stub(child_path, child_name, format_version):
     lines.append(f'<MetaDataObject {XMLNS_DECL} version="{format_version}">')
     lines.append(f'\t<Subsystem uuid="{child_uuid}">')
     lines.append('\t\t<Properties>')
-    lines.append(f'\t\t\t<Name>{esc_xml(child_name)}</Name>')
+    lines.append(f'\t\t\t<Name>{esc_xml_text(child_name)}</Name>')
     lines.append('\t\t\t<Synonym/>')
     lines.append('\t\t\t<Comment/>')
     lines.append('\t\t\t<IncludeHelpInContents>true</IncludeHelpInContents>')

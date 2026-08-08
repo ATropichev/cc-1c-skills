@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.20 — Create 1C subsystem from JSON definition (+detect_format_version: ветка автономной EPF/ERF)
+﻿# subsystem-compile v1.21 — Create 1C subsystem from JSON definition (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -188,9 +188,15 @@ function X([string]$text) {
 	$script:xml.AppendLine($text) | Out-Null
 }
 
-function Esc-Xml([string]$s) {
-	# Экранирование ТЕКСТА элемента: только & < > . Кавычки в тексте платформа НЕ экранирует —
-	# пишет литерально (92142 сырых кавычки на корпус, ни одной &quot;).
+function Esc-Xml {
+	param([string]$s)
+	# Эскейп ЗНАЧЕНИЯ АТРИБУТА: & < > и кавычка — внутри "..." литеральная " невалидна.
+	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;').Replace('"','&quot;')
+}
+
+function Esc-XmlText {
+	param([string]$s)
+	# Эскейп ТЕКСТА элемента: только & < > — кавычку и апостроф платформа держит сырыми.
 	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;')
 }
 
@@ -211,7 +217,7 @@ function Emit-MLText([string]$indent, [string]$tag, [string]$text) {
 	X "$indent<$tag>"
 	X "$indent`t<v8:item>"
 	X "$indent`t`t<v8:lang>ru</v8:lang>"
-	X "$indent`t`t<v8:content>$(Esc-Xml $text)</v8:content>"
+	X "$indent`t`t<v8:content>$(Esc-XmlText $text)</v8:content>"
 	X "$indent`t</v8:item>"
 	X "$indent</$tag>"
 }
@@ -227,7 +233,7 @@ function Write-ChildSubsystemStub([string]$childPath, [string]$childName, [strin
 	[void]$sb.AppendLine("<MetaDataObject $($script:xmlnsDecl) version=`"$formatVersion`">")
 	[void]$sb.AppendLine("`t<Subsystem uuid=`"$childUuid`">")
 	[void]$sb.AppendLine("`t`t<Properties>")
-	[void]$sb.AppendLine("`t`t`t<Name>$(Esc-Xml $childName)</Name>")
+	[void]$sb.AppendLine("`t`t`t<Name>$(Esc-XmlText $childName)</Name>")
 	[void]$sb.AppendLine("`t`t`t<Synonym/>")
 	[void]$sb.AppendLine("`t`t`t<Comment/>")
 	[void]$sb.AppendLine("`t`t`t<IncludeHelpInContents>true</IncludeHelpInContents>")
@@ -483,14 +489,14 @@ X "`t<Subsystem uuid=`"$uuid`">"
 X "`t`t<Properties>"
 
 # Name
-X "`t`t`t<Name>$(Esc-Xml $objName)</Name>"
+X "`t`t`t<Name>$(Esc-XmlText $objName)</Name>"
 
 # Synonym
 Emit-MLText "`t`t`t" "Synonym" $synonym
 
 # Comment
 if ($comment) {
-	X "`t`t`t<Comment>$(Esc-Xml $comment)</Comment>"
+	X "`t`t`t<Comment>$(Esc-XmlText $comment)</Comment>"
 } else {
 	X "`t`t`t<Comment/>"
 }
@@ -517,7 +523,7 @@ if ($picture) {
 if ($contentItems.Count -gt 0) {
 	X "`t`t`t<Content>"
 	foreach ($item in $contentItems) {
-		X "`t`t`t`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-Xml $item)</xr:Item>"
+		X "`t`t`t`t<xr:Item xsi:type=`"xr:MDObjectRef`">$(Esc-XmlText $item)</xr:Item>"
 	}
 	X "`t`t`t</Content>"
 } else {
@@ -530,7 +536,7 @@ X "`t`t</Properties>"
 if ($children.Count -gt 0) {
 	X "`t`t<ChildObjects>"
 	foreach ($ch in $children) {
-		X "`t`t`t<Subsystem>$(Esc-Xml $ch)</Subsystem>"
+		X "`t`t`t<Subsystem>$(Esc-XmlText $ch)</Subsystem>"
 	}
 	X "`t`t</ChildObjects>"
 } else {

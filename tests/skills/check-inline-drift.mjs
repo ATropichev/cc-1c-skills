@@ -3,9 +3,13 @@
 // копируются в каждый .ps1/.py — docs/python-porting-guide.md), поэтому нужен гард от расхождения
 // копий. Реестр семей держим здесь же: реестр про дрейф не должен дрейфовать относительно проверки.
 //
-// Часть расхождений ЗАКОННА (например esc_xml без &quot; в form-* ради раундтрипа), поэтому семья
-// хранит не одно эталонное тело, а список вариантов. У законного варианта обязано быть поле `why`;
-// вариант без `why` — необоснованный, попадает в список долга (WARN).
+// Семья хранит не одно эталонное тело, а список вариантов: расхождение бывает и законным. У такого
+// варианта обязано быть поле `why`; вариант без `why` — необоснованный, идёт в список долга (WARN).
+//
+// Важно не путать «вариант» с «разными задачами под одним именем»: esc_xml и esc_xml_text — это
+// ДВЕ семьи, а не два варианта одной. Платформа в тексте элемента экранирует только & < >, а в
+// значении атрибута добавляет &quot;, поэтому им нужны разные функции с говорящими именами, каждая
+// со своим единственным эталоном. Свести такое в один вариант с флагом — значит спрятать разницу.
 //
 // Запуск: node tests/skills/check-inline-drift.mjs [--list]
 // Выход 1 при ERROR, 0 при WARN. Кандидатов в реестр искать: node debug/inline-utils/scan-dupes.mjs
@@ -119,22 +123,24 @@ const FAMILIES = [
   },
 
   // ─── Экранирование XML ───────────────────────────────────────────────────
+  // Платформа в ТЕКСТЕ элемента экранирует только & < > (кавычка и апостроф остаются сырыми —
+  // проверено раундтрипом через базу), а в ЗНАЧЕНИИ АТРИБУТА добавляет &quot;: внутри "..."
+  // литеральная кавычка невалидна. Отсюда две функции, а не одна с переключателем.
   {
-    name: 'esc_xml', py: 'esc_xml', ps1: 'Esc-Xml',
+    name: 'esc_xml (значение атрибута)', py: 'esc_xml', ps1: 'Esc-Xml',
     variants: [
-      { id: 'text-no-quot', authority: 'form-compile',
-        why: 'экранирование ТЕКСТА элемента: платформа кавычки в тексте не экранирует, &quot; ломает раундтрип',
-        consumers: ['form-edit', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit'],
-        consumersPy: ['subsystem-compile', 'subsystem-edit'] },
-      { id: 'text-no-quot-subsystem-ps1', authority: 'subsystem-compile',
-        consumers: [], consumersPs1: ['subsystem-edit'], port: 'ps1' },
-      { id: 'attr-with-quot', authority: 'cf-init', port: 'py',
-        why: 'экранирование ЗНАЧЕНИЯ АТРИБУТА: там &quot; обязателен (init-навыки, PS1-порт функции не имеет)',
-        consumers: ['cfe-init', 'epf-init', 'erf-init'] },
-      { id: 'meta-attr-with-quot', authority: 'meta-compile',
-        why: 'парный esc_xml_text экранирует текст, сам esc_xml применяется только к значениям атрибутов',
-        consumers: ['meta-edit'] },
-      { id: 'meta-edit-own-py', authority: 'meta-edit', consumers: [], port: 'py' },
+      { id: 'attr-with-quot', authority: 'meta-compile',
+        consumers: ['form-compile', 'form-edit', 'meta-edit', 'mxl-compile', 'role-compile',
+          'skd-compile', 'skd-edit', 'subsystem-compile', 'subsystem-edit'] },
+    ],
+  },
+  {
+    name: 'esc_xml_text (текст элемента)', py: 'esc_xml_text', ps1: 'Esc-XmlText',
+    variants: [
+      { id: 'text-no-quot', authority: 'meta-compile',
+        consumers: ['cf-init', 'cfe-init', 'epf-init', 'erf-init', 'form-compile', 'form-edit',
+          'meta-edit', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
+          'subsystem-compile', 'subsystem-edit'] },
     ],
   },
   // ─── Сохранение стиля XML при round-trip (#44/#46/#47) ───────────────────

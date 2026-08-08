@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# erf-init v1.4 — Init 1C external report scaffold
+# erf-init v1.5 — Init 1C external report scaffold (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C external report."""
 import sys, os, re, argparse, uuid
 
-def esc_xml(s):
-    return s.replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('"','&quot;')
+def esc_xml_text(s):
+    # Эскейп ТЕКСТА элемента: только & < > — кавычку и апостроф платформа держит сырыми.
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
 def new_uuid():
     return str(uuid.uuid4())
@@ -107,11 +108,11 @@ def main():
 \t\t\t</xr:GeneratedType>
 \t\t</InternalInfo>
 \t\t<Properties>
-\t\t\t<Name>{esc_xml(name)}</Name>
+\t\t\t<Name>{esc_xml_text(name)}</Name>
 \t\t\t<Synonym>
 \t\t\t\t<v8:item>
 \t\t\t\t\t<v8:lang>ru</v8:lang>
-\t\t\t\t\t<v8:content>{esc_xml(synonym)}</v8:content>
+\t\t\t\t\t<v8:content>{esc_xml_text(synonym)}</v8:content>
 \t\t\t\t</v8:item>
 \t\t\t</Synonym>
 \t\t\t<Comment/>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mxl-compile v1.10 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.11 — Compile 1C spreadsheet from JSON (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -188,6 +188,11 @@ def assert_edit_allowed(target_path, require):
 
 
 def esc_xml(s):
+    # Эскейп ЗНАЧЕНИЯ АТРИБУТА: & < > и кавычка — внутри "..." литеральная " невалидна.
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+
+def esc_xml_text(s):
     """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
     (92142 сырых кавычки на корпус, ни одной &quot;); &quot; она принимает, но нормализует обратно."""
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
@@ -725,7 +730,7 @@ def main():
                         lines.append('\t\t\t\t\t<tl>')
                         lines.append('\t\t\t\t\t\t<v8:item>')
                         lines.append('\t\t\t\t\t\t\t<v8:lang>ru</v8:lang>')
-                        lines.append(f'\t\t\t\t\t\t\t<v8:content>{esc_xml(cell_info["Text"])}</v8:content>')
+                        lines.append(f'\t\t\t\t\t\t\t<v8:content>{esc_xml_text(cell_info["Text"])}</v8:content>')
                         lines.append('\t\t\t\t\t\t</v8:item>')
                         lines.append('\t\t\t\t\t</tl>')
 
@@ -733,7 +738,7 @@ def main():
                         lines.append('\t\t\t\t\t<tl>')
                         lines.append('\t\t\t\t\t\t<v8:item>')
                         lines.append('\t\t\t\t\t\t\t<v8:lang>ru</v8:lang>')
-                        lines.append(f'\t\t\t\t\t\t\t<v8:content>{esc_xml(cell_info["Template"])}</v8:content>')
+                        lines.append(f'\t\t\t\t\t\t\t<v8:content>{esc_xml_text(cell_info["Template"])}</v8:content>')
                         lines.append('\t\t\t\t\t\t</v8:item>')
                         lines.append('\t\t\t\t\t</tl>')
 
@@ -829,7 +834,7 @@ def main():
             lines.append('\t\t<format>')
             lines.append('\t\t\t<v8:item>')
             lines.append('\t\t\t\t<v8:lang>ru</v8:lang>')
-            lines.append(f'\t\t\t\t<v8:content>{esc_xml(fmt["NumberFormat"])}</v8:content>')
+            lines.append(f'\t\t\t\t<v8:content>{esc_xml_text(fmt["NumberFormat"])}</v8:content>')
             lines.append('\t\t\t</v8:item>')
             lines.append('\t\t</format>')
 

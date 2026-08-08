@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.19 — Compile 1C role from JSON (+detect_format_version: ветка автономной EPF/ERF)
+# role-compile v1.20 — Compile 1C role from JSON (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -228,6 +228,11 @@ def detect_eol(text):
     return '\r\n' if '\r\n' in text else '\n'
 
 def esc_xml(s):
+    # Эскейп ЗНАЧЕНИЯ АТРИБУТА: & < > и кавычка — внутри "..." литеральная " невалидна.
+    return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+
+
+def esc_xml_text(s):
     """Экранирование ТЕКСТА элемента: только & < > . Кавычки платформа в тексте не экранирует
     (92142 сырых кавычки на корпус, ни одной &quot;); &quot; она принимает, но нормализует обратно."""
     return s.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
@@ -240,7 +245,7 @@ def emit_mltext(lines, indent, tag, text):
     lines.append(f"{indent}<{tag}>")
     lines.append(f"{indent}\t<v8:item>")
     lines.append(f"{indent}\t\t<v8:lang>ru</v8:lang>")
-    lines.append(f"{indent}\t\t<v8:content>{esc_xml(text)}</v8:content>")
+    lines.append(f"{indent}\t\t<v8:content>{esc_xml_text(text)}</v8:content>")
     lines.append(f"{indent}\t</v8:item>")
     lines.append(f"{indent}</{tag}>")
 
@@ -712,11 +717,11 @@ def main():
     lines.append('\t\t\t<Synonym>')
     lines.append('\t\t\t\t<v8:item>')
     lines.append('\t\t\t\t\t<v8:lang>ru</v8:lang>')
-    lines.append(f'\t\t\t\t\t<v8:content>{esc_xml(synonym)}</v8:content>')
+    lines.append(f'\t\t\t\t\t<v8:content>{esc_xml_text(synonym)}</v8:content>')
     lines.append('\t\t\t\t</v8:item>')
     lines.append('\t\t\t</Synonym>')
     if comment:
-        lines.append(f'\t\t\t<Comment>{esc_xml(comment)}</Comment>')
+        lines.append(f'\t\t\t<Comment>{esc_xml_text(comment)}</Comment>')
     else:
         lines.append('\t\t\t<Comment/>')
     lines.append('\t\t</Properties>')
@@ -752,7 +757,7 @@ def main():
             lines.append(f'\t\t\t<value>{right["Value"]}</value>')
             if right['Condition']:
                 lines.append('\t\t\t<restrictionByCondition>')
-                lines.append(f'\t\t\t\t<condition>{esc_xml(right["Condition"])}</condition>')
+                lines.append(f'\t\t\t\t<condition>{esc_xml_text(right["Condition"])}</condition>')
                 lines.append('\t\t\t</restrictionByCondition>')
             lines.append('\t\t</right>')
             total_rights += 1
@@ -763,8 +768,8 @@ def main():
     if defn.get('templates'):
         for tpl in defn['templates']:
             lines.append('\t<restrictionTemplate>')
-            lines.append(f'\t\t<name>{esc_xml(str(tpl["name"]))}</name>')
-            lines.append(f'\t\t<condition>{esc_xml(str(tpl["condition"]))}</condition>')
+            lines.append(f'\t\t<name>{esc_xml_text(str(tpl["name"]))}</name>')
+            lines.append(f'\t\t<condition>{esc_xml_text(str(tpl["condition"]))}</condition>')
             lines.append('\t</restrictionTemplate>')
             template_count += 1
 
