@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.186 — Compile 1C managed form from JSON or object metadata (+resolve_type_str: срезание префикса cfg:/d5p1:)
+# form-compile v1.187 — Compile 1C managed form from JSON or object metadata (+resolve_type_str: срезание префикса cfg:/d5p1:)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -3767,14 +3767,15 @@ def resolve_type_str(type_str):
         return type_str
     # Прощающий ввод: ведущий префикс приходит копипастой из выгрузки. Без срезания он ломает
     # поиск в словаре — русское имя типа остаётся непереведённым, и платформа отвечает
-    # «Неизвестное имя типа». cfg: снимаем всегда (однозначно = текущая конфигурация), d5p1: —
-    # только у ССЫЛОЧНЫХ типов (с точкой): сам по себе префикс неоднозначен, в формах d5p1:Chart,
-    # d5p1:TextDocument, d5p1:GeographicalSchema и др. адресуют свои пространства имён, и там он
-    # часть канонического значения.
+    # «Неизвестное имя типа». cfg: снимаем всегда — он однозначно означает текущую конфигурацию.
+    # Сгенерированный dNpM: (в корпусе на этом URI встречаются d4p1, d5p1, d6p1 — имя префикса
+    # платформа выдаёт по порядку объявления) снимаем ТОЛЬКО у ссылочных типов, с точкой:
+    # сам по себе префикс многозначен — в формах d5p1:Chart, d5p1:TextDocument,
+    # d5p1:GeographicalSchema адресуют чужие пространства имён, и там он часть значения.
     if type_str.startswith('cfg:'):
         type_str = type_str[4:]
-    elif type_str.startswith('d5p1:') and '.' in type_str:
-        type_str = type_str[5:]
+    elif '.' in type_str and re.match(r'^d\d+p\d+:', type_str):
+        type_str = type_str[type_str.index(':') + 1:]
     # Параметризованные типы: Number(15,2), Строка(100)
     m = re.match(r'^([^(]+)\((.+)\)$', type_str)
     if m:
