@@ -132,8 +132,7 @@ JSON — строки и/или объекты (для групп с вложе�
 
 **Свойства** задавайте по имени свойства 1С (PascalCase, как в конфигураторе): `Indexing`, `FillChecking`,
 `Use`, `FullTextSearch`, `DataHistory`, `PasswordMode`, `MultiLine`, `Mask`, `CreateOnInput`, `QuickChoice` и др.
-Свойство можно задать, даже если у реквизита оно ещё не выставлено. Опечатка в имени свойства → ошибка
-(правка не теряется молча).
+Свойство можно задать, даже если у реквизита оно ещё не выставлено.
 
 ```powershell
 -Operation modify-attribute -Value "СтароеИмя: name=НовоеИмя, type=Строка(500)"
