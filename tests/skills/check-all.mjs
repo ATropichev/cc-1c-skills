@@ -12,6 +12,7 @@ const GUARDS = [
   ['check-enum-drift.mjs', 'allowlist-и перечислений: meta-compile ↔ meta-validate ↔ meta-edit'],
   ['check-uuid-invariant.mjs', 'сохранение uuid объекта и сущностей при правке'],
   ['check-inline-drift.mjs', 'общие inline-реализации: копии совпадают с эталонами'],
+  ['check-type-maps.mjs', 'карты типов метаданных: согласованы со спецификацией'],
 ];
 
 let failed = 0;
