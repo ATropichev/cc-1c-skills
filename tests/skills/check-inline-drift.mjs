@@ -279,11 +279,17 @@ const FAMILIES = [
 // Перечислять «вариант на каждую копию» бессмысленно — эталона у них сейчас нет. Держим храповик:
 // число групп не должно расти. Фаза 2 сводит семью к одному телу и переносит её в FAMILIES.
 
+// Разбор каждой оставшейся семьи уже сделан — сведение упирается не в аккуратность, а в решение,
+// поэтому note описывает ПРИРОДУ расхождения, а не «когда-нибудь свести».
 const DRIFTED = [
-  { name: 'emit_mltext', py: 'emit_mltext', ps1: 'Emit-MLText', maxVariants: { py: 5, ps1: 5 } },
-  { name: 'get_ml_text', py: 'get_ml_text', ps1: 'Get-MLText', maxVariants: { py: 7, ps1: 6 } },
-  { name: 'import_fragment', py: 'import_fragment', ps1: 'Import-Fragment', maxVariants: { py: 5, ps1: 4 } },
-  { name: 'get_child_indent', py: 'get_child_indent', ps1: 'Get-ChildIndent', maxVariants: { py: 4, ps1: 3 } },
+  { name: 'emit_mltext', py: 'emit_mltext', ps1: 'Emit-MLText', maxVariants: { py: 5, ps1: 5 },
+    note: 'разные сигнатуры: (lines,indent,tag,text) / +xsi_type / +no_xsi_type / meta-compile пишет через глобальный X(). Сведение = принять самую богатую сигнатуру и переписать все вызовы' },
+  { name: 'get_ml_text', py: 'get_ml_text', ps1: 'Get-MLText', maxVariants: { py: 7, ps1: 6 },
+    note: 'одна задача, разная полнота: cf-info берёт первый item, meta-info предпочитает ru с фолбэком, skd-info добавляет itertext. Сведение = принять самый способный вариант, меняет вывод *-info' },
+  { name: 'import_fragment', py: 'import_fragment', ps1: 'Import-Fragment', maxVariants: { py: 5, ps1: 4 },
+    note: 'НЕ общая семья: разные сигнатуры и разные наборы xmlns по навыкам (meta-edit добавляет cfg:, xdto-edit строит ns из схемы). Одно имя — разные задачи, сводить нельзя' },
+  { name: 'get_child_indent', py: 'get_child_indent', ps1: 'Get-ChildIndent', maxVariants: { py: 4, ps1: 3 },
+    note: 'одна задача, разные эвристики определения отступа (skd-edit ловит только табы). Сведение меняет форматирование вывода — нужен разбор снэпшотов' },
 ];
 
 // ─── Извлечение тел функций ─────────────────────────────────────────────────
