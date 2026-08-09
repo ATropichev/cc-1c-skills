@@ -674,7 +674,7 @@ def get_ws_operations(child_objs):
 # ── Support status of this object (Ext/ParentConfigurations.bin) ──
 # See docs/1c-support-state-spec.md. Walks up to the config root, decodes the
 # object's support rule. Never throws — degrades to "не на поддержке".
-def _meta_is_external_root(xml_path):
+def _sg_is_external_root(xml_path):
     if not os.path.isfile(xml_path):
         return False
     try:
@@ -689,7 +689,7 @@ def _meta_is_external_root(xml_path):
 
 def get_object_support_status(obj_uuid):
     try:
-        if _meta_is_external_root(object_path):
+        if _sg_is_external_root(object_path):
             return None
         d = os.path.dirname(object_path)
         bin_path = None

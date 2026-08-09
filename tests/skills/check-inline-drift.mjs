@@ -56,9 +56,10 @@ const FAMILIES = [
       { id: 'full', authority: 'cf-edit',
         consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
           'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
-          'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile', 'xdto-edit'],
-        // *-info навыки несут хелпер только в PS1-порте — см. debug/inline-utils/FINDINGS.md.
-        consumersPs1: ['form-info', 'meta-info', 'mxl-info', 'role-info', 'skd-info'] },
+          'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile', 'xdto-edit',
+          // *-info навыки читают тем же хелпером СОСТОЯНИЕ поддержки для вывода, а не запрещают
+          // правку. Тело то же, поэтому семья общая.
+          'form-info', 'meta-info', 'mxl-info', 'role-info', 'skd-info', 'subsystem-info'] },
     ],
   },
   {
@@ -77,7 +78,9 @@ const FAMILIES = [
         consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
           'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
           'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile', 'xdto-edit'],
-        consumersPs1: ['support-edit'] },
+        // support-edit и *-info читают uuid для ОТОБРАЖЕНИЯ состояния поддержки; в PY-портах
+        // *-info пользуются другим путём, поэтому копия только в PS1.
+        consumersPs1: ['form-info', 'mxl-info', 'role-info', 'skd-info', 'subsystem-info', 'support-edit'] },
     ],
   },
 
@@ -151,7 +154,8 @@ const FAMILIES = [
     name: 'validate: report_ok', py: null, ps1: 'Report-OK',
     variants: [
       { id: 'buffered', authority: 'cf-validate',
-        consumers: ['cfe-validate', 'epf-validate', 'meta-validate', 'role-validate', 'skd-validate'] },
+        consumers: ['cfe-validate', 'epf-validate', 'interface-validate', 'meta-validate',
+          'role-validate', 'skd-validate', 'subsystem-validate', 'xdto-validate'] },
       { id: 'streamed', authority: 'form-validate', consumers: ['mxl-validate'],
         why: 'потоковый вывод вместо буферизованного — эти навыки не поддерживают -OutFile' },
     ],
@@ -295,17 +299,22 @@ function extractPy(text) {
   const lines = text.split('\n');
   const out = new Map();
   for (let i = 0; i < lines.length; i++) {
-    const m = /^def ([A-Za-z_]\w*)\(/.exec(lines[i]);
+    // Определение бывает вложенным: *-info объявляют is_external_root внутри другой функции.
+    // Поиск только по `^def` делал такие копии невидимыми для гарда — то есть давал ложное «OK».
+    const m = /^(\s*)def ([A-Za-z_]\w*)\(/.exec(lines[i]);
     if (!m) continue;
+    const indent = m[1].length;
     const body = [lines[i]];
     let j = i + 1;
     for (; j < lines.length; j++) {
       const l = lines[j];
-      if (l.trim() === '' || l[0] === ' ' || l[0] === '\t') { body.push(l); continue; }
+      if (l.trim() === '') { body.push(l); continue; }
+      const li = l.length - l.trimStart().length;
+      if (li > indent) { body.push(l); continue; }
       break;
     }
-    out.set(m[1], body);
-    i = j - 1;
+    if (!out.has(m[2])) out.set(m[2], body);
+    // НЕ перескакиваем через тело: иначе вложенные определения внутри него остались бы невидимыми.
   }
   return out;
 }
@@ -318,6 +327,15 @@ function extractPs1(text) {
     // поэтому конец ищем по закрывающей скобке НА ТОМ ЖЕ отступе, что и слово function.
     const m = /^(\s*)function\s+([A-Za-z][\w-]*)/.exec(lines[i]);
     if (!m) continue;
+    // Однострочное определение (`function Out(...) { ... }`) закрывается на своей же строке.
+    // Без этой ветки «телом» такой функции становилось всё до следующей одиночной `}` — то есть
+    // следующая функция проглатывалась и была невидима для гарда.
+    const opens = (lines[i].match(/\{/g) || []).length;
+    const closes = (lines[i].match(/\}/g) || []).length;
+    if (opens > 0 && opens === closes) {
+      if (!out.has(m[2])) out.set(m[2], [lines[i]]);
+      continue;
+    }
     const closing = m[1] + '}';
     const body = [lines[i]];
     let j = i + 1;
@@ -326,7 +344,6 @@ function extractPs1(text) {
       if (lines[j].replace(/\s+$/, '') === closing) break;
     }
     if (!out.has(m[2])) out.set(m[2], body);
-    i = j;
   }
   return out;
 }

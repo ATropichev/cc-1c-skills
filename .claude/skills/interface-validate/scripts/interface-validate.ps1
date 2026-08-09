@@ -51,7 +51,8 @@ $script:output = New-Object System.Text.StringBuilder 8192
 $script:allCommandNames = @()
 
 function Out-Line([string]$msg) { $script:output.AppendLine($msg) | Out-Null }
-function Report-OK([string]$msg) {
+function Report-OK {
+	param([string]$msg)
 	$script:okCount++
 	if ($Detailed) { Out-Line "[OK]    $msg" }
 }

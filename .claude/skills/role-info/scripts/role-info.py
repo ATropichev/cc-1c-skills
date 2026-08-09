@@ -161,7 +161,7 @@ def get_support_status_for_path(target_path):
             except Exception:
                 pass
             return None
-        def is_external_root(xml_path):
+        def _sg_is_external_root(xml_path):
             if not os.path.isfile(xml_path):
                 return False
             try:
@@ -175,14 +175,14 @@ def get_support_status_for_path(target_path):
         rp = os.path.abspath(target_path)
         # The target file itself may be the element meta-xml (e.g. Subsystems/X.xml).
         elem_uuid = root_uuid(rp)
-        if is_external_root(rp):
+        if _sg_is_external_root(rp):
             return None
         bin_path = None
         d = os.path.dirname(rp)
         for _ in range(12):
             if not d:
                 break
-            if is_external_root(d + ".xml"):
+            if _sg_is_external_root(d + ".xml"):
                 return None
             if not elem_uuid:
                 elem_uuid = root_uuid(d + ".xml")

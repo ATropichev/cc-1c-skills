@@ -43,7 +43,8 @@ $script:stopped = $false
 $script:output = New-Object System.Text.StringBuilder
 
 function Out-Line([string]$s) { [void]$script:output.AppendLine($s) }
-function Report-OK([string]$msg) {
+function Report-OK {
+	param([string]$msg)
 	$script:okCount++
 	if ($Detailed) { Out-Line "[OK]    $msg" }
 }
