@@ -270,6 +270,23 @@ const FAMILIES = [
     ],
   },
 
+  // ─── Регистронезависимый ввод: паритет с PS1 ─────────────────────────────
+  // Существует только в PY: PowerShell регистронезависим сам по себе (свойства PSObject, ключи
+  // Hashtable, -eq/-contains, имена параметров, ValidateSet), поэтому в .ps1 копии нет и быть
+  // не должно — ps1: null.
+  {
+    name: 'case-insensitive input: CIDict', py: 'CIDict', ps1: null,
+    variants: [{ id: 'base', authority: 'meta-compile', consumers: [] }],
+  },
+  {
+    name: 'case-insensitive input: ci_json', py: 'ci_json', ps1: null,
+    variants: [{ id: 'base', authority: 'meta-compile', consumers: [] }],
+  },
+  {
+    name: 'case-insensitive input: ci_parse_args', py: 'ci_parse_args', ps1: null,
+    variants: [{ id: 'base', authority: 'meta-compile', consumers: [] }],
+  },
+
 ];
 
 // ─── Семьи, разъехавшиеся целиком ───────────────────────────────────────────
@@ -301,7 +318,9 @@ function extractPy(text) {
   for (let i = 0; i < lines.length; i++) {
     // Определение бывает вложенным: *-info объявляют is_external_root внутри другой функции.
     // Поиск только по `^def` делал такие копии невидимыми для гарда — то есть давал ложное «OK».
-    const m = /^(\s*)def ([A-Za-z_]\w*)\(/.exec(lines[i]);
+    // Классы забирает та же ветка: общая утилита бывает и классом (CIDict), а без этого её тело
+    // гарду невидимо и семью для неё не завести.
+    const m = /^(\s*)(?:def|class) ([A-Za-z_]\w*)[(:]/.exec(lines[i]);
     if (!m) continue;
     const indent = m[1].length;
     const body = [lines[i]];

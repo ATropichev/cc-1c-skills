@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.93 — Compile 1C metadata object from JSON
+# meta-compile v1.94 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -15,6 +15,69 @@ from lxml import etree
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
+
+# ============================================================
+# Регистронезависимый ввод — паритет с PS1. В PowerShell регистр не значим нигде, куда
+# смотрит пользовательский ввод: свойства объекта из ConvertFrom-Json, ключи Hashtable,
+# -eq/-contains, имена параметров, ValidateSet. В Python совпадение точное, поэтому порт
+# молча терял свойства DSL, написанные в другом регистре. Обёртки ниже выравнивают поведение.
+# ============================================================
+
+class CIDict(dict):
+    # Ключи храним КАК ЕСТЬ: часть из них — имена объектов (табличные части, стандартные
+    # реквизиты), они попадают в XML. Регистронезависим только поиск. Порядок вставки
+    # сохраняется — от него зависит порядок эмиссии.
+    def _actual(self, key):
+        if not isinstance(key, str) or dict.__contains__(self, key):
+            return key
+        ci = self.__dict__.get('_ci')
+        if ci is None or len(ci) != len(self):
+            ci = {k.lower(): k for k in self if isinstance(k, str)}
+            self.__dict__['_ci'] = ci
+        return ci.get(key.lower(), key)
+
+    def __getitem__(self, key):
+        return dict.__getitem__(self, self._actual(key))
+
+    def __contains__(self, key):
+        return dict.__contains__(self, self._actual(key))
+
+    def get(self, key, default=None):
+        return dict.get(self, self._actual(key), default)
+
+    def pop(self, key, *default):
+        return dict.pop(self, self._actual(key), *default)
+
+    def __setitem__(self, key, value):
+        # запись по ключу, отличающемуся регистром, обновляет существующий, а не плодит дубль
+        dict.__setitem__(self, self._actual(key), value)
+
+def ci_json(obj):
+    """Рекурсивно оборачивает разобранный JSON: словари → CIDict, списки обходятся."""
+    if isinstance(obj, dict):
+        return CIDict((k, ci_json(v)) for k, v in obj.items())
+    if isinstance(obj, list):
+        return [ci_json(v) for v in obj]
+    return obj
+
+def ci_parse_args(parser, argv=None):
+    """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    names = {s.lower(): s for a in parser._actions for s in a.option_strings}
+    for i, tok in enumerate(argv):
+        if tok.startswith('-') and tok.lower() in names:
+            argv[i] = names[tok.lower()]
+    # choices — зеркало [ValidateSet]; канонизируем ДО разбора, иначе argparse отвергнет регистр
+    choice_map = {}
+    for a in parser._actions:
+        if a.choices:
+            for s in a.option_strings:
+                choice_map[s] = {str(c).lower(): c for c in a.choices}
+    for i in range(len(argv) - 1):
+        m = choice_map.get(argv[i])
+        if m and argv[i + 1].lower() in m:
+            argv[i + 1] = m[argv[i + 1].lower()]
+    return parser.parse_args(argv)
 
 # ============================================================
 # Support guard (Ext/ParentConfigurations.bin) — see docs/1c-support-state-spec.md
@@ -302,7 +365,7 @@ def split_camel_case(name):
 parser = argparse.ArgumentParser(allow_abbrev=False)
 parser.add_argument('-JsonPath', required=True)
 parser.add_argument('-OutputDir', required=True)
-args = parser.parse_args()
+args = ci_parse_args(parser)
 
 json_path = args.JsonPath
 output_dir = args.OutputDir
@@ -314,7 +377,7 @@ if not os.path.isfile(json_path):
 with open(json_path, 'r', encoding='utf-8-sig') as f:
     json_text = f.read()
 
-defn = json.loads(json_text)
+defn = ci_json(json.loads(json_text))
 
 assert_edit_allowed(output_dir, "editable")
 
@@ -407,6 +470,10 @@ enum_value_aliases = {
     'НеИндексировать': 'DontIndex', 'Индексировать': 'Index',
     'ИндексироватьСДопУпорядочиванием': 'IndexWithAdditionalOrder',
 }
+
+# Словари, по которым ищут ПОЛЬЗОВАТЕЛЬСКИЙ ввод, — регистронезависимы, как хеш-таблицы PS1.
+object_type_synonyms = CIDict(object_type_synonyms)
+enum_value_aliases = CIDict(enum_value_aliases)
 
 # Valid enum values per property (from meta-validate)
 valid_enum_values = {
@@ -566,6 +633,8 @@ valid_types = [
     'SessionParameter', 'CommonCommand', 'CommandGroup', 'CommonAttribute', 'FunctionalOptionsParameter', 'WSReference',
     'CommonPicture', 'CommonTemplate',
 ]
+# Регистр имени вида — как в PS (-contains регистронезависим): приводим к канону списка
+obj_type = next((t for t in valid_types if t.lower() == obj_type.lower()), obj_type)
 if obj_type not in valid_types:
     print(f"Unsupported type: {obj_type}. Valid: {', '.join(valid_types)}", file=sys.stderr)
     sys.exit(1)
@@ -652,6 +721,7 @@ cfg_object_kinds = {"Catalog", "Document", "Enum", "ChartOfAccounts", "ChartOfCh
 
 # Алиас на локальный словарь: тело resolve_type_str ниже — общая реализация,
 # одинаковая во всех навыках (реестр в tests/skills/check-inline-drift.mjs).
+type_synonyms = CIDict(type_synonyms)
 TYPE_SYNONYMS = type_synonyms
 
 

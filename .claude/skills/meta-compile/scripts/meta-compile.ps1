@@ -1,4 +1,4 @@
-﻿# meta-compile v1.93 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.94 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -408,6 +408,11 @@ $validTypes = @("Catalog","Document","Enum","Constant","InformationRegister","Ac
 	"Sequence","FilterCriterion","DocumentNumerator","SettingsStorage","CommonForm",
 	"SessionParameter","CommonCommand","CommandGroup","CommonAttribute","FunctionalOptionsParameter","WSReference",
 	"CommonPicture","CommonTemplate")
+# -notin регистронезависим, поэтому "catalog" проходил проверку и дальше шёл в ИМЯ ТЕГА и в
+# Configuration.xml как есть — выгрузка получалась с <catalog>, которую платформа не принимает.
+# Прощаем регистр, но приводим к канону списка.
+$canonType = $validTypes | Where-Object { $_ -eq $objType } | Select-Object -First 1
+if ($canonType) { $objType = $canonType }
 if ($objType -notin $validTypes) {
 	Write-Error "Unsupported type: $objType. Valid: $($validTypes -join ', ')"
 	exit 1
