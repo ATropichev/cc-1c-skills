@@ -1,4 +1,4 @@
-﻿# role-compile v1.21 — Compile 1C role from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# role-compile v1.22 — Compile 1C role from JSON (+русские алиасы типов: формы с ё и без)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -193,15 +193,18 @@ $script:typeAliases = @{
 	"РегистрНакопления" = "AccumulationRegister"
 	"РегистрБухгалтерии" = "AccountingRegister"
 	"РегистрРасчета" = "CalculationRegister"
+	"РегистрРасчёта" = "CalculationRegister"
 	"Константа" = "Constant"
 	"ПланСчетов" = "ChartOfAccounts"
 	"ПланВидовХарактеристик" = "ChartOfCharacteristicTypes"
 	"ПланВидовРасчета" = "ChartOfCalculationTypes"
+	"ПланВидовРасчёта" = "ChartOfCalculationTypes"
 	"ПланОбмена" = "ExchangePlan"
 	"БизнесПроцесс" = "BusinessProcess"
 	"Задача" = "Task"
 	"Обработка" = "DataProcessor"
 	"Отчет" = "Report"
+	"Отчёт" = "Report"
 	"ОбщаяФорма" = "CommonForm"
 	"ОбщаяКоманда" = "CommonCommand"
 	"Подсистема" = "Subsystem"

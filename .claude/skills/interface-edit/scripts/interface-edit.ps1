@@ -1,4 +1,4 @@
-﻿# interface-edit v1.14 — Edit 1C CommandInterface.xml (+detect_format_version: ветка автономной EPF/ERF)
+﻿# interface-edit v1.15 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$CIPath,
@@ -396,6 +396,10 @@ $script:typeNormMap = @{
 	"ПланОбмена"="ExchangePlan"; "ЖурналДокументов"="DocumentJournal"
 	"ОбщийМодуль"="CommonModule"; "ОбщаяКоманда"="CommonCommand"
 	"ОбщаяФорма"="CommonForm"; "Подсистема"="Subsystem"
+	"РегистрРасчёта"="CalculationRegister"; "РегистрРасчета"="CalculationRegister"
+	"ПланВидовРасчёта"="ChartOfCalculationTypes"; "ПланВидовРасчета"="ChartOfCalculationTypes"
+	"Роль"="Role"; "ОбщийМакет"="CommonTemplate"; "ЭлементСтиля"="StyleItem"
+	"ОбщийРеквизит"="CommonAttribute"; "ГруппаКоманд"="CommandGroup"
 	# Russian plural
 	"Справочники"="Catalog"; "Документы"="Document"; "Перечисления"="Enum"
 	"Константы"="Constant"; "Отчёты"="Report"; "Отчеты"="Report"; "Обработки"="DataProcessor"
@@ -405,6 +409,10 @@ $script:typeNormMap = @{
 	"БизнесПроцессы"="BusinessProcess"; "Задачи"="Task"
 	"ПланыОбмена"="ExchangePlan"; "ЖурналыДокументов"="DocumentJournal"
 	"Подсистемы"="Subsystem"
+	"РегистрыРасчёта"="CalculationRegister"; "РегистрыРасчета"="CalculationRegister"
+	"ПланыВидовРасчёта"="ChartOfCalculationTypes"; "ПланыВидовРасчета"="ChartOfCalculationTypes"
+	"Роли"="Role"; "ОбщиеМакеты"="CommonTemplate"; "ЭлементыСтиля"="StyleItem"
+	"ОбщиеРеквизиты"="CommonAttribute"; "ГруппыКоманд"="CommandGroup"
 }
 
 function Normalize-CmdName([string]$name) {
