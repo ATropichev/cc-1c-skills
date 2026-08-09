@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.36 — Edit existing 1C metadata object XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+# meta-edit v1.37 — Edit existing 1C metadata object XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -13,6 +13,43 @@ from lxml import etree
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
+class CIDict(dict):
+    # Ключи храним КАК ЕСТЬ: часть из них — имена объектов (табличные части, стандартные
+    # реквизиты), они попадают в XML. Регистронезависим только поиск. Порядок вставки
+    # сохраняется — от него зависит порядок эмиссии.
+    def _actual(self, key):
+        if not isinstance(key, str) or dict.__contains__(self, key):
+            return key
+        ci = self.__dict__.get('_ci')
+        if ci is None or len(ci) != len(self):
+            ci = {k.lower(): k for k in self if isinstance(k, str)}
+            self.__dict__['_ci'] = ci
+        return ci.get(key.lower(), key)
+
+    def __getitem__(self, key):
+        return dict.__getitem__(self, self._actual(key))
+
+    def __contains__(self, key):
+        return dict.__contains__(self, self._actual(key))
+
+    def get(self, key, default=None):
+        return dict.get(self, self._actual(key), default)
+
+    def pop(self, key, *default):
+        return dict.pop(self, self._actual(key), *default)
+
+    def __setitem__(self, key, value):
+        # запись по ключу, отличающемуся регистром, обновляет существующий, а не плодит дубль
+        dict.__setitem__(self, self._actual(key), value)
+
+def ci_json(obj):
+    """Рекурсивно оборачивает разобранный JSON: словари → CIDict, списки обходятся."""
+    if isinstance(obj, dict):
+        return CIDict((k, ci_json(v)) for k, v in obj.items())
+    if isinstance(obj, list):
+        return [ci_json(v) for v in obj]
+    return obj
+
 def ci_parse_args(parser, argv=None):
     """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -3210,7 +3247,7 @@ def main():
         if not os.path.exists(args.DefinitionFile):
             die(f"Definition file not found: {args.DefinitionFile}")
         with open(args.DefinitionFile, "r", encoding="utf-8-sig") as f:
-            definition = json.load(f)
+            definition = ci_json(json.load(f))
 
     # --- Resolve object path ---
     object_path = args.ObjectPath

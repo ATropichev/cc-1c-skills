@@ -1,4 +1,4 @@
-﻿# form-edit v1.13 — Edit 1C managed form elements (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# form-edit v1.14 — Edit 1C managed form elements (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

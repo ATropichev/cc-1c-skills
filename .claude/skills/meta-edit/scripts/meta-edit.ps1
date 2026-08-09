@@ -1,4 +1,4 @@
-﻿# meta-edit v1.36 — Edit existing 1C metadata object XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# meta-edit v1.37 — Edit existing 1C metadata object XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,

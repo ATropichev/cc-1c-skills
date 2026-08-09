@@ -276,11 +276,19 @@ const FAMILIES = [
   // не должно — ps1: null.
   {
     name: 'case-insensitive input: CIDict', py: 'CIDict', ps1: null,
-    variants: [{ id: 'base', authority: 'meta-compile', consumers: [] }],
+    variants: [
+      { id: 'base', authority: 'meta-compile',
+        consumers: [
+          'cf-edit', 'form-compile', 'form-edit', 'interface-edit', 'meta-edit', 'mxl-compile',
+          'role-compile', 'skd-compile', 'subsystem-compile', 'subsystem-edit'] }],
   },
   {
     name: 'case-insensitive input: ci_json', py: 'ci_json', ps1: null,
-    variants: [{ id: 'base', authority: 'meta-compile', consumers: [] }],
+    variants: [
+      { id: 'base', authority: 'meta-compile',
+        consumers: [
+          'cf-edit', 'form-compile', 'form-edit', 'interface-edit', 'meta-edit', 'mxl-compile',
+          'role-compile', 'skd-compile', 'subsystem-compile', 'subsystem-edit'] }],
   },
   {
     // Единственная из трёх, которая нужна КАЖДОМУ порту: DSL читают не все навыки, а параметры — все.

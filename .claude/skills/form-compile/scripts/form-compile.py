@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.190 — Compile 1C managed form from JSON or object metadata (+write_xml_file/write_utf8_bom: общий эталон записи)
+# form-compile v1.191 — Compile 1C managed form from JSON or object metadata (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -15,6 +15,43 @@ from lxml import etree
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
+class CIDict(dict):
+    # Ключи храним КАК ЕСТЬ: часть из них — имена объектов (табличные части, стандартные
+    # реквизиты), они попадают в XML. Регистронезависим только поиск. Порядок вставки
+    # сохраняется — от него зависит порядок эмиссии.
+    def _actual(self, key):
+        if not isinstance(key, str) or dict.__contains__(self, key):
+            return key
+        ci = self.__dict__.get('_ci')
+        if ci is None or len(ci) != len(self):
+            ci = {k.lower(): k for k in self if isinstance(k, str)}
+            self.__dict__['_ci'] = ci
+        return ci.get(key.lower(), key)
+
+    def __getitem__(self, key):
+        return dict.__getitem__(self, self._actual(key))
+
+    def __contains__(self, key):
+        return dict.__contains__(self, self._actual(key))
+
+    def get(self, key, default=None):
+        return dict.get(self, self._actual(key), default)
+
+    def pop(self, key, *default):
+        return dict.pop(self, self._actual(key), *default)
+
+    def __setitem__(self, key, value):
+        # запись по ключу, отличающемуся регистром, обновляет существующий, а не плодит дубль
+        dict.__setitem__(self, self._actual(key), value)
+
+def ci_json(obj):
+    """Рекурсивно оборачивает разобранный JSON: словари → CIDict, списки обходятся."""
+    if isinstance(obj, dict):
+        return CIDict((k, ci_json(v)) for k, v in obj.items())
+    if isinstance(obj, list):
+        return [ci_json(v) for v in obj]
+    return obj
+
 def ci_parse_args(parser, argv=None):
     """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -506,7 +543,7 @@ def load_preset(preset_name, script_dir, out_path_resolved):
     built_in_path = os.path.join(preset_dir, f'{preset_name}.json')
     if os.path.isfile(built_in_path):
         with open(built_in_path, 'r', encoding='utf-8-sig') as f:
-            preset_data = json.load(f)
+            preset_data = ci_json(json.load(f))
         for k in list(preset_data.keys()):
             defaults[k] = _deep_merge(defaults.get(k), preset_data[k])
 
@@ -6399,7 +6436,7 @@ def main():
                 json.dump(dsl, f, ensure_ascii=False, indent=2)
             print(f"[from-object] DSL saved: {dsl_path}")
 
-        defn = json.loads(json.dumps(dsl))  # normalize OrderedDict to regular dict
+        defn = ci_json(json.loads(json.dumps(dsl)))  # normalize OrderedDict to regular dict
         # Convert dict-style elements (from generators) to list-style (expected by compiler)
         defn = _normalize_elements(defn)
     else:
@@ -6410,7 +6447,7 @@ def main():
             sys.exit(1)
 
         with open(json_path, 'r', encoding='utf-8-sig') as f:
-            defn = json.load(f)
+            defn = ci_json(json.load(f))
         global QUERY_BASE_DIR
         QUERY_BASE_DIR = os.path.dirname(os.path.abspath(json_path))
 

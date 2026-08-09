@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-edit v1.19 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+# subsystem-edit v1.20 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -13,6 +13,43 @@ from lxml import etree
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
+class CIDict(dict):
+    # Ключи храним КАК ЕСТЬ: часть из них — имена объектов (табличные части, стандартные
+    # реквизиты), они попадают в XML. Регистронезависим только поиск. Порядок вставки
+    # сохраняется — от него зависит порядок эмиссии.
+    def _actual(self, key):
+        if not isinstance(key, str) or dict.__contains__(self, key):
+            return key
+        ci = self.__dict__.get('_ci')
+        if ci is None or len(ci) != len(self):
+            ci = {k.lower(): k for k in self if isinstance(k, str)}
+            self.__dict__['_ci'] = ci
+        return ci.get(key.lower(), key)
+
+    def __getitem__(self, key):
+        return dict.__getitem__(self, self._actual(key))
+
+    def __contains__(self, key):
+        return dict.__contains__(self, self._actual(key))
+
+    def get(self, key, default=None):
+        return dict.get(self, self._actual(key), default)
+
+    def pop(self, key, *default):
+        return dict.pop(self, self._actual(key), *default)
+
+    def __setitem__(self, key, value):
+        # запись по ключу, отличающемуся регистром, обновляет существующий, а не плодит дубль
+        dict.__setitem__(self, self._actual(key), value)
+
+def ci_json(obj):
+    """Рекурсивно оборачивает разобранный JSON: словари → CIDict, списки обходятся."""
+    if isinstance(obj, dict):
+        return CIDict((k, ci_json(v)) for k, v in obj.items())
+    if isinstance(obj, list):
+        return [ci_json(v) for v in obj]
+    return obj
+
 def ci_parse_args(parser, argv=None):
     """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -482,7 +519,7 @@ def parse_value_list(val):
     """Parse a string or JSON array into a list of strings."""
     val = val.strip()
     if val.startswith("["):
-        arr = json.loads(val)
+        arr = ci_json(json.loads(val))
         return [str(item) for item in arr]
     return [val]
 
@@ -740,7 +777,7 @@ def main():
 
     def do_set_property(json_val):
         nonlocal modify_count
-        prop_def = json.loads(json_val)
+        prop_def = ci_json(json.loads(json_val))
         prop_name = str(prop_def["name"])
         prop_value = str(prop_def.get("value", ""))
 
@@ -837,7 +874,7 @@ def main():
         if not os.path.isabs(def_file):
             def_file = os.path.join(os.getcwd(), def_file)
         with open(def_file, "r", encoding="utf-8-sig") as fh:
-            ops = json.loads(fh.read())
+            ops = ci_json(json.loads(fh.read()))
         if isinstance(ops, list):
             operations = ops
         else:

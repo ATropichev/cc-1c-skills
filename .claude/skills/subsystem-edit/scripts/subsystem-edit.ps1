@@ -1,4 +1,4 @@
-﻿# subsystem-edit v1.19 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+﻿# subsystem-edit v1.20 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$SubsystemPath,

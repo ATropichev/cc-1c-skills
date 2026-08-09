@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.116 — Compile 1C DCS from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# skd-compile v1.117 — Compile 1C DCS from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -12,6 +12,43 @@ from lxml import etree
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
+class CIDict(dict):
+    # Ключи храним КАК ЕСТЬ: часть из них — имена объектов (табличные части, стандартные
+    # реквизиты), они попадают в XML. Регистронезависим только поиск. Порядок вставки
+    # сохраняется — от него зависит порядок эмиссии.
+    def _actual(self, key):
+        if not isinstance(key, str) or dict.__contains__(self, key):
+            return key
+        ci = self.__dict__.get('_ci')
+        if ci is None or len(ci) != len(self):
+            ci = {k.lower(): k for k in self if isinstance(k, str)}
+            self.__dict__['_ci'] = ci
+        return ci.get(key.lower(), key)
+
+    def __getitem__(self, key):
+        return dict.__getitem__(self, self._actual(key))
+
+    def __contains__(self, key):
+        return dict.__contains__(self, self._actual(key))
+
+    def get(self, key, default=None):
+        return dict.get(self, self._actual(key), default)
+
+    def pop(self, key, *default):
+        return dict.pop(self, self._actual(key), *default)
+
+    def __setitem__(self, key, value):
+        # запись по ключу, отличающемуся регистром, обновляет существующий, а не плодит дубль
+        dict.__setitem__(self, self._actual(key), value)
+
+def ci_json(obj):
+    """Рекурсивно оборачивает разобранный JSON: словари → CIDict, списки обходятся."""
+    if isinstance(obj, dict):
+        return CIDict((k, ci_json(v)) for k, v in obj.items())
+    if isinstance(obj, list):
+        return [ci_json(v) for v in obj]
+    return obj
+
 def ci_parse_args(parser, argv=None):
     """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -1592,7 +1629,7 @@ def load_user_styles(base_dir, output_path=None):
     for p in search_paths:
         if os.path.isfile(p):
             with open(p, 'r', encoding='utf-8-sig') as f:
-                user_styles = json.load(f)
+                user_styles = ci_json(json.load(f))
             for name, overrides in user_styles.items():
                 base = dict(AREA_STYLE_PRESETS.get(name, AREA_STYLE_PRESETS['data']))
                 base.update(overrides)
@@ -3029,7 +3066,7 @@ def main():
     else:
         json_text = args.Value
 
-    defn = json.loads(json_text)
+    defn = ci_json(json.loads(json_text))
 
     if not defn.get('dataSets') or len(defn['dataSets']) == 0:
         print("JSON must have at least one entry in 'dataSets'", file=sys.stderr)
