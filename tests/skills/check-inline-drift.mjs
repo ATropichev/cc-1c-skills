@@ -270,6 +270,14 @@ const FAMILIES = [
     ],
   },
 
+  // ─── Значения свойств-перечислений ───────────────────────────────────────
+  // Сама функция одинакова в обоих портах; СПИСКИ значений, на которые она опирается, держит
+  // отдельный гард check-enum-drift.mjs (авторитет тот же — meta-compile).
+  {
+    name: 'normalize_enum_value', py: 'normalize_enum_value', ps1: 'Normalize-EnumValue',
+    variants: [{ id: 'base', authority: 'meta-compile', consumers: ['meta-edit'] }],
+  },
+
   // ─── Регистронезависимый ввод: паритет с PS1 ─────────────────────────────
   // Существует только в PY: PowerShell регистронезависим сам по себе (свойства PSObject, ключи
   // Hashtable, -eq/-contains, имена параметров, ValidateSet), поэтому в .ps1 копии нет и быть

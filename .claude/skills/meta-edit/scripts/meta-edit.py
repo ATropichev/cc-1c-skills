@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.37 — Edit existing 1C metadata object XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+# meta-edit v1.38 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -356,6 +356,9 @@ enum_value_aliases = {
     'НеИндексировать': 'DontIndex', 'Индексировать': 'Index',
     'ИндексироватьСДопУпорядочиванием': 'IndexWithAdditionalOrder',
 }
+
+# Словарь ищет ПОЛЬЗОВАТЕЛЬСКИЙ ввод — поиск регистронезависим, как хеш-таблица PS1.
+enum_value_aliases = CIDict(enum_value_aliases)
 
 valid_enum_values = {
     'RegisterType': ['Balance', 'Turnovers'],
@@ -2025,6 +2028,11 @@ def modify_properties(props_def):
         if len(list(prop_el)) > 0:
             print(f"meta-edit: modify-property: свойство '{prop_name}' структурное (содержит дочерние узлы) — установка скалярного текста повредит XML; не поддерживается", file=sys.stderr)
             sys.exit(1)
+
+        # Значение свойства-перечисления приводим к канону (как это делает meta-compile): иначе
+        # в XML уезжает то, что дала модель, и платформа отвергает выгрузку уже при загрузке.
+        # Неизвестное свойство функция пропускает как есть, неизвестное значение — отвергает.
+        value_str = normalize_enum_value(prop_name, value_str)
 
         # Set inner text — clear children first, set text
         for ch in list(prop_el):

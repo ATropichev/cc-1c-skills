@@ -1,4 +1,4 @@
-﻿# meta-edit v1.37 — Edit existing 1C metadata object XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# meta-edit v1.38 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -2109,6 +2109,11 @@ function Modify-Properties($propsDef) {
 			Write-Error "modify-property: свойство '$propName' структурное (содержит дочерние узлы) — установка скалярного текста повредит XML; не поддерживается"
 			exit 1
 		}
+
+		# Значение свойства-перечисления приводим к канону (как это делает meta-compile): иначе
+		# в XML уезжает то, что дала модель, и платформа отвергает выгрузку уже при загрузке.
+		# Неизвестное свойство функция пропускает как есть, неизвестное значение — отвергает.
+		$valueStr = Normalize-EnumValue $propName $valueStr
 
 		$propEl.InnerText = $valueStr
 		Info "Modified property: $propName = $valueStr"
