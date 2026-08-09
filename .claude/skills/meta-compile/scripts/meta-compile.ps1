@@ -1465,6 +1465,34 @@ $script:stdAttrConditions = @{
 $script:stdAttrTailPattern = @{
 	"AccountingRegister" = '^ExtDimension(Type)?\d+$'
 }
+
+# Состав хвоста задаёт не DSL, а объект, на который регистр ссылается: пар субконто столько,
+# сколько у плана счетов MaxExtDimensionCount. Читаем его из выгрузки — как версию формата из
+# Configuration.xml, — чтобы регистр, описанный неполным DSL, совпал с тем, что материализует
+# платформа. План не найден → хвост не генерируем и говорим об этом в выводе.
+$script:stdAttrTailHint = $null
+$script:stdAttrTailDerived = @{
+	"AccountingRegister" = {
+		param($d, $objectName, $outDir)
+		$ref = "$($d.chartOfAccounts)"
+		if (-not $ref) { return @() }
+		$chartName = $ref -replace '^.*\.', ''    # ссылка вида ChartOfAccounts.X (имя объекта точек не содержит)
+		$path = Join-Path (Join-Path $outDir "ChartsOfAccounts") "$chartName.xml"
+		if (-not (Test-Path -LiteralPath $path)) {
+			$script:stdAttrTailHint = "ChartOfAccounts '$chartName' not found in dump — ExtDimension pairs not generated (platform will add them on load)"
+			return @()
+		}
+		$n = 0
+		if ([System.IO.File]::ReadAllText($path) -match '<MaxExtDimensionCount>(\d+)</MaxExtDimensionCount>') { $n = [int]$matches[1] }
+		$out = @()
+		for ($i = 1; $i -le $n; $i++) {
+			# ExtDimensionN связан с Account через LinkByType (LinkItem = номер), ExtDimensionTypeN — нет.
+			$out += @{ name = "ExtDimension$i"; ov = @{ LinkByType = @{ dataPath = "AccountingRegister.$objectName.StandardAttribute.Account"; linkItem = $i } } }
+			$out += @{ name = "ExtDimensionType$i"; ov = @{} }
+		}
+		return $out
+	}
+}
 function Emit-StandardAttributes {
 	param([string]$indent, [string]$objectType)
 	$attrs = $script:standardAttributesByType[$objectType]
@@ -1491,6 +1519,16 @@ function Emit-StandardAttributes {
 			if ($tailRe -and $k -match $tailRe) { $tail += $k } else { $extra += $k }
 		}
 	}
+	# Хвост, выведенный из связанного объекта: дополняет DSL, а не заменяет его — лишнее из DSL
+	# остаётся (прощаем), недостающее добавляется вместе со своими значениями по умолчанию.
+	$derivedOv = @{}
+	$gen = $script:stdAttrTailDerived[$objectType]
+	if ($gen) {
+		foreach ($e in @(& $gen $def $objName $OutputDir)) {
+			$derivedOv[$e.name] = $e.ov
+			if ($tail -notcontains $e.name) { $tail += $e.name }
+		}
+	}
 	$tail = @($tail | Sort-Object @{e={[int]([regex]::Match($_, '\d+').Value)}}, @{e={ if ($_ -match 'Type\d+$') { 1 } else { 0 } }})
 	X "$indent<StandardAttributes>"
 	foreach ($a in ($extra + $attrs + $tail)) {
@@ -1502,6 +1540,7 @@ function Emit-StandardAttributes {
 		}
 		$ov = @{}
 		if ($profile.ContainsKey($a)) { foreach ($k in $profile[$a].Keys) { $ov[$k] = $profile[$a][$k] } }
+		if ($derivedOv.ContainsKey($a)) { foreach ($k in $derivedOv[$a].Keys) { $ov[$k] = $derivedOv[$a][$k] } }
 		if ($sa) {   # DSL-override применяем всегда при наличии ключа (для не-условных типов тоже, напр. ExchangePlan)
 			$d = $sa.$a
 			if ($d) {
@@ -5261,6 +5300,9 @@ switch ($regResult) {
 }
 
 # Cross-reference hints
+if ($script:stdAttrTailHint) {
+	Write-Host "[HINT] $($script:stdAttrTailHint)"
+}
 if ($objType -eq "AccountingRegister" -and -not $def.chartOfAccounts) {
 	Write-Host "[HINT] AccountingRegister requires ChartOfAccounts reference:"
 	Write-Host "       /meta-edit -Operation modify-property -Value `"ChartOfAccounts=ChartOfAccounts.XXX`""

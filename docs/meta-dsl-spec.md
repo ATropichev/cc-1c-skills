@@ -965,8 +965,10 @@ choiceParameters/indexing/fullTextSearch/dataHistory/…, см. §3–4). При
 Стандартные реквизиты РБ: PeriodAdjustment, Account, RecordType, Active, LineNumber, Recorder, Period,
 далее пары субконто ExtDimensionN/ExtDimensionTypeN (их число задаётся `maxExtDimensionCount` плана счетов).
 Два реквизита условны: `PeriodAdjustment` — при `periodAdjustmentLength > 0`, `RecordType` — при
-`correspondence=false`. ExtDimension1..N связаны с Account через `linkByType` (в блоке `standardAttributes`,
-§7.1.1; DataPath полный).
+`correspondence=false`. ExtDimensionN связаны с Account через `linkByType` (DataPath
+`AccountingRegister.<Имя>.StandardAttribute.Account`, LinkItem = номер), ExtDimensionTypeN — нет.
+Пары берутся из плана счетов, на который ссылается регистр; описывать их в `standardAttributes`
+(§7.1.1) нужно только ради переопределений.
 
 ### 7.6b CalculationRegister (Регистр расчёта)
 

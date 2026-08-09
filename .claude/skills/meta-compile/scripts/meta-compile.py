@@ -1512,6 +1512,39 @@ std_attr_conditions = {
 std_attr_tail_pattern = {
     'AccountingRegister': r'^ExtDimension(Type)?\d+$',
 }
+
+# Состав хвоста задаёт не DSL, а объект, на который регистр ссылается: пар субконто столько,
+# сколько у плана счетов MaxExtDimensionCount. Читаем его из выгрузки — как версию формата из
+# Configuration.xml, — чтобы регистр, описанный неполным DSL, совпал с тем, что материализует
+# платформа. План не найден → хвост не генерируем и говорим об этом в выводе.
+std_attr_tail_hint = None
+
+def _acc_register_ext_dimension_tail(d, object_name, out_dir):
+    global std_attr_tail_hint
+    ref = str(d.get('chartOfAccounts') or '')
+    if not ref:
+        return []
+    chart_name = re.sub(r'^.*\.', '', ref)   # ссылка вида ChartOfAccounts.X (имя объекта точек не содержит)
+    path = os.path.join(out_dir, 'ChartsOfAccounts', chart_name + '.xml')
+    if not os.path.isfile(path):
+        std_attr_tail_hint = ("ChartOfAccounts '%s' not found in dump — ExtDimension pairs not generated "
+                              "(platform will add them on load)" % chart_name)
+        return []
+    with open(path, encoding='utf-8-sig') as f:
+        m = re.search(r'<MaxExtDimensionCount>(\d+)</MaxExtDimensionCount>', f.read())
+    n = int(m.group(1)) if m else 0
+    out = []
+    for i in range(1, n + 1):
+        # ExtDimensionN связан с Account через LinkByType (LinkItem = номер), ExtDimensionTypeN — нет.
+        out.append(('ExtDimension%d' % i,
+                    {'LinkByType': {'dataPath': 'AccountingRegister.%s.StandardAttribute.Account' % object_name,
+                                    'linkItem': i}}))
+        out.append(('ExtDimensionType%d' % i, {}))
+    return out
+
+std_attr_tail_derived = {
+    'AccountingRegister': _acc_register_ext_dimension_tail,
+}
 def emit_standard_attributes(indent, object_type):
     attrs = standard_attributes_by_type.get(object_type)
     if not attrs:
@@ -1542,6 +1575,15 @@ def emit_standard_attributes(indent, object_type):
                 tail.append(k)
             else:
                 extra.append(k)
+    # Хвост, выведенный из связанного объекта: дополняет DSL, а не заменяет его — лишнее из DSL
+    # остаётся (прощаем), недостающее добавляется вместе со своими значениями по умолчанию.
+    derived_ov = {}
+    gen = std_attr_tail_derived.get(object_type)
+    if gen:
+        for name, dov in gen(defn, obj_name, output_dir):
+            derived_ov[name] = dov
+            if name not in tail:
+                tail.append(name)
     tail.sort(key=lambda k: (int(re.search(r'\d+', k).group()), 1 if re.search(r'Type\d+$', k) else 0))
     X(f'{indent}<StandardAttributes>')
     for a in extra + list(attrs) + tail:
@@ -1552,6 +1594,7 @@ def emit_standard_attributes(indent, object_type):
             if not present:
                 continue
         ov = dict(profile.get(a, {}))
+        ov.update(derived_ov.get(a, {}))
         if isinstance(sa, dict):
             d = sa.get(a)
             if d:
@@ -5159,6 +5202,8 @@ elif reg_result == 'no-config':
     print(f'     Configuration.xml: not found at {config_xml_path} (register manually)')
 
 # Cross-reference hints
+if std_attr_tail_hint:
+    print(f'[HINT] {std_attr_tail_hint}')
 if obj_type == 'AccountingRegister' and not defn.get('chartOfAccounts'):
     print('[HINT] AccountingRegister requires ChartOfAccounts reference:')
     print('       /meta-edit -Operation modify-property -Value "ChartOfAccounts=ChartOfAccounts.XXX"')
