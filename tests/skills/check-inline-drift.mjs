@@ -38,10 +38,7 @@ const FAMILIES = [
       { id: 'full', authority: 'cf-edit',
         consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
           'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
-          'subsystem-compile', 'subsystem-edit', 'template-add'] },
-      { id: 'xdto-compile-own', authority: 'xdto-compile', consumers: [] },
-      { id: 'xdto-edit-own', authority: 'xdto-edit', consumers: [] },
-      // Итог: xdto-* несут свою урезанную реализацию guard-а вместо общей — см. FINDINGS.md.
+          'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile', 'xdto-edit'] },
     ],
   },
   {
@@ -50,9 +47,7 @@ const FAMILIES = [
       { id: 'full', authority: 'cf-edit',
         consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
           'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
-          'subsystem-compile', 'subsystem-edit', 'template-add'] },
-      // В PY xdto-* держат ту же логику встроенной в assert_edit_allowed, отдельной функции нет.
-      { id: 'xdto-own', authority: 'xdto-compile', consumers: [], consumersPs1: ['xdto-edit'], port: 'ps1' },
+          'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile', 'xdto-edit'] },
     ],
   },
   {
@@ -61,10 +56,9 @@ const FAMILIES = [
       { id: 'full', authority: 'cf-edit',
         consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
           'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
-          'subsystem-compile', 'subsystem-edit', 'template-add'],
+          'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile', 'xdto-edit'],
         // *-info навыки несут хелпер только в PS1-порте — см. debug/inline-utils/FINDINGS.md.
         consumersPs1: ['form-info', 'meta-info', 'mxl-info', 'role-info', 'skd-info'] },
-      { id: 'xdto-own', authority: 'xdto-compile', consumers: [], consumersPs1: ['xdto-edit'], port: 'ps1' },
     ],
   },
   {
@@ -73,8 +67,7 @@ const FAMILIES = [
       { id: 'full', authority: 'cf-edit',
         consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
           'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
-          'subsystem-compile', 'subsystem-edit', 'template-add'],
-        consumersPs1: ['xdto-compile', 'xdto-edit'] },
+          'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile', 'xdto-edit'] },
     ],
   },
   {
@@ -83,8 +76,8 @@ const FAMILIES = [
       { id: 'full', authority: 'cf-edit',
         consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
           'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
-          'subsystem-compile', 'subsystem-edit', 'template-add'],
-        consumersPs1: ['support-edit', 'xdto-compile'] },
+          'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile', 'xdto-edit'],
+        consumersPs1: ['support-edit'] },
     ],
   },
 
