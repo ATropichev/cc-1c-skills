@@ -1,4 +1,4 @@
-﻿# subsystem-validate v1.3 — Validate 1C subsystem XML structure (+Report-*: общий эталон вывода валидаторов)
+﻿# subsystem-validate v1.4 — Validate 1C subsystem XML structure (+Report-*: общий эталон вывода валидаторов)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$SubsystemPath,

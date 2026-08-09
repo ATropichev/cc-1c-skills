@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# web-info v1.3 — Apache & 1C publication status
+# web-info v1.4 — Apache & 1C publication status
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 """
@@ -15,6 +15,28 @@ import socket
 import sys
 
 import psutil
+
+# Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
+# регистр не различают, в argparse совпадение точное.
+def ci_parse_args(parser, argv=None):
+    """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    names = {s.lower(): s for a in parser._actions for s in a.option_strings}
+    for i, tok in enumerate(argv):
+        if tok.startswith('-') and tok.lower() in names:
+            argv[i] = names[tok.lower()]
+    # choices — зеркало [ValidateSet]; канонизируем ДО разбора, иначе argparse отвергнет регистр
+    choice_map = {}
+    for a in parser._actions:
+        if a.choices:
+            for s in a.option_strings:
+                choice_map[s] = {str(c).lower(): c for c in a.choices}
+    for i in range(len(argv) - 1):
+        m = choice_map.get(argv[i])
+        if m and argv[i + 1].lower() in m:
+            argv[i + 1] = m[argv[i + 1].lower()]
+    return parser.parse_args(argv)
+
 
 
 def get_httpd_by_exe(httpd_exe_norm):
@@ -38,7 +60,7 @@ def main():
     sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description='Apache & 1C publication status', allow_abbrev=False)
     parser.add_argument('-ApachePath', type=str, default='', help='Apache root (default: tools\\apache24)')
-    args = parser.parse_args()
+    args = ci_parse_args(parser)
 
     # --- Resolve ApachePath ---
     apache_path = args.ApachePath

@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.19 — Borrow objects from configuration into extension (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+﻿# cfe-borrow v1.20 — Borrow objects from configuration into extension (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,

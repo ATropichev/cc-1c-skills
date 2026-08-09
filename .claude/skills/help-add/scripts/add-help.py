@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# help-add v1.18 — Add built-in help to 1C object (+write_xml_file/write_utf8_bom: общий эталон записи)
+# help-add v1.19 — Add built-in help to 1C object (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -9,6 +9,28 @@ import re
 import sys
 
 from lxml import etree
+
+# Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
+# регистр не различают, в argparse совпадение точное.
+def ci_parse_args(parser, argv=None):
+    """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    names = {s.lower(): s for a in parser._actions for s in a.option_strings}
+    for i, tok in enumerate(argv):
+        if tok.startswith('-') and tok.lower() in names:
+            argv[i] = names[tok.lower()]
+    # choices — зеркало [ValidateSet]; канонизируем ДО разбора, иначе argparse отвергнет регистр
+    choice_map = {}
+    for a in parser._actions:
+        if a.choices:
+            for s in a.option_strings:
+                choice_map[s] = {str(c).lower(): c for c in a.choices}
+    for i in range(len(argv) - 1):
+        m = choice_map.get(argv[i])
+        if m and argv[i + 1].lower() in m:
+            argv[i + 1] = m[argv[i + 1].lower()]
+    return parser.parse_args(argv)
+
 
 NSMAP = {"md": "http://v8.1c.ru/8.3/MDClasses"}
 
@@ -290,7 +312,7 @@ def main():
     parser.add_argument("-ObjectName", required=True)
     parser.add_argument("-Lang", default="ru")
     parser.add_argument("-SrcDir", default="src")
-    args = parser.parse_args()
+    args = ci_parse_args(parser)
 
     object_name = args.ObjectName
     lang = args.Lang

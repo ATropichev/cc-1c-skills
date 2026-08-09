@@ -1,4 +1,4 @@
-﻿# xdto-info v1.0 — Analyze 1C XDTO package structure
+﻿# xdto-info v1.1 — Analyze 1C XDTO package structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)]

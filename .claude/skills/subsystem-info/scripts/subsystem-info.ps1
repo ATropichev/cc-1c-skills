@@ -1,4 +1,4 @@
-﻿# subsystem-info v1.3 — Compact summary of 1C subsystem structure (+единое имя хелпера состояния поддержки)
+﻿# subsystem-info v1.4 — Compact summary of 1C subsystem structure (+единое имя хелпера состояния поддержки)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)][Alias('Path')][string]$SubsystemPath,

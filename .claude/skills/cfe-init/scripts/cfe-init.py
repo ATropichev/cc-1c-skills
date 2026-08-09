@@ -1,9 +1,31 @@
 #!/usr/bin/env python3
-# cfe-init v1.9 — Create 1C configuration extension scaffold (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
+# cfe-init v1.10 — Create 1C configuration extension scaffold (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration extension."""
 import sys, os, re, argparse, uuid
 from xml.etree import ElementTree as ET
+
+# Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
+# регистр не различают, в argparse совпадение точное.
+def ci_parse_args(parser, argv=None):
+    """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    names = {s.lower(): s for a in parser._actions for s in a.option_strings}
+    for i, tok in enumerate(argv):
+        if tok.startswith('-') and tok.lower() in names:
+            argv[i] = names[tok.lower()]
+    # choices — зеркало [ValidateSet]; канонизируем ДО разбора, иначе argparse отвергнет регистр
+    choice_map = {}
+    for a in parser._actions:
+        if a.choices:
+            for s in a.option_strings:
+                choice_map[s] = {str(c).lower(): c for c in a.choices}
+    for i in range(len(argv) - 1):
+        m = choice_map.get(argv[i])
+        if m and argv[i + 1].lower() in m:
+            argv[i + 1] = m[argv[i + 1].lower()]
+    return parser.parse_args(argv)
+
 
 def esc_xml_text(s):
     # Эскейп ТЕКСТА элемента: только & < > — кавычку и апостроф платформа держит сырыми.
@@ -49,7 +71,7 @@ def main():
     parser.add_argument('-CompatibilityMode', dest='CompatibilityMode', default='Version8_3_24')
     parser.add_argument('-ConfigPath', dest='ConfigPath', default=None)
     parser.add_argument('-NoRole', dest='NoRole', action='store_true')
-    args = parser.parse_args()
+    args = ci_parse_args(parser)
 
     name = args.Name
     synonym = args.Synonym if args.Synonym else name

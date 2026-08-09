@@ -1,4 +1,4 @@
-﻿# cfe-patch-method v2.6 — Source-aware method interceptor for 1C extension (CFE) (+прощающий ввод: имя каталога наравне с именем типа)
+﻿# cfe-patch-method v2.7 — Source-aware method interceptor for 1C extension (CFE) (+прощающий ввод: имя каталога наравне с именем типа)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.189 — Compile 1C managed form from JSON or object metadata (+write_xml_file/write_utf8_bom: общий эталон записи)
+# form-compile v1.190 — Compile 1C managed form from JSON or object metadata (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -12,6 +12,28 @@ import xml.etree.ElementTree as ET
 from collections import OrderedDict
 
 from lxml import etree
+
+# Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
+# регистр не различают, в argparse совпадение точное.
+def ci_parse_args(parser, argv=None):
+    """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    names = {s.lower(): s for a in parser._actions for s in a.option_strings}
+    for i, tok in enumerate(argv):
+        if tok.startswith('-') and tok.lower() in names:
+            argv[i] = names[tok.lower()]
+    # choices — зеркало [ValidateSet]; канонизируем ДО разбора, иначе argparse отвергнет регистр
+    choice_map = {}
+    for a in parser._actions:
+        if a.choices:
+            for s in a.option_strings:
+                choice_map[s] = {str(c).lower(): c for c in a.choices}
+    for i in range(len(argv) - 1):
+        m = choice_map.get(argv[i])
+        if m and argv[i + 1].lower() in m:
+            argv[i + 1] = m[argv[i + 1].lower()]
+    return parser.parse_args(argv)
+
 
 
 # ============================================================
@@ -6223,7 +6245,7 @@ def main():
     parser.add_argument('-Purpose', type=str, default=None)
     parser.add_argument('-Preset', type=str, default='erp-standard')
     parser.add_argument('-EmitDsl', type=str, default=None)
-    args = parser.parse_args()
+    args = ci_parse_args(parser)
 
     # Form name -> purpose mapping
     _FORM_NAME_TO_PURPOSE = {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# support-edit v1.0 — Toggle 1C configuration support state (Ext/ParentConfigurations.bin)
+# support-edit v1.1 — Toggle 1C configuration support state (Ext/ParentConfigurations.bin)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -12,11 +12,33 @@ from lxml import etree
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
+# Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
+# регистр не различают, в argparse совпадение точное.
+def ci_parse_args(parser, argv=None):
+    """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    names = {s.lower(): s for a in parser._actions for s in a.option_strings}
+    for i, tok in enumerate(argv):
+        if tok.startswith('-') and tok.lower() in names:
+            argv[i] = names[tok.lower()]
+    # choices — зеркало [ValidateSet]; канонизируем ДО разбора, иначе argparse отвергнет регистр
+    choice_map = {}
+    for a in parser._actions:
+        if a.choices:
+            for s in a.option_strings:
+                choice_map[s] = {str(c).lower(): c for c in a.choices}
+    for i in range(len(argv) - 1):
+        m = choice_map.get(argv[i])
+        if m and argv[i + 1].lower() in m:
+            argv[i + 1] = m[argv[i + 1].lower()]
+    return parser.parse_args(argv)
+
+
 parser = argparse.ArgumentParser(description="Toggle 1C support state", allow_abbrev=False)
 parser.add_argument("-Path", "-TargetPath", dest="Path", required=True, help="Путь к объекту/форме/макету или каталогу дампа")
 parser.add_argument("-Set", choices=["editable", "off-support", "locked"], default=None)
 parser.add_argument("-Capability", choices=["on", "off"], default=None)
-args = parser.parse_args()
+args = ci_parse_args(parser)
 
 if (not args.Set and not args.Capability) or (args.Set and args.Capability):
     sys.stderr.write("Укажите ровно одно: -Set editable|off-support|locked  ЛИБО  -Capability on|off\n")

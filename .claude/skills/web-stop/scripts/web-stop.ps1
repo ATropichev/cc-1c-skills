@@ -1,4 +1,4 @@
-﻿# web-stop v1.0 — Stop Apache HTTP Server
+﻿# web-stop v1.1 — Stop Apache HTTP Server
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS

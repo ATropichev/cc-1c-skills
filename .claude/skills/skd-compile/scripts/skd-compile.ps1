@@ -1,4 +1,4 @@
-﻿# skd-compile v1.115 — Compile 1C DCS from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# skd-compile v1.116 — Compile 1C DCS from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,

@@ -1,4 +1,4 @@
-﻿# role-compile v1.22 — Compile 1C role from JSON (+русские алиасы типов: формы с ё и без)
+﻿# role-compile v1.23 — Compile 1C role from JSON (+русские алиасы типов: формы с ё и без)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

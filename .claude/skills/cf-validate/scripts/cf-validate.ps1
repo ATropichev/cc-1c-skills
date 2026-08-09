@@ -1,4 +1,4 @@
-﻿# cf-validate v1.5 — Validate 1C configuration root structure
+﻿# cf-validate v1.6 — Validate 1C configuration root structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

@@ -1,4 +1,4 @@
-﻿# web-info v1.3 — Apache & 1C publication status
+﻿# web-info v1.4 — Apache & 1C publication status
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS

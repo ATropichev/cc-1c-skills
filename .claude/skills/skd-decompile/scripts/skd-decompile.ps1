@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.91 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.92 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

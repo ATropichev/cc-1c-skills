@@ -1,8 +1,30 @@
 #!/usr/bin/env python3
-# cf-init v1.10 — Create empty 1C configuration scaffold (+write_xml_file/write_utf8_bom: общий эталон записи)
+# cf-init v1.11 — Create empty 1C configuration scaffold (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration."""
 import sys, os, argparse, re, uuid
+
+# Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
+# регистр не различают, в argparse совпадение точное.
+def ci_parse_args(parser, argv=None):
+    """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
+    argv = list(sys.argv[1:] if argv is None else argv)
+    names = {s.lower(): s for a in parser._actions for s in a.option_strings}
+    for i, tok in enumerate(argv):
+        if tok.startswith('-') and tok.lower() in names:
+            argv[i] = names[tok.lower()]
+    # choices — зеркало [ValidateSet]; канонизируем ДО разбора, иначе argparse отвергнет регистр
+    choice_map = {}
+    for a in parser._actions:
+        if a.choices:
+            for s in a.option_strings:
+                choice_map[s] = {str(c).lower(): c for c in a.choices}
+    for i in range(len(argv) - 1):
+        m = choice_map.get(argv[i])
+        if m and argv[i + 1].lower() in m:
+            argv[i + 1] = m[argv[i + 1].lower()]
+    return parser.parse_args(argv)
+
 
 def esc_xml_text(s):
     # Эскейп ТЕКСТА элемента: только & < > — кавычку и апостроф платформа держит сырыми.
@@ -43,7 +65,7 @@ def main():
     # Дефолт консервативный: 2.17 читается всеми платформами.
     parser.add_argument('-FormatVersion', dest='FormatVersion', default='2.17',
                         choices=['2.17', '2.18', '2.19', '2.20', '2.21'])
-    args = parser.parse_args()
+    args = ci_parse_args(parser)
 
     name = args.Name
     synonym = args.Synonym if args.Synonym else name

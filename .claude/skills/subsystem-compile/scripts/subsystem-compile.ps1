@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.23 — Create 1C subsystem from JSON definition (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+﻿# subsystem-compile v1.24 — Create 1C subsystem from JSON definition (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,

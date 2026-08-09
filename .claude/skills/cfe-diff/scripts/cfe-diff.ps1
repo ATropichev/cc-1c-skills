@@ -1,4 +1,4 @@
-﻿# cfe-diff v1.1 — Analyze and compare 1C configuration extension (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+﻿# cfe-diff v1.2 — Analyze and compare 1C configuration extension (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

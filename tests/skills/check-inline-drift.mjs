@@ -283,8 +283,24 @@ const FAMILIES = [
     variants: [{ id: 'base', authority: 'meta-compile', consumers: [] }],
   },
   {
+    // Единственная из трёх, которая нужна КАЖДОМУ порту: DSL читают не все навыки, а параметры — все.
     name: 'case-insensitive input: ci_parse_args', py: 'ci_parse_args', ps1: null,
-    variants: [{ id: 'base', authority: 'meta-compile', consumers: [] }],
+    variants: [
+      { id: 'base', authority: 'meta-compile',
+        consumers: [
+          'cf-edit', 'cf-info', 'cf-init', 'cf-validate', 'cfe-borrow', 'cfe-diff', 'cfe-init',
+          'cfe-patch-method', 'cfe-validate', 'db-create', 'db-dump-cf', 'db-dump-dt', 'db-dump-xml',
+          'db-load-cf', 'db-load-dt', 'db-load-git', 'db-load-xml', 'db-run', 'db-update', 'epf-build',
+          'epf-dump', 'epf-init', 'epf-validate', 'erf-init', 'form-add', 'form-compile',
+          'form-decompile', 'form-edit', 'form-info', 'form-remove', 'form-validate', 'help-add',
+          'img-grid', 'interface-edit', 'interface-validate', 'meta-decompile', 'meta-edit', 'meta-info',
+          'meta-remove', 'meta-validate', 'mxl-compile', 'mxl-decompile', 'mxl-info', 'mxl-validate',
+          'role-compile', 'role-info', 'role-validate', 'skd-compile', 'skd-decompile', 'skd-edit',
+          'skd-info', 'skd-validate', 'subsystem-compile', 'subsystem-edit', 'subsystem-info',
+          'subsystem-validate', 'support-edit', 'template-add', 'template-remove', 'web-info',
+          'web-publish', 'web-stop', 'web-unpublish', 'xdto-compile', 'xdto-decompile', 'xdto-edit',
+          'xdto-info', 'xdto-validate'] },
+    ],
   },
 
 ];

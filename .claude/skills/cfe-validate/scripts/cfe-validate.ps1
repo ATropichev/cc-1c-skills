@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.6 — Validate 1C configuration extension structure (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+﻿# cfe-validate v1.7 — Validate 1C configuration extension structure (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

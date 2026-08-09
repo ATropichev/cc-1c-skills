@@ -1,4 +1,4 @@
-﻿# interface-validate v1.2 — Validate 1C CommandInterface.xml structure (+Report-*: общий эталон вывода валидаторов)
+﻿# interface-validate v1.3 — Validate 1C CommandInterface.xml structure (+Report-*: общий эталон вывода валидаторов)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$CIPath,

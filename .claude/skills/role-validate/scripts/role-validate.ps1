@@ -1,4 +1,4 @@
-﻿# role-validate v1.1 — Validate 1C role structure
+﻿# role-validate v1.2 — Validate 1C role structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
