@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-add v1.23 — Add managed form to 1C config object
+# form-add v1.24 — Add managed form to 1C config object (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -274,12 +274,12 @@ def save_xml_with_bom(tree, path):
         f.write(xml_bytes)
 
 
-def write_text_with_bom(path, text):
-    """Write text to file with UTF-8 BOM."""
-    # newline="" => без трансляции: в текстовом режиме Python на Windows превратил
-    # бы \n в \r\n, а на macOS оставил \n — вывод зависел бы от ОС.
-    with open(path, "w", encoding="utf-8-sig", newline="") as f:
-        f.write(text)
+def write_utf8_bom(path, content):
+    # newline='' — без трансляции: иначе текстовый режим Python дал бы CRLF на Windows
+    # и LF на macOS, то есть вывод навыка зависел бы от ОС.
+    with open(path, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write(content)
+
 
 
 def write_xml_file(path, content):
@@ -291,7 +291,7 @@ def write_xml_file(path, content):
     Модуль .bsl сюда НЕ идёт — он пишется отдельно.
     """
     text = content.replace('\r\n', '\n').replace('\n', '\r\n').rstrip('\r\n')
-    write_text_with_bom(path, text)
+    write_utf8_bom(path, text)
 
 
 def main():
@@ -641,7 +641,7 @@ def main():
         # Модуль пишем в каноне платформы: CRLF в разделителях строк (корпус: 2643 CRLF,
         # чисто-LF 0 из 3001). Хвостовой перевод НЕ навязываем — у платформы он
         # неканоничен (1235 модулей с ним, 766 без).
-        write_text_with_bom(module_path, module_bsl.replace('\r\n', '\n').replace('\n', '\r\n'))
+        write_utf8_bom(module_path, module_bsl.replace('\r\n', '\n').replace('\n', '\r\n'))
 
     # --- Phase 4: Register in parent object ---
 

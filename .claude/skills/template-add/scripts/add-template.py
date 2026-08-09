@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# template-add v1.21 — Add template to 1C object
+# template-add v1.22 — Add template to 1C object (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -246,15 +246,12 @@ def save_xml_with_bom(tree, path):
         f.write(xml_bytes)
 
 
-def write_text_with_bom(path, text):
-    """Write text to file with UTF-8 BOM.
+def write_utf8_bom(path, content):
+    # newline='' — без трансляции: иначе текстовый режим Python дал бы CRLF на Windows
+    # и LF на macOS, то есть вывод навыка зависел бы от ОС.
+    with open(path, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write(content)
 
-    newline="" обязателен: в текстовом режиме Python на Windows превратил бы \\n в
-    \\r\\n, а на macOS оставил \\n — вывод навыка зависел бы от ОС. Через эту функцию
-    идёт HTML-макет, а его платформа хранит именно с LF (корпус: 399 LF из 400).
-    """
-    with open(path, "w", encoding="utf-8-sig", newline="") as f:
-        f.write(text)
 
 
 def write_xml_file(path, content):
@@ -266,7 +263,7 @@ def write_xml_file(path, content):
     HTML-макет сюда НЕ идёт — платформа хранит его с LF.
     """
     text = content.replace('\r\n', '\n').replace('\n', '\r\n').rstrip('\r\n')
-    write_text_with_bom(path, text)
+    write_utf8_bom(path, text)
 
 
 def detect_format_version(d):
@@ -451,10 +448,10 @@ def main():
             '</body>\n'
             '</html>'
         )
-        write_text_with_bom(template_file_path, content)
+        write_utf8_bom(template_file_path, content)
 
     elif template_type == "Text":
-        write_text_with_bom(template_file_path, "")
+        write_utf8_bom(template_file_path, "")
 
     elif template_type == "SpreadsheetDocument":
         # Пустой макет — самозакрывающимся корнем: пустых пар платформа не пишет

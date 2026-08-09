@@ -1,4 +1,4 @@
-﻿# subsystem-edit v1.16 — Edit existing 1C subsystem XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# subsystem-edit v1.17 — Edit existing 1C subsystem XML (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$SubsystemPath,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-init v1.8 — Create 1C configuration extension scaffold (CFE) (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+# cfe-init v1.9 — Create 1C configuration extension scaffold (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration extension."""
 import sys, os, re, argparse, uuid
@@ -13,8 +13,11 @@ def new_uuid():
     return str(uuid.uuid4())
 
 def write_utf8_bom(path, content):
+    # newline='' — без трансляции: иначе текстовый режим Python дал бы CRLF на Windows
+    # и LF на macOS, то есть вывод навыка зависел бы от ОС.
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         f.write(content)
+
 
 def write_xml_file(path, content):
     """XML в каноне выгрузки Конфигуратора: CRLF в разделителях, без перевода в конце.

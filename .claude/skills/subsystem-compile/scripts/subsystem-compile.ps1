@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.21 — Create 1C subsystem from JSON definition (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# subsystem-compile v1.22 — Create 1C subsystem from JSON definition (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,

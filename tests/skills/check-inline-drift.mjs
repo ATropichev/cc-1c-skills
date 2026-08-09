@@ -111,6 +111,25 @@ const FAMILIES = [
     ],
   },
 
+  // ─── Запись файла в каноне выгрузки ──────────────────────────────────────
+  {
+    name: 'write_xml_file', py: 'write_xml_file', ps1: 'Write-XmlFile',
+    variants: [
+      { id: 'base', authority: 'cf-init',
+        consumers: ['cfe-init', 'epf-init', 'erf-init', 'form-add', 'help-add', 'template-add'],
+        consumersPy: ['cfe-borrow'] },
+    ],
+  },
+  {
+    name: 'write_utf8_bom', py: 'write_utf8_bom', ps1: null,
+    variants: [
+      { id: 'base', authority: 'cf-init',
+        consumers: ['cfe-borrow', 'cfe-init', 'epf-init', 'erf-init', 'form-add', 'form-compile',
+          'help-add', 'meta-compile', 'mxl-compile', 'role-compile', 'skd-compile',
+          'subsystem-compile', 'subsystem-edit', 'template-add'] },
+    ],
+  },
+
   // ─── Отчёт валидаторов ───────────────────────────────────────────────────
   // Два варианта по способу вывода: буферизованный Out-Line копит отчёт в $script:output, что даёт
   // -OutFile (та же выдача в файл) и вставку заголовка в начало; потоковый Write-Host этого не умеет.
@@ -265,7 +284,6 @@ const DRIFTED = [
   { name: 'get_ml_text', py: 'get_ml_text', ps1: 'Get-MLText', maxVariants: { py: 7, ps1: 6 } },
   { name: 'import_fragment', py: 'import_fragment', ps1: 'Import-Fragment', maxVariants: { py: 5, ps1: 4 } },
   { name: 'get_child_indent', py: 'get_child_indent', ps1: 'Get-ChildIndent', maxVariants: { py: 4, ps1: 3 } },
-  { name: 'write_xml_file', py: 'write_xml_file', ps1: null, maxVariants: { py: 3 } },
 ];
 
 // ─── Извлечение тел функций ─────────────────────────────────────────────────

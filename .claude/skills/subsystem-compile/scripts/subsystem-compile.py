@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-compile v1.21 — Create 1C subsystem from JSON definition (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+# subsystem-compile v1.22 — Create 1C subsystem from JSON definition (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -256,8 +256,11 @@ def new_uuid():
 
 
 def write_utf8_bom(path, content):
+    # newline='' — без трансляции: иначе текстовый режим Python дал бы CRLF на Windows
+    # и LF на macOS, то есть вывод навыка зависел бы от ОС.
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         f.write(content)
+
 
 
 def split_camel_case(name):

@@ -1,4 +1,4 @@
-﻿# form-compile v1.188 — Compile 1C managed form from JSON or object metadata (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# form-compile v1.189 — Compile 1C managed form from JSON or object metadata (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,

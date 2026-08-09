@@ -1,4 +1,4 @@
-﻿# epf-init v1.5 — Init 1C external data processor scaffold (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# epf-init v1.6 — Init 1C external data processor scaffold (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

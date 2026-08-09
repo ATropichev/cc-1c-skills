@@ -1,4 +1,4 @@
-﻿# help-add v1.17 — Add built-in help to 1C object (+detect_format_version: ветка автономной EPF/ERF)
+﻿# help-add v1.18 — Add built-in help to 1C object (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

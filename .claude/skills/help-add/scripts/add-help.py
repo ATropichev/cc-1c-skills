@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# help-add v1.17 — Add built-in help to 1C object (+detect_format_version: ветка автономной EPF/ERF)
+# help-add v1.18 — Add built-in help to 1C object (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -263,15 +263,12 @@ def save_xml_with_bom(tree, path):
         f.write(xml_bytes)
 
 
-def write_text_with_bom(path, text):
-    """Write text to file with UTF-8 BOM.
+def write_utf8_bom(path, content):
+    # newline='' — без трансляции: иначе текстовый режим Python дал бы CRLF на Windows
+    # и LF на macOS, то есть вывод навыка зависел бы от ОС.
+    with open(path, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write(content)
 
-    newline="" обязателен: в текстовом режиме Python на Windows превратил бы \\n в
-    \\r\\n, а на macOS оставил \\n — вывод навыка зависел бы от ОС. Через эту функцию
-    идёт HTML-страница справки, а её платформа хранит именно с LF (корпус: 399 LF из 400).
-    """
-    with open(path, "w", encoding="utf-8-sig", newline="") as f:
-        f.write(text)
 
 
 def write_xml_file(path, content):
@@ -283,7 +280,7 @@ def write_xml_file(path, content):
     HTML-страница сюда НЕ идёт — платформа хранит её с LF.
     """
     text = content.replace('\r\n', '\n').replace('\n', '\r\n').rstrip('\r\n')
-    write_text_with_bom(path, text)
+    write_utf8_bom(path, text)
 
 
 def main():
@@ -352,7 +349,7 @@ def main():
         '</html>'
     )
 
-    write_text_with_bom(help_html_path, help_html)
+    write_utf8_bom(help_html_path, help_html)
 
     # --- 3. Check IncludeHelpInContents in form metadata ---
 

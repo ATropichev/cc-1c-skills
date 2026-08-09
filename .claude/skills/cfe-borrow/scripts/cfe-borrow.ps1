@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.17 — Borrow objects from configuration into extension (CFE) (+detect_format_version: ветка автономной EPF/ERF)
+﻿# cfe-borrow v1.18 — Borrow objects from configuration into extension (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,

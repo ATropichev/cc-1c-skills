@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.188 — Compile 1C managed form from JSON or object metadata (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+# form-compile v1.189 — Compile 1C managed form from JSON or object metadata (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -2123,8 +2123,11 @@ def emit_conditional_appearance(lines, items, indent, block_view_mode=None, bloc
 
 
 def write_utf8_bom(path, content):
+    # newline='' — без трансляции: иначе текстовый режим Python дал бы CRLF на Windows
+    # и LF на macOS, то есть вывод навыка зависел бы от ОС.
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         f.write(content)
+
 
 
 # --- ID allocator ---

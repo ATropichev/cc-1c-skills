@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mxl-compile v1.11 — Compile 1C spreadsheet from JSON (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+# mxl-compile v1.12 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -199,8 +199,11 @@ def esc_xml_text(s):
 
 
 def write_utf8_bom(path, content):
+    # newline='' — без трансляции: иначе текстовый режим Python дал бы CRLF на Windows
+    # и LF на macOS, то есть вывод навыка зависел бы от ОС.
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         f.write(content)
+
 
 
 def detect_format_version(d):

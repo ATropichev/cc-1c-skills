@@ -1,4 +1,4 @@
-﻿# meta-compile v1.91 — Compile 1C metadata object from JSON (+resolve_type_str: срезание префикса cfg:/d5p1:)
+﻿# meta-compile v1.92 — Compile 1C metadata object from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

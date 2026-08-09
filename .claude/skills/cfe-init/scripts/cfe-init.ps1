@@ -1,4 +1,4 @@
-﻿# cfe-init v1.8 — Create 1C configuration extension scaffold (CFE) (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# cfe-init v1.9 — Create 1C configuration extension scaffold (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]

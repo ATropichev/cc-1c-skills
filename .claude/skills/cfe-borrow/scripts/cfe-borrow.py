@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.17 — Borrow objects from configuration into extension (CFE) (+detect_format_version: ветка автономной EPF/ERF)
+# cfe-borrow v1.18 — Borrow objects from configuration into extension (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -446,16 +446,12 @@ def save_xml_bom(tree, path):
         f.write(xml_bytes)
 
 
-def save_text_bom(path, text):
-    """Записать текст как есть, ничего не нормализуя.
+def write_utf8_bom(path, content):
+    # newline='' — без трансляции: иначе текстовый режим Python дал бы CRLF на Windows
+    # и LF на macOS, то есть вывод навыка зависел бы от ОС.
+    with open(path, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write(content)
 
-    Для файлов, которые мы ПРАВИМ: переводы строк уже пришли из самого файла, и
-    менять их нельзя (контракт #44/#46/#47). newline="" обязателен — без него
-    текстовый режим Python дал бы CRLF на Windows и LF на macOS, то есть вывод
-    навыка зависел бы от ОС.
-    """
-    with open(path, "w", encoding="utf-8-sig", newline="") as fh:
-        fh.write(text)
 
 
 def write_xml_file(path, content):
@@ -467,7 +463,7 @@ def write_xml_file(path, content):
     Только для файлов, которые СОЗДАЁМ: правка существующего наследует его стиль.
     """
     text = content.replace('\r\n', '\n').replace('\n', '\r\n').rstrip('\r\n')
-    save_text_bom(path, text)
+    write_utf8_bom(path, text)
 
 
 def new_guid():
@@ -1069,7 +1065,7 @@ def main():
                 obj_content = re.sub(r'<ChildObjects\s*/>', f"<ChildObjects>{all_attr_xml}\r\n\t\t</ChildObjects>", obj_content)
             else:
                 obj_content = obj_content.replace("</ChildObjects>", f"{all_attr_xml}\r\n\t\t</ChildObjects>")
-            save_text_bom(obj_file, obj_content)
+            write_utf8_bom(obj_file, obj_content)
             info(f"  Merged {added} attribute(s) into: {obj_file}")
 
     # --- 11h. Borrow main attribute orchestrator ---
@@ -1156,7 +1152,7 @@ def main():
                     f"<ChildObjects>{existing_inner}\r\n{adopted_content}\r\n\t\t</ChildObjects>"
                 )
 
-        save_text_bom(obj_file, obj_content)
+        write_utf8_bom(obj_file, obj_content)
         info(f"  Enriched object: {obj_file}")
 
         # Step 4: Collect all reference types and borrow as shells
@@ -1646,7 +1642,7 @@ def main():
         if os.path.isfile(module_bsl_file):
             info("  Preserved existing Module.bsl")
         else:
-            save_text_bom(module_bsl_file, "")
+            write_utf8_bom(module_bsl_file, "")
             info(f"  Created: {module_bsl_file}")
 
         # 7. Register form in parent object ChildObjects

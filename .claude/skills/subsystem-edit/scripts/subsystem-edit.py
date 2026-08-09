@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-edit v1.16 — Edit existing 1C subsystem XML (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+# subsystem-edit v1.17 — Edit existing 1C subsystem XML (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -204,8 +204,11 @@ def esc_xml_text(s):
 
 
 def write_utf8_bom(path, content):
+    # newline='' — без трансляции: иначе текстовый режим Python дал бы CRLF на Windows
+    # и LF на macOS, то есть вывод навыка зависел бы от ОС.
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         f.write(content)
+
 
 
 # Объявления пространств имён — одной переменной: место эмиссии её только подставляет.

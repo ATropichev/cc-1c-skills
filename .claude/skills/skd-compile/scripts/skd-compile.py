@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.114 — Compile 1C DCS from JSON (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+# skd-compile v1.115 — Compile 1C DCS from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -254,8 +254,11 @@ def new_uuid():
 
 
 def write_utf8_bom(path, content):
+    # newline='' — без трансляции: иначе текстовый режим Python дал бы CRLF на Windows
+    # и LF на macOS, то есть вывод навыка зависел бы от ОС.
     with open(path, 'w', encoding='utf-8-sig', newline='') as f:
         f.write(content)
+
 
 
 # --- Type system ---
