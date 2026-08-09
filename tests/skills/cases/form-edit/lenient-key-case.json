@@ -1,5 +1,5 @@
 {
-  "name": "Прощающий ввод: регистр ключей операции",
+  "name": "Прощающий ввод: регистр ключей DSL",
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
@@ -24,12 +24,10 @@
     "formPath": "DataProcessors/РедРегистр/Forms/Форма/Ext/Form.xml"
   },
   "input": {
-    "Operations": [
+    "Attributes": [
       {
-        "Op": "add-attribute",
-        "Name": "Рек",
-        "Type": "String",
-        "Length": 5
+        "Name": "Сумма",
+        "Type": "decimal(15,2)"
       }
     ]
   }

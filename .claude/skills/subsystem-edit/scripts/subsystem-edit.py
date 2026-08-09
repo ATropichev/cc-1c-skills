@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-edit v1.20 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+# subsystem-edit v1.21 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -831,7 +831,7 @@ def main():
                 info(f'Set {prop_name} = "{prop_value}"')
             return
 
-        if prop_name == "Comment":
+        if prop_key == "comment":
             for ch in list(prop_el):
                 prop_el.remove(ch)
             if not prop_value:
@@ -842,7 +842,7 @@ def main():
             info(f'Set Comment = "{prop_value}"')
             return
 
-        if prop_name == "Picture":
+        if prop_key == "picture":
             for ch in list(prop_el):
                 prop_el.remove(ch)
             if not prop_value:
@@ -884,17 +884,19 @@ def main():
 
     for op in operations:
         op_name = op.get("operation", args.Operation or "")
+        # PS сравнивает имя операции через switch, а он регистронезависим.
+        op_key = str(op_name).lower()
         op_value = op.get("value", args.Value or "")
 
-        if op_name == "add-content":
+        if op_key == "add-content":
             do_add_content(parse_value_list(op_value))
-        elif op_name == "remove-content":
+        elif op_key == "remove-content":
             do_remove_content(parse_value_list(op_value))
-        elif op_name == "add-child":
+        elif op_key == "add-child":
             do_add_child(op_value)
-        elif op_name == "remove-child":
+        elif op_key == "remove-child":
             do_remove_child(op_value)
-        elif op_name == "set-property":
+        elif op_key == "set-property":
             do_set_property(op_value)
         else:
             print(f"Unknown operation: {op_name}", file=sys.stderr)

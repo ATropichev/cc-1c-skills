@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# interface-edit v1.17 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
+# interface-edit v1.18 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -774,19 +774,21 @@ def main():
 
     for op in operations:
         op_name = op.get("operation", args.Operation or "")
+        # PS сравнивает имя операции через switch, а он регистронезависим.
+        op_key = str(op_name).lower()
         op_value = op.get("value", args.Value or "")
 
-        if op_name == "hide":
+        if op_key == "hide":
             do_hide(parse_value_list(op_value))
-        elif op_name == "show":
+        elif op_key == "show":
             do_show(parse_value_list(op_value))
-        elif op_name == "place":
+        elif op_key == "place":
             do_place(op_value)
-        elif op_name == "order":
+        elif op_key == "order":
             do_order(op_value)
-        elif op_name == "subsystem-order":
+        elif op_key == "subsystem-order":
             do_subsystem_order(op_value)
-        elif op_name == "group-order":
+        elif op_key == "group-order":
             do_group_order(op_value)
         else:
             print(f"Unknown operation: {op_name}", file=sys.stderr)

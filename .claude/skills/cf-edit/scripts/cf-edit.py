@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-edit v1.18 — Edit 1C configuration root (Configuration.xml)
+# cf-edit v1.19 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1055,23 +1055,25 @@ def main():
 
     for op in operations:
         op_name = op.get("operation", args.Operation or "")
+        # PS сравнивает имя операции через switch, а он регистронезависим.
+        op_key = str(op_name).lower()
         op_value = op.get("value", args.Value or "")
 
-        if op_name == "modify-property":
+        if op_key == "modify-property":
             do_modify_property(op_value if isinstance(op_value, str) else str(op_value))
-        elif op_name == "add-childObject":
+        elif op_key == "add-childobject":
             do_add_child_object(op_value if isinstance(op_value, str) else str(op_value))
-        elif op_name == "remove-childObject":
+        elif op_key == "remove-childobject":
             do_remove_child_object(op_value if isinstance(op_value, str) else str(op_value))
-        elif op_name == "add-defaultRole":
+        elif op_key == "add-defaultrole":
             do_add_default_role(op_value if isinstance(op_value, str) else str(op_value))
-        elif op_name == "remove-defaultRole":
+        elif op_key == "remove-defaultrole":
             do_remove_default_role(op_value if isinstance(op_value, str) else str(op_value))
-        elif op_name == "set-defaultRoles":
+        elif op_key == "set-defaultroles":
             do_set_default_roles(op_value if isinstance(op_value, str) else str(op_value))
-        elif op_name == "set-panels":
+        elif op_key == "set-panels":
             do_set_panels(op_value)
-        elif op_name == "set-home-page":
+        elif op_key == "set-home-page":
             do_set_home_page(op_value)
         else:
             print(f"Unknown operation: {op_name}", file=sys.stderr)

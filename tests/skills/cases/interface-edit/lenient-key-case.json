@@ -1,5 +1,5 @@
 {
-  "name": "Прощающий ввод: регистр ключей операции",
+  "name": "Прощающий ввод: регистр ключей И значения операции",
   "preRun": [
     {
       "script": "subsystem-compile/scripts/subsystem-compile",
@@ -21,7 +21,7 @@
   },
   "input": [
     {
-      "Operation": "subsystem-order",
+      "Operation": "Subsystem-Order",
       "Value": "[\"Subsystem.Продажи.Subsystem.Розничные\",\"Subsystem.Продажи.Subsystem.Оптовые\"]"
     }
   ]

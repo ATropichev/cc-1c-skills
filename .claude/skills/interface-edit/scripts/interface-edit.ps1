@@ -1,4 +1,4 @@
-﻿# interface-edit v1.17 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
+﻿# interface-edit v1.18 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$CIPath,
