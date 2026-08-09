@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-patch-method v2.5 — Source-aware method interceptor for 1C extension (CFE)
+# cfe-patch-method v2.6 — Source-aware method interceptor for 1C extension (CFE) (+прощающий ввод: имя каталога наравне с именем типа)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -19,6 +19,24 @@ TYPE_DIR_MAP = {
     "BusinessProcess": "BusinessProcesses", "Task": "Tasks",
     "InformationRegister": "InformationRegisters", "AccumulationRegister": "AccumulationRegisters",
     "AccountingRegister": "AccountingRegisters", "CalculationRegister": "CalculationRegisters",
+    # Прощающий ввод: имя каталога принимается наравне с именем типа (Catalogs.X ≡ Catalog.X) —
+    # PS1-порт так умел с самого начала, PY отставал.
+    "Catalogs": "Catalogs",
+    "Documents": "Documents",
+    "Enums": "Enums",
+    "CommonModules": "CommonModules",
+    "Reports": "Reports",
+    "DataProcessors": "DataProcessors",
+    "ExchangePlans": "ExchangePlans",
+    "ChartsOfAccounts": "ChartsOfAccounts",
+    "ChartsOfCharacteristicTypes": "ChartsOfCharacteristicTypes",
+    "ChartsOfCalculationTypes": "ChartsOfCalculationTypes",
+    "BusinessProcesses": "BusinessProcesses",
+    "Tasks": "Tasks",
+    "InformationRegisters": "InformationRegisters",
+    "AccumulationRegisters": "AccumulationRegisters",
+    "AccountingRegisters": "AccountingRegisters",
+    "CalculationRegisters": "CalculationRegisters",
 }
 # accept plural forms too
 for _v in list(TYPE_DIR_MAP.values()):

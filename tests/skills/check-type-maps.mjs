@@ -65,6 +65,17 @@ const MAPS = [
   { skill: 'subsystem-edit', file: 'subsystem-edit', kind: 'alias', py: 'CONTENT_TYPE_MAP', ps1: null },
   { skill: 'subsystem-compile', file: 'subsystem-compile', kind: 'alias', py: 'CONTENT_TYPE_MAP', ps1: null },
   { skill: 'meta-remove', file: 'meta-remove', kind: 'keys', py: 'TYPE_PLURAL_MAP', ps1: '$typePluralMap' },
+  { skill: 'cf-edit', file: 'cf-edit', kind: 'alias', py: 'RU_TYPE_MAP', ps1: '$script:ruTypeMap' },
+  { skill: 'cfe-borrow', file: 'cfe-borrow', kind: 'alias', py: 'SYNONYM_MAP', ps1: '$synonymMap' },
+  { skill: 'cfe-patch-method', file: 'cfe-patch-method', kind: 'alias',
+    py: 'DIR_TO_TYPE', ps1: '$script:dirToType' },
+  {
+    // Частичная карта тип→каталог: перехватывать метод можно только у объектов с модулями,
+    // поэтому полнота не требуется. Плюс прощающий ввод — ключом принимается и имя каталога
+    // (Catalogs.X ≡ Catalog.X), поэтому ключи сверяем как «тип ИЛИ каталог типа».
+    skill: 'cfe-patch-method', file: 'cfe-patch-method', kind: 'dir', partial: true, keyMayBeDir: true,
+    py: 'TYPE_DIR_MAP', ps1: '$script:typeDirMap',
+  },
 ];
 
 // ─── Эталон из спецификации ─────────────────────────────────────────────────
@@ -94,7 +105,10 @@ function sliceBlock(text, startIdx, open, close) {
   if (from < 0) return null;
   const closer = `\n${indent}${close}`;
   const to = text.indexOf(closer, from);
-  return text.slice(from + open.length, to < 0 ? text.length : to);
+  // Закрывашки нет — значит это не блок, а выражение в одну строку. Возвращать «до конца файла»
+  // нельзя: обнаружение тогда видит в таком «блоке» все канонические имена сразу.
+  if (to < 0) return null;
+  return text.slice(from + open.length, to);
 }
 
 function extractPy(text, name, kind) {
@@ -174,15 +188,17 @@ for (const entry of MAPS) {
 
     if (entry.kind === 'dir') {
       seen.push({ tag, count: data.length });
+      const dirNames = new Set(spec.dirOf.values());
       for (const [type, dir] of data) {
-        if (!canonical.has(type)) {
+        const asDir = entry.keyMayBeDir && dirNames.has(type);
+        if (!canonical.has(type) && !asDir) {
           errors.push(`${tag}: тип '${type}' отсутствует в таблице спецификации`);
           continue;
         }
-        const want = spec.dirOf.get(type);
+        const want = asDir ? type : spec.dirOf.get(type);
         if (dir !== want) errors.push(`${tag}: '${type}' → '${dir}', в таблице '${want}'`);
       }
-      checkMissing(tag, new Set(data.map((d) => d[0])), exclude);
+      if (!entry.partial) checkMissing(tag, new Set(data.map((d) => d[0])), exclude);
       continue;
     }
 
