@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.5 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.6 — Validate 1C configuration extension XML structure (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -37,7 +37,7 @@ VALID_CLASS_IDS = [
 CHILD_OBJECT_TYPES = [
     'Language', 'Subsystem', 'StyleItem', 'Style',
     'CommonPicture', 'SessionParameter', 'Role', 'CommonTemplate',
-    'FilterCriterion', 'CommonModule', 'CommonAttribute', 'ExchangePlan',
+    'FilterCriterion', 'CommonModule', 'Bot', 'CommonAttribute', 'ExchangePlan',
     'XDTOPackage', 'WebService', 'HTTPService', 'WSReference',
     'EventSubscription', 'ScheduledJob', 'SettingsStorage', 'FunctionalOption',
     'FunctionalOptionsParameter', 'DefinedType', 'CommonCommand', 'CommandGroup',
@@ -54,6 +54,7 @@ CHILD_TYPE_DIR_MAP = {
     'Language': 'Languages', 'Subsystem': 'Subsystems', 'StyleItem': 'StyleItems', 'Style': 'Styles',
     'CommonPicture': 'CommonPictures', 'SessionParameter': 'SessionParameters', 'Role': 'Roles',
     'CommonTemplate': 'CommonTemplates', 'FilterCriterion': 'FilterCriteria', 'CommonModule': 'CommonModules',
+    'Bot': 'Bots',
     'CommonAttribute': 'CommonAttributes', 'ExchangePlan': 'ExchangePlans', 'XDTOPackage': 'XDTOPackages',
     'WebService': 'WebServices', 'HTTPService': 'HTTPServices', 'WSReference': 'WSReferences',
     'EventSubscription': 'EventSubscriptions', 'ScheduledJob': 'ScheduledJobs',

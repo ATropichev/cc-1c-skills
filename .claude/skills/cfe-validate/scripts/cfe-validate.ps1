@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.5 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.6 — Validate 1C configuration extension structure (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -108,7 +108,7 @@ $validClassIds = @(
 $childObjectTypes = @(
 	"Language","Subsystem","StyleItem","Style",
 	"CommonPicture","SessionParameter","Role","CommonTemplate",
-	"FilterCriterion","CommonModule","CommonAttribute","ExchangePlan",
+	"FilterCriterion","CommonModule","Bot","CommonAttribute","ExchangePlan",
 	"XDTOPackage","WebService","HTTPService","WSReference",
 	"EventSubscription","ScheduledJob","SettingsStorage","FunctionalOption",
 	"FunctionalOptionsParameter","DefinedType","CommonCommand","CommandGroup",
@@ -122,7 +122,7 @@ $childObjectTypes = @(
 
 # Type -> directory mapping
 $childTypeDirMap = @{
-	"Language"="Languages"; "Subsystem"="Subsystems"; "StyleItem"="StyleItems"; "Style"="Styles"
+	"Language"="Languages"; "Subsystem"="Subsystems"; "StyleItem"="StyleItems"; "Style"="Styles"; "Bot"="Bots"
 	"CommonPicture"="CommonPictures"; "SessionParameter"="SessionParameters"; "Role"="Roles"
 	"CommonTemplate"="CommonTemplates"; "FilterCriterion"="FilterCriteria"; "CommonModule"="CommonModules"
 	"CommonAttribute"="CommonAttributes"; "ExchangePlan"="ExchangePlans"; "XDTOPackage"="XDTOPackages"

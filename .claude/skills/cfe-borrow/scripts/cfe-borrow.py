@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.18 — Borrow objects from configuration into extension (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
+# cfe-borrow v1.19 — Borrow objects from configuration into extension (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -80,6 +80,7 @@ CHILD_TYPE_DIR_MAP = {
     "XDTOPackage": "XDTOPackages", "WebService": "WebServices",
     "HTTPService": "HTTPServices", "WSReference": "WSReferences",
     "CommonAttribute": "CommonAttributes", "Style": "Styles",
+    "Bot": "Bots", "Language": "Languages",
 }
 
 SYNONYM_MAP = {
@@ -123,7 +124,7 @@ SYNONYM_MAP = {
 TYPE_ORDER = [
     "Language", "Subsystem", "StyleItem", "Style",
     "CommonPicture", "SessionParameter", "Role", "CommonTemplate",
-    "FilterCriterion", "CommonModule", "CommonAttribute", "ExchangePlan",
+    "FilterCriterion", "CommonModule", "Bot", "CommonAttribute", "ExchangePlan",
     "XDTOPackage", "WebService", "HTTPService", "WSReference",
     "EventSubscription", "ScheduledJob", "SettingsStorage", "FunctionalOption",
     "FunctionalOptionsParameter", "DefinedType", "CommonCommand", "CommandGroup",

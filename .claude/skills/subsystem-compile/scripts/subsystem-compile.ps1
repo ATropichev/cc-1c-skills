@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.22 — Create 1C subsystem from JSON definition (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# subsystem-compile v1.23 — Create 1C subsystem from JSON definition (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -294,6 +294,8 @@ $script:contentTypeMap = @{
 	"Subsystems"                   = "Subsystem"
 	"StyleItems"                   = "StyleItem"
 	"IntegrationServices"          = "IntegrationService"
+	"Bots"                         = "Bot"
+	"Bot"                          = "Bot"
 	# Russian singular → English
 	"Справочник"                   = "Catalog"
 	"Каталог"                      = "Catalog"

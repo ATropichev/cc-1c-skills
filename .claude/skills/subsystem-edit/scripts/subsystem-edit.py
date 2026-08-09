@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-edit v1.17 — Edit existing 1C subsystem XML (+write_xml_file/write_utf8_bom: общий эталон записи)
+# subsystem-edit v1.18 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -310,6 +310,7 @@ CONTENT_TYPE_MAP = {
     'DefinedTypes': 'DefinedType', 'DocumentNumerators': 'DocumentNumerator',
     'Sequences': 'Sequence', 'Subsystems': 'Subsystem',
     'StyleItems': 'StyleItem', 'IntegrationServices': 'IntegrationService',
+    'Bots': 'Bot', 'Bot': 'Bot',
     # Russian singular
     'Справочник': 'Catalog', 'Каталог': 'Catalog', 'Документ': 'Document',
     'Перечисление': 'Enum', 'Константа': 'Constant',

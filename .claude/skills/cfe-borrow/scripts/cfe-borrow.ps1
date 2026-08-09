@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.18 — Borrow objects from configuration into extension (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# cfe-borrow v1.19 — Borrow objects from configuration into extension (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -125,7 +125,7 @@ $childTypeDirMap = @{
 	"Sequence"="Sequences"; "IntegrationService"="IntegrationServices"
 	"XDTOPackage"="XDTOPackages"; "WebService"="WebServices"
 	"HTTPService"="HTTPServices"; "WSReference"="WSReferences"
-	"CommonAttribute"="CommonAttributes"; "Style"="Styles"
+	"CommonAttribute"="CommonAttributes"; "Style"="Styles"; "Bot"="Bots"; "Language"="Languages"
 }
 
 # --- 4b. Russian synonym → English type ---
@@ -153,7 +153,7 @@ $synonymMap = @{
 $script:typeOrder = @(
 	"Language","Subsystem","StyleItem","Style",
 	"CommonPicture","SessionParameter","Role","CommonTemplate",
-	"FilterCriterion","CommonModule","CommonAttribute","ExchangePlan",
+	"FilterCriterion","CommonModule","Bot","CommonAttribute","ExchangePlan",
 	"XDTOPackage","WebService","HTTPService","WSReference",
 	"EventSubscription","ScheduledJob","SettingsStorage","FunctionalOption",
 	"FunctionalOptionsParameter","DefinedType","CommonCommand","CommandGroup",
