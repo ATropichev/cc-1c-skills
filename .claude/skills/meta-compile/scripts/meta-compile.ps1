@@ -1,4 +1,4 @@
-﻿# meta-compile v1.92 — Compile 1C metadata object from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# meta-compile v1.93 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1311,20 +1311,20 @@ $script:standardAttributesByType = @{
 	"Document" = @("Posted","Ref","DeletionMark","Date","Number")
 	"Enum" = @("Order","Ref")
 	"InformationRegister" = @("Active","LineNumber","Recorder","Period")
-	"AccumulationRegister" = @("Active","LineNumber","Recorder","Period")
-	"AccountingRegister" = @("PeriodAdjustment","Account","Active","LineNumber","Recorder","Period")
-	"CalculationRegister" = @("Active","Recorder","LineNumber","RegistrationPeriod","CalculationType","ReversingEntry")
+	"AccumulationRegister" = @("RecordType","Active","LineNumber","Recorder","Period")
+	"AccountingRegister" = @("PeriodAdjustment","Account","RecordType","Active","LineNumber","Recorder","Period")
+	"CalculationRegister" = @("RegistrationPeriod","ReversingEntry","Active","EndOfBasePeriod","BegOfBasePeriod","EndOfActionPeriod","BegOfActionPeriod","ActionPeriod","CalculationType","LineNumber","Recorder")
 	"ChartOfAccounts" = @("PredefinedDataName","Order","OffBalance","Type","Description","Code","Parent","Predefined","DeletionMark","Ref")
 	"ChartOfCharacteristicTypes" = @("PredefinedDataName","ValueType","Description","Code","IsFolder","Parent","Predefined","DeletionMark","Ref")
 	"ChartOfCalculationTypes" = @("PredefinedDataName","Predefined","Ref","DeletionMark","ActionPeriodIsBasic","Description","Code")
 	"BusinessProcess" = @("Started","HeadTask","Completed","Ref","DeletionMark","Date","Number")
 	"Task" = @("Executed","Description","RoutePoint","BusinessProcess","Ref","DeletionMark","Date","Number")
 	# Порядок в каждом списке — канон выгрузки, снят с корпуса acc+erp (внутри типа разброса нет).
-	# Условные члены перечислены в $script:stdAttrOptional — они эмитятся только при наличии
-	# ключа в DSL, но позицию берут отсюда.
+	# Условные члены перечислены в $script:stdAttrConditions — позицию они берут отсюда, а
+	# присутствие определяется свойствами объекта.
 	# У ПВХ IsFolder входит в фикс-список: он есть у всех 23 объектов корпуса с этим блоком.
-	# У бухрегистра PeriodAdjustment, наоборот, условен (1 из 3) — он приходит как «лишний»
-	# ключ и эмитится ПЕРЕД фикс-списком, что совпадает с платформой.
+	# У регистра расчёта список безусловен: реквизиты периода действия и базового периода
+	# платформа пишет при любых ActionPeriod/BasePeriod/Periodicity (синтетика, все 4 комбинации).
 	"ExchangePlan" = @("ThisNode","ReceivedNo","SentNo","Ref","DeletionMark","Description","Code")
 	"DocumentJournal" = @("Type","Ref","Date","Posted","DeletionMark","Number")
 }
@@ -1445,10 +1445,17 @@ function Emit-StandardAttribute {
 # Миграция типа = добавить его в stdAttrConditionalTypes + stdAttrProfile и переснять снэпшоты; КОД НЕ ТРОГАЕМ.
 $script:stdAttrConditionalTypes = @('Catalog', 'ExchangePlan', 'ChartOfCharacteristicTypes', 'ChartOfAccounts', 'ChartOfCalculationTypes', 'Document')
 
-# Условные члены списка типа: позиция берётся из $script:standardAttributesByType, а сам
-# реквизит эмитится только при наличии ключа в DSL (у бухрегистра PeriodAdjustment — 2 из 5).
-$script:stdAttrOptional = @{
-	"AccountingRegister" = @("PeriodAdjustment")
+# Условные члены списка типа: позиция берётся из $script:standardAttributesByType, а присутствие —
+# из свойств самого объекта, как у платформы. Предикат ОБЯЗАН принимать определение параметром:
+# scriptblock не видит $def вызывающей функции, и отказ был бы молчаливым.
+$script:stdAttrConditions = @{
+	"AccountingRegister" = @{
+		"PeriodAdjustment" = { param($d) $v = 0; if ($null -ne $d.periodAdjustmentLength) { $v = [int]"$($d.periodAdjustmentLength)" }; $v -gt 0 }
+		"RecordType"       = { param($d) -not ($d.correspondence -eq $true) }
+	}
+	"AccumulationRegister" = @{
+		"RecordType" = { param($d) $raw = if ($d.registerType) { "$($d.registerType)" } else { "Balance" }; (Normalize-EnumValue "RegisterType" $raw) -eq "Balance" }
+	}
 }
 
 # Хвостовая группа: реквизиты, которых нет в списке типа и которые идут ПОСЛЕ него.
@@ -1469,9 +1476,9 @@ function Emit-StandardAttributes {
 	$profile = $script:stdAttrProfile[$objectType]; if (-not $profile) { $profile = @{} }
 	# Список типа задаёт ПОРЯДОК всех известных стандартных реквизитов, включая условные:
 	# их позиция бывает и до, и после обязательных (у бухрегистра PeriodAdjustment идёт
-	# перед Account, а ExtDimension1..3/ExtDimensionType1..3 — после Period), поэтому
-	# «условные скопом вперёд» не выражает канон. Условный эмитим по факту наличия в DSL.
-	$optional = $script:stdAttrOptional[$objectType]; if (-not $optional) { $optional = @() }
+	# перед Account, RecordType — после, а ExtDimension1..3/ExtDimensionType1..3 — после Period),
+	# поэтому «условные скопом вперёд» не выражает канон.
+	$cond = $script:stdAttrConditions[$objectType]
 	# Ключи, которых нет в списке типа ВООБЩЕ. По умолчанию их позиция — ПЕРЕД списком
 	# (легаси вроде ExchangeDate у части планов обмена). Подходящие под хвостовой шаблон
 	# типа идут ПОСЛЕ, в порядке номера, а внутри номера — сначала ExtDimensionN, затем
@@ -1487,7 +1494,12 @@ function Emit-StandardAttributes {
 	$tail = @($tail | Sort-Object @{e={[int]([regex]::Match($_, '\d+').Value)}}, @{e={ if ($_ -match 'Type\d+$') { 1 } else { 0 } }})
 	X "$indent<StandardAttributes>"
 	foreach ($a in ($extra + $attrs + $tail)) {
-		if (($optional -contains $a) -and (-not ($sa -and $sa.PSObject.Properties[$a]))) { continue }
+		# Условный реквизит: эмитим, если так велят свойства объекта ЛИБО если ключ есть в DSL.
+		# Дизъюнкция страхует роундтрип — декомпилятор перечисляет все имена блока.
+		if ($cond -and $cond.ContainsKey($a)) {
+			$present = ($sa -and $sa.PSObject.Properties[$a]) -or (& $cond[$a] $def)
+			if (-not $present) { continue }
+		}
 		$ov = @{}
 		if ($profile.ContainsKey($a)) { foreach ($k in $profile[$a].Keys) { $ov[$k] = $profile[$a][$k] } }
 		if ($sa) {   # DSL-override применяем всегда при наличии ключа (для не-условных типов тоже, напр. ExchangePlan)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.92 — Compile 1C metadata object from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# meta-compile v1.93 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1350,16 +1350,18 @@ standard_attributes_by_type = {
     'Document': ['Posted', 'Ref', 'DeletionMark', 'Date', 'Number'],
     'Enum': ['Order', 'Ref'],
     'InformationRegister': ['Active', 'LineNumber', 'Recorder', 'Period'],
-    'AccumulationRegister': ['Active', 'LineNumber', 'Recorder', 'Period'],
-    'AccountingRegister': ['PeriodAdjustment', 'Account', 'Active', 'LineNumber', 'Recorder', 'Period'],
-    'CalculationRegister': ['Active', 'Recorder', 'LineNumber', 'RegistrationPeriod', 'CalculationType', 'ReversingEntry'],
+    'AccumulationRegister': ['RecordType', 'Active', 'LineNumber', 'Recorder', 'Period'],
+    'AccountingRegister': ['PeriodAdjustment', 'Account', 'RecordType', 'Active', 'LineNumber', 'Recorder', 'Period'],
+    'CalculationRegister': ['RegistrationPeriod', 'ReversingEntry', 'Active', 'EndOfBasePeriod', 'BegOfBasePeriod', 'EndOfActionPeriod', 'BegOfActionPeriod', 'ActionPeriod', 'CalculationType', 'LineNumber', 'Recorder'],
     'ChartOfAccounts': ['PredefinedDataName', 'Order', 'OffBalance', 'Type', 'Description', 'Code', 'Parent', 'Predefined', 'DeletionMark', 'Ref'],
     'ChartOfCharacteristicTypes': ['PredefinedDataName', 'ValueType', 'Description', 'Code', 'IsFolder', 'Parent', 'Predefined', 'DeletionMark', 'Ref'],
     'ChartOfCalculationTypes': ['PredefinedDataName', 'Predefined', 'Ref', 'DeletionMark', 'ActionPeriodIsBasic', 'Description', 'Code'],
     # Порядок в каждом списке — канон выгрузки, снят с корпуса acc+erp (внутри типа разброса нет).
+    # Условные члены перечислены в std_attr_conditions — позицию они берут отсюда, а
+    # присутствие определяется свойствами объекта.
     # У ПВХ IsFolder входит в фикс-список: он есть у всех 23 объектов корпуса с этим блоком.
-    # У бухрегистра PeriodAdjustment, наоборот, условен (1 из 3) — он приходит как «лишний»
-    # ключ и эмитится ПЕРЕД фикс-списком, что совпадает с платформой.
+    # У регистра расчёта список безусловен: реквизиты периода действия и базового периода
+    # платформа пишет при любых ActionPeriod/BasePeriod/Periodicity (синтетика, все 4 комбинации).
     'BusinessProcess': ['Started', 'HeadTask', 'Completed', 'Ref', 'DeletionMark', 'Date', 'Number'],
     'Task': ['Executed', 'Description', 'RoutePoint', 'BusinessProcess', 'Ref', 'DeletionMark', 'Date', 'Number'],
     # Порядок снят с выгрузки: у плана обмена блок начинается с ThisNode, а не с Ref
@@ -1486,10 +1488,21 @@ def emit_standard_attribute(indent, attr_name, ov=None):
 # Прочие типы → блок всегда (текущее поведение). Миграция типа = +строчка в оба справочника + снэпшоты.
 std_attr_conditional_types = {'Catalog', 'ExchangePlan', 'ChartOfCharacteristicTypes', 'ChartOfAccounts', 'ChartOfCalculationTypes', 'Document'}
 
-# Условные члены списка типа: позиция берётся из standard_attributes_by_type, а сам
-# реквизит эмитится только при наличии ключа в DSL (у бухрегистра PeriodAdjustment — 2 из 5).
-std_attr_optional = {
-    'AccountingRegister': ('PeriodAdjustment',),
+# Условные члены списка типа: позиция берётся из standard_attributes_by_type, а присутствие —
+# из свойств самого объекта, как у платформы. Предикат принимает определение параметром
+# (зеркало .ps1, где scriptblock не видит $def вызывающей функции).
+def _period_adjustment_used(d):
+    v = d.get('periodAdjustmentLength')
+    return v is not None and int(str(v)) > 0
+
+std_attr_conditions = {
+    'AccountingRegister': {
+        'PeriodAdjustment': _period_adjustment_used,
+        'RecordType': lambda d: d.get('correspondence') is not True,
+    },
+    'AccumulationRegister': {
+        'RecordType': lambda d: normalize_enum_value('RegisterType', str(d.get('registerType') or 'Balance')) == 'Balance',
+    },
 }
 
 # Хвостовая группа: реквизиты, которых нет в списке типа и которые идут ПОСЛЕ него.
@@ -1512,9 +1525,9 @@ def emit_standard_attributes(indent, object_type):
     profile = std_attr_profile.get(object_type, {})
     # Список типа задаёт ПОРЯДОК всех известных стандартных реквизитов, включая условные:
     # их позиция бывает и до, и после обязательных (у бухрегистра PeriodAdjustment идёт
-    # перед Account, а ExtDimension1..3/ExtDimensionType1..3 — после Period), поэтому
-    # «условные скопом вперёд» не выражает канон. Условный эмитим по факту наличия в DSL.
-    optional = std_attr_optional.get(object_type, ())
+    # перед Account, RecordType — после, а ExtDimension1..3/ExtDimensionType1..3 — после Period),
+    # поэтому «условные скопом вперёд» не выражает канон.
+    cond = std_attr_conditions.get(object_type)
     # Ключи, которых нет в списке типа ВООБЩЕ. По умолчанию их позиция — ПЕРЕД списком
     # (легаси вроде ExchangeDate у части планов обмена). Подходящие под хвостовой шаблон
     # типа идут ПОСЛЕ, в порядке номера, а внутри номера — сначала ExtDimensionN, затем
@@ -1532,8 +1545,12 @@ def emit_standard_attributes(indent, object_type):
     tail.sort(key=lambda k: (int(re.search(r'\d+', k).group()), 1 if re.search(r'Type\d+$', k) else 0))
     X(f'{indent}<StandardAttributes>')
     for a in extra + list(attrs) + tail:
-        if a in optional and not (isinstance(sa, dict) and a in sa):
-            continue
+        # Условный реквизит: эмитим, если так велят свойства объекта ЛИБО если ключ есть в DSL.
+        # Дизъюнкция страхует роундтрип — декомпилятор перечисляет все имена блока.
+        if cond and a in cond:
+            present = (isinstance(sa, dict) and a in sa) or cond[a](defn)
+            if not present:
+                continue
         ov = dict(profile.get(a, {}))
         if isinstance(sa, dict):
             d = sa.get(a)

@@ -1,4 +1,4 @@
-# meta-validate v1.16 — Validate 1C metadata object structure (Python port) (+format_rank: свести к общему эталону)
+# meta-validate v1.17 — Validate 1C metadata object structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -209,7 +209,7 @@ standard_attributes_by_type = {
     "Enum":                       ["Order", "Ref"],
     "InformationRegister":        ["Active", "LineNumber", "Recorder", "Period"],
     "AccumulationRegister":       ["Active", "LineNumber", "Recorder", "Period", "RecordType"],
-    "AccountingRegister":         ["Active", "Period", "Recorder", "LineNumber", "Account"],
+    "AccountingRegister":         ["Active", "Period", "Recorder", "LineNumber", "Account", "PeriodAdjustment", "RecordType"],
     "CalculationRegister":        ["Active", "Recorder", "LineNumber", "RegistrationPeriod", "CalculationType", "ReversingEntry", "ActionPeriod", "BegOfActionPeriod", "EndOfActionPeriod", "BegOfBasePeriod", "EndOfBasePeriod"],
     "ChartOfAccounts":            ["PredefinedDataName", "Predefined", "Ref", "DeletionMark", "Description", "Code", "Parent", "Order", "Type", "OffBalance"],
     "ChartOfCharacteristicTypes": ["PredefinedDataName", "Predefined", "Ref", "DeletionMark", "Description", "Code", "Parent", "IsFolder", "ValueType"],
@@ -218,6 +218,14 @@ standard_attributes_by_type = {
     "Task":                       ["Ref", "DeletionMark", "Date", "Number", "Executed", "Description", "RoutePoint", "BusinessProcess"],
     "ExchangePlan":               ["Ref", "DeletionMark", "Code", "Description", "ThisNode", "SentNo", "ReceivedNo"],
     "DocumentJournal":            ["Type", "Ref", "Date", "Posted", "DeletionMark", "Number"],
+}
+
+# Стандартные реквизиты, присутствие которых зависит от свойств объекта: у бухрегистра
+# PeriodAdjustment — от длины периода корректировки, RecordType — от корреспонденции; у регистра
+# накопления RecordType — от вида регистра. Их отсутствие законно, в «Missing» не попадают.
+std_attr_conditional_names = {
+    "AccountingRegister":   ("PeriodAdjustment", "RecordType"),
+    "AccumulationRegister": ("RecordType",),
 }
 
 # Types that have StandardAttributes block
@@ -595,23 +603,19 @@ if md_type in types_with_std_attrs:
             if sa_name:
                 found_names.append(sa_name)
                 if sa_name not in expected_std_attrs:
-                    # AccountingRegister has dynamic attrs
+                    # AccountingRegister: пары субконто, число которых задаётся планом счетов
                     is_dynamic = (md_type == "AccountingRegister" and
                                   (re.match(r'^ExtDimension\d+$', sa_name) or
-                                   re.match(r'^ExtDimensionType\d+$', sa_name) or
-                                   sa_name == "PeriodAdjustment"))
-                    # CalculationRegister has conditional period attrs
-                    is_calc_dynamic = (md_type == "CalculationRegister" and
-                                       sa_name in ("ActionPeriod", "BegOfActionPeriod", "EndOfActionPeriod",
-                                                    "BegOfBasePeriod", "EndOfBasePeriod"))
-                    if not is_dynamic and not is_calc_dynamic:
+                                   re.match(r'^ExtDimensionType\d+$', sa_name)))
+                    if not is_dynamic:
                         report_warn(f"5. Unexpected StandardAttribute '{sa_name}' for {md_type}")
             else:
                 report_error("5. StandardAttribute without 'name' attribute")
                 check5_ok = False
 
         if expected_std_attrs:
-            missing_attrs = [a for a in expected_std_attrs if a not in found_names]
+            cond_names = std_attr_conditional_names.get(md_type, ())
+            missing_attrs = [a for a in expected_std_attrs if a not in found_names and a not in cond_names]
             if missing_attrs:
                 report_warn(f"5. Missing StandardAttributes: {', '.join(missing_attrs)}")
 

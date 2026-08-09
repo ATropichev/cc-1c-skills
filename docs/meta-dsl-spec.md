@@ -944,6 +944,9 @@ choiceParameters/indexing/fullTextSearch/dataHistory/…, см. §3–4). При
 Признаки измерения — флаги shorthand (`denyIncomplete`, `nouseintotals`) ЛИБО object-ключи (`denyIncompleteValues`,
 `useInTotals`: bool, дефолт true). Ресурс РН НЕ имеет `<Indexing>` (только `<FullTextSearch>`).
 
+Стандартные реквизиты РН: RecordType, Active, LineNumber, Recorder, Period — в этом порядке.
+`RecordType` есть только у регистра остатков (`registerType=Balance`); у оборотного его нет.
+
 ### 7.6a AccountingRegister (Регистр бухгалтерии)
 
 | Поле JSON | Умолчание | XML элемент |
@@ -957,8 +960,13 @@ choiceParameters/indexing/fullTextSearch/dataHistory/…, см. §3–4). При
 | `dimensions` / `resources` / `attributes` / `commands` | `[]` | → ChildObjects |
 
 Измерения/ресурсы РБ несут `balance` (bool), `accountingFlag` (ссылка `ChartOfAccounts.X.AccountingFlag.Y`);
-ресурсы дополнительно `extDimensionAccountingFlag`, измерения — `denyIncompleteValues`. Стандартные реквизиты
-ExtDimension1..N связаны с Account через `linkByType` (в блоке `standardAttributes`, §7.1.1; DataPath полный).
+ресурсы дополнительно `extDimensionAccountingFlag`, измерения — `denyIncompleteValues`.
+
+Стандартные реквизиты РБ: PeriodAdjustment, Account, RecordType, Active, LineNumber, Recorder, Period,
+далее пары субконто ExtDimensionN/ExtDimensionTypeN (их число задаётся `maxExtDimensionCount` плана счетов).
+Два реквизита условны: `PeriodAdjustment` — при `periodAdjustmentLength > 0`, `RecordType` — при
+`correspondence=false`. ExtDimension1..N связаны с Account через `linkByType` (в блоке `standardAttributes`,
+§7.1.1; DataPath полный).
 
 ### 7.6b CalculationRegister (Регистр расчёта)
 
@@ -974,6 +982,10 @@ ExtDimension1..N связаны с Account через `linkByType` (в блок�
 
 Измерения РР несут `denyIncompleteValues`, `baseDimension` (bool), `scheduleLink` (ссылка на измерение графика);
 реквизиты — `scheduleLink`; ресурсы — только `<FullTextSearch>` (без Indexing).
+
+Стандартные реквизиты РР: RegistrationPeriod, ReversingEntry, Active, EndOfBasePeriod, BegOfBasePeriod,
+EndOfActionPeriod, BegOfActionPeriod, ActionPeriod, CalculationType, LineNumber, Recorder — в этом порядке
+и все сразу, независимо от `actionPeriod` / `basePeriod` / `periodicity`.
 
 ### 7.6c BusinessProcess (Бизнес-процесс)
 

@@ -1,4 +1,4 @@
-﻿# meta-validate v1.16 — Validate 1C metadata object structure (+format_rank: свести к общему эталону)
+﻿# meta-validate v1.17 — Validate 1C metadata object structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -209,7 +209,7 @@ $standardAttributesByType = @{
 	"Enum"                       = @("Order","Ref")
 	"InformationRegister"        = @("Active","LineNumber","Recorder","Period")
 	"AccumulationRegister"       = @("Active","LineNumber","Recorder","Period","RecordType")
-	"AccountingRegister"         = @("Active","Period","Recorder","LineNumber","Account")
+	"AccountingRegister"         = @("Active","Period","Recorder","LineNumber","Account","PeriodAdjustment","RecordType")
 	"CalculationRegister"        = @("Active","Recorder","LineNumber","RegistrationPeriod","CalculationType","ReversingEntry","ActionPeriod","BegOfActionPeriod","EndOfActionPeriod","BegOfBasePeriod","EndOfBasePeriod")
 	"ChartOfAccounts"            = @("PredefinedDataName","Predefined","Ref","DeletionMark","Description","Code","Parent","Order","Type","OffBalance")
 	"ChartOfCharacteristicTypes" = @("PredefinedDataName","Predefined","Ref","DeletionMark","Description","Code","Parent","IsFolder","ValueType")
@@ -218,6 +218,14 @@ $standardAttributesByType = @{
 	"Task"                       = @("Ref","DeletionMark","Date","Number","Executed","Description","RoutePoint","BusinessProcess")
 	"ExchangePlan"               = @("Ref","DeletionMark","Code","Description","ThisNode","SentNo","ReceivedNo")
 	"DocumentJournal"            = @("Type","Ref","Date","Posted","DeletionMark","Number")
+}
+
+# Стандартные реквизиты, присутствие которых зависит от свойств объекта: у бухрегистра
+# PeriodAdjustment — от длины периода корректировки, RecordType — от корреспонденции; у регистра
+# накопления RecordType — от вида регистра. Их отсутствие законно, в «Missing» не попадают.
+$stdAttrConditionalNames = @{
+	"AccountingRegister"   = @("PeriodAdjustment","RecordType")
+	"AccumulationRegister" = @("RecordType")
 }
 
 # Types that have StandardAttributes block
@@ -607,11 +615,9 @@ if ($typesWithStdAttrs -contains $mdType) {
 			if ($saName) {
 				$foundNames += $saName
 				if ($expectedStdAttrs -notcontains $saName) {
-					# AccountingRegister has dynamic ExtDimension{N}/ExtDimensionType{N} and optional PeriodAdjustment
-					$isDynamic = ($mdType -eq "AccountingRegister" -and ($saName -match '^ExtDimension\d+$' -or $saName -match '^ExtDimensionType\d+$' -or $saName -eq "PeriodAdjustment"))
-					# CalculationRegister has conditional period attrs
-					$isCalcDynamic = ($mdType -eq "CalculationRegister" -and $saName -in @("ActionPeriod","BegOfActionPeriod","EndOfActionPeriod","BegOfBasePeriod","EndOfBasePeriod"))
-					if (-not $isDynamic -and -not $isCalcDynamic) {
+					# AccountingRegister: пары субконто, число которых задаётся планом счетов
+					$isDynamic = ($mdType -eq "AccountingRegister" -and ($saName -match '^ExtDimension\d+$' -or $saName -match '^ExtDimensionType\d+$'))
+					if (-not $isDynamic) {
 						Report-Warn "5. Unexpected StandardAttribute '$saName' for $mdType"
 					}
 				}
@@ -622,7 +628,8 @@ if ($typesWithStdAttrs -contains $mdType) {
 		}
 
 		if ($expectedStdAttrs) {
-			$missingAttrs = @($expectedStdAttrs | Where-Object { $foundNames -notcontains $_ })
+			$condNames = $stdAttrConditionalNames[$mdType]; if (-not $condNames) { $condNames = @() }
+			$missingAttrs = @($expectedStdAttrs | Where-Object { $foundNames -notcontains $_ -and $condNames -notcontains $_ })
 			if ($missingAttrs.Count -gt 0) {
 				Report-Warn "5. Missing StandardAttributes: $($missingAttrs -join ', ')"
 			}
