@@ -1,4 +1,4 @@
-﻿# mxl-info v1.2 — Analyze 1C spreadsheet structure
+﻿# mxl-info v1.3 — Analyze 1C spreadsheet structure (+единое имя хелпера состояния поддержки)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Alias('Path')]

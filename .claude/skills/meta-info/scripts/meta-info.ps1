@@ -1,4 +1,4 @@
-﻿# meta-info v1.8 — Compact summary of 1C metadata object
+﻿# meta-info v1.9 — Compact summary of 1C metadata object (+единое имя хелпера состояния поддержки)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)][Alias('Path')][string]$ObjectPath,

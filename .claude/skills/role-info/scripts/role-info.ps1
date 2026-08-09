@@ -1,4 +1,4 @@
-﻿# role-info v1.2 — Analyze 1C role rights
+﻿# role-info v1.3 — Analyze 1C role rights (+единое имя хелпера состояния поддержки)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory=$true)][Alias('Path')][string]$RightsPath,

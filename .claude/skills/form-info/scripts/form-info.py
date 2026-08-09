@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-info v1.5 — Analyze 1C managed form structure
+# form-info v1.6 — Analyze 1C managed form structure (+единое имя хелпера состояния поддержки)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
