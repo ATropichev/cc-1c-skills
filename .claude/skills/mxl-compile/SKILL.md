@@ -51,10 +51,11 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 { columns, page, defaultWidth, columnWidths,
   fonts: { name: { face, size, bold, italic, underline, strikeout } },
   styles: { name: { font, align, valign, border, borderWidth, wrap, format } },
-  areas: [{ name, rows: [{ height, rowStyle, cells: [
+  areas: [{ name, columnSet, rows: [{ height, rowStyle, cells: [
     { col, span, rowspan, style, param, detail, text, template }
   ]}]}],
-  namedAreas: [{ name, rows, cols }]
+  namedAreas: [{ name, rows, cols }],
+  columnSets: { name: { columns, columnWidths } }
 }
 ```
 
@@ -62,6 +63,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 - `page` — формат страницы (`"A4-landscape"`, `"A4-portrait"` или число). Автоматически вычисляет `defaultWidth` из суммы пропорций `"Nx"`
 - `name` у области в `areas` необязателен: область без имени — просто кусок сетки, именованной она не станет
 - `namedAreas` — области, которые не описываются диапазоном подряд идущих строк: полоса колонок, прямоугольник, ячейка. Тип не указывается, он следует из того, какие оси заданы
+- `columnSet` у области — ссылка на раскладку из `columnSets`, когда группе строк нужны свои ширины колонок; без него действует документная раскладка
 - `rowStyle` — автозаполнение пустот стилем (рамки по всей ширине)
 - `empty` в строке — шорткат для N подряд пустых строк (`{ "empty": 3 }` = три `{}`)
 - Строку можно писать массивом ячеек — позиция из порядка, `col` не нужен: `"текст"`, `"{Имя}"` — параметр, `">"` — продолжить ячейку слева, `"|"` — сверху, `null` — пропуск колонки
