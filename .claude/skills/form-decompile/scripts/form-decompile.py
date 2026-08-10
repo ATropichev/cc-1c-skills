@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-decompile v0.148 — Decompile 1C managed Form.xml to JSON DSL (draft)
+# form-decompile v0.149 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 #
@@ -103,29 +103,29 @@ def _attr(node, name, ns_uri=None):
 def convert_string_to_json_literal(s):
     if s is None:
         return 'null'
-    sb = ['"']
+    out = ['"']
     for ch in s:
         code = ord(ch)
         if code == 0x22:
-            sb.append('\\"')
+            out.append('\\"')
         elif code == 0x5C:
-            sb.append('\\\\')
+            out.append('\\\\')
         elif code == 0x08:
-            sb.append('\\b')
+            out.append('\\b')
         elif code == 0x09:
-            sb.append('\\t')
+            out.append('\\t')
         elif code == 0x0A:
-            sb.append('\\n')
+            out.append('\\n')
         elif code == 0x0C:
-            sb.append('\\f')
+            out.append('\\f')
         elif code == 0x0D:
-            sb.append('\\r')
+            out.append('\\r')
         elif code < 0x20:
-            sb.append('\\u%04x' % code)
+            out.append('\\u%04x' % code)
         else:
-            sb.append(ch)
-    sb.append('"')
-    return ''.join(sb)
+            out.append(ch)
+    out.append('"')
+    return ''.join(out)
 
 
 def _num_to_str(obj):

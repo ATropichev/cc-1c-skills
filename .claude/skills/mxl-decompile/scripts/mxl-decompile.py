@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-# mxl-decompile v1.1 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.2 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
-import json
 import os
 import sys
 from collections import OrderedDict
@@ -61,6 +60,122 @@ def int_of(node, default=0):
     if node is not None and node.text:
         return int(node.text)
     return default
+
+
+# Custom JSON serializer — компактный, 2-пробельный indent, массивы примитивов inline.
+# В отличие от ConvertTo-Json (PS5.1):
+#   - не выравнивает ключи объекта по самому длинному
+#   - не разворачивает массивы примитивов на отдельные строки
+#   - кириллица в UTF-8 (без \uXXXX-escapes)
+def convert_string_to_json_literal(s):
+    if s is None:
+        return 'null'
+    out = ['"']
+    for ch in s:
+        code = ord(ch)
+        if code == 0x22:
+            out.append('\\"')
+        elif code == 0x5C:
+            out.append('\\\\')
+        elif code == 0x08:
+            out.append('\\b')
+        elif code == 0x09:
+            out.append('\\t')
+        elif code == 0x0A:
+            out.append('\\n')
+        elif code == 0x0C:
+            out.append('\\f')
+        elif code == 0x0D:
+            out.append('\\r')
+        elif code < 0x20:
+            out.append('\\u%04x' % code)
+        else:
+            out.append(ch)
+    out.append('"')
+    return ''.join(out)
+
+
+def _fmt_number(v):
+    if isinstance(v, bool):
+        return 'true' if v else 'false'
+    if isinstance(v, int):
+        return str(v)
+    if isinstance(v, float):
+        # Invariant culture: '.' decimal sep
+        if v == int(v):
+            # Preserve float-ness: PS [double] 5.0 → "5"
+            # Match PS ToString invariant: 5.0 → "5"
+            return str(int(v))
+        return repr(v)
+    return str(v)
+
+
+def try_inline_json(obj):
+    if obj is None:
+        return 'null'
+    if isinstance(obj, bool):
+        return 'true' if obj else 'false'
+    if isinstance(obj, str):
+        return convert_string_to_json_literal(obj)
+    if isinstance(obj, (int, float)):
+        return _fmt_number(obj)
+    if isinstance(obj, dict):
+        if len(obj) == 0:
+            return '{}'
+        parts = []
+        for k, v in obj.items():
+            vs = try_inline_json(v)
+            if vs is None:
+                return None
+            parts.append(convert_string_to_json_literal(str(k)) + ': ' + vs)
+        return '{ ' + ', '.join(parts) + ' }'
+    if isinstance(obj, (list, tuple)):
+        if len(obj) == 0:
+            return '[]'
+        parts = []
+        for it in obj:
+            vs = try_inline_json(it)
+            if vs is None:
+                return None
+            parts.append(vs)
+        return '[' + ', '.join(parts) + ']'
+    return None
+
+
+def convert_to_compact_json(obj, depth=0, indent_unit='  ', line_limit=400):
+    indent = indent_unit * depth
+    child_indent = indent_unit * (depth + 1)
+
+    if obj is None:
+        return 'null'
+    if isinstance(obj, bool):
+        return 'true' if obj else 'false'
+    if isinstance(obj, str):
+        return convert_string_to_json_literal(obj)
+    if isinstance(obj, (int, float)):
+        return _fmt_number(obj)
+
+    # Try inline для объектов и массивов с объектами — если помещается в lineLimit с учётом текущего indent.
+    is_container = isinstance(obj, (dict, list, tuple))
+    if is_container:
+        inline_attempt = try_inline_json(obj)
+        if inline_attempt is not None and (len(indent) + len(inline_attempt)) <= line_limit:
+            return inline_attempt
+
+    if isinstance(obj, dict):
+        if len(obj) == 0:
+            return '{}'
+        parts = []
+        for k, v in obj.items():
+            val = convert_to_compact_json(v, depth + 1, indent_unit, line_limit)
+            parts.append(child_indent + convert_string_to_json_literal(str(k)) + ': ' + val)
+        return "{\n" + ",\n".join(parts) + "\n" + indent + "}"
+    if isinstance(obj, (list, tuple)):
+        if len(obj) == 0:
+            return '[]'
+        parts = [child_indent + convert_to_compact_json(it, depth + 1, indent_unit, line_limit) for it in obj]
+        return "[\n" + ",\n".join(parts) + "\n" + indent + "]"
+    return convert_string_to_json_literal(str(obj))
 
 
 # --- Main ---
@@ -707,13 +822,13 @@ def main():
 
     # --- 16. Convert to JSON ---
 
-    json_str = json.dumps(result, ensure_ascii=False, indent=2)
+    json_str = convert_to_compact_json(result)
 
     # --- 17. Output ---
 
     if output_path:
         abs_path = os.path.join(os.getcwd(), output_path) if not os.path.isabs(output_path) else output_path
-        with open(abs_path, "w", encoding="utf-8") as fh:
+        with open(abs_path, "w", encoding="utf-8", newline="") as fh:
             fh.write(json_str)
         print(f"[OK] Decompiled: {output_path}")
     else:

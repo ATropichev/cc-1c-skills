@@ -319,6 +319,43 @@ const FAMILIES = [
     ],
   },
 
+  // ─── Компактный JSON декомпиляторов ─────────────────────────────────────
+  // Штатные сериализаторы не годятся: ConvertTo-Json (PS5.1) выравнивает ключи по самому
+  // длинному и эскейпит кириллицу в \uXXXX, json.dumps даёт иную раскладку inline/multiline.
+  // Поэтому у декомпиляторов свой сериализатор — и он обязан совпадать в портах байт в байт,
+  // иначе один и тот же макет даёт разный DSL на разных рантаймах.
+  {
+    name: 'decompile json: string literal',
+    py: 'convert_string_to_json_literal', ps1: 'Convert-StringToJsonLiteral',
+    variants: [
+      { id: 'base', authority: 'skd-decompile', consumers: ['form-decompile', 'mxl-decompile'] }],
+  },
+  {
+    name: 'decompile json: try inline',
+    py: 'try_inline_json', ps1: 'Try-InlineJson',
+    variants: [
+      { id: 'base', authority: 'skd-decompile', consumers: ['mxl-decompile'] },
+      { id: 'no-pscustomobject', authority: 'form-decompile', consumers: [],
+        why: 'form-decompile строит дерево на ordered-хэштейблах и ветку PSCustomObject не проходит' }],
+  },
+  {
+    // Только в PY: в ps1 числа печатает [System.Convert]::ToString с InvariantCulture прямо
+    // в теле сериализатора, отдельной функции там нет — ps1: null.
+    name: 'decompile json: number', py: '_fmt_number', ps1: null,
+    variants: [
+      { id: 'base', authority: 'skd-decompile', consumers: ['mxl-decompile'] }],
+  },
+  {
+    name: 'decompile json: compact',
+    py: 'convert_to_compact_json', ps1: 'ConvertTo-CompactJson',
+    variants: [
+      { id: 'base', authority: 'skd-decompile', consumers: ['mxl-decompile'] },
+      { id: 'line-limit-120', authority: 'form-decompile', consumers: [],
+        why: 'у форм строки DSL длиннее, порог inline снижен со 400 до 120' },
+      { id: 'legacy', authority: 'meta-decompile', consumers: [],
+        why: 'ранний вариант со своим Quote-Json и без inline-попытки; сведение меняет вывод meta-decompile' }],
+  },
+
 ];
 
 // ─── Семьи, разъехавшиеся целиком ───────────────────────────────────────────
