@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mxl-compile v1.16 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# mxl-compile v1.17 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -297,6 +297,19 @@ def format_rank(ver):
     return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
 
 
+def to_font_size(raw):
+    """Размер шрифта бывает дробным (8.3, 11.3). int() на таком падал, ps1 ТИХО округлял.
+    Целое держим целым, иначе "10" превратилось бы в "10.0"."""
+    s = str(raw).strip() if raw is not None else ''
+    if not s:
+        return 0
+    try:
+        d = float(s)
+    except (TypeError, ValueError):
+        return 0
+    return int(d) if d == int(d) else d
+
+
 def parse_col_value(val):
     """Позиция колонки как целое, иначе None. Аналог [int]::TryParse в ps1:
     целое из JSON приходит int, "3" — строкой, 3.0 — float (ps1 печатает такое как "3")."""
@@ -351,7 +364,7 @@ def main():
 
     def add_font(name, font_def):
         face = font_def.get('face', 'Arial') if font_def else 'Arial'
-        size = int(font_def.get('size', 10)) if font_def else 10
+        size = to_font_size(font_def.get('size', 10)) if font_def else 10
         bold = 'true' if font_def and font_def.get('bold') is True else 'false'
         italic = 'true' if font_def and font_def.get('italic') is True else 'false'
         underline = 'true' if font_def and font_def.get('underline') is True else 'false'

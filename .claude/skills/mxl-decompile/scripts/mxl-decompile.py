@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mxl-decompile v1.2 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.3 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -54,6 +54,19 @@ def text_of(node):
     if node is not None and node.text:
         return node.text
     return None
+
+
+def to_font_size(raw):
+    """Размер шрифта бывает дробным (8.3, 11.3 — в корпусе ERP это треть макетов).
+    int() на таком падал, а ps1 ТИХО округлял. Целое держим целым, иначе "10" → "10.0"."""
+    s = str(raw).strip() if raw is not None else ''
+    if not s:
+        return 0
+    try:
+        d = float(s)
+    except (TypeError, ValueError):
+        return 0
+    return int(d) if d == int(d) else d
 
 
 def int_of(node, default=0):
@@ -207,7 +220,7 @@ def main():
     for f_node in findall(root, "d:font"):
         raw_fonts.append({
             "Face": f_node.get("faceName", ""),
-            "Size": int(f_node.get("height", "0")),
+            "Size": to_font_size(f_node.get("height", "0")),
             "Bold": f_node.get("bold") == "true",
             "Italic": f_node.get("italic") == "true",
             "Underline": f_node.get("underline") == "true",

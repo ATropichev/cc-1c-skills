@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.16 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# mxl-compile v1.17 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -209,10 +209,29 @@ $defaultWidth = if ($def.defaultWidth) { [int]$def.defaultWidth } else { 10 }
 $fontMap = [ordered]@{}   # name -> 0-based index
 $fontEntries = @()        # array of hashtables
 
+# Размер шрифта бывает дробным (8.3, 11.3). [int] его ТИХО округлял. Читаем инвариантной
+# культурой и держим целым, когда дробной части нет, — иначе "10" стало бы "10.0".
+function ConvertTo-FontSize {
+	param($raw)
+	$s = [string]$raw
+	if ([string]::IsNullOrWhiteSpace($s)) { return 0 }
+	$d = 0.0
+	if (-not [double]::TryParse($s, [System.Globalization.NumberStyles]::Float,
+			[System.Globalization.CultureInfo]::InvariantCulture, [ref]$d)) { return 0 }
+	if ($d -eq [math]::Floor($d)) { return [int]$d }
+	return $d
+}
+
+# Число в XML-атрибут: интерполяция строкой отдала бы "8,3" под русской культурой.
+function Format-Num {
+	param($v)
+	return [System.Convert]::ToString($v, [System.Globalization.CultureInfo]::InvariantCulture)
+}
+
 function Add-Font {
 	param([string]$name, $fontDef)
 	$face = if ($fontDef.face) { $fontDef.face } else { "Arial" }
-	$size = if ($fontDef.size) { [int]$fontDef.size } else { 10 }
+	$size = if ($fontDef.size) { ConvertTo-FontSize $fontDef.size } else { 10 }
 	$bold = if ($fontDef.bold -eq $true) { "true" } else { "false" }
 	$italic = if ($fontDef.italic -eq $true) { "true" } else { "false" }
 	$underline = if ($fontDef.underline -eq $true) { "true" } else { "false" }
@@ -1012,7 +1031,7 @@ if ($hasThickBorders) {
 
 # 7i. Font palette
 foreach ($fe in $fontEntries) {
-	X "`t<font faceName=`"$($fe.Face)`" height=`"$($fe.Size)`" bold=`"$($fe.Bold)`" italic=`"$($fe.Italic)`" underline=`"$($fe.Underline)`" strikeout=`"$($fe.Strikeout)`" kind=`"Absolute`" scale=`"100`"/>"
+	X "`t<font faceName=`"$($fe.Face)`" height=`"$(Format-Num $fe.Size)`" bold=`"$($fe.Bold)`" italic=`"$($fe.Italic)`" underline=`"$($fe.Underline)`" strikeout=`"$($fe.Strikeout)`" kind=`"Absolute`" scale=`"100`"/>"
 }
 
 # 7j. Format palette

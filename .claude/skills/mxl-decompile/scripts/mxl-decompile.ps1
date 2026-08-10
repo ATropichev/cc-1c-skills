@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.2 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.3 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -31,11 +31,25 @@ $ns.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
 
 # --- 2. Extract font palette ---
 
+# Размер шрифта бывает дробным (8.3, 11.3 — в корпусе ERP это треть макетов). [int] его
+# ТИХО округлял, а py-порт падал на int(). Читаем инвариантной культурой и держим целым,
+# когда дробной части нет, — иначе "10" превратилось бы в "10.0".
+function ConvertTo-FontSize {
+	param($raw)
+	$s = [string]$raw
+	if ([string]::IsNullOrWhiteSpace($s)) { return 0 }
+	$d = 0.0
+	if (-not [double]::TryParse($s, [System.Globalization.NumberStyles]::Float,
+			[System.Globalization.CultureInfo]::InvariantCulture, [ref]$d)) { return 0 }
+	if ($d -eq [math]::Floor($d)) { return [int]$d }
+	return $d
+}
+
 $rawFonts = @()
 foreach ($fNode in $root.SelectNodes("d:font", $ns)) {
 	$rawFonts += @{
 		Face      = $fNode.GetAttribute("faceName")
-		Size      = [int]$fNode.GetAttribute("height")
+		Size      = ConvertTo-FontSize $fNode.GetAttribute("height")
 		Bold      = $fNode.GetAttribute("bold") -eq "true"
 		Italic    = $fNode.GetAttribute("italic") -eq "true"
 		Underline = $fNode.GetAttribute("underline") -eq "true"
