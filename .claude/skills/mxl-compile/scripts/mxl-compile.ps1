@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.21 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# mxl-compile v1.22 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -400,8 +400,13 @@ function ConvertTo-LayoutId {
 	if ($name -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
 		return $name
 	}
+	# UUID версии 3 (имя + MD5, RFC 4122): биты версии и варианта проставляются, иначе это
+	# не UUID, а просто шестнадцатеричная строка нужной формы.
 	$md5 = [System.Security.Cryptography.MD5]::Create()
-	$h = ($md5.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($name)) | ForEach-Object { $_.ToString('x2') }) -join ''
+	$b = $md5.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($name))
+	$b[6] = [byte](($b[6] -band 0x0F) -bor 0x30)   # версия 3
+	$b[8] = [byte](($b[8] -band 0x3F) -bor 0x80)   # вариант RFC 4122
+	$h = ($b | ForEach-Object { $_.ToString('x2') }) -join ''
 	return "$($h.Substring(0,8))-$($h.Substring(8,4))-$($h.Substring(12,4))-$($h.Substring(16,4))-$($h.Substring(20,12))"
 }
 

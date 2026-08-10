@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.21 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# mxl-compile v1.22 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -504,7 +504,12 @@ def main():
         if re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
                     r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', name):
             return name
-        h = hashlib.md5(name.encode('utf-8')).hexdigest()
+        # UUID версии 3 (имя + MD5, RFC 4122): биты версии и варианта проставляются, иначе это
+        # не UUID, а просто шестнадцатеричная строка нужной формы.
+        b = bytearray(hashlib.md5(name.encode('utf-8')).digest())
+        b[6] = (b[6] & 0x0F) | 0x30   # версия 3
+        b[8] = (b[8] & 0x3F) | 0x80   # вариант RFC 4122
+        h = b.hex()
         return f'{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}'
 
     column_layouts = [{'Id': None, 'Name': None, 'Size': total_columns, 'Widths': col_width_map}]
