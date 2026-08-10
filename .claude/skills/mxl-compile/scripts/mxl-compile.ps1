@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.19 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# mxl-compile v1.20 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -789,6 +789,14 @@ foreach ($area in $def.areas) {
 	$activeRowspans = @()  # @{ColStart=1-based; ColEnd=1-based; EndLocalRow=int}
 	$localRow = 0
 	# Ссылка области на колоночную раскладку — её получают все строки области.
+	# Раскладка адресуется ИМЕНЕМ из columnSets — инлайновой формы в этом DSL нет ни у чего
+	# (стиль и шрифт тоже только по имени). Иначе сообщение включало бы сериализованный
+	# объект, а он у портов выглядит по-разному.
+	if ($area.PSObject.Properties['columnSet'] -and
+		($area.columnSet -is [System.Management.Automation.PSCustomObject] -or $area.columnSet -is [System.Collections.IDictionary])) {
+		[Console]::Error.WriteLine("'columnSet' must be a name declared in columnSets, got an object: area `"$($area.name)`"")
+		exit 1
+	}
 	$areaColumnSet = if ($area.PSObject.Properties['columnSet']) { "$($area.columnSet)" } else { '' }
 	$areaLayout = $columnLayouts[0]
 	if ($areaColumnSet) {

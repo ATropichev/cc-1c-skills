@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.19 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# mxl-compile v1.20 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -814,6 +814,13 @@ def main():
         active_rowspans = []
         local_row = 0
         # Ссылка области на колоночную раскладку — её получают все строки области.
+        # Раскладка адресуется ИМЕНЕМ из columnSets — инлайновой формы в этом DSL нет ни у чего
+        # (стиль и шрифт тоже только по имени). Иначе сообщение включало бы сериализованный
+        # объект, а он у портов выглядит по-разному.
+        if isinstance(area.get('columnSet'), (dict, list)):
+            print(f'\'columnSet\' must be a name declared in columnSets, got an object:'
+                  f' area "{area.get("name", "")}"', file=sys.stderr)
+            sys.exit(1)
         area_column_set = str(area.get('columnSet') or '')
         area_layout = column_layouts[0]
         if area_column_set:
