@@ -10,7 +10,7 @@
 		</languageInfo>
 	</languageSettings>
 	<columns>
-		<size>3</size>
+		<size>4</size>
 	</columns>
 	<rowsItem>
 		<index>0</index>
@@ -22,7 +22,7 @@
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>A</v8:content>
+							<v8:content>Наименование</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -34,7 +34,7 @@
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>B</v8:content>
+							<v8:content>Количество</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -46,7 +46,50 @@
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>C</v8:content>
+							<v8:content>Сумма</v8:content>
+						</v8:item>
+					</tl>
+				</c>
+			</c>
+			<c>
+				<i>3</i>
+				<c>
+					<f>2</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Примечание</v8:content>
+						</v8:item>
+					</tl>
+				</c>
+			</c>
+		</row>
+	</rowsItem>
+	<rowsItem>
+		<index>1</index>
+		<row>
+			<c>
+				<i>0</i>
+				<c>
+					<f>3</f>
+					<parameter>Товар</parameter>
+				</c>
+			</c>
+			<c>
+				<i>1</i>
+				<c>
+					<f>3</f>
+					<parameter>Кол</parameter>
+				</c>
+			</c>
+			<c>
+				<i>3</i>
+				<c>
+					<f>4</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>хвост</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -55,24 +98,40 @@
 	</rowsItem>
 	<templateMode>true</templateMode>
 	<defaultFormatIndex>1</defaultFormatIndex>
-	<height>1</height>
-	<vgRows>1</vgRows>
+	<height>2</height>
+	<vgRows>2</vgRows>
 	<namedItem xsi:type="NamedItemCells">
-		<name>Test</name>
+		<name>Таблица</name>
 		<area>
 			<type>Rows</type>
 			<beginRow>0</beginRow>
-			<endRow>0</endRow>
+			<endRow>1</endRow>
 			<beginColumn>-1</beginColumn>
 			<endColumn>-1</endColumn>
 		</area>
 	</namedItem>
+	<line width="1" gap="false">
+		<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Solid</v8ui:style>
+	</line>
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
 		<width>10</width>
 	</format>
 	<format>
 		<font>0</font>
+		<fillType>Text</fillType>
+	</format>
+	<format>
+		<font>0</font>
+		<fillType>Parameter</fillType>
+	</format>
+	<format>
+		<font>0</font>
+		<leftBorder>0</leftBorder>
+		<topBorder>0</topBorder>
+		<rightBorder>0</rightBorder>
+		<bottomBorder>0</bottomBorder>
+		<horizontalAlignment>Center</horizontalAlignment>
 		<fillType>Text</fillType>
 	</format>
 </document>

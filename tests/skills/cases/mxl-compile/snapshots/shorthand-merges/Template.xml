@@ -10,7 +10,7 @@
 		</languageInfo>
 	</languageSettings>
 	<columns>
-		<size>3</size>
+		<size>4</size>
 	</columns>
 	<rowsItem>
 		<index>0</index>
@@ -22,7 +22,7 @@
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>A</v8:content>
+							<v8:content>Вид</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -34,7 +34,36 @@
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>B</v8:content>
+							<v8:content>Остаток</v8:content>
+						</v8:item>
+					</tl>
+				</c>
+			</c>
+			<c>
+				<i>3</i>
+				<c>
+					<f>2</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Итог</v8:content>
+						</v8:item>
+					</tl>
+				</c>
+			</c>
+		</row>
+	</rowsItem>
+	<rowsItem>
+		<index>1</index>
+		<row>
+			<c>
+				<i>1</i>
+				<c>
+					<f>2</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>начало</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -46,23 +75,73 @@
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>C</v8:content>
+							<v8:content>конец</v8:content>
 						</v8:item>
 					</tl>
 				</c>
 			</c>
 		</row>
 	</rowsItem>
+	<rowsItem>
+		<index>2</index>
+		<row>
+			<c>
+				<i>0</i>
+				<c>
+					<f>3</f>
+					<parameter>Вид</parameter>
+				</c>
+			</c>
+			<c>
+				<i>1</i>
+				<c>
+					<f>3</f>
+					<parameter>Нач</parameter>
+				</c>
+			</c>
+			<c>
+				<i>2</i>
+				<c>
+					<f>3</f>
+					<parameter>Кон</parameter>
+				</c>
+			</c>
+			<c>
+				<i>3</i>
+				<c>
+					<f>3</f>
+					<parameter>Итог</parameter>
+				</c>
+			</c>
+		</row>
+	</rowsItem>
 	<templateMode>true</templateMode>
 	<defaultFormatIndex>1</defaultFormatIndex>
-	<height>1</height>
-	<vgRows>1</vgRows>
+	<height>3</height>
+	<vgRows>3</vgRows>
+	<merge>
+		<r>0</r>
+		<c>0</c>
+		<h>1</h>
+		<w>0</w>
+	</merge>
+	<merge>
+		<r>0</r>
+		<c>1</c>
+		<w>1</w>
+	</merge>
+	<merge>
+		<r>0</r>
+		<c>3</c>
+		<h>1</h>
+		<w>0</w>
+	</merge>
 	<namedItem xsi:type="NamedItemCells">
-		<name>Test</name>
+		<name>Шапка</name>
 		<area>
 			<type>Rows</type>
 			<beginRow>0</beginRow>
-			<endRow>0</endRow>
+			<endRow>2</endRow>
 			<beginColumn>-1</beginColumn>
 			<endColumn>-1</endColumn>
 		</area>
@@ -74,5 +153,9 @@
 	<format>
 		<font>0</font>
 		<fillType>Text</fillType>
+	</format>
+	<format>
+		<font>0</font>
+		<fillType>Parameter</fillType>
 	</format>
 </document>

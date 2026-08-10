@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.15 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# mxl-compile v1.16 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -518,6 +518,129 @@ function Register-CellFormat {
 		NumberFormat = $resolved.NumberFormat
 	}
 	return Register-Format -key $key -props $props
+}
+
+# --- 5.5. Шорткат строк: строка-массив ячеек ---
+# Та же форма, что у макетов СКД (skd-compile): позиция ячейки = индекс в массиве,
+# ">" продолжает ячейку слева, "|" — ячейку сверху, null — пустая колонка,
+# "{Имя}" — параметр. Разворачиваем в обычную строку с явными col/span/rowspan,
+# поэтому весь код ниже про шорткат не знает.
+
+function Set-CellProp {
+	param($cell, [string]$name, $value)
+	$cell | Add-Member -NotePropertyName $name -NotePropertyValue $value -Force
+}
+
+function Expand-ShorthandRow {
+	param($row, [string]$areaName, [int]$rowIdx, $openByCol)
+
+	$cells = @()
+	$placed = @{}     # 1-based col -> ячейка, занимающая колонку в ЭТОЙ строке
+	$extended = @()   # ячейки, чей rowspan уже нарастили в этой строке (span>1 даёт несколько "|")
+	$last = $null     # последняя реальная ячейка слева — цель для ">"
+	$idx = 0
+
+	foreach ($el in $row) {
+		$idx++
+		# Внутри функции пишем в stderr напрямую: Write-Error приписал бы к сообщению имя
+		# функции, и текст перестал бы совпадать с py-портом.
+		if ($idx -gt $totalColumns) {
+			[Console]::Error.WriteLine("Row exceeds 'columns' ($totalColumns): area `"$areaName`", row $rowIdx")
+			exit 1
+		}
+
+		if ($null -eq $el) { $last = $null; continue }
+
+		if ($el -is [string] -and $el -eq '>') {
+			if ($null -eq $last) {
+				[Console]::Error.WriteLine("Row shorthand: '>' has no cell to the left: area `"$areaName`", row $rowIdx, cell $idx")
+				exit 1
+			}
+			$span = if ($last.span) { [int]$last.span } else { 1 }
+			Set-CellProp $last 'span' ($span + 1)
+			$placed[$idx] = $last
+			continue
+		}
+
+		if ($el -is [string] -and $el -eq '|') {
+			$above = $openByCol[$idx]
+			if ($null -eq $above) {
+				[Console]::Error.WriteLine("Row shorthand: '|' has no cell above: area `"$areaName`", row $rowIdx, cell $idx")
+				exit 1
+			}
+			if (-not ($extended -contains $above)) {
+				$rowspan = if ($above.rowspan) { [int]$above.rowspan } else { 1 }
+				Set-CellProp $above 'rowspan' ($rowspan + 1)
+				$extended += $above
+			}
+			$placed[$idx] = $above
+			$last = $null
+			continue
+		}
+
+		if ($el -is [string]) {
+			$cell = [PSCustomObject]@{ col = $idx; span = 1 }
+			$m = [regex]::Match($el, '^\{(.+)\}$')
+			if ($m.Success) { Set-CellProp $cell 'param' $m.Groups[1].Value }
+			else { Set-CellProp $cell 'text' $el }
+		} else {
+			# Объектный элемент — обычная ячейка mxl, позиция берётся из индекса.
+			if ($el.PSObject.Properties['col']) {
+				[Console]::Error.WriteLine("Row shorthand: cell object must not carry 'col': area `"$areaName`", row $rowIdx, cell $idx")
+				exit 1
+			}
+			$cell = $el
+			Set-CellProp $cell 'col' $idx
+			if (-not $cell.span) { Set-CellProp $cell 'span' 1 }
+		}
+
+		$cells += $cell
+		$placed[$idx] = $cell
+		$last = $cell
+	}
+
+	# Колонки, не занятые в этой строке, теряют «ячейку сверху».
+	$openByCol.Clear()
+	foreach ($k in $placed.Keys) { $openByCol[$k] = $placed[$k] }
+
+	return [PSCustomObject]@{ cells = $cells }
+}
+
+# Карту занятых колонок ведём и по объектным строкам: "|" продолжает ту ячейку,
+# которая реально стоит выше, независимо от того, какой формой её записали.
+function Update-OpenByCol {
+	param($row, $openByCol)
+	$placed = @{}
+	if ($row.cells) {
+		foreach ($cell in $row.cells) {
+			# Ячейки без col (строка с автопотоком) на этом шаге ещё не разложены — позиция
+			# станет известна позже, поэтому «ячейку сверху» они не дают, и "|" под такой
+			# строкой честно скажет, что сверху ничего нет.
+			if (-not $cell.PSObject.Properties['col'] -or $null -eq $cell.col) { continue }
+			$col = [int]$cell.col
+			$span = if ($cell.span) { [int]$cell.span } else { 1 }
+			for ($c = $col; $c -lt ($col + $span); $c++) { $placed[$c] = $cell }
+		}
+	}
+	$openByCol.Clear()
+	foreach ($k in $placed.Keys) { $openByCol[$k] = $placed[$k] }
+}
+
+foreach ($area in $def.areas) {
+	$areaName = $area.name
+	$openByCol = @{}
+	$rowIdx = 0
+	$expandedRows = @()
+	foreach ($row in $area.rows) {
+		$rowIdx++
+		if ($row -is [array]) {
+			$expandedRows += Expand-ShorthandRow -row $row -areaName $areaName -rowIdx $rowIdx -openByCol $openByCol
+		} else {
+			$expandedRows += $row
+			if ($row.empty) { $openByCol.Clear() } else { Update-OpenByCol -row $row -openByCol $openByCol }
+		}
+	}
+	$area.rows = $expandedRows
 }
 
 # Pre-register all formats from areas

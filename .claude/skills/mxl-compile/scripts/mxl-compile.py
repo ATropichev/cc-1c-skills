@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mxl-compile v1.15 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# mxl-compile v1.16 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -585,12 +585,117 @@ def main():
         }
         return register_format(key, props)
 
+    # --- 5.5. Шорткат строк: строка-массив ячеек ---
+    # Та же форма, что у макетов СКД (skd-compile): позиция ячейки = индекс в массиве,
+    # ">" продолжает ячейку слева, "|" — ячейку сверху, null — пустая колонка,
+    # "{Имя}" — параметр. Разворачиваем в обычную строку с явными col/span/rowspan,
+    # поэтому весь код ниже про шорткат не знает.
+
+    def expand_shorthand_row(row, area_name, row_idx, open_by_col):
+        cells = []
+        placed = {}      # 1-based col -> ячейка, занимающая колонку в ЭТОЙ строке
+        extended = []    # ячейки, чей rowspan уже нарастили в этой строке (span>1 даёт несколько "|")
+        last = None      # последняя реальная ячейка слева — цель для ">"
+
+        for idx, el in enumerate(row, start=1):
+            if idx > total_columns:
+                print(f'Row exceeds \'columns\' ({total_columns}): area "{area_name}",'
+                      f' row {row_idx}', file=sys.stderr)
+                sys.exit(1)
+
+            if el is None:
+                last = None
+                continue
+
+            if isinstance(el, str) and el == '>':
+                if last is None:
+                    print(f'Row shorthand: \'>\' has no cell to the left: area "{area_name}",'
+                          f' row {row_idx}, cell {idx}', file=sys.stderr)
+                    sys.exit(1)
+                last['span'] = int(last.get('span', 1)) + 1
+                placed[idx] = last
+                continue
+
+            if isinstance(el, str) and el == '|':
+                above = open_by_col.get(idx)
+                if above is None:
+                    print(f'Row shorthand: \'|\' has no cell above: area "{area_name}",'
+                          f' row {row_idx}, cell {idx}', file=sys.stderr)
+                    sys.exit(1)
+                if not any(above is e for e in extended):
+                    above['rowspan'] = int(above.get('rowspan', 1)) + 1
+                    extended.append(above)
+                placed[idx] = above
+                last = None
+                continue
+
+            if isinstance(el, str):
+                cell = CIDict()
+                cell['col'] = idx
+                cell['span'] = 1
+                m = re.match(r'^\{(.+)\}$', el)
+                if m:
+                    cell['param'] = m.group(1)
+                else:
+                    cell['text'] = el
+            else:
+                # Объектный элемент — обычная ячейка mxl, позиция берётся из индекса.
+                if 'col' in el:
+                    print(f'Row shorthand: cell object must not carry \'col\': area "{area_name}",'
+                          f' row {row_idx}, cell {idx}', file=sys.stderr)
+                    sys.exit(1)
+                cell = el
+                cell['col'] = idx
+                if not cell.get('span'):
+                    cell['span'] = 1
+
+            cells.append(cell)
+            placed[idx] = cell
+            last = cell
+
+        # Колонки, не занятые в этой строке, теряют «ячейку сверху».
+        open_by_col.clear()
+        open_by_col.update(placed)
+
+        out = CIDict()
+        out['cells'] = cells
+        return out
+
+    # Карту занятых колонок ведём и по объектным строкам: "|" продолжает ту ячейку,
+    # которая реально стоит выше, независимо от того, какой формой её записали.
+    def update_open_by_col(row, open_by_col):
+        placed = {}
+        for cell in (row.get('cells') or []):
+            # Ячейки без col (строка с автопотоком) на этом шаге ещё не разложены — позиция
+            # станет известна позже, поэтому «ячейку сверху» они не дают, и "|" под такой
+            # строкой честно скажет, что сверху ничего нет.
+            if cell.get('col') is None:
+                continue
+            col = int(cell['col'])
+            span = int(cell.get('span', 1))
+            for c in range(col, col + span):
+                placed[c] = cell
+        open_by_col.clear()
+        open_by_col.update(placed)
+
+    for area in defn['areas']:
+        area_name = area.get('name', '')
+        open_by_col = {}
+        expanded_rows = []
+        for row_idx, row in enumerate(area.get('rows', []), start=1):
+            if isinstance(row, list):
+                expanded_rows.append(expand_shorthand_row(row, area_name, row_idx, open_by_col))
+            else:
+                expanded_rows.append(row)
+                if row.get('empty'):
+                    open_by_col.clear()
+                else:
+                    update_open_by_col(row, open_by_col)
+        area['rows'] = expanded_rows
+
     # Pre-register all formats from areas
     for area in defn['areas']:
         for row in area.get('rows', []):
-            # Skip list-of-values shorthand rows (treated as empty rows like PS1)
-            if isinstance(row, list):
-                continue
             # Skip empty row placeholder
             if row.get('empty'):
                 continue
@@ -668,9 +773,6 @@ def main():
         local_row = 0
 
         for row in area.get('rows', []):
-            # List-of-values shorthand: treat as row with no properties (like PS1)
-            if isinstance(row, list):
-                row = {}
             # Empty row placeholder: emit N empty rows
             if row.get('empty'):
                 count = int(row['empty'])
