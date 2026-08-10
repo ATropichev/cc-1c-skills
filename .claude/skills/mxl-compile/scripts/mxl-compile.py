@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.23 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# mxl-compile v1.24 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -606,6 +606,22 @@ def main():
     col_format_map = column_layouts[0]['FormatMap']
 
     # 6c. Helper: determine fillType from cell content
+    # Текст ячейки платформа хранит по элементу на язык. Конвенция ML-значений (та же, что у
+    # synonym/tooltip/title в метаданных и формах): строка — русский текст, объект — по элементу
+    # на язык В ПОРЯДКЕ КЛЮЧЕЙ.
+    def emit_cell_text(lines, value):
+        if isinstance(value, dict):
+            pairs = [(str(k), str(v)) for k, v in value.items()]
+        else:
+            pairs = [('ru', str(value))]
+        lines.append('\t\t\t\t\t<tl>')
+        for lang, content in pairs:
+            lines.append('\t\t\t\t\t\t<v8:item>')
+            lines.append(f'\t\t\t\t\t\t\t<v8:lang>{lang}</v8:lang>')
+            lines.append(f'\t\t\t\t\t\t\t<v8:content>{esc_xml_text(content)}</v8:content>')
+            lines.append('\t\t\t\t\t\t</v8:item>')
+        lines.append('\t\t\t\t\t</tl>')
+
     def get_fill_type(cell):
         """Text НЕ эмитим: платформа его практически не пишет — на выборке корпуса 344 981
         текстовая ячейка из 348 023 (99,1%) ссылается на формат БЕЗ fillType. Наличие <tl>
@@ -1033,20 +1049,10 @@ def main():
                             lines.append(f'\t\t\t\t\t<detailParameter>{cell_info["Detail"]}</detailParameter>')
 
                     if cell_info['Text']:
-                        lines.append('\t\t\t\t\t<tl>')
-                        lines.append('\t\t\t\t\t\t<v8:item>')
-                        lines.append('\t\t\t\t\t\t\t<v8:lang>ru</v8:lang>')
-                        lines.append(f'\t\t\t\t\t\t\t<v8:content>{esc_xml_text(cell_info["Text"])}</v8:content>')
-                        lines.append('\t\t\t\t\t\t</v8:item>')
-                        lines.append('\t\t\t\t\t</tl>')
+                        emit_cell_text(lines, cell_info['Text'])
 
                     if cell_info['Template']:
-                        lines.append('\t\t\t\t\t<tl>')
-                        lines.append('\t\t\t\t\t\t<v8:item>')
-                        lines.append('\t\t\t\t\t\t\t<v8:lang>ru</v8:lang>')
-                        lines.append(f'\t\t\t\t\t\t\t<v8:content>{esc_xml_text(cell_info["Template"])}</v8:content>')
-                        lines.append('\t\t\t\t\t\t</v8:item>')
-                        lines.append('\t\t\t\t\t</tl>')
+                        emit_cell_text(lines, cell_info['Template'])
 
                     lines.append('\t\t\t\t</c>')
                     lines.append('\t\t\t</c>')

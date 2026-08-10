@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.5 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.6 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -248,9 +248,22 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 			$dNode = $cContent.SelectSingleNode("d:detailParameter", $ns)
 			if ($dNode) { $detail = $dNode.InnerText }
 
+			# Текст ячейки платформа хранит по элементу на язык. Раньше брался ПЕРВЫЙ, и всё
+			# остальное терялось — в корпусе ERP 98% макетов держат текст и под ru, и под en.
+			# Конвенция ML-значений: только ru → строка, иначе объект «язык → текст».
 			$text = $null
-			$tNode = $cContent.SelectSingleNode("d:tl/v8:item/v8:content", $ns)
-			if ($tNode) { $text = $tNode.InnerText }
+			$items = $cContent.SelectNodes("d:tl/v8:item", $ns)
+			if ($items -and $items.Count -gt 0) {
+				$byLang = [ordered]@{}
+				foreach ($it in $items) {
+					$langNode = $it.SelectSingleNode("v8:lang", $ns)
+					$contentNode = $it.SelectSingleNode("v8:content", $ns)
+					$lang = if ($langNode) { $langNode.InnerText } else { '' }
+					$byLang[$lang] = if ($contentNode) { $contentNode.InnerText } else { '' }
+				}
+				if ($byLang.Count -eq 1 -and $byLang.Contains('ru')) { $text = $byLang['ru'] }
+				else { $text = $byLang }
+			}
 
 			$cells += @{
 				Col       = $col

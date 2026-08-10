@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.5 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.6 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -428,10 +428,22 @@ def main():
                 if d_node is not None and d_node.text:
                     detail = d_node.text
 
+                # Текст ячейки платформа хранит по элементу на язык. Раньше брался ПЕРВЫЙ, и всё
+                # остальное терялось — в корпусе ERP 98% макетов держат текст и под ru, и под en.
+                # Конвенция ML-значений: только ru → строка, иначе объект «язык → текст».
                 text = None
-                t_node = find(c_content, "d:tl/v8:item/v8:content")
-                if t_node is not None and t_node.text:
-                    text = t_node.text
+                items = findall(c_content, "d:tl/v8:item")
+                if items:
+                    by_lang = OrderedDict()
+                    for it in items:
+                        lang_node = find(it, "v8:lang")
+                        content_node = find(it, "v8:content")
+                        lang = (text_of(lang_node) or '') if lang_node is not None else ''
+                        by_lang[lang] = (text_of(content_node) or '') if content_node is not None else ''
+                    if len(by_lang) == 1 and 'ru' in by_lang:
+                        text = by_lang['ru']
+                    else:
+                        text = by_lang
 
                 cells.append({
                     "Col": col,

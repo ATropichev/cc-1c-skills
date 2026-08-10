@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.23 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# mxl-compile v1.24 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -558,6 +558,29 @@ function Esc-XmlText {
 	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;')
 }
 
+# Текст ячейки платформа хранит по элементу на язык. Конвенция ML-значений (та же, что у
+# synonym/tooltip/title в метаданных и формах): строка — русский текст, объект — по элементу
+# на язык В ПОРЯДКЕ КЛЮЧЕЙ.
+function Emit-CellText {
+	param($value)
+	$pairs = @()
+	if ($value -is [System.Collections.IDictionary]) {
+		foreach ($k in $value.Keys) { $pairs += @{ Lang = "$k"; Text = "$($value[$k])" } }
+	} elseif ($value -is [System.Management.Automation.PSCustomObject]) {
+		foreach ($p in $value.PSObject.Properties) { $pairs += @{ Lang = $p.Name; Text = "$($p.Value)" } }
+	} else {
+		$pairs += @{ Lang = 'ru'; Text = "$value" }
+	}
+	X "`t`t`t`t`t<tl>"
+	foreach ($p in $pairs) {
+		X "`t`t`t`t`t`t<v8:item>"
+		X "`t`t`t`t`t`t`t<v8:lang>$($p.Lang)</v8:lang>"
+		X "`t`t`t`t`t`t`t<v8:content>$(Esc-XmlText $p.Text)</v8:content>"
+		X "`t`t`t`t`t`t</v8:item>"
+	}
+	X "`t`t`t`t`t</tl>"
+}
+
 # Helper: determine fillType from cell content
 # Text НЕ эмитим: платформа его практически не пишет — на выборке корпуса 344 981 текстовая
 # ячейка из 348 023 (99,1%) ссылается на формат БЕЗ fillType. Наличие <tl> и так означает
@@ -1045,23 +1068,9 @@ foreach ($area in $def.areas) {
 					}
 				}
 
-				if ($cellInfo.Text) {
-					X "`t`t`t`t`t<tl>"
-					X "`t`t`t`t`t`t<v8:item>"
-					X "`t`t`t`t`t`t`t<v8:lang>ru</v8:lang>"
-					X "`t`t`t`t`t`t`t<v8:content>$(Esc-XmlText $cellInfo.Text)</v8:content>"
-					X "`t`t`t`t`t`t</v8:item>"
-					X "`t`t`t`t`t</tl>"
-				}
+				if ($cellInfo.Text) { Emit-CellText $cellInfo.Text }
 
-				if ($cellInfo.Template) {
-					X "`t`t`t`t`t<tl>"
-					X "`t`t`t`t`t`t<v8:item>"
-					X "`t`t`t`t`t`t`t<v8:lang>ru</v8:lang>"
-					X "`t`t`t`t`t`t`t<v8:content>$(Esc-XmlText $cellInfo.Template)</v8:content>"
-					X "`t`t`t`t`t`t</v8:item>"
-					X "`t`t`t`t`t</tl>"
-				}
+				if ($cellInfo.Template) { Emit-CellText $cellInfo.Template }
 
 				X "`t`t`t`t</c>"
 				X "`t`t`t</c>"
