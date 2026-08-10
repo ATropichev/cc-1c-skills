@@ -156,11 +156,11 @@
 		</area>
 	</namedItem>
 	<namedItem xsi:type="NamedItemCells">
-		<name>ШапкаТаблицы</name>
+		<name>Итого</name>
 		<area>
 			<type>Rows</type>
-			<beginRow>1</beginRow>
-			<endRow>1</endRow>
+			<beginRow>3</beginRow>
+			<endRow>3</endRow>
 			<beginColumn>-1</beginColumn>
 			<endColumn>-1</endColumn>
 		</area>
@@ -176,11 +176,11 @@
 		</area>
 	</namedItem>
 	<namedItem xsi:type="NamedItemCells">
-		<name>Итого</name>
+		<name>ШапкаТаблицы</name>
 		<area>
 			<type>Rows</type>
-			<beginRow>3</beginRow>
-			<endRow>3</endRow>
+			<beginRow>1</beginRow>
+			<endRow>1</endRow>
 			<beginColumn>-1</beginColumn>
 			<endColumn>-1</endColumn>
 		</area>

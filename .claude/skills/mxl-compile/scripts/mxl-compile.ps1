@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.17 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# mxl-compile v1.18 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -978,14 +978,117 @@ foreach ($area in $def.areas) {
 	}
 
 	$areaEndRow = $globalRow - 1
-	$namedItems += @{
-		Name     = $areaName
-		BeginRow = $areaStartRow
-		EndRow   = $areaEndRow
+	# Блок без имени — просто кусок сетки: строки, не принадлежащие ни одной именованной
+	# области (в корпусе таких дыр 34%, а макетов вовсе без Rows-областей — 21%).
+	# Имя на блоке — сахар: разворачиваем его в обычную именованную область типа Rows.
+	if (-not [string]::IsNullOrEmpty($areaName)) {
+		$namedItems += @{
+			Name     = $areaName
+			BeginRow = $areaStartRow
+			EndRow   = $areaEndRow
+			BeginCol = -1
+			EndCol   = -1
+		}
 	}
 }
 
 $totalRowCount = $globalRow
+
+# 7d-bis. Именованные области, заданные координатами (namedAreas).
+# Нужны для всего, что блоком не выражается: области не-Rows и пересекающиеся Rows.
+# Ось, которую не указали, означает «вся» — так же устроен ТабличныйДокумент.Область().
+
+# Диапазон — та же грамматика, что у columnWidths: число или "N-M". Список через запятую
+# для области бессмыслен: область непрерывна, платформа разрывную не хранит.
+function ConvertTo-AreaRange {
+	param($spec, [string]$axis, [string]$where)
+	if ($null -eq $spec) { return $null }
+	$s = ([string]$spec).Trim()
+	if ($s -eq '') { return $null }
+	if ($s.Contains(',')) {
+		[Console]::Error.WriteLine("namedAreas: '$axis' must be a single number or range, got list `"$s`": $where")
+		exit 1
+	}
+	if ($s -match '^(\d+)\s*-\s*(\d+)$') {
+		$from = [int]$Matches[1]; $to = [int]$Matches[2]
+	} elseif ($s -match '^(\d+)$') {
+		$from = [int]$Matches[1]; $to = $from
+	} else {
+		[Console]::Error.WriteLine("namedAreas: invalid '$axis' value `"$s`": $where")
+		exit 1
+	}
+	# Платформа трактует 0 как 1 (см. описание Область()) — принимаем так же.
+	if ($from -lt 1) { $from = 1 }
+	if ($to -lt $from) {
+		[Console]::Error.WriteLine("namedAreas: '$axis' range is reversed `"$s`": $where")
+		exit 1
+	}
+	return @{ From = $from; To = $to }
+}
+
+# Прощающий ввод: платформенный адрес "R1C1:R2C2" — модель, пишущая код на встроенном
+# языке, естественно потянется за ним. В документацию не выносим.
+function ConvertFrom-R1C1 {
+	param([string]$s)
+	$m = [regex]::Match($s.Trim(), '^R(\d+)(?:C(\d+))?(?::R(\d+)(?:C(\d+))?)?$', 'IgnoreCase')
+	if (-not $m.Success) {
+		$m2 = [regex]::Match($s.Trim(), '^C(\d+)(?::C(\d+))?$', 'IgnoreCase')
+		if (-not $m2.Success) { return $null }
+		$c1 = [int]$m2.Groups[1].Value
+		$c2 = if ($m2.Groups[2].Success) { [int]$m2.Groups[2].Value } else { $c1 }
+		return @{ Rows = $null; Cols = @{ From = $c1; To = $c2 } }
+	}
+	$r1 = [int]$m.Groups[1].Value
+	$r2 = if ($m.Groups[3].Success) { [int]$m.Groups[3].Value } else { $r1 }
+	$cols = $null
+	if ($m.Groups[2].Success) {
+		$c1 = [int]$m.Groups[2].Value
+		$c2 = if ($m.Groups[4].Success) { [int]$m.Groups[4].Value } else { $c1 }
+		$cols = @{ From = $c1; To = $c2 }
+	}
+	return @{ Rows = @{ From = $r1; To = $r2 }; Cols = $cols }
+}
+
+if ($def.namedAreas) {
+	$naIdx = 0
+	foreach ($na in $def.namedAreas) {
+		$naIdx++
+		$naName = "$($na.name)"
+		$where = "namedAreas[$naIdx]" + $(if ($naName) { " `"$naName`"" } else { '' })
+		if ([string]::IsNullOrEmpty($naName)) {
+			[Console]::Error.WriteLine("namedAreas: 'name' is required: $where")
+			exit 1
+		}
+		$rows = ConvertTo-AreaRange $na.rows 'rows' $where
+		$cols = ConvertTo-AreaRange $na.cols 'cols' $where
+		if (-not $rows -and -not $cols) {
+			$addr = $null
+			foreach ($k in 'area', 'at', 'address') {
+				if ($na.PSObject.Properties[$k] -and "$($na.$k)" -ne '') { $addr = "$($na.$k)"; break }
+			}
+			if ($addr) {
+				$parsed = ConvertFrom-R1C1 $addr
+				if ($null -eq $parsed) {
+					[Console]::Error.WriteLine("namedAreas: invalid address `"$addr`": $where")
+					exit 1
+				}
+				$rows = $parsed.Rows; $cols = $parsed.Cols
+			}
+		}
+		if (-not $rows -and -not $cols) {
+			[Console]::Error.WriteLine("namedAreas: at least one of 'rows'/'cols' is required: $where")
+			exit 1
+		}
+		# DSL 1-based, XML 0-based; отсутствующая ось помечается -1.
+		$namedItems += @{
+			Name     = $naName
+			BeginRow = if ($rows) { $rows.From - 1 } else { -1 }
+			EndRow   = if ($rows) { $rows.To - 1 } else { -1 }
+			BeginCol = if ($cols) { $cols.From - 1 } else { -1 }
+			EndCol   = if ($cols) { $cols.To - 1 } else { -1 }
+		}
+	}
+}
 
 # 7e. Scalar metadata
 X "`t<templateMode>true</templateMode>"
@@ -1004,15 +1107,26 @@ foreach ($m in $merges) {
 }
 
 # 7g. Named items
-foreach ($ni in $namedItems) {
+# Платформа хранит именованные элементы ОТСОРТИРОВАННЫМИ по имени: на выборке 541 макета
+# с несколькими элементами иного порядка нет ни разу. Сортировка регистронезависимая и
+# ординальная — Sort-Object брать нельзя, он сортирует по текущей культуре и на кириллице
+# даст другой порядок. NB: имён с «ё» в выборке не встретилось, этот случай не проверен.
+$sortedNamedItems = @($namedItems | Sort-Object -Property @{ Expression = { $_.Name.ToLowerInvariant() } } `
+	-CaseSensitive)
+foreach ($ni in $sortedNamedItems) {
+	# Тип области выводится из указанных осей, как в ТабличныйДокумент.Область():
+	# нет колонок → полоса строк, нет строк → полоса колонок, обе → прямоугольник.
+	$hasRows = $ni.BeginRow -ge 0
+	$hasCols = $ni.BeginCol -ge 0
+	$type = if ($hasRows -and $hasCols) { 'Rectangle' } elseif ($hasCols) { 'Columns' } else { 'Rows' }
 	X "`t<namedItem xsi:type=`"NamedItemCells`">"
 	X "`t`t<name>$($ni.Name)</name>"
 	X "`t`t<area>"
-	X "`t`t`t<type>Rows</type>"
+	X "`t`t`t<type>$type</type>"
 	X "`t`t`t<beginRow>$($ni.BeginRow)</beginRow>"
 	X "`t`t`t<endRow>$($ni.EndRow)</endRow>"
-	X "`t`t`t<beginColumn>-1</beginColumn>"
-	X "`t`t`t<endColumn>-1</endColumn>"
+	X "`t`t`t<beginColumn>$($ni.BeginCol)</beginColumn>"
+	X "`t`t`t<endColumn>$($ni.EndCol)</endColumn>"
 	X "`t`t</area>"
 	X "`t</namedItem>"
 }

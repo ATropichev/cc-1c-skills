@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-# mxl-compile v1.17 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿#!/usr/bin/env python3
+# mxl-compile v1.18 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -976,13 +976,104 @@ def main():
             global_row += 1
 
         area_end_row = global_row - 1
-        named_items.append({
-            'Name': area_name,
-            'BeginRow': area_start_row,
-            'EndRow': area_end_row,
-        })
+        # Блок без имени — просто кусок сетки: строки, не принадлежащие ни одной именованной
+        # области (в корпусе таких дыр 34%, а макетов вовсе без Rows-областей — 21%).
+        # Имя на блоке — сахар: разворачиваем его в обычную именованную область типа Rows.
+        if area_name:
+            named_items.append({
+                'Name': area_name,
+                'BeginRow': area_start_row,
+                'EndRow': area_end_row,
+                'BeginCol': -1,
+                'EndCol': -1,
+            })
 
     total_row_count = global_row
+
+    # 7d-bis. Именованные области, заданные координатами (namedAreas).
+    # Нужны для всего, что блоком не выражается: области не-Rows и пересекающиеся Rows.
+    # Ось, которую не указали, означает «вся» — так же устроен ТабличныйДокумент.Область().
+
+    def to_area_range(spec, axis, where):
+        """Диапазон — та же грамматика, что у columnWidths: число или "N-M". Список через
+        запятую для области бессмыслен: область непрерывна, платформа разрывную не хранит."""
+        if spec is None:
+            return None
+        s = str(spec).strip()
+        if s == '':
+            return None
+        if ',' in s:
+            print(f'namedAreas: \'{axis}\' must be a single number or range, got list "{s}": {where}',
+                  file=sys.stderr)
+            sys.exit(1)
+        m = re.match(r'^(\d+)\s*-\s*(\d+)$', s)
+        if m:
+            frm, to = int(m.group(1)), int(m.group(2))
+        elif re.match(r'^\d+$', s):
+            frm = to = int(s)
+        else:
+            print(f'namedAreas: invalid \'{axis}\' value "{s}": {where}', file=sys.stderr)
+            sys.exit(1)
+        # Платформа трактует 0 как 1 (см. описание Область()) — принимаем так же.
+        if frm < 1:
+            frm = 1
+        if to < frm:
+            print(f'namedAreas: \'{axis}\' range is reversed "{s}": {where}', file=sys.stderr)
+            sys.exit(1)
+        return (frm, to)
+
+    def from_r1c1(s):
+        """Прощающий ввод: платформенный адрес "R1C1:R2C2" — модель, пишущая код на встроенном
+        языке, естественно потянется за ним. В документацию не выносим."""
+        s = s.strip()
+        m = re.match(r'^R(\d+)(?:C(\d+))?(?::R(\d+)(?:C(\d+))?)?$', s, re.IGNORECASE)
+        if not m:
+            m2 = re.match(r'^C(\d+)(?::C(\d+))?$', s, re.IGNORECASE)
+            if not m2:
+                return None
+            c1 = int(m2.group(1))
+            c2 = int(m2.group(2)) if m2.group(2) else c1
+            return (None, (c1, c2))
+        r1 = int(m.group(1))
+        r2 = int(m.group(3)) if m.group(3) else r1
+        cols = None
+        if m.group(2):
+            c1 = int(m.group(2))
+            c2 = int(m.group(4)) if m.group(4) else c1
+            cols = (c1, c2)
+        return ((r1, r2), cols)
+
+    for na_idx, na in enumerate(defn.get('namedAreas') or [], start=1):
+        na_name = str(na.get('name') or '')
+        where = f'namedAreas[{na_idx}]' + (f' "{na_name}"' if na_name else '')
+        if not na_name:
+            print(f'namedAreas: \'name\' is required: {where}', file=sys.stderr)
+            sys.exit(1)
+        rows = to_area_range(na.get('rows'), 'rows', where)
+        cols = to_area_range(na.get('cols'), 'cols', where)
+        if not rows and not cols:
+            addr = None
+            for k in ('area', 'at', 'address'):
+                if na.get(k):
+                    addr = str(na.get(k))
+                    break
+            if addr:
+                parsed = from_r1c1(addr)
+                if parsed is None:
+                    print(f'namedAreas: invalid address "{addr}": {where}', file=sys.stderr)
+                    sys.exit(1)
+                rows, cols = parsed
+        if not rows and not cols:
+            print(f'namedAreas: at least one of \'rows\'/\'cols\' is required: {where}', file=sys.stderr)
+            sys.exit(1)
+        # DSL 1-based, XML 0-based; отсутствующая ось помечается -1.
+        named_items.append({
+            'Name': na_name,
+            'BeginRow': rows[0] - 1 if rows else -1,
+            'EndRow': rows[1] - 1 if rows else -1,
+            'BeginCol': cols[0] - 1 if cols else -1,
+            'EndCol': cols[1] - 1 if cols else -1,
+        })
 
     # 7e. Scalar metadata
     lines.append(f'\t<templateMode>true</templateMode>')
@@ -1001,15 +1092,24 @@ def main():
         lines.append('\t</merge>')
 
     # 7g. Named items
-    for ni in named_items:
+    # Платформа хранит именованные элементы ОТСОРТИРОВАННЫМИ по имени: на выборке 541 макета
+    # с несколькими элементами иного порядка нет ни разу. Сортировка регистронезависимая и
+    # ординальная (в ps1 поэтому нельзя Sort-Object — он сортирует по текущей культуре).
+    # NB: имён с «ё» в выборке не встретилось, этот случай не проверен.
+    for ni in sorted(named_items, key=lambda x: str(x['Name']).lower()):
+        # Тип области выводится из указанных осей, как в ТабличныйДокумент.Область():
+        # нет колонок → полоса строк, нет строк → полоса колонок, обе → прямоугольник.
+        has_rows = int(ni['BeginRow']) >= 0
+        has_cols = int(ni.get('BeginCol', -1)) >= 0
+        area_type = 'Rectangle' if (has_rows and has_cols) else ('Columns' if has_cols else 'Rows')
         lines.append('\t<namedItem xsi:type="NamedItemCells">')
         lines.append(f'\t\t<name>{ni["Name"]}</name>')
         lines.append('\t\t<area>')
-        lines.append('\t\t\t<type>Rows</type>')
+        lines.append(f'\t\t\t<type>{area_type}</type>')
         lines.append(f'\t\t\t<beginRow>{ni["BeginRow"]}</beginRow>')
         lines.append(f'\t\t\t<endRow>{ni["EndRow"]}</endRow>')
-        lines.append('\t\t\t<beginColumn>-1</beginColumn>')
-        lines.append('\t\t\t<endColumn>-1</endColumn>')
+        lines.append(f'\t\t\t<beginColumn>{ni.get("BeginCol", -1)}</beginColumn>')
+        lines.append(f'\t\t\t<endColumn>{ni.get("EndCol", -1)}</endColumn>')
         lines.append('\t\t</area>')
         lines.append('\t</namedItem>')
 

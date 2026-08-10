@@ -502,26 +502,6 @@
 		</area>
 	</namedItem>
 	<namedItem xsi:type="NamedItemCells">
-		<name>ШапкаТаблицы</name>
-		<area>
-			<type>Rows</type>
-			<beginRow>4</beginRow>
-			<endRow>4</endRow>
-			<beginColumn>-1</beginColumn>
-			<endColumn>-1</endColumn>
-		</area>
-	</namedItem>
-	<namedItem xsi:type="NamedItemCells">
-		<name>Строка</name>
-		<area>
-			<type>Rows</type>
-			<beginRow>5</beginRow>
-			<endRow>5</endRow>
-			<beginColumn>-1</beginColumn>
-			<endColumn>-1</endColumn>
-		</area>
-	</namedItem>
-	<namedItem xsi:type="NamedItemCells">
 		<name>Итого</name>
 		<area>
 			<type>Rows</type>
@@ -537,6 +517,26 @@
 			<type>Rows</type>
 			<beginRow>8</beginRow>
 			<endRow>14</endRow>
+			<beginColumn>-1</beginColumn>
+			<endColumn>-1</endColumn>
+		</area>
+	</namedItem>
+	<namedItem xsi:type="NamedItemCells">
+		<name>Строка</name>
+		<area>
+			<type>Rows</type>
+			<beginRow>5</beginRow>
+			<endRow>5</endRow>
+			<beginColumn>-1</beginColumn>
+			<endColumn>-1</endColumn>
+		</area>
+	</namedItem>
+	<namedItem xsi:type="NamedItemCells">
+		<name>ШапкаТаблицы</name>
+		<area>
+			<type>Rows</type>
+			<beginRow>4</beginRow>
+			<endRow>4</endRow>
 			<beginColumn>-1</beginColumn>
 			<endColumn>-1</endColumn>
 		</area>

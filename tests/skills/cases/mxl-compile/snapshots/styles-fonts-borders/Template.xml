@@ -235,6 +235,16 @@
 		</area>
 	</namedItem>
 	<namedItem xsi:type="NamedItemCells">
+		<name>Итого</name>
+		<area>
+			<type>Rows</type>
+			<beginRow>4</beginRow>
+			<endRow>4</endRow>
+			<beginColumn>-1</beginColumn>
+			<endColumn>-1</endColumn>
+		</area>
+	</namedItem>
+	<namedItem xsi:type="NamedItemCells">
 		<name>Подпись</name>
 		<area>
 			<type>Rows</type>
@@ -245,11 +255,11 @@
 		</area>
 	</namedItem>
 	<namedItem xsi:type="NamedItemCells">
-		<name>ШапкаТаблицы</name>
+		<name>Примечание</name>
 		<area>
 			<type>Rows</type>
-			<beginRow>2</beginRow>
-			<endRow>2</endRow>
+			<beginRow>5</beginRow>
+			<endRow>5</endRow>
 			<beginColumn>-1</beginColumn>
 			<endColumn>-1</endColumn>
 		</area>
@@ -265,21 +275,11 @@
 		</area>
 	</namedItem>
 	<namedItem xsi:type="NamedItemCells">
-		<name>Итого</name>
+		<name>ШапкаТаблицы</name>
 		<area>
 			<type>Rows</type>
-			<beginRow>4</beginRow>
-			<endRow>4</endRow>
-			<beginColumn>-1</beginColumn>
-			<endColumn>-1</endColumn>
-		</area>
-	</namedItem>
-	<namedItem xsi:type="NamedItemCells">
-		<name>Примечание</name>
-		<area>
-			<type>Rows</type>
-			<beginRow>5</beginRow>
-			<endRow>5</endRow>
+			<beginRow>2</beginRow>
+			<endRow>2</endRow>
 			<beginColumn>-1</beginColumn>
 			<endColumn>-1</endColumn>
 		</area>

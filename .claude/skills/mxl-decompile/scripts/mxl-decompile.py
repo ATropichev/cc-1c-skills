@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-# mxl-decompile v1.3 — Decompile 1C spreadsheet to JSON
+﻿#!/usr/bin/env python3
+# mxl-decompile v1.4 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -337,6 +337,8 @@ def main():
 
     # --- 7. Extract named items ---
 
+    # Захватываем области ВСЕХ типов. Раньше здесь стоял `if area_type != "Rows": continue`,
+    # из-за чего терялись Rectangle и Columns — а они есть у 61% макетов корпуса.
     named_areas = []
     for ni_node in findall(root, "d:namedItem"):
         xsi_type = ni_node.get(f"{{{XSI_NS}}}type", "")
@@ -344,15 +346,20 @@ def main():
             continue
 
         area_node = find(ni_node, "d:area")
-        area_type_node = find(area_node, "d:type")
-        area_type = text_of(area_type_node) or ""
-        if area_type != "Rows":
+        if area_node is None:
             continue
+
+        def coord(tag, node=area_node):
+            n = find(node, "d:" + tag)
+            return int_of(n) if n is not None else -1
 
         named_areas.append({
             "Name": text_of(find(ni_node, "d:name")) or "",
-            "BeginRow": int_of(find(area_node, "d:beginRow")),
-            "EndRow": int_of(find(area_node, "d:endRow")),
+            "Type": text_of(find(area_node, "d:type")) or "",
+            "BeginRow": coord("beginRow"),
+            "EndRow": coord("endRow"),
+            "BeginCol": coord("beginColumn"),
+            "EndCol": coord("endColumn"),
         })
 
     # --- 8. Extract rows ---
@@ -630,9 +637,44 @@ def main():
 
     # --- 12. Build areas ---
 
+    # Сетка нарезается на блоки: непересекающиеся области типа Rows задают границы, строки вне
+    # них становятся БЕЗЫМЯННЫМИ блоками. Раньше строки вне областей просто терялись — в корпусе
+    # такие дыры у 34% макетов, а макетов вовсе без Rows-областей 21%.
+    # Всё, что блоком не выражается (области не-Rows и пересекающиеся Rows), уходит в namedAreas
+    # координатами. Правило детерминированное — иначе раундтрип поехал бы.
+
+    max_row_idx = max(row_data.keys()) if row_data else -1
+
+    block_areas = []
+    overlay_areas = []
+    claimed = set()
+    for a in sorted(named_areas, key=lambda x: (x["BeginRow"], x["EndRow"])):
+        fits = a["Type"] == "Rows" and a["BeginRow"] >= 0 and a["EndRow"] >= a["BeginRow"]
+        if fits:
+            for r in range(a["BeginRow"], a["EndRow"] + 1):
+                if r in claimed:
+                    fits = False
+                    break
+        if fits:
+            claimed.update(range(a["BeginRow"], a["EndRow"] + 1))
+            block_areas.append(a)
+        else:
+            overlay_areas.append(a)
+
+    # Блоки в порядке строк + безымянные заполнители дыр.
+    blocks = []
+    cursor = 0
+    for a in sorted(block_areas, key=lambda x: x["BeginRow"]):
+        if a["BeginRow"] > cursor:
+            blocks.append({"Name": None, "BeginRow": cursor, "EndRow": a["BeginRow"] - 1})
+        blocks.append({"Name": a["Name"], "BeginRow": a["BeginRow"], "EndRow": a["EndRow"]})
+        cursor = a["EndRow"] + 1
+    if cursor <= max_row_idx:
+        blocks.append({"Name": None, "BeginRow": cursor, "EndRow": max_row_idx})
+
     dsl_areas = []
 
-    for area in named_areas:
+    for area in blocks:
         area_rows = []
 
         for global_row in range(area["BeginRow"], area["EndRow"] + 1):
@@ -746,10 +788,12 @@ def main():
             else:
                 compressed_rows.append(OrderedDict([("empty", empty_run)]))
 
-        dsl_areas.append(OrderedDict([
-            ("name", area["Name"]),
-            ("rows", compressed_rows),
-        ]))
+        dsl_block = OrderedDict()
+        # Безымянный блок — просто кусок сетки, ключ name у него не пишем.
+        if area["Name"]:
+            dsl_block["name"] = area["Name"]
+        dsl_block["rows"] = compressed_rows
+        dsl_areas.append(dsl_block)
 
     # --- 13. Compress columnWidths ---
 
@@ -832,6 +876,21 @@ def main():
     result["fonts"] = fonts_out
     result["styles"] = style_defs
     result["areas"] = dsl_areas
+
+    # Именованные области, не выразимые блоком, — координатами. Тип не пишем: он выводится
+    # из указанных осей (как в ТабличныйДокумент.Область()). DSL 1-based, XML 0-based.
+    if overlay_areas:
+        na_out = []
+        for a in overlay_areas:
+            entry = OrderedDict([("name", a["Name"])])
+            if a["BeginRow"] >= 0:
+                entry["rows"] = (f'{a["BeginRow"] + 1}-{a["EndRow"] + 1}'
+                                 if a["EndRow"] > a["BeginRow"] else a["BeginRow"] + 1)
+            if a["BeginCol"] >= 0:
+                entry["cols"] = (f'{a["BeginCol"] + 1}-{a["EndCol"] + 1}'
+                                 if a["EndCol"] > a["BeginCol"] else a["BeginCol"] + 1)
+            na_out.append(entry)
+        result["namedAreas"] = na_out
 
     # --- 16. Convert to JSON ---
 

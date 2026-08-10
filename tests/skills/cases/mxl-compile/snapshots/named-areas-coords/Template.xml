@@ -18,11 +18,11 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>3</f>
+					<f>2</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>Дата</v8:content>
+							<v8:content>А</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -30,11 +30,11 @@
 			<c>
 				<i>1</i>
 				<c>
-					<f>3</f>
+					<f>2</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>Товар</v8:content>
+							<v8:content>Б</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -42,11 +42,11 @@
 			<c>
 				<i>2</i>
 				<c>
-					<f>3</f>
+					<f>2</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>Кол-во</v8:content>
+							<v8:content>В</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -54,11 +54,11 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>3</f>
+					<f>2</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>Цена</v8:content>
+							<v8:content>Г</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -71,29 +71,29 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>5</f>
-					<parameter>Дата</parameter>
+					<f>3</f>
+					<parameter>П1</parameter>
 				</c>
 			</c>
 			<c>
 				<i>1</i>
 				<c>
-					<f>6</f>
-					<parameter>Товар</parameter>
+					<f>3</f>
+					<parameter>П2</parameter>
 				</c>
 			</c>
 			<c>
 				<i>2</i>
 				<c>
-					<f>7</f>
-					<parameter>Количество</parameter>
+					<f>3</f>
+					<parameter>П3</parameter>
 				</c>
 			</c>
 			<c>
 				<i>3</i>
 				<c>
-					<f>7</f>
-					<parameter>Цена</parameter>
+					<f>3</f>
+					<parameter>П4</parameter>
 				</c>
 			</c>
 		</row>
@@ -103,92 +103,55 @@
 	<height>2</height>
 	<vgRows>2</vgRows>
 	<namedItem xsi:type="NamedItemCells">
-		<name>Строка</name>
+		<name>ПолосаКолонок</name>
+		<area>
+			<type>Columns</type>
+			<beginRow>-1</beginRow>
+			<endRow>-1</endRow>
+			<beginColumn>1</beginColumn>
+			<endColumn>3</endColumn>
+		</area>
+	</namedItem>
+	<namedItem xsi:type="NamedItemCells">
+		<name>ПолосаСтрок</name>
 		<area>
 			<type>Rows</type>
-			<beginRow>1</beginRow>
+			<beginRow>0</beginRow>
 			<endRow>1</endRow>
 			<beginColumn>-1</beginColumn>
 			<endColumn>-1</endColumn>
 		</area>
 	</namedItem>
 	<namedItem xsi:type="NamedItemCells">
-		<name>ШапкаТаблицы</name>
+		<name>Прямоугольник</name>
 		<area>
-			<type>Rows</type>
-			<beginRow>0</beginRow>
-			<endRow>0</endRow>
-			<beginColumn>-1</beginColumn>
-			<endColumn>-1</endColumn>
+			<type>Rectangle</type>
+			<beginRow>1</beginRow>
+			<endRow>1</endRow>
+			<beginColumn>1</beginColumn>
+			<endColumn>2</endColumn>
 		</area>
 	</namedItem>
-	<line width="1" gap="false">
-		<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Solid</v8ui:style>
-	</line>
+	<namedItem xsi:type="NamedItemCells">
+		<name>Ячейка</name>
+		<area>
+			<type>Rectangle</type>
+			<beginRow>0</beginRow>
+			<endRow>0</endRow>
+			<beginColumn>0</beginColumn>
+			<endColumn>0</endColumn>
+		</area>
+	</namedItem>
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
 		<width>10</width>
 	</format>
 	<format>
 		<font>0</font>
-		<leftBorder>0</leftBorder>
-		<topBorder>0</topBorder>
-		<rightBorder>0</rightBorder>
-		<bottomBorder>0</bottomBorder>
-		<horizontalAlignment>Center</horizontalAlignment>
-	</format>
-	<format>
-		<font>0</font>
-		<leftBorder>0</leftBorder>
-		<topBorder>0</topBorder>
-		<rightBorder>0</rightBorder>
-		<bottomBorder>0</bottomBorder>
-		<horizontalAlignment>Center</horizontalAlignment>
 		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>0</font>
-		<leftBorder>0</leftBorder>
-		<topBorder>0</topBorder>
-		<rightBorder>0</rightBorder>
-		<bottomBorder>0</bottomBorder>
-	</format>
-	<format>
-		<font>0</font>
-		<leftBorder>0</leftBorder>
-		<topBorder>0</topBorder>
-		<rightBorder>0</rightBorder>
-		<bottomBorder>0</bottomBorder>
-		<horizontalAlignment>Center</horizontalAlignment>
 		<fillType>Parameter</fillType>
-		<format>
-			<v8:item>
-				<v8:lang>ru</v8:lang>
-				<v8:content>ДФ=dd.MM.yyyy</v8:content>
-			</v8:item>
-		</format>
-	</format>
-	<format>
-		<font>0</font>
-		<leftBorder>0</leftBorder>
-		<topBorder>0</topBorder>
-		<rightBorder>0</rightBorder>
-		<bottomBorder>0</bottomBorder>
-		<fillType>Parameter</fillType>
-	</format>
-	<format>
-		<font>0</font>
-		<leftBorder>0</leftBorder>
-		<topBorder>0</topBorder>
-		<rightBorder>0</rightBorder>
-		<bottomBorder>0</bottomBorder>
-		<horizontalAlignment>Right</horizontalAlignment>
-		<fillType>Parameter</fillType>
-		<format>
-			<v8:item>
-				<v8:lang>ru</v8:lang>
-				<v8:content>ЧЦ=15; ЧДЦ=2</v8:content>
-			</v8:item>
-		</format>
 	</format>
 </document>

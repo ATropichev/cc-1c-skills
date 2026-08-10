@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.3 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.4 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -161,19 +161,29 @@ foreach ($mNode in $root.SelectNodes("d:merge", $ns)) {
 
 # --- 7. Extract named items ---
 
+# Захватываем области ВСЕХ типов. Раньше здесь стоял `if ($areaType -ne "Rows") { continue }`,
+# из-за чего терялись Rectangle и Columns — а они есть у 61% макетов корпуса.
 $namedAreas = @()
 foreach ($niNode in $root.SelectNodes("d:namedItem", $ns)) {
 	$xsiType = $niNode.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance")
 	if ($xsiType -ne "NamedItemCells") { continue }
 
 	$areaNode = $niNode.SelectSingleNode("d:area", $ns)
-	$areaType = $areaNode.SelectSingleNode("d:type", $ns).InnerText
-	if ($areaType -ne "Rows") { continue }
+	if (-not $areaNode) { continue }
+	$getCoord = {
+		param([string]$tag)
+		$n = $areaNode.SelectSingleNode("d:$tag", $ns)
+		if ($n) { return [int]$n.InnerText }
+		return -1
+	}
 
 	$namedAreas += @{
 		Name     = $niNode.SelectSingleNode("d:name", $ns).InnerText
-		BeginRow = [int]$areaNode.SelectSingleNode("d:beginRow", $ns).InnerText
-		EndRow   = [int]$areaNode.SelectSingleNode("d:endRow", $ns).InnerText
+		Type     = $areaNode.SelectSingleNode("d:type", $ns).InnerText
+		BeginRow = & $getCoord 'beginRow'
+		EndRow   = & $getCoord 'endRow'
+		BeginCol = & $getCoord 'beginColumn'
+		EndCol   = & $getCoord 'endColumn'
 	}
 }
 
@@ -434,9 +444,50 @@ function Get-StyleName {
 
 # --- 12. Build areas ---
 
+# Сетка нарезается на блоки: непересекающиеся области типа Rows задают границы, строки вне
+# них становятся БЕЗЫМЯННЫМИ блоками. Раньше строки вне областей просто терялись — в корпусе
+# такие дыры у 34% макетов, а макетов вовсе без Rows-областей 21%.
+# Всё, что блоком не выражается (области не-Rows и пересекающиеся Rows), уходит в namedAreas
+# координатами. Правило детерминированное — иначе раундтрип поехал бы.
+
+$maxRowIdx = -1
+foreach ($k in $rowData.Keys) { if ([int]$k -gt $maxRowIdx) { $maxRowIdx = [int]$k } }
+
+$blockAreas = @()
+$overlayAreas = @()
+$claimed = @{}   # строка → занята блоком
+foreach ($a in @($namedAreas | Sort-Object @{ Expression = { $_.BeginRow } }, @{ Expression = { $_.EndRow } })) {
+	$fitsBlock = ($a.Type -eq 'Rows' -and $a.BeginRow -ge 0 -and $a.EndRow -ge $a.BeginRow)
+	if ($fitsBlock) {
+		for ($r = $a.BeginRow; $r -le $a.EndRow; $r++) {
+			if ($claimed.ContainsKey($r)) { $fitsBlock = $false; break }
+		}
+	}
+	if ($fitsBlock) {
+		for ($r = $a.BeginRow; $r -le $a.EndRow; $r++) { $claimed[$r] = $true }
+		$blockAreas += $a
+	} else {
+		$overlayAreas += $a
+	}
+}
+
+# Блоки в порядке строк + безымянные заполнители дыр.
+$blocks = @()
+$cursor = 0
+foreach ($a in @($blockAreas | Sort-Object @{ Expression = { $_.BeginRow } })) {
+	if ($a.BeginRow -gt $cursor) {
+		$blocks += @{ Name = $null; BeginRow = $cursor; EndRow = $a.BeginRow - 1 }
+	}
+	$blocks += @{ Name = $a.Name; BeginRow = $a.BeginRow; EndRow = $a.EndRow }
+	$cursor = $a.EndRow + 1
+}
+if ($cursor -le $maxRowIdx) {
+	$blocks += @{ Name = $null; BeginRow = $cursor; EndRow = $maxRowIdx }
+}
+
 $dslAreas = @()
 
-foreach ($area in $namedAreas) {
+foreach ($area in $blocks) {
 	$areaRows = @()
 
 	for ($globalRow = $area.BeginRow; $globalRow -le $area.EndRow; $globalRow++) {
@@ -557,10 +608,11 @@ foreach ($area in $namedAreas) {
 		else { $compressedRows += [ordered]@{ empty = $emptyRun } }
 	}
 
-	$dslAreas += [ordered]@{
-		name = $area.Name
-		rows = [array]$compressedRows
-	}
+	$dslBlock = [ordered]@{}
+	# Безымянный блок — просто кусок сетки, ключ name у него не пишем.
+	if (-not [string]::IsNullOrEmpty($area.Name)) { $dslBlock["name"] = $area.Name }
+	$dslBlock["rows"] = [array]$compressedRows
+	$dslAreas += $dslBlock
 }
 
 # --- 13. Compress columnWidths ---
@@ -631,6 +683,23 @@ foreach ($s in $toRemove) { $styleDefs.Remove($s)
 $result["fonts"] = $fontsOut
 $result["styles"] = $styleDefs
 $result["areas"] = [array]$dslAreas
+
+# Именованные области, не выразимые блоком, — координатами. Тип не пишем: он выводится
+# из указанных осей (как в ТабличныйДокумент.Область()). DSL 1-based, XML 0-based.
+if ($overlayAreas.Count -gt 0) {
+	$naOut = @()
+	foreach ($a in $overlayAreas) {
+		$entry = [ordered]@{ name = $a.Name }
+		if ($a.BeginRow -ge 0) {
+			$entry["rows"] = if ($a.EndRow -gt $a.BeginRow) { "$($a.BeginRow + 1)-$($a.EndRow + 1)" } else { $a.BeginRow + 1 }
+		}
+		if ($a.BeginCol -ge 0) {
+			$entry["cols"] = if ($a.EndCol -gt $a.BeginCol) { "$($a.BeginCol + 1)-$($a.EndCol + 1)" } else { $a.BeginCol + 1 }
+		}
+		$naOut += $entry
+	}
+	$result["namedAreas"] = [array]$naOut
+}
 
 # --- 16. Convert to JSON ---
 

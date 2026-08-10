@@ -144,6 +144,16 @@
 		</area>
 	</namedItem>
 	<namedItem xsi:type="NamedItemCells">
+		<name>Итого</name>
+		<area>
+			<type>Rows</type>
+			<beginRow>3</beginRow>
+			<endRow>3</endRow>
+			<beginColumn>-1</beginColumn>
+			<endColumn>-1</endColumn>
+		</area>
+	</namedItem>
+	<namedItem xsi:type="NamedItemCells">
 		<name>Поставщик</name>
 		<area>
 			<type>Rows</type>
@@ -159,16 +169,6 @@
 			<type>Rows</type>
 			<beginRow>2</beginRow>
 			<endRow>2</endRow>
-			<beginColumn>-1</beginColumn>
-			<endColumn>-1</endColumn>
-		</area>
-	</namedItem>
-	<namedItem xsi:type="NamedItemCells">
-		<name>Итого</name>
-		<area>
-			<type>Rows</type>
-			<beginRow>3</beginRow>
-			<endRow>3</endRow>
 			<beginColumn>-1</beginColumn>
 			<endColumn>-1</endColumn>
 		</area>
