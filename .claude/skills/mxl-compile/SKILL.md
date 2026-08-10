@@ -53,7 +53,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
   styles: { name: { font, align, valign, border, borderWidth, wrap, format } },
   areas: [{ name, rows: [{ height, rowStyle, cells: [
     { col, span, rowspan, style, param, detail, text, template }
-  ]}]}]
+  ]}]}],
+  namedAreas: [{ name, rows, cols }]
 }
 ```
 
@@ -64,9 +65,11 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 - Тип заполнения определяется автоматически: `param` → Parameter, `text` → Text, `template` → Template
 - `rowspan` — объединение строк вниз (rowStyle учитывает занятые ячейки)
 - `empty` в строке — шорткат для N подряд пустых строк (`{ "empty": 3 }` = три `{}`)
-- `name` у области необязателен: блок без имени — просто кусок сетки, именованную область он не создаёт
+- `name` у области в `areas` необязателен: область без имени — просто кусок сетки, в макет как именованная она не попадёт
+- `namedAreas` — области, которые не описываются диапазоном подряд идущих строк (полоса колонок, прямоугольник, ячейка). Тип не указывается: только `rows` → полоса строк, только `cols` → полоса колонок, обе оси → прямоугольник
 - Строку можно писать массивом ячеек — позиция из порядка, `col` не нужен: `"текст"`, `"{Имя}"` — параметр, `">"` — продолжить ячейку слева, `"|"` — сверху, `null` — пропуск колонки
 
+Двухуровневая шапка массивами:
 ```json
 "rows": [
   ["Вид", "Остаток", ">", "Итог"],
