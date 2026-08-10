@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mxl-compile v1.14 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# mxl-compile v1.15 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -295,6 +295,21 @@ def format_rank(ver):
     """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
     m = re.match(r'^(\d+)\.(\d+)$', ver or '')
     return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
+def parse_col_value(val):
+    """Позиция колонки как целое, иначе None. Аналог [int]::TryParse в ps1:
+    целое из JSON приходит int, "3" — строкой, 3.0 — float (ps1 печатает такое как "3")."""
+    if isinstance(val, bool) or val is None:
+        return None
+    if isinstance(val, int):
+        return val
+    if isinstance(val, float):
+        return int(val) if val.is_integer() else None
+    try:
+        return int(str(val).strip())
+    except (TypeError, ValueError):
+        return None
 
 
 def main():
@@ -689,6 +704,38 @@ def main():
 
             if row.get('cells') and len(row['cells']) > 0:
                 row_has_content = True
+
+                # Прощающий ввод: строка, в которой НИ У ОДНОЙ ячейки нет col, раскладывается
+                # слева направо с учётом span и rowspan сверху. Канон один и он в документации —
+                # col обязателен; здесь мы лишь спасаем естественный DSL вместо тихой порчи
+                # (в ps1 $null -> [int]0 -> Col = -1). Смешанную строку не угадываем: это опечатка.
+                positioned = [c for c in row['cells']
+                              if 'col' in c and c.get('col') is not None and str(c.get('col')) != '']
+                if len(positioned) == 0:
+                    cursor = 1
+                    for cell in row['cells']:
+                        col_span = int(cell.get('span', 1))
+                        while any(c in rowspan_occupied for c in range(cursor, cursor + col_span)):
+                            cursor += 1
+                        if cursor + col_span - 1 > total_columns:
+                            print(f'Row exceeds \'columns\' ({total_columns}): area "{area_name}",'
+                                  f' row {local_row + 1}', file=sys.stderr)
+                            sys.exit(1)
+                        cell['col'] = cursor
+                        cursor += col_span
+                elif len(positioned) != len(row['cells']):
+                    print(f'Cell without \'col\' mixed with positioned cells: area "{area_name}",'
+                          f' row {local_row + 1}', file=sys.stderr)
+                    sys.exit(1)
+
+                # Позиция обязана быть в 1..columns: до этой проверки нечисловой или нулевой col
+                # ронял py голым KeyError/ValueError, а ps1 молча писал Col = -1.
+                for cell_idx, cell in enumerate(row['cells'], start=1):
+                    col_parsed = parse_col_value(cell.get('col'))
+                    if col_parsed is None or col_parsed < 1 or col_parsed > total_columns:
+                        print(f'Invalid \'col\' value "{cell.get("col")}": area "{area_name}",'
+                              f' row {local_row + 1}, cell {cell_idx}', file=sys.stderr)
+                        sys.exit(1)
 
                 # Build set of occupied columns (1-based)
                 occupied_cols = dict(rowspan_occupied)

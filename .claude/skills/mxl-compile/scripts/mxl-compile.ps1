@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.14 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# mxl-compile v1.15 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -651,6 +651,49 @@ foreach ($area in $def.areas) {
 
 		if ($row.cells -and $row.cells.Count -gt 0) {
 			$rowHasContent = $true
+
+			# Прощающий ввод: строка, в которой НИ У ОДНОЙ ячейки нет col, раскладывается
+			# слева направо с учётом span и rowspan сверху. Канон один и он в документации —
+			# col обязателен; здесь мы лишь спасаем естественный DSL вместо тихой порчи
+			# ($null -> [int]0 -> Col = -1). Смешанную строку не угадываем: это опечатка.
+			$positioned = @($row.cells | Where-Object {
+				$_.PSObject.Properties['col'] -and $null -ne $_.col -and "$($_.col)" -ne ""
+			})
+			if ($positioned.Count -eq 0) {
+				$cursor = 1
+				foreach ($cell in $row.cells) {
+					$colSpan = if ($cell.span) { [int]$cell.span } else { 1 }
+					while ($true) {
+						$isFree = $true
+						for ($c = $cursor; $c -lt ($cursor + $colSpan); $c++) {
+							if ($rowspanOccupied[$c]) { $isFree = $false; break }
+						}
+						if ($isFree) { break }
+						$cursor++
+					}
+					if (($cursor + $colSpan - 1) -gt $totalColumns) {
+						Write-Error "Row exceeds 'columns' ($totalColumns): area `"$areaName`", row $($localRow + 1)"
+						exit 1
+					}
+					$cell | Add-Member -NotePropertyName col -NotePropertyValue $cursor -Force
+					$cursor += $colSpan
+				}
+			} elseif ($positioned.Count -ne $row.cells.Count) {
+				Write-Error "Cell without 'col' mixed with positioned cells: area `"$areaName`", row $($localRow + 1)"
+				exit 1
+			}
+
+			# Позиция обязана быть в 1..columns: до этой проверки нечисловой или нулевой col
+			# молча превращался в Col = -1 и давал битую ячейку без единого сообщения.
+			$cellIdx = 0
+			foreach ($cell in $row.cells) {
+				$cellIdx++
+				$colParsed = 0
+				if (-not [int]::TryParse("$($cell.col)", [ref]$colParsed) -or $colParsed -lt 1 -or $colParsed -gt $totalColumns) {
+					Write-Error "Invalid 'col' value `"$($cell.col)`": area `"$areaName`", row $($localRow + 1), cell $cellIdx"
+					exit 1
+				}
+			}
 
 			# Build set of occupied columns (1-based): explicit cells + rowspan from above
 			$occupiedCols = @{}
