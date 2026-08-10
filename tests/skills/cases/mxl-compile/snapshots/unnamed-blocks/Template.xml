@@ -18,7 +18,7 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>2</f>
+					<f>1</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -30,7 +30,7 @@
 			<c>
 				<i>1</i>
 				<c>
-					<f>2</f>
+					<f>1</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -42,7 +42,7 @@
 			<c>
 				<i>2</i>
 				<c>
-					<f>2</f>
+					<f>1</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -59,7 +59,7 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>2</f>
+					<f>1</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -76,21 +76,21 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>3</f>
+					<f>2</f>
 					<parameter>П1</parameter>
 				</c>
 			</c>
 			<c>
 				<i>1</i>
 				<c>
-					<f>3</f>
+					<f>2</f>
 					<parameter>П2</parameter>
 				</c>
 			</c>
 			<c>
 				<i>2</i>
 				<c>
-					<f>3</f>
+					<f>2</f>
 					<parameter>П3</parameter>
 				</c>
 			</c>
@@ -128,9 +128,6 @@
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
 		<width>10</width>
-	</format>
-	<format>
-		<font>0</font>
 	</format>
 	<format>
 		<font>0</font>

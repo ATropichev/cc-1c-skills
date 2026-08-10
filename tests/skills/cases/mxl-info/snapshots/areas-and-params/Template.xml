@@ -30,7 +30,7 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>3</f>
+					<f>1</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -55,14 +55,14 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>5</f>
+					<f>4</f>
 					<parameter>НомерСтроки</parameter>
 				</c>
 			</c>
 			<c>
 				<i>1</i>
 				<c>
-					<f>5</f>
+					<f>4</f>
 					<parameter>Товар</parameter>
 					<detailParameter>Номенклатура</detailParameter>
 				</c>
@@ -70,21 +70,21 @@
 			<c>
 				<i>2</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<parameter>Количество</parameter>
 				</c>
 			</c>
 			<c>
 				<i>3</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<parameter>Цена</parameter>
 				</c>
 			</c>
 			<c>
 				<i>4</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<parameter>Сумма</parameter>
 				</c>
 			</c>
@@ -96,7 +96,7 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>7</f>
+					<f>6</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -108,7 +108,7 @@
 			<c>
 				<i>4</i>
 				<c>
-					<f>8</f>
+					<f>7</f>
 					<parameter>Всего</parameter>
 				</c>
 			</c>
@@ -184,9 +184,6 @@
 	<format>
 		<font>0</font>
 		<fillType>Parameter</fillType>
-	</format>
-	<format>
-		<font>0</font>
 	</format>
 	<format>
 		<font>0</font>

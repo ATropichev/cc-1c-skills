@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.22 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# mxl-compile v1.23 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -619,6 +619,16 @@ def main():
     # Helper: register a cell format and return its index
     def register_cell_format(style_name, fill_type):
         resolved = resolve_style(style_name, fill_type)
+        # Ячейка без собственного оформления ссылается на формат ПО УМОЛЧАНИЮ — так делает
+        # платформа: в её палитре у неоформленного макета один формат (ширина колонки), и все
+        # ячейки указывают на него. Мы же заводили каждой свой формат с <font>0</font>, где ноль
+        # означает «шрифт не задан», то есть формат был пуст по смыслу.
+        if (resolved['FontIdx'] == font_map.get('default', 0)
+                and resolved['LB'] < 0 and resolved['TB'] < 0
+                and resolved['RB'] < 0 and resolved['BB'] < 0
+                and not resolved['HA'] and not resolved['VA'] and not resolved['Wrap']
+                and not resolved['FillType'] and not resolved['NumberFormat']):
+            return default_format_index
         key = get_format_key(
             font_idx=resolved['FontIdx'],
             lb=resolved['LB'], tb=resolved['TB'], rb=resolved['RB'], bb=resolved['BB'],

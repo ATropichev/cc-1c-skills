@@ -58,7 +58,7 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>4</f>
+					<f>1</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -70,7 +70,7 @@
 			<c>
 				<i>1</i>
 				<c>
-					<f>4</f>
+					<f>1</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -82,7 +82,7 @@
 			<c>
 				<i>2</i>
 				<c>
-					<f>4</f>
+					<f>1</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -100,21 +100,21 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>5</f>
+					<f>4</f>
 					<parameter>Товар</parameter>
 				</c>
 			</c>
 			<c>
 				<i>1</i>
 				<c>
-					<f>5</f>
+					<f>4</f>
 					<parameter>Кол</parameter>
 				</c>
 			</c>
 			<c>
 				<i>2</i>
 				<c>
-					<f>5</f>
+					<f>4</f>
 					<parameter>Сумма</parameter>
 				</c>
 			</c>
@@ -153,9 +153,6 @@
 	</format>
 	<format>
 		<width>8</width>
-	</format>
-	<format>
-		<font>0</font>
 	</format>
 	<format>
 		<font>0</font>
