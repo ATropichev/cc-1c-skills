@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.6 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.7 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -807,8 +807,13 @@ def main():
                 if row_style_key and cell_style_key == row_style_key:
                     pass  # Inherits rowStyle
                 else:
+                    # Стиль пишем, только когда он отличается от того, что подставит компилятор:
+                    # без rowStyle умолчание и есть "default", поэтому такой ключ — шум (56% ячеек).
+                    # А при заданном rowStyle стиль "default" писать ОБЯЗАТЕЛЬНО: раньше здесь было
+                    # `not row_style_name`, и такая ячейка теряла стиль вовсе — при обратной сборке
+                    # она наследовала rowStyle.
                     sn = get_style_name(cell["FormatIdx"])
-                    if sn != "default" or not row_style_name:
+                    if sn != "default" or row_style_name:
                         dsl_cell["style"] = sn
 
                 # Content

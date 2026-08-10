@@ -1,1 +1,1 @@
-{ "columns": 2, "defaultWidth": 10, "fonts": { "default": { "face": "Arial", "size": 10 } }, "styles": {}, "areas": [{ "name": "Test", "rows": [{ "cells": [{ "col": 1, "style": "default", "text": "A" }, { "col": 2, "style": "default", "text": "B" }] }] }] }
+{ "columns": 2, "defaultWidth": 10, "fonts": { "default": { "face": "Arial", "size": 10 } }, "styles": {}, "areas": [{ "name": "Test", "rows": [{ "cells": [{ "col": 1, "text": "A" }, { "col": 2, "text": "B" }] }] }] }

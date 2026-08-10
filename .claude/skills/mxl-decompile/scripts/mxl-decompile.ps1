@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.6 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.7 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -638,8 +638,13 @@ foreach ($area in $blocks) {
 			if ($rowStyleKey -and $cellStyleKey -eq $rowStyleKey) {
 				# Inherits rowStyle
 			} else {
+				# Стиль пишем, только когда он отличается от того, что подставит компилятор:
+				# без rowStyle умолчание и есть "default", поэтому такой ключ — шум (56% ячеек).
+				# А при заданном rowStyle стиль "default" писать ОБЯЗАТЕЛЬНО: раньше здесь стояло
+				# `-not $rowStyleName`, и такая ячейка теряла стиль вовсе — при обратной сборке
+				# она наследовала rowStyle.
 				$sn = Get-StyleName $cell.FormatIdx
-				if ($sn -ne "default" -or -not $rowStyleName) {
+				if ($sn -ne "default" -or $rowStyleName) {
 					$dslCell["style"] = $sn
 				}
 			}
