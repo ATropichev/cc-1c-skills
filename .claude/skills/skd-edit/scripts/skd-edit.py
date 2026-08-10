@@ -1,4 +1,4 @@
-# skd-edit v1.36 — Atomic 1C DCS editor (Python port) (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+# skd-edit v1.37 — Atomic 1C DCS editor (Python port) (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -2437,7 +2437,7 @@ elif operation == "rename-parameter":
         new_name = m_rn.group(2).strip()
 
         if old_name == new_name:
-            print('[WARN] rename-parameter: old and new names are equal -- skipped')
+            print('[WARN] rename-parameter: old and new names are equal — skipped')
             continue
 
         # 1. Rename <parameter><name>OldName</name>
@@ -2494,7 +2494,7 @@ elif operation == "reorder-parameters":
     for val in values:
         order = [s.strip() for s in val.split(",") if s.strip()]
         if not order:
-            print('[WARN] reorder-parameters: empty list -- skipped')
+            print('[WARN] reorder-parameters: empty list — skipped')
             continue
 
         all_params = []
@@ -2647,7 +2647,7 @@ elif operation == "add-selection":
                         break
             if is_dup:
                 target = f'group "{group_name}"' if group_name else f'variant "{var_name}"'
-                print(f'[WARN] SelectedItemAuto already exists in {target} -- skipped')
+                print(f'[WARN] SelectedItemAuto already exists in {target} — skipped')
                 continue
 
         sel_indent = get_container_child_indent(selection)

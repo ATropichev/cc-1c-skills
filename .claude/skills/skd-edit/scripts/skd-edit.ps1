@@ -1,4 +1,4 @@
-﻿# skd-edit v1.36 — Atomic 1C DCS editor (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# skd-edit v1.37 — Atomic 1C DCS editor (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: парный .py собирает выражения автодат вне f-string ради совместимости с python 3.9 (PEP 701).
 param(
