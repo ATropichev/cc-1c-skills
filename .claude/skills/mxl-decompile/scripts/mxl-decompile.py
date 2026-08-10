@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.4 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.5 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -296,14 +296,11 @@ def main():
 
     # --- 5. Extract columns and default width ---
 
-    col_node = find(root, "d:columns")
-    total_columns = int_of(find(col_node, "d:size"))
-
-    col_format_indices = {}
-    for ci in findall(col_node, "d:columnsItem"):
-        col_idx = int_of(find(ci, "d:index"))
-        fmt_idx = int_of(find(ci, "d:column/d:formatIndex"))
-        col_format_indices[col_idx] = fmt_idx
+    # Колоночная раскладка («индивидуальная ширина колонок» для группы строк) — элемент <columns>.
+    # Их бывает несколько: раскладка БЕЗ <id> — умолчание (ровно одна в каждом макете корпуса),
+    # остальные адресуются GUID из <id>, на который ссылаются строки (<row><columnsID>) и
+    # области (<area><columnsID>). Раньше читался только первый <columns> — отсюда терялись
+    # ширины и вылезал columns: 0.
 
     default_fmt_idx = 0
     n = find(root, "d:defaultFormatIndex")
@@ -316,13 +313,31 @@ def main():
         if def_fmt and def_fmt["Width"] > 0:
             default_width = def_fmt["Width"]
 
-    # Build column width map (1-based col -> width), only non-default
-    col_width_map = OrderedDict()
-    for col0 in sorted(col_format_indices.keys()):
-        fmt = get_format(col_format_indices[col0])
-        if fmt and fmt["Width"] > 0 and fmt["Width"] != default_width:
-            col1 = str(col0 + 1)
-            col_width_map[col1] = fmt["Width"]
+    def read_column_set(node):
+        by_idx = {}
+        for ci in findall(node, "d:columnsItem"):
+            by_idx[int_of(find(ci, "d:index"))] = int_of(find(ci, "d:column/d:formatIndex"))
+        # Карта ширин (1-based колонка → ширина), только отличные от умолчания.
+        widths = OrderedDict()
+        for col0 in sorted(by_idx.keys()):
+            fmt = get_format(by_idx[col0])
+            if fmt and fmt["Width"] > 0 and fmt["Width"] != default_width:
+                widths[str(col0 + 1)] = fmt["Width"]
+        id_node = find(node, "d:id")
+        size_node = find(node, "d:size")
+        return {
+            "Id": (text_of(id_node) or None) if id_node is not None else None,
+            "Size": int_of(size_node) if size_node is not None else 0,
+            "Widths": widths,
+        }
+
+    column_sets = [read_column_set(cn) for cn in findall(root, "d:columns")]
+
+    default_set = next((c for c in column_sets if not c["Id"]), None)
+    if default_set is None and column_sets:
+        default_set = column_sets[0]
+    total_columns = default_set["Size"] if default_set else 0
+    col_width_map = default_set["Widths"] if default_set else OrderedDict()
 
     # --- 6. Extract merges ---
 
@@ -426,11 +441,16 @@ def main():
                     "Text": text,
                 })
 
+        # Ссылка строки на колоночную раскладку; пусто = раскладка по умолчанию.
+        cid_node = find(row_node, "d:columnsID")
+        row_columns_id = text_of(cid_node) if cid_node is not None else None
+
         for r in range(row_idx, index_to + 1):
             row_data[r] = {
                 "FormatIdx": row_fmt_idx,
                 "Cells": cells,
                 "Empty": is_empty,
+                "ColumnsId": row_columns_id,
             }
 
     # --- 9. Build style key (ignoring fillType) ---
@@ -645,6 +665,16 @@ def main():
 
     max_row_idx = max(row_data.keys()) if row_data else -1
 
+    def row_columns_id(r):
+        rd = row_data.get(r)
+        return rd["ColumnsId"] if rd else None
+
+    def uniform_column_set(frm, to):
+        """Область годится в качестве области-диапазона, только если у всех её строк ОДНА
+        раскладка: иначе её пришлось бы резать, а имя резать нельзя."""
+        first = row_columns_id(frm)
+        return all(row_columns_id(r) == first for r in range(frm + 1, to + 1))
+
     block_areas = []
     overlay_areas = []
     claimed = set()
@@ -656,21 +686,40 @@ def main():
                     fits = False
                     break
         if fits:
+            fits = uniform_column_set(a["BeginRow"], a["EndRow"])
+        if fits:
             claimed.update(range(a["BeginRow"], a["EndRow"] + 1))
             block_areas.append(a)
         else:
             overlay_areas.append(a)
 
-    # Блоки в порядке строк + безымянные заполнители дыр.
+    def split_gap_by_column_set(frm, to):
+        """Безымянный промежуток режем на куски с одной раскладкой: границы наборов не
+        совпадают с границами именованных областей."""
+        out = []
+        if to < frm:
+            return out
+        run_start = frm
+        run_id = row_columns_id(frm)
+        for r in range(frm + 1, to + 1):
+            cid = row_columns_id(r)
+            if cid != run_id:
+                out.append({"Name": None, "BeginRow": run_start, "EndRow": r - 1, "ColumnsId": run_id})
+                run_start, run_id = r, cid
+        out.append({"Name": None, "BeginRow": run_start, "EndRow": to, "ColumnsId": run_id})
+        return out
+
+    # Области в порядке строк + безымянные заполнители дыр.
     blocks = []
     cursor = 0
     for a in sorted(block_areas, key=lambda x: x["BeginRow"]):
         if a["BeginRow"] > cursor:
-            blocks.append({"Name": None, "BeginRow": cursor, "EndRow": a["BeginRow"] - 1})
-        blocks.append({"Name": a["Name"], "BeginRow": a["BeginRow"], "EndRow": a["EndRow"]})
+            blocks.extend(split_gap_by_column_set(cursor, a["BeginRow"] - 1))
+        blocks.append({"Name": a["Name"], "BeginRow": a["BeginRow"], "EndRow": a["EndRow"],
+                       "ColumnsId": row_columns_id(a["BeginRow"])})
         cursor = a["EndRow"] + 1
     if cursor <= max_row_idx:
-        blocks.append({"Name": None, "BeginRow": cursor, "EndRow": max_row_idx})
+        blocks.extend(split_gap_by_column_set(cursor, max_row_idx))
 
     dsl_areas = []
 
@@ -789,9 +838,13 @@ def main():
                 compressed_rows.append(OrderedDict([("empty", empty_run)]))
 
         dsl_block = OrderedDict()
-        # Безымянный блок — просто кусок сетки, ключ name у него не пишем.
+        # Область без имени — просто кусок сетки, ключ name у неё не пишем.
         if area["Name"]:
             dsl_block["name"] = area["Name"]
+        # Ссылка на колоночную раскладку по имени из columnSets — как style у ячейки на styles.
+        # Умолчание (раскладка без id) не пишем.
+        if area.get("ColumnsId"):
+            dsl_block["columnSet"] = area["ColumnsId"]
         dsl_block["rows"] = compressed_rows
         dsl_areas.append(dsl_block)
 
@@ -875,6 +928,20 @@ def main():
 
     result["fonts"] = fonts_out
     result["styles"] = style_defs
+
+    # Колоночные раскладки помимо умолчания: ключ — идентификатор из макета, на него ссылаются
+    # области. Содержимое раскладку не опознаёт (в корпусе полно наборов с одинаковым
+    # содержимым и разными id), поэтому склейки по содержимому нет.
+    extra_sets = [c for c in column_sets if c["Id"]]
+    if extra_sets:
+        sets_out = OrderedDict()
+        for cs in extra_sets:
+            entry = OrderedDict([("columns", cs["Size"])])
+            if cs["Widths"]:
+                entry["columnWidths"] = cs["Widths"]
+            sets_out[cs["Id"]] = entry
+        result["columnSets"] = sets_out
+
     result["areas"] = dsl_areas
 
     # Именованные области, не выразимые блоком, — координатами. Тип не пишем: он выводится

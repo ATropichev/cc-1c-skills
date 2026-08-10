@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.18 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# mxl-compile v1.19 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -348,10 +348,14 @@ def main():
     with open(json_path, 'r', encoding='utf-8-sig') as f:
         defn = ci_json(json.load(f))
 
-    if not defn.get('columns'):
+    # Проверяем НАЛИЧИЕ ключа, а не истинность значения: `columns: 0` — осмысленная величина
+    # (раскладка по умолчанию пустая, все строки живут в именованных раскладках), а пустой
+    # список областей встречается у макета без строк. Прежняя проверка объявляла и то
+    # и другое отсутствующим.
+    if 'columns' not in defn or defn.get('columns') is None:
         print("Required field 'columns' is missing", file=sys.stderr)
         sys.exit(1)
-    if not defn.get('areas'):
+    if 'areas' not in defn or defn.get('areas') is None:
         print("Required field 'areas' is missing", file=sys.stderr)
         sys.exit(1)
 
@@ -473,18 +477,32 @@ def main():
                 default_width = round((target_width - absolute_sum) / total_units)
 
     # Build column width map: 1-based col -> width
-    col_width_map = {}
-    if defn.get('columnWidths'):
-        for prop_name, prop_value in defn['columnWidths'].items():
-            val = str(prop_value)
-            m = re.match(r'^([0-9.]+)x$', val)
-            if m:
-                width = round(float(m.group(1)) * default_width)
-            else:
-                width = int(val)
-            columns = parse_column_spec(prop_name)
-            for c in columns:
-                col_width_map[c] = width
+    def build_col_width_map(widths):
+        out = {}
+        if widths:
+            for prop_name, prop_value in widths.items():
+                val = str(prop_value)
+                m = re.match(r'^([0-9.]+)x$', val)
+                width = round(float(m.group(1)) * default_width) if m else int(val)
+                for c in parse_column_spec(prop_name):
+                    out[c] = width
+        return out
+
+    col_width_map = build_col_width_map(defn.get('columnWidths'))
+
+    # Колоночные раскладки: документные columns/columnWidths — раскладка по умолчанию (в XML
+    # элемент <columns> БЕЗ <id>, он всегда идёт первым). Дополнительные объявляются в
+    # columnSets, ключ — идентификатор, на него ссылается область ключом columnSet.
+    # Склейки по содержимому нет: в корпусе полно раскладок с одинаковым содержимым и разными
+    # идентификаторами, поэтому опознаёт раскладку только идентификатор.
+    column_layouts = [{'Id': None, 'Size': total_columns, 'Widths': col_width_map}]
+    for set_id, cs in (defn.get('columnSets') or {}).items():
+        size = int(cs['columns']) if cs.get('columns') is not None else total_columns
+        column_layouts.append({
+            'Id': set_id,
+            'Size': size,
+            'Widths': build_col_width_map(cs.get('columnWidths')),
+        })
 
     # --- 5. Style resolver ---
     def resolve_style(style_name, fill_type):
@@ -560,13 +578,14 @@ def main():
     default_format_key = get_format_key(width=default_width)
     default_format_index = register_format(default_format_key, {'Width': default_width})
 
-    # 6b. Column width formats
-    col_format_map = {}  # 1-based col -> format index
-    for col in sorted(col_width_map):
-        w = col_width_map[col]
-        key = get_format_key(width=w)
-        idx = register_format(key, {'Width': w})
-        col_format_map[int(col)] = idx
+    # 6b. Column width formats — по одной карте на каждую колоночную раскладку
+    for layout in column_layouts:
+        fmap = {}  # 1-based col -> format index
+        for col in sorted(layout['Widths']):
+            w = layout['Widths'][col]
+            fmap[int(col)] = register_format(get_format_key(width=w), {'Width': w})
+        layout['FormatMap'] = fmap
+    col_format_map = column_layouts[0]['FormatMap']
 
     # 6c. Helper: determine fillType from cell content
     def get_fill_type(cell):
@@ -604,15 +623,15 @@ def main():
     # "{Имя}" — параметр. Разворачиваем в обычную строку с явными col/span/rowspan,
     # поэтому весь код ниже про шорткат не знает.
 
-    def expand_shorthand_row(row, area_name, row_idx, open_by_col):
+    def expand_shorthand_row(row, area_name, row_idx, open_by_col, max_cols):
         cells = []
         placed = {}      # 1-based col -> ячейка, занимающая колонку в ЭТОЙ строке
         extended = []    # ячейки, чей rowspan уже нарастили в этой строке (span>1 даёт несколько "|")
         last = None      # последняя реальная ячейка слева — цель для ">"
 
         for idx, el in enumerate(row, start=1):
-            if idx > total_columns:
-                print(f'Row exceeds \'columns\' ({total_columns}): area "{area_name}",'
+            if idx > max_cols:
+                print(f'Row exceeds \'columns\' ({max_cols}): area "{area_name}",'
                       f' row {row_idx}', file=sys.stderr)
                 sys.exit(1)
 
@@ -693,11 +712,17 @@ def main():
 
     for area in defn['areas']:
         area_name = area.get('name', '')
+        # Ширина сетки берётся из раскладки области: у каждой она своя.
+        area_max_cols = total_columns
+        if area.get('columnSet'):
+            lay = next((x for x in column_layouts if x['Id'] == str(area['columnSet'])), None)
+            if lay:
+                area_max_cols = int(lay['Size'])
         open_by_col = {}
         expanded_rows = []
         for row_idx, row in enumerate(area.get('rows', []), start=1):
             if isinstance(row, list):
-                expanded_rows.append(expand_shorthand_row(row, area_name, row_idx, open_by_col))
+                expanded_rows.append(expand_shorthand_row(row, area_name, row_idx, open_by_col, area_max_cols))
             else:
                 expanded_rows.append(row)
                 if row.get('empty'):
@@ -757,21 +782,25 @@ def main():
     lines.append('\t</languageSettings>')
 
     # 7c. Columns
-    lines.append('\t<columns>')
-    lines.append(f'\t\t<size>{total_columns}</size>')
+    # Раскладка по умолчанию идёт первой и без <id> — так их хранит платформа.
+    for layout in column_layouts:
+        lines.append('\t<columns>')
+        if layout['Id']:
+            lines.append(f'\t\t<id>{layout["Id"]}</id>')
+        lines.append(f'\t\t<size>{layout["Size"]}</size>')
 
-    # Emit columnsItem for columns with non-default widths
-    for col in sorted(col_format_map.keys()):
-        fmt_idx = col_format_map[col]
-        col_idx = col - 1  # Convert to 0-based
-        lines.append('\t\t<columnsItem>')
-        lines.append(f'\t\t\t<index>{col_idx}</index>')
-        lines.append('\t\t\t<column>')
-        lines.append(f'\t\t\t\t<formatIndex>{fmt_idx}</formatIndex>')
-        lines.append('\t\t\t</column>')
-        lines.append('\t\t</columnsItem>')
+        # Emit columnsItem for columns with non-default widths
+        for col in sorted(layout['FormatMap'].keys()):
+            fmt_idx = layout['FormatMap'][col]
+            col_idx = col - 1  # Convert to 0-based
+            lines.append('\t\t<columnsItem>')
+            lines.append(f'\t\t\t<index>{col_idx}</index>')
+            lines.append('\t\t\t<column>')
+            lines.append(f'\t\t\t\t<formatIndex>{fmt_idx}</formatIndex>')
+            lines.append('\t\t\t</column>')
+            lines.append('\t\t</columnsItem>')
 
-    lines.append('\t</columns>')
+        lines.append('\t</columns>')
 
     # 7d. Rows -- main generation loop
     global_row = 0
@@ -784,6 +813,18 @@ def main():
         area_name = area.get('name', '')
         active_rowspans = []
         local_row = 0
+        # Ссылка области на колоночную раскладку — её получают все строки области.
+        area_column_set = str(area.get('columnSet') or '')
+        area_layout = column_layouts[0]
+        if area_column_set:
+            area_layout = next((x for x in column_layouts if x['Id'] == area_column_set), None)
+            if area_layout is None:
+                print(f'Unknown \'columnSet\': "{area_column_set}" is not declared in columnSets',
+                      file=sys.stderr)
+                sys.exit(1)
+        # Ширина сетки — у КАЖДОЙ раскладки своя, поэтому позиции колонок сверяем с ней,
+        # а не с документным columns (у макетов с раскладками умолчание бывает и пустым).
+        area_columns = int(area_layout['Size'])
 
         for row in area.get('rows', []):
             # Empty row placeholder: emit N empty rows
@@ -832,8 +873,8 @@ def main():
                         col_span = int(cell.get('span', 1))
                         while any(c in rowspan_occupied for c in range(cursor, cursor + col_span)):
                             cursor += 1
-                        if cursor + col_span - 1 > total_columns:
-                            print(f'Row exceeds \'columns\' ({total_columns}): area "{area_name}",'
+                        if cursor + col_span - 1 > area_columns:
+                            print(f'Row exceeds \'columns\' ({area_columns}): area "{area_name}",'
                                   f' row {local_row + 1}', file=sys.stderr)
                             sys.exit(1)
                         cell['col'] = cursor
@@ -847,7 +888,7 @@ def main():
                 # ронял py голым KeyError/ValueError, а ps1 молча писал Col = -1.
                 for cell_idx, cell in enumerate(row['cells'], start=1):
                     col_parsed = parse_col_value(cell.get('col'))
-                    if col_parsed is None or col_parsed < 1 or col_parsed > total_columns:
+                    if col_parsed is None or col_parsed < 1 or col_parsed > area_columns:
                         print(f'Invalid \'col\' value "{cell.get("col")}": area "{area_name}",'
                               f' row {local_row + 1}, cell {cell_idx}', file=sys.stderr)
                         sys.exit(1)
@@ -932,6 +973,9 @@ def main():
             lines.append('\t<rowsItem>')
             lines.append(f'\t\t<index>{global_row}</index>')
             lines.append('\t\t<row>')
+
+            if area_column_set:
+                lines.append(f'\t\t\t<columnsID>{area_column_set}</columnsID>')
 
             if row_format_idx > 0:
                 lines.append(f'\t\t\t<formatIndex>{row_format_idx}</formatIndex>')

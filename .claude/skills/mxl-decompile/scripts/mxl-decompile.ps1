@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.4 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.5 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -117,15 +117,11 @@ function Get-Format {
 
 # --- 5. Extract columns and default width ---
 
-$colNode = $root.SelectSingleNode("d:columns", $ns)
-$totalColumns = [int]$colNode.SelectSingleNode("d:size", $ns).InnerText
-
-$colFormatIndices = @{}
-foreach ($ci in $colNode.SelectNodes("d:columnsItem", $ns)) {
-	$colIdx = [int]$ci.SelectSingleNode("d:index", $ns).InnerText
-	$fmtIdx = [int]$ci.SelectSingleNode("d:column/d:formatIndex", $ns).InnerText
-	$colFormatIndices[$colIdx] = $fmtIdx
-}
+# Колоночная раскладка («индивидуальная ширина колонок» для группы строк) — элемент <columns>.
+# Их бывает несколько: раскладка БЕЗ <id> — умолчание (ровно одна в каждом макете корпуса),
+# остальные адресуются GUID из <id>, на который ссылаются строки (<row><columnsID>) и
+# области (<area><columnsID>). Раньше читался только первый <columns> — отсюда терялись
+# ширины и вылезал columns: 0.
 
 $defaultFmtIdx = 0
 $n = $root.SelectSingleNode("d:defaultFormatIndex", $ns)
@@ -137,15 +133,38 @@ if ($defaultFmtIdx -gt 0) {
 	if ($defFmt -and $defFmt.Width -gt 0) { $defaultWidth = $defFmt.Width }
 }
 
-# Build column width map (1-based col → width), only non-default
-$colWidthMap = [ordered]@{}
-foreach ($col0 in ($colFormatIndices.Keys | Sort-Object)) {
-	$fmt = Get-Format $colFormatIndices[$col0]
-	if ($fmt -and $fmt.Width -gt 0 -and $fmt.Width -ne $defaultWidth) {
-		$col1 = [string]($col0 + 1)
-		$colWidthMap.Add($col1, $fmt.Width)
+function Read-ColumnSet {
+	param($node)
+	$byIdx = @{}
+	foreach ($ci in $node.SelectNodes("d:columnsItem", $ns)) {
+		$colIdx = [int]$ci.SelectSingleNode("d:index", $ns).InnerText
+		$fmtIdx = [int]$ci.SelectSingleNode("d:column/d:formatIndex", $ns).InnerText
+		$byIdx[$colIdx] = $fmtIdx
+	}
+	# Карта ширин (1-based колонка → ширина), только отличные от умолчания.
+	$widths = [ordered]@{}
+	foreach ($col0 in ($byIdx.Keys | Sort-Object)) {
+		$fmt = Get-Format $byIdx[$col0]
+		if ($fmt -and $fmt.Width -gt 0 -and $fmt.Width -ne $defaultWidth) {
+			$widths.Add([string]($col0 + 1), $fmt.Width)
+		}
+	}
+	$sizeNode = $node.SelectSingleNode("d:size", $ns)
+	$idNode = $node.SelectSingleNode("d:id", $ns)
+	return @{
+		Id     = if ($idNode) { $idNode.InnerText } else { $null }
+		Size   = if ($sizeNode) { [int]$sizeNode.InnerText } else { 0 }
+		Widths = $widths
 	}
 }
+
+$columnSets = @()
+foreach ($cn in $root.SelectNodes("d:columns", $ns)) { $columnSets += Read-ColumnSet $cn }
+
+$defaultSet = @($columnSets | Where-Object { -not $_.Id })[0]
+if (-not $defaultSet -and $columnSets.Count -gt 0) { $defaultSet = $columnSets[0] }
+$totalColumns = if ($defaultSet) { $defaultSet.Size } else { 0 }
+$colWidthMap = if ($defaultSet) { $defaultSet.Widths } else { [ordered]@{} }
 
 # --- 6. Extract merges ---
 
@@ -243,11 +262,17 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 		}
 	}
 
+	# Ссылка строки на колоночную раскладку; пусто = раскладка по умолчанию.
+	$rowColumnsId = $null
+	$cidNode = $rowNode.SelectSingleNode("d:columnsID", $ns)
+	if ($cidNode) { $rowColumnsId = $cidNode.InnerText }
+
 	for ($r = $rowIdx; $r -le $indexTo; $r++) {
 		$rowData[$r] = @{
 			FormatIdx = $rowFmtIdx
 			Cells     = $cells
 			Empty     = $isEmpty
+			ColumnsId = $rowColumnsId
 		}
 	}
 }
@@ -453,9 +478,26 @@ function Get-StyleName {
 $maxRowIdx = -1
 foreach ($k in $rowData.Keys) { if ([int]$k -gt $maxRowIdx) { $maxRowIdx = [int]$k } }
 
+function Get-RowColumnsId {
+	param([int]$r)
+	if ($rowData.ContainsKey($r)) { return $rowData[$r].ColumnsId }
+	return $null
+}
+
+# Область годится в качестве области-диапазона, только если у всех её строк ОДНА раскладка:
+# иначе её пришлось бы резать, а имя резать нельзя — такая уходит в координатный список.
+function Test-UniformColumnSet {
+	param([int]$from, [int]$to)
+	$first = Get-RowColumnsId $from
+	for ($r = $from + 1; $r -le $to; $r++) {
+		if ((Get-RowColumnsId $r) -ne $first) { return $false }
+	}
+	return $true
+}
+
 $blockAreas = @()
 $overlayAreas = @()
-$claimed = @{}   # строка → занята блоком
+$claimed = @{}   # строка → занята областью-диапазоном
 foreach ($a in @($namedAreas | Sort-Object @{ Expression = { $_.BeginRow } }, @{ Expression = { $_.EndRow } })) {
 	$fitsBlock = ($a.Type -eq 'Rows' -and $a.BeginRow -ge 0 -and $a.EndRow -ge $a.BeginRow)
 	if ($fitsBlock) {
@@ -463,6 +505,7 @@ foreach ($a in @($namedAreas | Sort-Object @{ Expression = { $_.BeginRow } }, @{
 			if ($claimed.ContainsKey($r)) { $fitsBlock = $false; break }
 		}
 	}
+	if ($fitsBlock) { $fitsBlock = Test-UniformColumnSet $a.BeginRow $a.EndRow }
 	if ($fitsBlock) {
 		for ($r = $a.BeginRow; $r -le $a.EndRow; $r++) { $claimed[$r] = $true }
 		$blockAreas += $a
@@ -471,18 +514,37 @@ foreach ($a in @($namedAreas | Sort-Object @{ Expression = { $_.BeginRow } }, @{
 	}
 }
 
-# Блоки в порядке строк + безымянные заполнители дыр.
+# Безымянный промежуток режем на куски с одной раскладкой: границы наборов не совпадают
+# с границами именованных областей, а у области должна быть ровно одна раскладка.
+function Split-GapByColumnSet {
+	param([int]$from, [int]$to)
+	$out = @()
+	if ($to -lt $from) { return $out }
+	$runStart = $from
+	$runId = Get-RowColumnsId $from
+	for ($r = $from + 1; $r -le $to; $r++) {
+		$id = Get-RowColumnsId $r
+		if ($id -ne $runId) {
+			$out += @{ Name = $null; BeginRow = $runStart; EndRow = $r - 1; ColumnsId = $runId }
+			$runStart = $r; $runId = $id
+		}
+	}
+	$out += @{ Name = $null; BeginRow = $runStart; EndRow = $to; ColumnsId = $runId }
+	return $out
+}
+
+# Области в порядке строк + безымянные заполнители дыр.
 $blocks = @()
 $cursor = 0
 foreach ($a in @($blockAreas | Sort-Object @{ Expression = { $_.BeginRow } })) {
 	if ($a.BeginRow -gt $cursor) {
-		$blocks += @{ Name = $null; BeginRow = $cursor; EndRow = $a.BeginRow - 1 }
+		$blocks += Split-GapByColumnSet $cursor ($a.BeginRow - 1)
 	}
-	$blocks += @{ Name = $a.Name; BeginRow = $a.BeginRow; EndRow = $a.EndRow }
+	$blocks += @{ Name = $a.Name; BeginRow = $a.BeginRow; EndRow = $a.EndRow; ColumnsId = (Get-RowColumnsId $a.BeginRow) }
 	$cursor = $a.EndRow + 1
 }
 if ($cursor -le $maxRowIdx) {
-	$blocks += @{ Name = $null; BeginRow = $cursor; EndRow = $maxRowIdx }
+	$blocks += Split-GapByColumnSet $cursor $maxRowIdx
 }
 
 $dslAreas = @()
@@ -609,8 +671,11 @@ foreach ($area in $blocks) {
 	}
 
 	$dslBlock = [ordered]@{}
-	# Безымянный блок — просто кусок сетки, ключ name у него не пишем.
+	# Область без имени — просто кусок сетки, ключ name у неё не пишем.
 	if (-not [string]::IsNullOrEmpty($area.Name)) { $dslBlock["name"] = $area.Name }
+	# Ссылка на колоночную раскладку по имени из columnSets — как style у ячейки на styles.
+	# Умолчание (раскладка без id) не пишем.
+	if (-not [string]::IsNullOrEmpty($area.ColumnsId)) { $dslBlock["columnSet"] = $area.ColumnsId }
 	$dslBlock["rows"] = [array]$compressedRows
 	$dslAreas += $dslBlock
 }
@@ -682,6 +747,21 @@ foreach ($s in $toRemove) { $styleDefs.Remove($s)
 
 $result["fonts"] = $fontsOut
 $result["styles"] = $styleDefs
+
+# Колоночные раскладки помимо умолчания: ключ — идентификатор из макета, на него ссылаются
+# области. Содержимое раскладку не опознаёт (в корпусе полно наборов с одинаковым
+# содержимым и разными id), поэтому склейки по содержимому нет.
+$extraSets = @($columnSets | Where-Object { $_.Id })
+if ($extraSets.Count -gt 0) {
+	$setsOut = [ordered]@{}
+	foreach ($cs in $extraSets) {
+		$entry = [ordered]@{ columns = $cs.Size }
+		if ($cs.Widths.Count -gt 0) { $entry["columnWidths"] = $cs.Widths }
+		$setsOut[$cs.Id] = $entry
+	}
+	$result["columnSets"] = $setsOut
+}
+
 $result["areas"] = [array]$dslAreas
 
 # Именованные области, не выразимые блоком, — координатами. Тип не пишем: он выводится

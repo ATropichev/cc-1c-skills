@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.18 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# mxl-compile v1.19 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -192,11 +192,15 @@ if (-not (Test-Path $JsonPath)) {
 $json = Get-Content -Raw -Encoding UTF8 $JsonPath
 $def = $json | ConvertFrom-Json
 
-if (-not $def.columns) {
+# Проверяем НАЛИЧИЕ ключа, а не истинность значения: `columns: 0` — осмысленная величина
+# (раскладка по умолчанию пустая, все строки живут в именованных раскладках), а пустой
+# список областей встречается у макета без строк. Прежняя проверка `-not` объявляла и то
+# и другое отсутствующим.
+if (-not $def.PSObject.Properties['columns'] -or $null -eq $def.columns) {
 	Write-Error "Required field 'columns' is missing"
 	exit 1
 }
-if (-not $def.areas) {
+if (-not $def.PSObject.Properties['areas'] -or $null -eq $def.areas) {
 	Write-Error "Required field 'areas' is missing"
 	exit 1
 }
@@ -363,18 +367,40 @@ if ($def.page) {
 }
 
 # Build column width map: 1-based col -> width
-$colWidthMap = @{}
-if ($def.columnWidths) {
-	foreach ($prop in $def.columnWidths.PSObject.Properties) {
-		$val = "$($prop.Value)"
-		if ($val -match '^([0-9.]+)x$') {
-			$width = [int][math]::Round([double]$Matches[1] * $defaultWidth)
-		} else {
-			$width = [int]$val
+function Build-ColWidthMap {
+	param($widths)
+	$map = @{}
+	if ($widths) {
+		foreach ($prop in $widths.PSObject.Properties) {
+			$val = "$($prop.Value)"
+			if ($val -match '^([0-9.]+)x$') {
+				$width = [int][math]::Round([double]$Matches[1] * $defaultWidth)
+			} else {
+				$width = [int]$val
+			}
+			foreach ($c in (Parse-ColumnSpec $prop.Name)) { $map[$c] = $width }
 		}
-		$columns = Parse-ColumnSpec $prop.Name
-		foreach ($c in $columns) {
-			$colWidthMap[$c] = $width
+	}
+	return $map
+}
+
+$colWidthMap = Build-ColWidthMap $def.columnWidths
+
+# Колоночные раскладки: документные columns/columnWidths — раскладка по умолчанию (в XML
+# элемент <columns> БЕЗ <id>, он всегда идёт первым). Дополнительные объявляются в
+# columnSets, ключ — идентификатор, на него ссылается область ключом columnSet.
+# Склейки по содержимому нет: в корпусе полно раскладок с одинаковым содержимым и разными
+# идентификаторами, поэтому опознаёт раскладку только идентификатор.
+$columnLayouts = @()
+$columnLayouts += @{ Id = $null; Size = $totalColumns; Widths = $colWidthMap }
+if ($def.columnSets) {
+	foreach ($prop in $def.columnSets.PSObject.Properties) {
+		$cs = $prop.Value
+		$size = if ($cs.columns) { [int]$cs.columns } else { $totalColumns }
+		$columnLayouts += @{
+			Id     = $prop.Name
+			Size   = $size
+			Widths = Build-ColWidthMap $cs.columnWidths
 		}
 	}
 }
@@ -482,14 +508,17 @@ function Register-Format {
 $defaultFormatKey = Get-FormatKey -width $defaultWidth
 $defaultFormatIndex = Register-Format -key $defaultFormatKey -props @{ Width = $defaultWidth }
 
-# 6b. Column width formats
-$colFormatMap = @{}  # 1-based col -> format index
-foreach ($col in ($colWidthMap.Keys | Sort-Object)) {
-	$w = $colWidthMap[$col]
-	$key = Get-FormatKey -width $w
-	$idx = Register-Format -key $key -props @{ Width = $w }
-	$colFormatMap[[int]$col] = $idx
+# 6b. Column width formats — по одной карте на каждую колоночную раскладку
+foreach ($layout in $columnLayouts) {
+	$map = @{}  # 1-based col -> format index
+	foreach ($col in ($layout.Widths.Keys | Sort-Object)) {
+		$w = $layout.Widths[$col]
+		$key = Get-FormatKey -width $w
+		$map[[int]$col] = Register-Format -key $key -props @{ Width = $w }
+	}
+	$layout.FormatMap = $map
 }
+$colFormatMap = $columnLayouts[0].FormatMap
 
 # 6c. Scan areas for row heights and cell formats
 # We need to do two passes: first collect all formats, then generate XML
@@ -551,7 +580,7 @@ function Set-CellProp {
 }
 
 function Expand-ShorthandRow {
-	param($row, [string]$areaName, [int]$rowIdx, $openByCol)
+	param($row, [string]$areaName, [int]$rowIdx, $openByCol, [int]$maxCols)
 
 	$cells = @()
 	$placed = @{}     # 1-based col -> ячейка, занимающая колонку в ЭТОЙ строке
@@ -563,8 +592,8 @@ function Expand-ShorthandRow {
 		$idx++
 		# Внутри функции пишем в stderr напрямую: Write-Error приписал бы к сообщению имя
 		# функции, и текст перестал бы совпадать с py-портом.
-		if ($idx -gt $totalColumns) {
-			[Console]::Error.WriteLine("Row exceeds 'columns' ($totalColumns): area `"$areaName`", row $rowIdx")
+		if ($idx -gt $maxCols) {
+			[Console]::Error.WriteLine("Row exceeds 'columns' ($maxCols): area `"$areaName`", row $rowIdx")
 			exit 1
 		}
 
@@ -647,13 +676,19 @@ function Update-OpenByCol {
 
 foreach ($area in $def.areas) {
 	$areaName = $area.name
+	# Ширина сетки берётся из раскладки области: у каждой она своя.
+	$areaMaxCols = $totalColumns
+	if ($area.PSObject.Properties['columnSet'] -and "$($area.columnSet)" -ne '') {
+		$lay = @($columnLayouts | Where-Object { $_.Id -eq "$($area.columnSet)" })[0]
+		if ($lay) { $areaMaxCols = [int]$lay.Size }
+	}
 	$openByCol = @{}
 	$rowIdx = 0
 	$expandedRows = @()
 	foreach ($row in $area.rows) {
 		$rowIdx++
 		if ($row -is [array]) {
-			$expandedRows += Expand-ShorthandRow -row $row -areaName $areaName -rowIdx $rowIdx -openByCol $openByCol
+			$expandedRows += Expand-ShorthandRow -row $row -areaName $areaName -rowIdx $rowIdx -openByCol $openByCol -maxCols $areaMaxCols
 		} else {
 			$expandedRows += $row
 			if ($row.empty) { $openByCol.Clear() } else { Update-OpenByCol -row $row -openByCol $openByCol }
@@ -721,22 +756,26 @@ X "`t`t</languageInfo>"
 X "`t</languageSettings>"
 
 # 7c. Columns
-X "`t<columns>"
-X "`t`t<size>$totalColumns</size>"
+# Раскладка по умолчанию идёт первой и без <id> — так их хранит платформа.
+foreach ($layout in $columnLayouts) {
+	X "`t<columns>"
+	if ($layout.Id) { X "`t`t<id>$($layout.Id)</id>" }
+	X "`t`t<size>$($layout.Size)</size>"
 
-# Emit columnsItem for columns with non-default widths
-foreach ($col in ($colFormatMap.Keys | Sort-Object)) {
-	$fmtIdx = $colFormatMap[$col]
-	$colIdx = $col - 1  # Convert to 0-based
-	X "`t`t<columnsItem>"
-	X "`t`t`t<index>$colIdx</index>"
-	X "`t`t`t<column>"
-	X "`t`t`t`t<formatIndex>$fmtIdx</formatIndex>"
-	X "`t`t`t</column>"
-	X "`t`t</columnsItem>"
+	# Emit columnsItem for columns with non-default widths
+	foreach ($col in ($layout.FormatMap.Keys | Sort-Object)) {
+		$fmtIdx = $layout.FormatMap[$col]
+		$colIdx = $col - 1  # Convert to 0-based
+		X "`t`t<columnsItem>"
+		X "`t`t`t<index>$colIdx</index>"
+		X "`t`t`t<column>"
+		X "`t`t`t`t<formatIndex>$fmtIdx</formatIndex>"
+		X "`t`t`t</column>"
+		X "`t`t</columnsItem>"
+	}
+
+	X "`t</columns>"
 }
-
-X "`t</columns>"
 
 # 7d. Rows — main generation loop
 $globalRow = 0
@@ -749,6 +788,19 @@ foreach ($area in $def.areas) {
 	$areaName = $area.name
 	$activeRowspans = @()  # @{ColStart=1-based; ColEnd=1-based; EndLocalRow=int}
 	$localRow = 0
+	# Ссылка области на колоночную раскладку — её получают все строки области.
+	$areaColumnSet = if ($area.PSObject.Properties['columnSet']) { "$($area.columnSet)" } else { '' }
+	$areaLayout = $columnLayouts[0]
+	if ($areaColumnSet) {
+		$areaLayout = @($columnLayouts | Where-Object { $_.Id -eq $areaColumnSet })[0]
+		if (-not $areaLayout) {
+			[Console]::Error.WriteLine("Unknown 'columnSet': `"$areaColumnSet`" is not declared in columnSets")
+			exit 1
+		}
+	}
+	# Ширина сетки — у КАЖДОЙ раскладки своя, поэтому позиции колонок сверяем с ней,
+	# а не с документным columns (у макетов с раскладками умолчание бывает и пустым).
+	$areaColumns = [int]$areaLayout.Size
 
 	foreach ($row in $area.rows) {
 		# Empty row placeholder: emit N empty rows
@@ -813,8 +865,8 @@ foreach ($area in $def.areas) {
 						if ($isFree) { break }
 						$cursor++
 					}
-					if (($cursor + $colSpan - 1) -gt $totalColumns) {
-						Write-Error "Row exceeds 'columns' ($totalColumns): area `"$areaName`", row $($localRow + 1)"
+					if (($cursor + $colSpan - 1) -gt $areaColumns) {
+						Write-Error "Row exceeds 'columns' ($areaColumns): area `"$areaName`", row $($localRow + 1)"
 						exit 1
 					}
 					$cell | Add-Member -NotePropertyName col -NotePropertyValue $cursor -Force
@@ -831,7 +883,7 @@ foreach ($area in $def.areas) {
 			foreach ($cell in $row.cells) {
 				$cellIdx++
 				$colParsed = 0
-				if (-not [int]::TryParse("$($cell.col)", [ref]$colParsed) -or $colParsed -lt 1 -or $colParsed -gt $totalColumns) {
+				if (-not [int]::TryParse("$($cell.col)", [ref]$colParsed) -or $colParsed -lt 1 -or $colParsed -gt $areaColumns) {
 					Write-Error "Invalid 'col' value `"$($cell.col)`": area `"$areaName`", row $($localRow + 1), cell $cellIdx"
 					exit 1
 				}
@@ -926,6 +978,10 @@ foreach ($area in $def.areas) {
 		X "`t<rowsItem>"
 		X "`t`t<index>$globalRow</index>"
 		X "`t`t<row>"
+
+		if ($areaColumnSet) {
+			X "`t`t`t<columnsID>$areaColumnSet</columnsID>"
+		}
 
 		if ($rowFormatIdx -gt 0) {
 			X "`t`t`t<formatIndex>$rowFormatIdx</formatIndex>"
