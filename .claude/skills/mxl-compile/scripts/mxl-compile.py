@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.24 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# mxl-compile v1.25 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -674,7 +674,9 @@ def main():
         extended = []    # ячейки, чей rowspan уже нарастили в этой строке (span>1 даёт несколько "|")
         last = None      # последняя реальная ячейка слева — цель для ">"
 
-        for idx, el in enumerate(row, start=1):
+        idx = 0
+        for el in row:
+            idx += 1
             if idx > max_cols:
                 print(f'Row exceeds \'columns\' ({max_cols}): area "{area_name}",'
                       f' row {row_idx}', file=sys.stderr)
@@ -729,6 +731,13 @@ def main():
             cells.append(cell)
             placed[idx] = cell
             last = cell
+            # Ячейка занимает СТОЛЬКО позиций, каков её span. У строки со следующими ">" это
+            # получается само (каждый маркер съедает позицию), а объектный элемент несёт span
+            # внутри — без этого сдвига всё правее него уезжало влево.
+            el_span = int(cell.get('span') or 1)
+            for _ in range(el_span - 1):
+                idx += 1
+                placed[idx] = cell
 
         # Колонки, не занятые в этой строке, теряют «ячейку сверху».
         open_by_col.clear()
@@ -737,6 +746,14 @@ def main():
         out = CIDict()
         out['cells'] = cells
         return out
+
+    # Позиционный список ячеек опознаём по наличию хотя бы одного элемента-строки или None:
+    # маркеры, текст и пропуски бывают только в нём. Список из одних объектов разбирается
+    # как обычный — для простой строки обе трактовки дают один результат, неоднозначности нет.
+    def is_positional_cells(cells):
+        if not isinstance(cells, list):
+            return False
+        return any(el is None or isinstance(el, str) for el in cells)
 
     # Карту занятых колонок ведём и по объектным строкам: "|" продолжает ту ячейку,
     # которая реально стоит выше, независимо от того, какой формой её записали.
@@ -767,7 +784,14 @@ def main():
         expanded_rows = []
         for row_idx, row in enumerate(area.get('rows', []), start=1):
             if isinstance(row, list):
+                # Строка целиком массивом — сахар для { cells: [...] }.
                 expanded_rows.append(expand_shorthand_row(row, area_name, row_idx, open_by_col, area_max_cols))
+            elif is_positional_cells(row.get('cells')):
+                # Короткая запись — свойство СПИСКА ЯЧЕЕК, а не строки: свои height и rowStyle
+                # строка при этом сохраняет.
+                expanded = expand_shorthand_row(row['cells'], area_name, row_idx, open_by_col, area_max_cols)
+                row['cells'] = expanded['cells']
+                expanded_rows.append(row)
             else:
                 expanded_rows.append(row)
                 if row.get('empty'):

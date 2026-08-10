@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.24 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# mxl-compile v1.25 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -700,6 +700,13 @@ function Expand-ShorthandRow {
 		$cells += $cell
 		$placed[$idx] = $cell
 		$last = $cell
+		# Ячейка занимает СТОЛЬКО позиций, каков её span. У строки со следующими ">" это
+		# получается само (каждый маркер съедает позицию), а объектный элемент несёт span
+		# внутри — без этого сдвига всё правее него уезжало влево.
+		$elSpan = if ($cell.span) { [int]$cell.span } else { 1 }
+		if ($elSpan -gt 1) {
+			for ($s = 1; $s -lt $elSpan; $s++) { $idx++; $placed[$idx] = $cell }
+		}
 	}
 
 	# Колонки, не занятые в этой строке, теряют «ячейку сверху».
@@ -707,6 +714,18 @@ function Expand-ShorthandRow {
 	foreach ($k in $placed.Keys) { $openByCol[$k] = $placed[$k] }
 
 	return [PSCustomObject]@{ cells = $cells }
+}
+
+# Позиционный список ячеек опознаём по наличию хотя бы одного элемента-строки или null:
+# маркеры, текст и пропуски бывают только в нём. Список из одних объектов разбирается
+# как обычный — для простой строки обе трактовки дают один результат, неоднозначности нет.
+function Test-PositionalCells {
+	param($cells)
+	if ($null -eq $cells -or -not ($cells -is [array])) { return $false }
+	foreach ($el in $cells) {
+		if ($null -eq $el -or $el -is [string]) { return $true }
+	}
+	return $false
 }
 
 # Карту занятых колонок ведём и по объектным строкам: "|" продолжает ту ячейку,
@@ -743,7 +762,14 @@ foreach ($area in $def.areas) {
 	foreach ($row in $area.rows) {
 		$rowIdx++
 		if ($row -is [array]) {
+			# Строка целиком массивом — сахар для { cells: [...] }.
 			$expandedRows += Expand-ShorthandRow -row $row -areaName $areaName -rowIdx $rowIdx -openByCol $openByCol -maxCols $areaMaxCols
+		} elseif (Test-PositionalCells $row.cells) {
+			# Короткая запись — свойство СПИСКА ЯЧЕЕК, а не строки: свои height и rowStyle
+			# строка при этом сохраняет.
+			$expanded = Expand-ShorthandRow -row $row.cells -areaName $areaName -rowIdx $rowIdx -openByCol $openByCol -maxCols $areaMaxCols
+			$row.cells = $expanded.cells
+			$expandedRows += $row
 		} else {
 			$expandedRows += $row
 			if ($row.empty) { $openByCol.Clear() } else { Update-OpenByCol -row $row -openByCol $openByCol }

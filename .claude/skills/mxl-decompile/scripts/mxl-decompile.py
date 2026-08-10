@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.7 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.8 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -667,6 +667,39 @@ def main():
             return style_names[key]
         return "default"
 
+    def to_positional_cells(cells):
+        """Позиционная запись списка ячеек: позиция берётся из порядка, `col` не пишется.
+        Применяем, когда первая ячейка стоит в колонке 1 — иначе список начнётся с череды None
+        и станет длиннее объектного. Ячейка, у которой кроме текста или параметра ничего нет,
+        пишется строкой; span раскрывается маркерами ">"; прочее — объектным элементом без col."""
+        if not cells or int(cells[0].get("col", 0)) != 1:
+            return cells
+        out = []
+        expected = 1
+        for c in cells:
+            col = int(c.get("col", 0))
+            if col < expected:
+                return cells   # перекрытие — позиционно не выразить
+            while expected < col:
+                out.append(None)
+                expected += 1
+            span = int(c.get("span", 1) or 1)
+            keys = [k for k in c if k not in ("col", "span")]
+            plain_text = len(keys) == 1 and keys[0] == "text" and isinstance(c["text"], str)
+            plain_param = len(keys) == 1 and keys[0] == "param"
+            if plain_text:
+                out.append(c["text"])
+            elif plain_param:
+                out.append("{%s}" % c["param"])
+            else:
+                obj = OrderedDict((k, v) for k, v in c.items() if k != "col")
+                out.append(obj)
+            # span раскрываем маркерами — кроме объектного элемента, он несёт span сам.
+            if (plain_text or plain_param) and span > 1:
+                out.extend([">"] * (span - 1))
+            expected = col + span
+        return out
+
     # --- 12. Build areas ---
 
     # Сетка нарезается на блоки: непересекающиеся области типа Rows задают границы, строки вне
@@ -831,8 +864,14 @@ def main():
                 dsl_cells.append(dsl_cell)
 
             if len(dsl_cells) > 0:
-                dsl_row["cells"] = dsl_cells
-            area_rows.append(dsl_row)
+                dsl_row["cells"] = to_positional_cells(dsl_cells)
+            # Самая короткая из применимых форм: если у строки нет своих свойств, а список ячеек
+            # позиционный — строка пишется просто массивом, без ключа cells.
+            if (len(dsl_row) == 1 and "cells" in dsl_row
+                    and any(el is None or isinstance(el, str) for el in dsl_row["cells"])):
+                area_rows.append(dsl_row["cells"])
+            else:
+                area_rows.append(dsl_row)
 
         # Compress consecutive empty rows ({}) into { empty = N }
         compressed_rows = []
@@ -933,12 +972,19 @@ def main():
     used_styles = set()
     for a in dsl_areas:
         for r in a["rows"]:
-            if "rowStyle" in r:
-                used_styles.add(r["rowStyle"])
-            if "cells" in r:
-                for c in r["cells"]:
-                    if "style" in c:
-                        used_styles.add(c["style"])
+            # Строка может быть массивом (короткая форма) — у неё нет ключа cells, и без этой
+            # ветки стиль, использованный только внутри такой строки, вырезался как «неиспользуемый».
+            if isinstance(r, list):
+                cell_list = r
+            else:
+                if "rowStyle" in r:
+                    used_styles.add(r["rowStyle"])
+                cell_list = r.get("cells") or []
+            # Список ячеек может быть позиционным: строки, None и маркеры стиля не несут,
+            # стиль бывает только у объектного элемента.
+            for c in cell_list:
+                if isinstance(c, dict) and "style" in c:
+                    used_styles.add(c["style"])
     to_remove = [s for s in style_defs if s not in used_styles]
     for s in to_remove:
         del style_defs[s]

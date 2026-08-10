@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.7 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.8 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -480,6 +480,54 @@ function Get-StyleName {
 	return "default"
 }
 
+# Список признаётся позиционным по тому же правилу, что и в компиляторе: есть элемент-строка
+# или пропуск. Список из одних объектов таковым не считаем — он читается как обычный.
+function Test-PositionalList {
+	param($cells)
+	foreach ($el in $cells) {
+		if ($null -eq $el -or $el -is [string]) { return $true }
+	}
+	return $false
+}
+
+# Позиционная запись списка ячеек: позиция берётся из порядка, `col` не пишется.
+# Применяем, когда первая ячейка стоит в колонке 1 — иначе список начнётся с череды null
+# и станет длиннее объектного. Ячейка, у которой кроме текста или параметра ничего нет,
+# пишется строкой; span раскрывается маркерами ">"; всё прочее — объектным элементом без col.
+function ConvertTo-PositionalCells {
+	param($cells)
+	if ($cells.Count -eq 0) { return @() }
+	$first = $cells[0]
+	if ([int]$first["col"] -ne 1) { return $cells }
+
+	$out = @()
+	$expected = 1
+	foreach ($c in $cells) {
+		$col = [int]$c["col"]
+		if ($col -lt $expected) { return $cells }   # перекрытие — позиционно не выразить
+		while ($expected -lt $col) { $out += $null; $expected++ }
+
+		$span = if ($c.Contains("span")) { [int]$c["span"] } else { 1 }
+		$keys = @($c.Keys | Where-Object { $_ -notin @("col", "span") })
+		$plainText = ($keys.Count -eq 1 -and $keys[0] -eq "text" -and $c["text"] -is [string])
+		$plainParam = ($keys.Count -eq 1 -and $keys[0] -eq "param")
+
+		if ($plainText) { $out += $c["text"] }
+		elseif ($plainParam) { $out += "{$($c["param"])}" }
+		else {
+			$obj = [ordered]@{}
+			foreach ($k in $c.Keys) { if ($k -ne "col") { $obj[$k] = $c[$k] } }
+			$out += $obj
+		}
+		# span раскрываем маркерами — кроме объектного элемента, он несёт span сам.
+		if (($plainText -or $plainParam) -and $span -gt 1) {
+			for ($i = 1; $i -lt $span; $i++) { $out += ">" }
+		}
+		$expected = $col + $span
+	}
+	return $out
+}
+
 # --- 12. Build areas ---
 
 # Сетка нарезается на блоки: непересекающиеся области типа Rows задают границы, строки вне
@@ -664,8 +712,14 @@ foreach ($area in $blocks) {
 			$dslCells += $dslCell
 		}
 
-		if ($dslCells.Count -gt 0) { $dslRow["cells"] = [array]$dslCells }
-		$areaRows += $dslRow
+		if ($dslCells.Count -gt 0) { $dslRow["cells"] = [array](ConvertTo-PositionalCells $dslCells) }
+		# Самая короткая из применимых форм: если у строки нет своих свойств, а список ячеек
+		# позиционный — строка пишется просто массивом, без ключа cells.
+		if ($dslRow.Count -eq 1 -and $dslRow.Contains("cells") -and (Test-PositionalList $dslRow["cells"])) {
+			$areaRows += ,([array]$dslRow["cells"])
+		} else {
+			$areaRows += $dslRow
+		}
 	}
 
 	# Compress consecutive empty rows ({}) into { empty = N }
@@ -680,7 +734,8 @@ foreach ($area in $blocks) {
 				else { $compressedRows += [ordered]@{ empty = $emptyRun } }
 				$emptyRun = 0
 			}
-			$compressedRows += $r
+			# Запятая обязательна: строка-массив иначе развернётся в список строк.
+			$compressedRows += ,$r
 		}
 	}
 	if ($emptyRun -gt 0) {
@@ -755,8 +810,11 @@ if ($styleDefs.Contains("default") -and $styleDefs["default"].Count -eq 0) {
 $usedStyles = @{}
 foreach ($a in $dslAreas) {
 	foreach ($r in $a.rows) {
-		if ($r.rowStyle) { $usedStyles[$r.rowStyle] = $true }
-		if ($r.cells) { foreach ($c in $r.cells) { if ($c.style) { $usedStyles[$c.style] = $true } } }
+		# Строка может быть массивом (короткая форма) — у неё нет свойства cells, и без этой
+		# ветки стиль, использованный только внутри такой строки, вырезался как «неиспользуемый».
+		$cellList = if ($r -is [array]) { $r } else { $r.cells }
+		if ($r -isnot [array] -and $r.rowStyle) { $usedStyles[$r.rowStyle] = $true }
+		if ($cellList) { foreach ($c in $cellList) { if ($c -isnot [string] -and $c.style) { $usedStyles[$c.style] = $true } } }
 	}
 }
 $toRemove = @($styleDefs.Keys | Where-Object { -not $usedStyles.ContainsKey($_) })
