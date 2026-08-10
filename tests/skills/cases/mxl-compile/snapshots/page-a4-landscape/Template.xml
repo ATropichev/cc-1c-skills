@@ -48,7 +48,7 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>4</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -60,7 +60,7 @@
 			<c>
 				<i>1</i>
 				<c>
-					<f>4</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -72,7 +72,7 @@
 			<c>
 				<i>2</i>
 				<c>
-					<f>4</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -84,7 +84,7 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>4</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -96,7 +96,7 @@
 			<c>
 				<i>4</i>
 				<c>
-					<f>4</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -113,35 +113,35 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<parameter>Номер</parameter>
 				</c>
 			</c>
 			<c>
 				<i>1</i>
 				<c>
-					<f>7</f>
+					<f>6</f>
 					<parameter>Описание</parameter>
 				</c>
 			</c>
 			<c>
 				<i>2</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<parameter>ЕдИзм</parameter>
 				</c>
 			</c>
 			<c>
 				<i>3</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<parameter>Количество</parameter>
 				</c>
 			</c>
 			<c>
 				<i>4</i>
 				<c>
-					<f>7</f>
+					<f>6</f>
 					<parameter>Сумма</parameter>
 				</c>
 			</c>
@@ -189,15 +189,6 @@
 		<rightBorder>0</rightBorder>
 		<bottomBorder>0</bottomBorder>
 		<horizontalAlignment>Center</horizontalAlignment>
-	</format>
-	<format>
-		<font>1</font>
-		<leftBorder>0</leftBorder>
-		<topBorder>0</topBorder>
-		<rightBorder>0</rightBorder>
-		<bottomBorder>0</bottomBorder>
-		<horizontalAlignment>Center</horizontalAlignment>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>0</font>

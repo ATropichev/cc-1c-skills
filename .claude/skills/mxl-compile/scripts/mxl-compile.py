@@ -1,7 +1,8 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.20 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# mxl-compile v1.21 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
+import hashlib
 import json
 import math
 import os
@@ -495,11 +496,23 @@ def main():
     # columnSets, ключ — идентификатор, на него ссылается область ключом columnSet.
     # Склейки по содержимому нет: в корпусе полно раскладок с одинаковым содержимым и разными
     # идентификаторами, поэтому опознаёт раскладку только идентификатор.
-    column_layouts = [{'Id': None, 'Size': total_columns, 'Widths': col_width_map}]
-    for set_id, cs in (defn.get('columnSets') or {}).items():
+    def to_layout_id(name):
+        """Платформа хранит идентификатор раскладки как UUID и другой не принимает. Имя,
+        полученное декомпиляцией, уже UUID — оставляем как есть, иначе раундтрип перестал бы
+        совпадать. Читаемое имя автора превращаем в UUID ДЕТЕРМИНИРОВАННО (из хэша имени),
+        чтобы повторная компиляция давала тот же файл."""
+        if re.match(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
+                    r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$', name):
+            return name
+        h = hashlib.md5(name.encode('utf-8')).hexdigest()
+        return f'{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}'
+
+    column_layouts = [{'Id': None, 'Name': None, 'Size': total_columns, 'Widths': col_width_map}]
+    for set_name, cs in (defn.get('columnSets') or {}).items():
         size = int(cs['columns']) if cs.get('columns') is not None else total_columns
         column_layouts.append({
-            'Id': set_id,
+            'Id': to_layout_id(set_name),
+            'Name': set_name,
             'Size': size,
             'Widths': build_col_width_map(cs.get('columnWidths')),
         })
@@ -589,12 +602,13 @@ def main():
 
     # 6c. Helper: determine fillType from cell content
     def get_fill_type(cell):
+        """Text НЕ эмитим: платформа его практически не пишет — на выборке корпуса 344 981
+        текстовая ячейка из 348 023 (99,1%) ссылается на формат БЕЗ fillType. Наличие <tl>
+        и так означает текст. Parameter и Template платформа пишет — их оставляем."""
         if cell.get('param'):
             return 'Parameter'
         if cell.get('template'):
             return 'Template'
-        if cell.get('text'):
-            return 'Text'
         return ''
 
     # Helper: register a cell format and return its index
@@ -715,7 +729,7 @@ def main():
         # Ширина сетки берётся из раскладки области: у каждой она своя.
         area_max_cols = total_columns
         if area.get('columnSet'):
-            lay = next((x for x in column_layouts if x['Id'] == str(area['columnSet'])), None)
+            lay = next((x for x in column_layouts if x['Name'] == str(area['columnSet'])), None)
             if lay:
                 area_max_cols = int(lay['Size'])
         open_by_col = {}
@@ -821,14 +835,16 @@ def main():
             print(f'\'columnSet\' must be a name declared in columnSets, got an object:'
                   f' area "{area.get("name", "")}"', file=sys.stderr)
             sys.exit(1)
-        area_column_set = str(area.get('columnSet') or '')
+        area_column_set_name = str(area.get('columnSet') or '')
+        area_column_set = ''
         area_layout = column_layouts[0]
-        if area_column_set:
-            area_layout = next((x for x in column_layouts if x['Id'] == area_column_set), None)
+        if area_column_set_name:
+            area_layout = next((x for x in column_layouts if x['Name'] == area_column_set_name), None)
             if area_layout is None:
-                print(f'Unknown \'columnSet\': "{area_column_set}" is not declared in columnSets',
+                print(f'Unknown \'columnSet\': "{area_column_set_name}" is not declared in columnSets',
                       file=sys.stderr)
                 sys.exit(1)
+            area_column_set = area_layout['Id']
         # Ширина сетки — у КАЖДОЙ раскладки своя, поэтому позиции колонок сверяем с ней,
         # а не с документным columns (у макетов с раскладками умолчание бывает и пустым).
         area_columns = int(area_layout['Size'])

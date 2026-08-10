@@ -60,7 +60,7 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>7</f>
+					<f>6</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -72,7 +72,7 @@
 			<c>
 				<i>1</i>
 				<c>
-					<f>7</f>
+					<f>6</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -84,7 +84,7 @@
 			<c>
 				<i>2</i>
 				<c>
-					<f>7</f>
+					<f>6</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -96,7 +96,7 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>7</f>
+					<f>6</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -108,7 +108,7 @@
 			<c>
 				<i>4</i>
 				<c>
-					<f>7</f>
+					<f>6</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -125,35 +125,35 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>9</f>
+					<f>8</f>
 					<parameter>НомерСтроки</parameter>
 				</c>
 			</c>
 			<c>
 				<i>1</i>
 				<c>
-					<f>10</f>
+					<f>9</f>
 					<parameter>Товар</parameter>
 				</c>
 			</c>
 			<c>
 				<i>2</i>
 				<c>
-					<f>11</f>
+					<f>10</f>
 					<parameter>Количество</parameter>
 				</c>
 			</c>
 			<c>
 				<i>3</i>
 				<c>
-					<f>11</f>
+					<f>10</f>
 					<parameter>Цена</parameter>
 				</c>
 			</c>
 			<c>
 				<i>4</i>
 				<c>
-					<f>11</f>
+					<f>10</f>
 					<parameter>Сумма</parameter>
 				</c>
 			</c>
@@ -165,7 +165,7 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>12</f>
+					<f>11</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -177,7 +177,7 @@
 			<c>
 				<i>4</i>
 				<c>
-					<f>13</f>
+					<f>12</f>
 					<parameter>Всего</parameter>
 				</c>
 			</c>
@@ -189,7 +189,7 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>14</f>
+					<f>13</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -305,12 +305,10 @@
 	<format>
 		<font>3</font>
 		<horizontalAlignment>Center</horizontalAlignment>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>1</font>
 		<bottomBorder>0</bottomBorder>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>5</font>
@@ -322,14 +320,6 @@
 		<topBorder>1</topBorder>
 		<rightBorder>1</rightBorder>
 		<bottomBorder>1</bottomBorder>
-	</format>
-	<format>
-		<font>1</font>
-		<leftBorder>1</leftBorder>
-		<topBorder>1</topBorder>
-		<rightBorder>1</rightBorder>
-		<bottomBorder>1</bottomBorder>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>0</font>
@@ -369,7 +359,6 @@
 		<font>0</font>
 		<topBorder>0</topBorder>
 		<bottomBorder>0</bottomBorder>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>0</font>
@@ -380,6 +369,5 @@
 	<format>
 		<font>4</font>
 		<horizontalAlignment>Center</horizontalAlignment>
-		<fillType>Text</fillType>
 	</format>
 </document>

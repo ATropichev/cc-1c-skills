@@ -54,7 +54,7 @@
 			<c>
 				<i>0</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -66,7 +66,7 @@
 			<c>
 				<i>1</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -78,7 +78,7 @@
 			<c>
 				<i>2</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -90,7 +90,7 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -102,7 +102,7 @@
 			<c>
 				<i>4</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -114,7 +114,7 @@
 			<c>
 				<i>5</i>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -161,13 +161,5 @@
 		<topBorder>0</topBorder>
 		<rightBorder>0</rightBorder>
 		<bottomBorder>0</bottomBorder>
-	</format>
-	<format>
-		<font>0</font>
-		<leftBorder>0</leftBorder>
-		<topBorder>0</topBorder>
-		<rightBorder>0</rightBorder>
-		<bottomBorder>0</bottomBorder>
-		<fillType>Text</fillType>
 	</format>
 </document>

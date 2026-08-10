@@ -19,7 +19,10 @@
     "files": ["Template.xml"],
     "fileContains": {
       "file": "Template.xml",
-      "text": ["<id>узкая</id>", "<columnsID>узкая</columnsID>"]
+      "text": [
+        "<id>12320174-2b07-7806-1f7f-ec3834007fdb</id>",
+        "<columnsID>12320174-2b07-7806-1f7f-ec3834007fdb</columnsID>"
+      ]
     }
   }
 }

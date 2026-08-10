@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.20 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# mxl-compile v1.21 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -391,14 +391,29 @@ $colWidthMap = Build-ColWidthMap $def.columnWidths
 # columnSets, ключ — идентификатор, на него ссылается область ключом columnSet.
 # Склейки по содержимому нет: в корпусе полно раскладок с одинаковым содержимым и разными
 # идентификаторами, поэтому опознаёт раскладку только идентификатор.
+# Платформа хранит идентификатор раскладки как UUID и другой не принимает. Имя из
+# columnSets, полученное декомпиляцией, уже UUID — оставляем как есть, иначе раундтрип
+# перестал бы совпадать. Читаемое имя, написанное автором, превращаем в UUID ДЕТЕРМИНИРОВАННО
+# (из хэша имени), чтобы повторная компиляция давала тот же файл.
+function ConvertTo-LayoutId {
+	param([string]$name)
+	if ($name -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') {
+		return $name
+	}
+	$md5 = [System.Security.Cryptography.MD5]::Create()
+	$h = ($md5.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($name)) | ForEach-Object { $_.ToString('x2') }) -join ''
+	return "$($h.Substring(0,8))-$($h.Substring(8,4))-$($h.Substring(12,4))-$($h.Substring(16,4))-$($h.Substring(20,12))"
+}
+
 $columnLayouts = @()
-$columnLayouts += @{ Id = $null; Size = $totalColumns; Widths = $colWidthMap }
+$columnLayouts += @{ Id = $null; Name = $null; Size = $totalColumns; Widths = $colWidthMap }
 if ($def.columnSets) {
 	foreach ($prop in $def.columnSets.PSObject.Properties) {
 		$cs = $prop.Value
 		$size = if ($cs.columns) { [int]$cs.columns } else { $totalColumns }
 		$columnLayouts += @{
-			Id     = $prop.Name
+			Id     = ConvertTo-LayoutId $prop.Name
+			Name   = $prop.Name
 			Size   = $size
 			Widths = Build-ColWidthMap $cs.columnWidths
 		}
@@ -539,11 +554,13 @@ function Esc-XmlText {
 }
 
 # Helper: determine fillType from cell content
+# Text НЕ эмитим: платформа его практически не пишет — на выборке корпуса 344 981 текстовая
+# ячейка из 348 023 (99,1%) ссылается на формат БЕЗ fillType. Наличие <tl> и так означает
+# текст, поэтому тег избыточен. Parameter и Template платформа пишет — их оставляем.
 function Get-FillType {
 	param($cell)
 	if ($cell.param) { return "Parameter" }
 	if ($cell.template) { return "Template" }
-	if ($cell.text) { return "Text" }
 	return ""
 }
 
@@ -679,7 +696,7 @@ foreach ($area in $def.areas) {
 	# Ширина сетки берётся из раскладки области: у каждой она своя.
 	$areaMaxCols = $totalColumns
 	if ($area.PSObject.Properties['columnSet'] -and "$($area.columnSet)" -ne '') {
-		$lay = @($columnLayouts | Where-Object { $_.Id -eq "$($area.columnSet)" })[0]
+		$lay = @($columnLayouts | Where-Object { $_.Name -eq "$($area.columnSet)" })[0]
 		if ($lay) { $areaMaxCols = [int]$lay.Size }
 	}
 	$openByCol = @{}
@@ -797,14 +814,16 @@ foreach ($area in $def.areas) {
 		[Console]::Error.WriteLine("'columnSet' must be a name declared in columnSets, got an object: area `"$($area.name)`"")
 		exit 1
 	}
-	$areaColumnSet = if ($area.PSObject.Properties['columnSet']) { "$($area.columnSet)" } else { '' }
+	$areaColumnSetName = if ($area.PSObject.Properties['columnSet']) { "$($area.columnSet)" } else { '' }
+	$areaColumnSet = ''
 	$areaLayout = $columnLayouts[0]
-	if ($areaColumnSet) {
-		$areaLayout = @($columnLayouts | Where-Object { $_.Id -eq $areaColumnSet })[0]
+	if ($areaColumnSetName) {
+		$areaLayout = @($columnLayouts | Where-Object { $_.Name -eq $areaColumnSetName })[0]
 		if (-not $areaLayout) {
-			[Console]::Error.WriteLine("Unknown 'columnSet': `"$areaColumnSet`" is not declared in columnSets")
+			[Console]::Error.WriteLine("Unknown 'columnSet': `"$areaColumnSetName`" is not declared in columnSets")
 			exit 1
 		}
+		$areaColumnSet = $areaLayout.Id
 	}
 	# Ширина сетки — у КАЖДОЙ раскладки своя, поэтому позиции колонок сверяем с ней,
 	# а не с документным columns (у макетов с раскладками умолчание бывает и пустым).

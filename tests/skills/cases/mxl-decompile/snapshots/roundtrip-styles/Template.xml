@@ -83,12 +83,10 @@
 		<rightBorder>0</rightBorder>
 		<bottomBorder>0</bottomBorder>
 		<horizontalAlignment>Center</horizontalAlignment>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>2</font>
 		<horizontalAlignment>Right</horizontalAlignment>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>0</font>
@@ -96,6 +94,5 @@
 		<topBorder>0</topBorder>
 		<rightBorder>0</rightBorder>
 		<bottomBorder>0</bottomBorder>
-		<fillType>Text</fillType>
 	</format>
 </document>

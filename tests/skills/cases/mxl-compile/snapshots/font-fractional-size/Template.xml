@@ -63,10 +63,8 @@
 	</format>
 	<format>
 		<font>2</font>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>1</font>
-		<fillType>Text</fillType>
 	</format>
 </document>

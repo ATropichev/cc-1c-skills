@@ -107,7 +107,6 @@
 	<format>
 		<font>1</font>
 		<horizontalAlignment>Center</horizontalAlignment>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>0</font>

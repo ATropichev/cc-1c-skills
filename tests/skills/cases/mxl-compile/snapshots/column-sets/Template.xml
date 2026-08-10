@@ -31,7 +31,7 @@
 		</columnsItem>
 	</columns>
 	<columns>
-		<id>узкая</id>
+		<id>12320174-2b07-7806-1f7f-ec3834007fdb</id>
 		<size>3</size>
 		<columnsItem>
 			<index>0</index>
@@ -96,7 +96,7 @@
 	<rowsItem>
 		<index>1</index>
 		<row>
-			<columnsID>узкая</columnsID>
+			<columnsID>12320174-2b07-7806-1f7f-ec3834007fdb</columnsID>
 			<c>
 				<i>0</i>
 				<c>
@@ -156,7 +156,6 @@
 	</format>
 	<format>
 		<font>0</font>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>0</font>

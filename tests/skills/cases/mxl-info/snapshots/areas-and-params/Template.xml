@@ -187,7 +187,6 @@
 	</format>
 	<format>
 		<font>0</font>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>0</font>
@@ -217,7 +216,6 @@
 		<font>1</font>
 		<topBorder>0</topBorder>
 		<horizontalAlignment>Right</horizontalAlignment>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>1</font>

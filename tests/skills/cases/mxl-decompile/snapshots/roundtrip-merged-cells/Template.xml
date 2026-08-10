@@ -47,7 +47,7 @@
 			<c>
 				<i>1</i>
 				<c>
-					<f>4</f>
+					<f>2</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -59,7 +59,7 @@
 			<c>
 				<i>2</i>
 				<c>
-					<f>4</f>
+					<f>2</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -117,14 +117,5 @@
 		<rightBorder>0</rightBorder>
 		<bottomBorder>0</bottomBorder>
 		<horizontalAlignment>Center</horizontalAlignment>
-		<fillType>Text</fillType>
-	</format>
-	<format>
-		<font>0</font>
-		<leftBorder>0</leftBorder>
-		<topBorder>0</topBorder>
-		<rightBorder>0</rightBorder>
-		<bottomBorder>0</bottomBorder>
-		<fillType>Text</fillType>
 	</format>
 </document>

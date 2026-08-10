@@ -561,7 +561,6 @@
 	</format>
 	<format>
 		<font>1</font>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>0</font>
@@ -581,7 +580,6 @@
 		<rightBorder>0</rightBorder>
 		<bottomBorder>0</bottomBorder>
 		<horizontalAlignment>Center</horizontalAlignment>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>0</font>
@@ -612,7 +610,6 @@
 	<format>
 		<font>1</font>
 		<horizontalAlignment>Right</horizontalAlignment>
-		<fillType>Text</fillType>
 	</format>
 	<format>
 		<font>1</font>
@@ -628,6 +625,5 @@
 	<format>
 		<font>3</font>
 		<horizontalAlignment>Center</horizontalAlignment>
-		<fillType>Text</fillType>
 	</format>
 </document>
