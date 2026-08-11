@@ -185,7 +185,7 @@ $script:formatVersion = Detect-FormatVersion ([System.IO.Path]::GetDirectoryName
 # --- 1. Load and validate JSON ---
 
 if (-not (Test-Path $JsonPath)) {
-	Write-Error "File not found: $JsonPath"
+	[Console]::Error.WriteLine("File not found: $JsonPath")
 	exit 1
 }
 
@@ -197,11 +197,11 @@ $def = $json | ConvertFrom-Json
 # список областей встречается у макета без строк. Прежняя проверка `-not` объявляла и то
 # и другое отсутствующим.
 if (-not $def.PSObject.Properties['columns'] -or $null -eq $def.columns) {
-	Write-Error "Required field 'columns' is missing"
+	[Console]::Error.WriteLine("Required field 'columns' is missing")
 	exit 1
 }
 if (-not $def.PSObject.Properties['areas'] -or $null -eq $def.areas) {
-	Write-Error "Required field 'areas' is missing"
+	[Console]::Error.WriteLine("Required field 'areas' is missing")
 	exit 1
 }
 
@@ -963,14 +963,14 @@ foreach ($area in $def.areas) {
 						$cursor++
 					}
 					if (($cursor + $colSpan - 1) -gt $areaColumns) {
-						Write-Error "Row exceeds 'columns' ($areaColumns): area `"$areaName`", row $($localRow + 1)"
+						[Console]::Error.WriteLine("Row exceeds 'columns' ($areaColumns): area `"$areaName`", row $($localRow + 1)")
 						exit 1
 					}
 					$cell | Add-Member -NotePropertyName col -NotePropertyValue $cursor -Force
 					$cursor += $colSpan
 				}
 			} elseif ($positioned.Count -ne $row.cells.Count) {
-				Write-Error "Cell without 'col' mixed with positioned cells: area `"$areaName`", row $($localRow + 1)"
+				[Console]::Error.WriteLine("Cell without 'col' mixed with positioned cells: area `"$areaName`", row $($localRow + 1)")
 				exit 1
 			}
 
@@ -981,7 +981,7 @@ foreach ($area in $def.areas) {
 				$cellIdx++
 				$colParsed = 0
 				if (-not [int]::TryParse("$($cell.col)", [ref]$colParsed) -or $colParsed -lt 1 -or $colParsed -gt $areaColumns) {
-					Write-Error "Invalid 'col' value `"$($cell.col)`": area `"$areaName`", row $($localRow + 1), cell $cellIdx"
+					[Console]::Error.WriteLine("Invalid 'col' value `"$($cell.col)`": area `"$areaName`", row $($localRow + 1), cell $cellIdx")
 					exit 1
 				}
 			}
