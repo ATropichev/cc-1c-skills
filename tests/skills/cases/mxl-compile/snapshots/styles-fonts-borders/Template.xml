@@ -15,10 +15,10 @@
 	<rowsItem>
 		<index>0</index>
 		<row>
-			<formatIndex>2</formatIndex>
+			<formatIndex>1</formatIndex>
 			<c>
 				<c>
-					<f>3</f>
+					<f>2</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -34,7 +34,7 @@
 		<row>
 			<c>
 				<c>
-					<f>4</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -46,7 +46,7 @@
 			<c>
 				<i>2</i>
 				<c>
-					<f>5</f>
+					<f>4</f>
 					<parameter>Поставщик</parameter>
 				</c>
 			</c>
@@ -55,10 +55,10 @@
 	<rowsItem>
 		<index>2</index>
 		<row>
-			<formatIndex>6</formatIndex>
+			<formatIndex>5</formatIndex>
 			<c>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -69,7 +69,7 @@
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -80,7 +80,7 @@
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -91,7 +91,7 @@
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -102,7 +102,7 @@
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -116,34 +116,34 @@
 	<rowsItem>
 		<index>3</index>
 		<row>
-			<formatIndex>7</formatIndex>
+			<formatIndex>6</formatIndex>
 			<c>
 				<c>
-					<f>9</f>
+					<f>8</f>
 					<parameter>НомерСтроки</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>10</f>
+					<f>9</f>
 					<parameter>Товар</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>11</f>
+					<f>10</f>
 					<parameter>Количество</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>11</f>
+					<f>10</f>
 					<parameter>Цена</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>11</f>
+					<f>10</f>
 					<parameter>Сумма</parameter>
 				</c>
 			</c>
@@ -155,7 +155,7 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>12</f>
+					<f>11</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -166,7 +166,7 @@
 			</c>
 			<c>
 				<c>
-					<f>13</f>
+					<f>12</f>
 					<parameter>Всего</parameter>
 				</c>
 			</c>
@@ -177,7 +177,7 @@
 		<row>
 			<c>
 				<c>
-					<f>14</f>
+					<f>13</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -189,7 +189,7 @@
 		</row>
 	</rowsItem>
 	<templateMode>true</templateMode>
-	<defaultFormatIndex>1</defaultFormatIndex>
+	<defaultFormatIndex>14</defaultFormatIndex>
 	<height>6</height>
 	<vgRows>6</vgRows>
 	<merge>
@@ -285,9 +285,6 @@
 	<font faceName="Arial" height="8" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="true" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
-		<width>25</width>
-	</format>
-	<format>
 		<height>25</height>
 	</format>
 	<format>
@@ -345,5 +342,8 @@
 	<format>
 		<font>4</font>
 		<horizontalAlignment>Center</horizontalAlignment>
+	</format>
+	<format>
+		<width>25</width>
 	</format>
 </document>

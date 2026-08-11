@@ -17,7 +17,7 @@
 		<row>
 			<c>
 				<c>
-					<f>2</f>
+					<f>1</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -28,7 +28,7 @@
 			</c>
 			<c>
 				<c>
-					<f>3</f>
+					<f>2</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -39,7 +39,7 @@
 			</c>
 			<c>
 				<c>
-					<f>4</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -51,7 +51,7 @@
 		</row>
 	</rowsItem>
 	<templateMode>true</templateMode>
-	<defaultFormatIndex>1</defaultFormatIndex>
+	<defaultFormatIndex>4</defaultFormatIndex>
 	<height>1</height>
 	<vgRows>1</vgRows>
 	<namedItem xsi:type="NamedItemCells">
@@ -71,9 +71,6 @@
 	<font faceName="Arial" height="10" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="10" bold="false" italic="true" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
-		<width>10</width>
-	</format>
-	<format>
 		<font>1</font>
 		<border>0</border>
 		<horizontalAlignment>Center</horizontalAlignment>
@@ -85,5 +82,8 @@
 	<format>
 		<font>0</font>
 		<border>0</border>
+	</format>
+	<format>
+		<width>10</width>
 	</format>
 </document>

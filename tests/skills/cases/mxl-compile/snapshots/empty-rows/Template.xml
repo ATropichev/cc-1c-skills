@@ -17,7 +17,7 @@
 		<row>
 			<c>
 				<c>
-					<f>2</f>
+					<f>1</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -38,29 +38,29 @@
 	<rowsItem>
 		<index>3</index>
 		<row>
-			<formatIndex>3</formatIndex>
+			<formatIndex>2</formatIndex>
 			<c>
 				<c>
-					<f>5</f>
+					<f>4</f>
 					<parameter>Код</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>5</f>
+					<f>4</f>
 					<parameter>Имя</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>5</f>
+					<f>4</f>
 					<parameter>Значение</parameter>
 				</c>
 			</c>
 		</row>
 	</rowsItem>
 	<templateMode>true</templateMode>
-	<defaultFormatIndex>1</defaultFormatIndex>
+	<defaultFormatIndex>5</defaultFormatIndex>
 	<height>4</height>
 	<vgRows>4</vgRows>
 	<merge>
@@ -94,9 +94,6 @@
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="12" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
-		<width>10</width>
-	</format>
-	<format>
 		<font>1</font>
 		<horizontalAlignment>Center</horizontalAlignment>
 	</format>
@@ -111,5 +108,8 @@
 		<font>0</font>
 		<border>0</border>
 		<fillType>Parameter</fillType>
+	</format>
+	<format>
+		<width>10</width>
 	</format>
 </document>

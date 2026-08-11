@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.33 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.34 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -808,7 +808,9 @@ def main():
         return format_order.index(key) + 1
 
     # 6a. Default width format
-    default_format_index = register_format({'width': default_width})
+    # Формат по умолчанию платформа кладёт в палитру ПОСЛЕДНИМ: на корпусе он последний
+    # в 8285 макетах из 10 863, первым — в 25. Поэтому регистрируем его после всех остальных,
+    # уже за пре-проходом; здесь только запоминаем ширину.
 
     # 6b. Column formats — по одной карте на каждую колоночную раскладку.
     # У колонки бывает и ширина, и оформление: формат один, свойства складываются.
@@ -1038,6 +1040,9 @@ def main():
                     cell_style = cell.get('style') or cells_style or 'default'
                     ft = get_fill_type(cell)
                     register_cell_format(cell_style, ft)
+
+    # Формат по умолчанию — последняя запись палитры (см. выше).
+    default_format_index = register_format({'width': default_width})
 
     # --- 7. Generate XML ---
     lines = []

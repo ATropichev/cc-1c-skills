@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.33 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.34 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -731,7 +731,9 @@ function Register-Format {
 }
 
 # 6a. Default width format
-$defaultFormatIndex = Register-Format @{ width = $defaultWidth }
+# Формат по умолчанию платформа кладёт в палитру ПОСЛЕДНИМ: на корпусе он последний
+# в 8285 макетах из 10 863, первым — в 25. Поэтому регистрируем его после всех остальных,
+# уже за пре-проходом; здесь только запоминаем ширину.
 
 # 6b. Column formats — по одной карте на каждую колоночную раскладку.
 # У колонки бывает и ширина, и оформление: формат один, свойства складываются.
@@ -1015,6 +1017,9 @@ foreach ($area in $def.areas) {
 		}
 	}
 }
+
+# Формат по умолчанию — последняя запись палитры (см. выше).
+$defaultFormatIndex = Register-Format @{ width = $defaultWidth }
 
 # --- 7. Generate XML ---
 

@@ -15,23 +15,23 @@
 	<rowsItem>
 		<index>0</index>
 		<row>
-			<formatIndex>2</formatIndex>
+			<formatIndex>1</formatIndex>
 			<c>
 				<c>
-					<f>4</f>
+					<f>3</f>
 					<parameter>Ключ</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>4</f>
+					<f>3</f>
 					<parameter>Значение</parameter>
 				</c>
 			</c>
 		</row>
 	</rowsItem>
 	<templateMode>true</templateMode>
-	<defaultFormatIndex>1</defaultFormatIndex>
+	<defaultFormatIndex>4</defaultFormatIndex>
 	<height>1</height>
 	<vgRows>1</vgRows>
 	<namedItem xsi:type="NamedItemCells">
@@ -49,9 +49,6 @@
 	</line>
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
-		<width>10</width>
-	</format>
-	<format>
 		<border>0</border>
 	</format>
 	<format>
@@ -62,5 +59,8 @@
 		<font>0</font>
 		<border>0</border>
 		<fillType>Parameter</fillType>
+	</format>
+	<format>
+		<width>10</width>
 	</format>
 </document>

@@ -84,32 +84,32 @@
 		<row>
 			<c>
 				<c>
-					<f>2</f>
+					<f>1</f>
 					<parameter>Вид</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>2</f>
+					<f>1</f>
 					<parameter>Нач</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>2</f>
+					<f>1</f>
 					<parameter>Кон</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>2</f>
+					<f>1</f>
 					<parameter>Итог</parameter>
 				</c>
 			</c>
 		</row>
 	</rowsItem>
 	<templateMode>true</templateMode>
-	<defaultFormatIndex>1</defaultFormatIndex>
+	<defaultFormatIndex>2</defaultFormatIndex>
 	<height>3</height>
 	<vgRows>3</vgRows>
 	<merge>
@@ -141,10 +141,10 @@
 	</namedItem>
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
-		<width>10</width>
-	</format>
-	<format>
 		<font>0</font>
 		<fillType>Parameter</fillType>
+	</format>
+	<format>
+		<width>10</width>
 	</format>
 </document>
