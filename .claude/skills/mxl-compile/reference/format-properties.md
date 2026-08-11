@@ -1,0 +1,77 @@
+# Полный список свойств стиля
+
+Имя ключа совпадает с именем свойства в выгрузке — исключений нет. Частые свойства
+с примерами — в `styles.md`, здесь полный перечень.
+
+Тип значения:
+
+- **число** — целое;
+- **да/нет** — `true` / `false`;
+- **перечисление** — одно из указанных, регистр не важен;
+- **цвет** — `#RRGGBB`, `style:Имя`, `web:Имя`, `win:Имя`;
+- **линия** — `"Solid"` либо `{ style, width }`;
+- **текст** — строка (разворачивается на языки макета).
+
+## Текст и выравнивание
+
+| Ключ | Тип | Значение |
+|------|-----|----------|
+| `font` | имя | Ссылка на имя из `fonts` |
+| `horizontalAlignment` | перечисление | `Left`, `Center`, `Right`, `Justify`, `Auto` |
+| `verticalAlignment` | перечисление | `Top`, `Center`, `Bottom` |
+| `textPlacement` | перечисление | `Wrap`, `Cut`, `Block`, `Auto` |
+| `textOrientation` | число | Поворот в десятых долях градуса: `900` = 90° |
+| `textColor` | цвет | Цвет текста |
+| `indent` | число | Отступ текста |
+| `autoIndent` | число | Автоматический отступ |
+| `format` | текст | Формат данных: `"ЧЦ=15; ЧДЦ=2"` |
+| `editFormat` | текст | Формат редактирования |
+| `mask` | текст | Маска ввода |
+| `markNegatives` | да/нет | Выделять отрицательные |
+
+## Фон и рамка
+
+| Ключ | Тип | Значение |
+|------|-----|----------|
+| `backColor` | цвет | Цвет фона |
+| `pattern` | перечисление | `Solid`, `WithoutPattern`, `Pattern7`, `Pattern10`, `Pattern12`, `Pattern13`, `Pattern14`, `Pattern16` |
+| `patternColor` | цвет | Цвет узора |
+| `border` | линия | Все четыре стороны |
+| `leftBorder`, `topBorder`, `rightBorder`, `bottomBorder` | линия | Отдельная сторона |
+| `borderColor` | цвет | Цвет рамки |
+
+## Поведение
+
+| Ключ | Тип | Значение |
+|------|-----|----------|
+| `hidden` | да/нет | Скрыть |
+| `protection` | да/нет | Защита от редактирования |
+| `print` | да/нет | Выводить на печать |
+| `hyperLink` | да/нет | Гиперссылка |
+| `detailsUse` | перечисление | Использование расшифровки: `Cell`, `Row`, `WithoutProcessing` |
+| `autoMarkIncomplete` | да/нет | Автоотметка незаполненного |
+| `bySelectedColumns` | да/нет | По выделенным колонкам |
+| `columnSizeChange` | перечисление | `Normal`, `QuickChange` |
+| `autoWidthCalculation` | да/нет | Автоматический расчёт ширины |
+| `widthWeightFactor` | число | Весовой коэффициент ширины |
+
+## Картинка в ячейке
+
+| Ключ | Тип | Значение |
+|------|-----|----------|
+| `picIndex` | число | Номер картинки |
+| `pictureSizeMode` | перечисление | `AutoSize`, `Proportionally`, `RealSize` |
+| `picHorizontalAlignment` | перечисление | `Auto`, `Center`, `Left`, `Right` |
+| `picVerticalAlignment` | перечисление | `Top`, `Center`, `Bottom` |
+| `textPosition` | перечисление | Положение текста относительно картинки: `Auto`, `Top`, `Right`, `Bottom` |
+| `drawingBorder` | число | Рамка рисунка |
+| `drawingHaveLeftBorder`, `drawingHaveTopBorder`, `drawingHaveRightBorder`, `drawingHaveBottomBorder` | да/нет | Наличие стороны рамки рисунка |
+
+## Чего в стиле нет
+
+- `width` — свойство колонки, задаётся через `columnWidths`;
+- `height` — свойство строки, задаётся ключом `height` у строки;
+- `fillType` — выводится из того, каким ключом задано содержимое ячейки
+  (`text` / `param` / `template`);
+- `containsValue`, `valueType`, `controlType` — свойства конкретной ячейки, а не общего
+  оформления; сейчас не поддерживаются.

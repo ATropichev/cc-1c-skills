@@ -43,19 +43,26 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 
 ## JSON-схема DSL
 
-Ниже — компактная структура и ключевые правила, достаточные для типового макета. Полные таблицы полей (все свойства шрифтов, стилей, ячеек), развёрнутый пример и ограничения формата — в **`reference/dsl-spec.md`**; нужны не всегда, читать по необходимости.
+Ниже — компактная структура и ключевые правила, достаточные для типового макета. Подробности читать по необходимости:
+
+| Что нужно | Файл |
+|---|---|
+| Полные таблицы полей, развёрнутый пример, ограничения формата | `reference/dsl-spec.md` |
+| Шрифты, стили, цвета, рамки, колоночные раскладки и стили колонок | `reference/styles.md` |
+| Полный перечень свойств стиля — все 44 | `reference/format-properties.md` |
 
 Краткая структура:
 
 ```
-{ columns, page, defaultWidth, columnWidths,
+{ columns, page, defaultWidth, columnWidths, columnStyles,
   fonts: { name: { face, size, bold, italic, underline, strikeout } },
-  styles: { name: { font, align, valign, border, borderWidth, wrap, format } },
+  styles: { name: { font, horizontalAlignment, verticalAlignment, textPlacement,
+                    backColor, textColor, border, borderColor, format, hidden } },
   areas: [{ name, columnSet, rows: [{ height, rowStyle, cells: [
     { col, span, rowspan, style, param, detail, text, template }
   ]}]}],
   namedAreas: [{ name, rows, cols }],
-  columnSets: { name: { columns, columnWidths } }
+  columnSets: { name: { columns, columnWidths, columnStyles } }
 }
 ```
 
@@ -64,6 +71,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 - `name` у области в `areas` необязателен: область без имени — просто кусок сетки, именованной она не станет
 - `namedAreas` — области, которые не описываются диапазоном подряд идущих строк: полоса колонок, прямоугольник, ячейка. Тип не указывается, он следует из того, какие оси заданы
 - `columnSet` у области — ссылка на раскладку из `columnSets`, когда группе строк нужны свои ширины колонок; без него действует документная раскладка
+- Ключ стиля — имя свойства как в выгрузке; `columnStyles` вешает стиль на колонку так же, как `style` на ячейку
+- Рамка — `border` (все стороны) или `leftBorder`/`topBorder`/`rightBorder`/`bottomBorder`; значение `"Solid"` либо `{ style, width }`
 - `rowStyle` — автозаполнение пустот стилем (рамки по всей ширине)
 - `empty` в строке — шорткат для N подряд пустых строк (`{ "empty": 3 }` = три `{}`)
 - Строку можно писать массивом ячеек — позиция из порядка, `col` не нужен: `"текст"`, `"{Имя}"` — параметр, `">"` — продолжить ячейку слева, `"|"` — сверху, `null` — пропуск колонки
