@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.14 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.15 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -791,10 +791,12 @@ def main():
 
     def to_positional_cells(cells):
         """Позиционная запись списка ячеек: позиция берётся из порядка, `col` не пишется.
-        Применяем, когда первая ячейка стоит в колонке 1 — иначе список начнётся с череды None
-        и станет длиннее объектного. Ячейка, у которой кроме текста или параметра ничего нет,
-        пишется строкой; span раскрывается маркерами ">"; прочее — объектным элементом без col."""
-        if not cells or int(cells[0].get("col", 0)) != 1:
+        Ячейка, у которой кроме текста или параметра ничего нет, пишется строкой; span
+        раскрывается маркерами ">"; прочее — объектным элементом без col. Пропуск колонки —
+        null. Выбираем ту запись, которая КОРОЧЕ: раньше позиционная форма отбрасывалась,
+        как только первая ячейка стояла не в первой колонке, хотя один-два null впереди
+        обычно короче объектной записи с `col`."""
+        if not cells:
             return cells
         out = []
         expected = 1
@@ -820,6 +822,10 @@ def main():
             if (plain_text or plain_param) and span > 1:
                 out.extend([">"] * (span - 1))
             expected = col + span
+        # Позиционная форма ценна компактностью: если она длиннее объектной, смысла в ней нет.
+        a, b = try_inline_json(out), try_inline_json(cells)
+        if a is not None and b is not None and len(a) > len(b):
+            return cells
         return out
 
     # --- 12. Build areas ---
@@ -959,6 +965,7 @@ def main():
                 dsl_row["rowStyle"] = OrderedDict([("style", own_name), ("apply", "row")])
                 row_style_name = None
                 row_style_key = None
+                cells_name = None
 
             # Build cell list
             dsl_cells = []
@@ -984,12 +991,14 @@ def main():
                     pass  # Inherits rowStyle
                 else:
                     # Стиль пишем, только когда он отличается от того, что подставит компилятор:
-                    # без rowStyle умолчание и есть "default", поэтому такой ключ — шум (56% ячеек).
-                    # А при заданном rowStyle стиль "default" писать ОБЯЗАТЕЛЬНО: раньше здесь было
-                    # `not row_style_name`, и такая ячейка теряла стиль вовсе — при обратной сборке
-                    # она наследовала rowStyle.
+                    # без стиля у ячеек умолчание и есть "default", поэтому такой ключ — шум
+                    # (56% ячеек). А когда стиль ячейкам раздаётся, "default" писать ОБЯЗАТЕЛЬНО:
+                    # иначе ячейка при обратной сборке унаследовала бы его.
+                    # Сверяемся с cells_name — стилем, который РЕАЛЬНО раздаётся ячейкам. Раньше
+                    # здесь стоял row_style_name, а он бывает равен "default": строка такой стиль
+                    # не пишет, а ячейка получала бессмысленный ключ на несуществующий стиль.
                     sn = get_style_name(cell["FormatIdx"])
-                    if sn != "default" or row_style_name:
+                    if sn != "default" or cells_name:
                         dsl_cell["style"] = sn
 
                 # Content

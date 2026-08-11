@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.14 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.15 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -645,11 +645,138 @@ function Test-PositionalList {
 # Применяем, когда первая ячейка стоит в колонке 1 — иначе список начнётся с череды null
 # и станет длиннее объектного. Ячейка, у которой кроме текста или параметра ничего нет,
 # пишется строкой; span раскрывается маркерами ">"; всё прочее — объектным элементом без col.
+# Custom JSON serializer — компактный, 2-пробельный indent, массивы примитивов inline.
+# В отличие от ConvertTo-Json (PS5.1):
+#   - не выравнивает ключи объекта по самому длинному
+#   - не разворачивает массивы примитивов на отдельные строки
+#   - кириллица в UTF-8 (без \uXXXX-escapes)
+function Convert-StringToJsonLiteral {
+	param([string]$s)
+	if ($null -eq $s) { return 'null' }
+	$sb = New-Object System.Text.StringBuilder
+	[void]$sb.Append('"')
+	foreach ($ch in $s.ToCharArray()) {
+		$code = [int]$ch
+		if ($code -eq 0x22)     { [void]$sb.Append('\"') }
+		elseif ($code -eq 0x5C) { [void]$sb.Append('\\') }
+		elseif ($code -eq 0x08) { [void]$sb.Append('\b') }
+		elseif ($code -eq 0x09) { [void]$sb.Append('\t') }
+		elseif ($code -eq 0x0A) { [void]$sb.Append('\n') }
+		elseif ($code -eq 0x0C) { [void]$sb.Append('\f') }
+		elseif ($code -eq 0x0D) { [void]$sb.Append('\r') }
+		elseif ($code -lt 0x20) { [void]$sb.AppendFormat('\u{0:x4}', $code) }
+		else { [void]$sb.Append($ch) }
+	}
+	[void]$sb.Append('"')
+	return $sb.ToString()
+}
+
+# Попробовать сериализовать значение полностью inline (одна строка).
+# Возвращает строку либо $null, если содержимое не помещается.
+function Try-InlineJson {
+	param($obj)
+	if ($null -eq $obj) { return 'null' }
+	if ($obj -is [bool]) { if ($obj) { return 'true' } else { return 'false' } }
+	if ($obj -is [string]) { return (Convert-StringToJsonLiteral $obj) }
+	if ($obj -is [int] -or $obj -is [long]) { return "$obj" }
+	if ($obj -is [double] -or $obj -is [single] -or $obj -is [decimal]) {
+		return ([System.Convert]::ToString($obj, [System.Globalization.CultureInfo]::InvariantCulture))
+	}
+	if ($obj -is [System.Collections.IDictionary]) {
+		if ($obj.Count -eq 0) { return '{}' }
+		$parts = @()
+		foreach ($k in $obj.Keys) {
+			$v = Try-InlineJson $obj[$k]
+			if ($null -eq $v) { return $null }
+			$parts += "$(Convert-StringToJsonLiteral "$k"): $v"
+		}
+		return '{ ' + ($parts -join ', ') + ' }'
+	}
+	if ($obj -is [System.Management.Automation.PSCustomObject]) {
+		$props = @($obj.PSObject.Properties)
+		if ($props.Count -eq 0) { return '{}' }
+		$parts = @()
+		foreach ($p in $props) {
+			$v = Try-InlineJson $p.Value
+			if ($null -eq $v) { return $null }
+			$parts += "$(Convert-StringToJsonLiteral "$($p.Name)"): $v"
+		}
+		return '{ ' + ($parts -join ', ') + ' }'
+	}
+	if ($obj -is [array] -or $obj -is [System.Collections.IList]) {
+		$items = @($obj)
+		if ($items.Count -eq 0) { return '[]' }
+		$parts = @()
+		foreach ($it in $items) {
+			$v = Try-InlineJson $it
+			if ($null -eq $v) { return $null }
+			$parts += $v
+		}
+		return '[' + ($parts -join ', ') + ']'
+	}
+	return $null
+}
+
+function ConvertTo-CompactJson {
+	param($obj, [int]$depth = 0, [string]$indentUnit = '  ', [int]$lineLimit = 400)
+	$indent = $indentUnit * $depth
+	$childIndent = $indentUnit * ($depth + 1)
+
+	if ($null -eq $obj) { return 'null' }
+	if ($obj -is [bool]) { if ($obj) { return 'true' } else { return 'false' } }
+	if ($obj -is [string]) { return (Convert-StringToJsonLiteral $obj) }
+	if ($obj -is [int] -or $obj -is [long]) { return "$obj" }
+	if ($obj -is [double] -or $obj -is [single] -or $obj -is [decimal]) {
+		return ([System.Convert]::ToString($obj, [System.Globalization.CultureInfo]::InvariantCulture))
+	}
+
+	# Try inline для объектов и массивов с объектами — если помещается в lineLimit с учётом текущего indent.
+	$isContainer = ($obj -is [System.Collections.IDictionary]) -or ($obj -is [System.Management.Automation.PSCustomObject]) -or ($obj -is [array]) -or ($obj -is [System.Collections.IList])
+	if ($isContainer) {
+		$inlineAttempt = Try-InlineJson $obj
+		if ($null -ne $inlineAttempt -and ($indent.Length + $inlineAttempt.Length) -le $lineLimit) {
+			return $inlineAttempt
+		}
+	}
+
+	# Hashtable / OrderedDictionary — объект multi-line
+	if ($obj -is [System.Collections.IDictionary]) {
+		$keys = @($obj.Keys)
+		if ($keys.Count -eq 0) { return '{}' }
+		$parts = @()
+		foreach ($k in $keys) {
+			$val = ConvertTo-CompactJson -obj $obj[$k] -depth ($depth + 1) -indentUnit $indentUnit -lineLimit $lineLimit
+			$parts += "$childIndent$(Convert-StringToJsonLiteral "$k"): $val"
+		}
+		return "{`n" + ($parts -join ",`n") + "`n$indent}"
+	}
+	if ($obj -is [System.Management.Automation.PSCustomObject]) {
+		$props = @($obj.PSObject.Properties)
+		if ($props.Count -eq 0) { return '{}' }
+		$parts = @()
+		foreach ($p in $props) {
+			$val = ConvertTo-CompactJson -obj $p.Value -depth ($depth + 1) -indentUnit $indentUnit -lineLimit $lineLimit
+			$parts += "$childIndent$(Convert-StringToJsonLiteral "$($p.Name)"): $val"
+		}
+		return "{`n" + ($parts -join ",`n") + "`n$indent}"
+	}
+	# Array / IList multi-line
+	if ($obj -is [array] -or $obj -is [System.Collections.IList]) {
+		$items = @($obj)
+		if ($items.Count -eq 0) { return '[]' }
+		$parts = @($items | ForEach-Object { "$childIndent$(ConvertTo-CompactJson -obj $_ -depth ($depth + 1) -indentUnit $indentUnit -lineLimit $lineLimit)" })
+		return "[`n" + ($parts -join ",`n") + "`n$indent]"
+	}
+	# Fallback
+	return (Convert-StringToJsonLiteral "$obj")
+}
+
 function ConvertTo-PositionalCells {
 	param($cells)
+	# Пропуск колонки — null. Выбираем ту запись, которая КОРОЧЕ: раньше позиционная форма
+	# отбрасывалась, как только первая ячейка стояла не в первой колонке, хотя один-два null
+	# впереди обычно короче объектной записи с `col`.
 	if ($cells.Count -eq 0) { return @() }
-	$first = $cells[0]
-	if ([int]$first["col"] -ne 1) { return $cells }
 
 	$out = @()
 	$expected = 1
@@ -676,6 +803,10 @@ function ConvertTo-PositionalCells {
 		}
 		$expected = $col + $span
 	}
+	# Позиционная форма ценна компактностью: если она длиннее объектной, смысла в ней нет.
+	$a = Try-InlineJson $out
+	$b = Try-InlineJson $cells
+	if ($null -ne $a -and $null -ne $b -and $a.Length -gt $b.Length) { return $cells }
 	return $out
 }
 
@@ -834,6 +965,7 @@ foreach ($area in $blocks) {
 			$dslRow["rowStyle"] = [ordered]@{ style = $ownName; apply = "row" }
 			$rowStyleName = $null
 			$rowStyleKey = $null
+			$cellsName = $null
 		}
 
 		# Build cell list
@@ -863,7 +995,7 @@ foreach ($area in $blocks) {
 				# `-not $rowStyleName`, и такая ячейка теряла стиль вовсе — при обратной сборке
 				# она наследовала rowStyle.
 				$sn = Get-StyleName $cell.FormatIdx
-				if ($sn -ne "default" -or $rowStyleName) {
+				if ($sn -ne "default" -or $cellsName) {
 					$dslCell["style"] = $sn
 				}
 			}
@@ -1074,131 +1206,6 @@ if ($overlayAreas.Count -gt 0) {
 
 # --- 16. Convert to JSON ---
 
-# Custom JSON serializer — компактный, 2-пробельный indent, массивы примитивов inline.
-# В отличие от ConvertTo-Json (PS5.1):
-#   - не выравнивает ключи объекта по самому длинному
-#   - не разворачивает массивы примитивов на отдельные строки
-#   - кириллица в UTF-8 (без \uXXXX-escapes)
-function Convert-StringToJsonLiteral {
-	param([string]$s)
-	if ($null -eq $s) { return 'null' }
-	$sb = New-Object System.Text.StringBuilder
-	[void]$sb.Append('"')
-	foreach ($ch in $s.ToCharArray()) {
-		$code = [int]$ch
-		if ($code -eq 0x22)     { [void]$sb.Append('\"') }
-		elseif ($code -eq 0x5C) { [void]$sb.Append('\\') }
-		elseif ($code -eq 0x08) { [void]$sb.Append('\b') }
-		elseif ($code -eq 0x09) { [void]$sb.Append('\t') }
-		elseif ($code -eq 0x0A) { [void]$sb.Append('\n') }
-		elseif ($code -eq 0x0C) { [void]$sb.Append('\f') }
-		elseif ($code -eq 0x0D) { [void]$sb.Append('\r') }
-		elseif ($code -lt 0x20) { [void]$sb.AppendFormat('\u{0:x4}', $code) }
-		else { [void]$sb.Append($ch) }
-	}
-	[void]$sb.Append('"')
-	return $sb.ToString()
-}
-
-# Попробовать сериализовать значение полностью inline (одна строка).
-# Возвращает строку либо $null, если содержимое не помещается.
-function Try-InlineJson {
-	param($obj)
-	if ($null -eq $obj) { return 'null' }
-	if ($obj -is [bool]) { if ($obj) { return 'true' } else { return 'false' } }
-	if ($obj -is [string]) { return (Convert-StringToJsonLiteral $obj) }
-	if ($obj -is [int] -or $obj -is [long]) { return "$obj" }
-	if ($obj -is [double] -or $obj -is [single] -or $obj -is [decimal]) {
-		return ([System.Convert]::ToString($obj, [System.Globalization.CultureInfo]::InvariantCulture))
-	}
-	if ($obj -is [System.Collections.IDictionary]) {
-		if ($obj.Count -eq 0) { return '{}' }
-		$parts = @()
-		foreach ($k in $obj.Keys) {
-			$v = Try-InlineJson $obj[$k]
-			if ($null -eq $v) { return $null }
-			$parts += "$(Convert-StringToJsonLiteral "$k"): $v"
-		}
-		return '{ ' + ($parts -join ', ') + ' }'
-	}
-	if ($obj -is [System.Management.Automation.PSCustomObject]) {
-		$props = @($obj.PSObject.Properties)
-		if ($props.Count -eq 0) { return '{}' }
-		$parts = @()
-		foreach ($p in $props) {
-			$v = Try-InlineJson $p.Value
-			if ($null -eq $v) { return $null }
-			$parts += "$(Convert-StringToJsonLiteral "$($p.Name)"): $v"
-		}
-		return '{ ' + ($parts -join ', ') + ' }'
-	}
-	if ($obj -is [array] -or $obj -is [System.Collections.IList]) {
-		$items = @($obj)
-		if ($items.Count -eq 0) { return '[]' }
-		$parts = @()
-		foreach ($it in $items) {
-			$v = Try-InlineJson $it
-			if ($null -eq $v) { return $null }
-			$parts += $v
-		}
-		return '[' + ($parts -join ', ') + ']'
-	}
-	return $null
-}
-
-function ConvertTo-CompactJson {
-	param($obj, [int]$depth = 0, [string]$indentUnit = '  ', [int]$lineLimit = 400)
-	$indent = $indentUnit * $depth
-	$childIndent = $indentUnit * ($depth + 1)
-
-	if ($null -eq $obj) { return 'null' }
-	if ($obj -is [bool]) { if ($obj) { return 'true' } else { return 'false' } }
-	if ($obj -is [string]) { return (Convert-StringToJsonLiteral $obj) }
-	if ($obj -is [int] -or $obj -is [long]) { return "$obj" }
-	if ($obj -is [double] -or $obj -is [single] -or $obj -is [decimal]) {
-		return ([System.Convert]::ToString($obj, [System.Globalization.CultureInfo]::InvariantCulture))
-	}
-
-	# Try inline для объектов и массивов с объектами — если помещается в lineLimit с учётом текущего indent.
-	$isContainer = ($obj -is [System.Collections.IDictionary]) -or ($obj -is [System.Management.Automation.PSCustomObject]) -or ($obj -is [array]) -or ($obj -is [System.Collections.IList])
-	if ($isContainer) {
-		$inlineAttempt = Try-InlineJson $obj
-		if ($null -ne $inlineAttempt -and ($indent.Length + $inlineAttempt.Length) -le $lineLimit) {
-			return $inlineAttempt
-		}
-	}
-
-	# Hashtable / OrderedDictionary — объект multi-line
-	if ($obj -is [System.Collections.IDictionary]) {
-		$keys = @($obj.Keys)
-		if ($keys.Count -eq 0) { return '{}' }
-		$parts = @()
-		foreach ($k in $keys) {
-			$val = ConvertTo-CompactJson -obj $obj[$k] -depth ($depth + 1) -indentUnit $indentUnit -lineLimit $lineLimit
-			$parts += "$childIndent$(Convert-StringToJsonLiteral "$k"): $val"
-		}
-		return "{`n" + ($parts -join ",`n") + "`n$indent}"
-	}
-	if ($obj -is [System.Management.Automation.PSCustomObject]) {
-		$props = @($obj.PSObject.Properties)
-		if ($props.Count -eq 0) { return '{}' }
-		$parts = @()
-		foreach ($p in $props) {
-			$val = ConvertTo-CompactJson -obj $p.Value -depth ($depth + 1) -indentUnit $indentUnit -lineLimit $lineLimit
-			$parts += "$childIndent$(Convert-StringToJsonLiteral "$($p.Name)"): $val"
-		}
-		return "{`n" + ($parts -join ",`n") + "`n$indent}"
-	}
-	# Array / IList multi-line
-	if ($obj -is [array] -or $obj -is [System.Collections.IList]) {
-		$items = @($obj)
-		if ($items.Count -eq 0) { return '[]' }
-		$parts = @($items | ForEach-Object { "$childIndent$(ConvertTo-CompactJson -obj $_ -depth ($depth + 1) -indentUnit $indentUnit -lineLimit $lineLimit)" })
-		return "[`n" + ($parts -join ",`n") + "`n$indent]"
-	}
-	# Fallback
-	return (Convert-StringToJsonLiteral "$obj")
-}
 
 $json = ConvertTo-CompactJson $result
 
