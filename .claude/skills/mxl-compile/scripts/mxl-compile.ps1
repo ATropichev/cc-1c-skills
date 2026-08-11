@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.36 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.37 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -845,6 +845,17 @@ function Set-CellProp {
 	$cell | Add-Member -NotePropertyName $name -NotePropertyValue $value -Force
 }
 
+# Ячейка это или многоязычный текст: у ячейки есть хоть один ключ её схемы, у ML-значения
+# ключи — идентификаторы языков. Пересечений нет: в корпусе это ru, en, ru1, Русский.
+function Test-CellObject {
+	param($el)
+	$cellKeys = @('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template')
+	foreach ($p in $el.PSObject.Properties) {
+		if ($cellKeys -contains $p.Name) { return $true }
+	}
+	return $false
+}
+
 function Expand-ShorthandRow {
 	param($row, [string]$areaName, [int]$rowIdx, $openByCol, [int]$maxCols)
 
@@ -897,6 +908,12 @@ function Expand-ShorthandRow {
 			$m = [regex]::Match($el, '^\{(.+)\}$')
 			if ($m.Success) { Set-CellProp $cell 'param' $m.Groups[1].Value }
 			else { Set-CellProp $cell 'text' $el }
+		} elseif (-not (Test-CellObject $el)) {
+			# Объект без единого ключа ячейки — это многоязычный ТЕКСТ: в позиционной записи
+			# элемент и есть значение текста, а значение текста по общей конвенции бывает
+			# строкой либо объектом «язык → текст».
+			$cell = [PSCustomObject]@{ col = $idx; span = 1 }
+			Set-CellProp $cell 'text' $el
 		} else {
 			# Объектный элемент — обычная ячейка mxl, позиция берётся из индекса.
 			if ($el.PSObject.Properties['col']) {

@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.36 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.37 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -884,6 +884,13 @@ def main():
     # "{Имя}" — параметр. Разворачиваем в обычную строку с явными col/span/rowspan,
     # поэтому весь код ниже про шорткат не знает.
 
+    def is_cell_object(el):
+        """Ячейка это или многоязычный текст: у ячейки есть хоть один ключ её схемы,
+        у ML-значения ключи — идентификаторы языков. Пересечений нет: в корпусе это
+        ru, en, ru1, Русский."""
+        cell_keys = ('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template')
+        return any(k in el for k in cell_keys)
+
     def expand_shorthand_row(row, area_name, row_idx, open_by_col, max_cols):
         cells = []
         placed = {}      # 1-based col -> ячейка, занимающая колонку в ЭТОЙ строке
@@ -933,6 +940,11 @@ def main():
                     cell['param'] = m.group(1)
                 else:
                     cell['text'] = el
+            elif not is_cell_object(el):
+                # Объект без единого ключа ячейки — это многоязычный ТЕКСТ: в позиционной
+                # записи элемент и есть значение текста, а значение текста по общей конвенции
+                # бывает строкой либо объектом «язык → текст».
+                cell = CIDict({'col': idx, 'span': 1, 'text': el})
             else:
                 # Объектный элемент — обычная ячейка mxl, позиция берётся из индекса.
                 if 'col' in el:

@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.15 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.16 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -791,7 +791,7 @@ def main():
 
     def to_positional_cells(cells):
         """Позиционная запись списка ячеек: позиция берётся из порядка, `col` не пишется.
-        Ячейка, у которой кроме текста или параметра ничего нет, пишется строкой; span
+        Ячейка, у которой кроме текста или параметра ничего нет, пишется значением; span
         раскрывается маркерами ">"; прочее — объектным элементом без col. Пропуск колонки —
         null. Выбираем ту запись, которая КОРОЧЕ: раньше позиционная форма отбрасывалась,
         как только первая ячейка стояла не в первой колонке, хотя один-два null впереди
@@ -809,7 +809,9 @@ def main():
                 expected += 1
             span = int(c.get("span", 1) or 1)
             keys = [k for k in c if k not in ("col", "span")]
-            plain_text = len(keys) == 1 and keys[0] == "text" and isinstance(c["text"], str)
+            # Текст — единственное содержимое: пишем значением. Оно бывает строкой либо
+            # объектом «язык → текст», и в позиционной записи элемент И ЕСТЬ это значение.
+            plain_text = len(keys) == 1 and keys[0] == "text"
             plain_param = len(keys) == 1 and keys[0] == "param"
             if plain_text:
                 out.append(c["text"])
@@ -1019,8 +1021,11 @@ def main():
                 dsl_row["cells"] = to_positional_cells(dsl_cells)
             # Самая короткая из применимых форм: если у строки нет своих свойств, а список ячеек
             # позиционный — строка пишется просто массивом, без ключа cells.
+            # Список позиционный, если позиция в нём НЕ записана: ни у одного элемента нет col.
+            # Прежняя проверка искала элемент-строку, поэтому строка из одних многоязычных
+            # текстов позиционной не признавалась и оставалась объектной.
             if (len(dsl_row) == 1 and "cells" in dsl_row
-                    and any(el is None or isinstance(el, str) for el in dsl_row["cells"])):
+                    and not any(isinstance(el, dict) and "col" in el for el in dsl_row["cells"])):
                 area_rows.append(dsl_row["cells"])
             else:
                 area_rows.append(dsl_row)

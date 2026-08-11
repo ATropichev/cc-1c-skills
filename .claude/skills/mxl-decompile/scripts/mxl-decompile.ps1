@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.15 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.16 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -631,20 +631,17 @@ function Get-ColumnStyles {
 	return $out
 }
 
-# Список признаётся позиционным по тому же правилу, что и в компиляторе: есть элемент-строка
-# или пропуск. Список из одних объектов таковым не считаем — он читается как обычный.
+# Список позиционный, если позиция в нём НЕ записана: ни у одного элемента нет col.
+# Прежняя проверка искала элемент-строку, поэтому строка из одних многоязычных текстов
+# позиционной не признавалась и оставалась объектной.
 function Test-PositionalList {
 	param($cells)
 	foreach ($el in $cells) {
-		if ($null -eq $el -or $el -is [string]) { return $true }
+		if ($el -is [System.Collections.IDictionary] -and $el.Contains('col')) { return $false }
 	}
-	return $false
+	return $true
 }
 
-# Позиционная запись списка ячеек: позиция берётся из порядка, `col` не пишется.
-# Применяем, когда первая ячейка стоит в колонке 1 — иначе список начнётся с череды null
-# и станет длиннее объектного. Ячейка, у которой кроме текста или параметра ничего нет,
-# пишется строкой; span раскрывается маркерами ">"; всё прочее — объектным элементом без col.
 # Custom JSON serializer — компактный, 2-пробельный indent, массивы примитивов inline.
 # В отличие от ConvertTo-Json (PS5.1):
 #   - не выравнивает ключи объекта по самому длинному
@@ -771,6 +768,10 @@ function ConvertTo-CompactJson {
 	return (Convert-StringToJsonLiteral "$obj")
 }
 
+# Позиционная запись списка ячеек: позиция берётся из порядка, `col` не пишется.
+# Ячейка, у которой кроме текста или параметра ничего нет, пишется значением; span
+# раскрывается маркерами ">"; пропуск колонки — null; всё прочее — объектным элементом
+# без col. Выбираем ту запись, которая КОРОЧЕ.
 function ConvertTo-PositionalCells {
 	param($cells)
 	# Пропуск колонки — null. Выбираем ту запись, которая КОРОЧЕ: раньше позиционная форма
@@ -787,10 +788,12 @@ function ConvertTo-PositionalCells {
 
 		$span = if ($c.Contains("span")) { [int]$c["span"] } else { 1 }
 		$keys = @($c.Keys | Where-Object { $_ -notin @("col", "span") })
-		$plainText = ($keys.Count -eq 1 -and $keys[0] -eq "text" -and $c["text"] -is [string])
+		# Текст — единственное содержимое: пишем значением. Оно бывает строкой либо
+		# объектом «язык → текст», и в позиционной записи элемент И ЕСТЬ это значение.
+		$plainText = ($keys.Count -eq 1 -and $keys[0] -eq "text")
 		$plainParam = ($keys.Count -eq 1 -and $keys[0] -eq "param")
 
-		if ($plainText) { $out += $c["text"] }
+		if ($plainText) { $out += , $c["text"] }
 		elseif ($plainParam) { $out += "{$($c["param"])}" }
 		else {
 			$obj = [ordered]@{}
