@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.9 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.10 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -67,6 +67,51 @@ def to_font_size(raw):
     except (TypeError, ValueError):
         return 0
     return int(d) if d == int(d) else d
+
+
+def format_tag_kind():
+    """Тип значения каждого тега — выведен из корпуса, а не выписан на глаз.
+    line — ссылка в палитру <line>; color — #RRGGBB / style: / web: / win:
+    ml — многоязычная строка; enum — замкнутый список (см. format_enum_values).
+    containsValue / valueType / controlType сюда НЕ входят: это свойства конкретной ячейки,
+    а стиль — сущность общая, один на многие ячейки."""
+    return {
+        'autoIndent': 'int', 'autoMarkIncomplete': 'bool', 'autoWidthCalculation': 'bool',
+        'backColor': 'color', 'border': 'line', 'borderColor': 'color',
+        'bottomBorder': 'line', 'bySelectedColumns': 'bool', 'columnSizeChange': 'enum',
+        'detailsUse': 'enum', 'drawingBorder': 'int',
+        'drawingHaveBottomBorder': 'bool', 'drawingHaveLeftBorder': 'bool',
+        'drawingHaveRightBorder': 'bool', 'drawingHaveTopBorder': 'bool',
+        'editFormat': 'ml', 'fillType': 'enum', 'font': 'int', 'format': 'ml',
+        'height': 'int', 'hidden': 'bool', 'horizontalAlignment': 'enum',
+        'hyperLink': 'bool', 'indent': 'int', 'leftBorder': 'line',
+        'markNegatives': 'bool', 'mask': 'ml', 'pattern': 'enum', 'patternColor': 'color',
+        'picHorizontalAlignment': 'enum', 'picIndex': 'int', 'picVerticalAlignment': 'enum',
+        'pictureSizeMode': 'enum', 'print': 'bool', 'protection': 'bool',
+        'rightBorder': 'line', 'textColor': 'color', 'textOrientation': 'int',
+        'textPlacement': 'enum', 'textPosition': 'enum', 'topBorder': 'line',
+        'verticalAlignment': 'enum', 'width': 'int', 'widthWeightFactor': 'int',
+    }
+
+
+def format_ml_tags():
+    """Теги, значение которых — многоязычная строка (<v8:item> на язык), а не скаляр."""
+    return {'format': True, 'editFormat': True, 'mask': True}
+
+
+def color_to_dsl(node, val):
+    """Цвет платформа хранит значением с префиксом пространства имён. style: объявлен в корне
+    документа и читается как есть; web/win объявлены прямо на узле сгенерированным префиксом
+    (d3p1), поэтому его надо разрешить в URI и вернуть привычное web:/win:."""
+    if ':' not in val or val.startswith('style:'):
+        return val
+    prefix, name = val.split(':', 1)
+    uri = node.nsmap.get(prefix)
+    if uri == 'http://v8.1c.ru/8.1/data/ui/colors/web':
+        return 'web:' + name
+    if uri == 'http://v8.1c.ru/8.1/data/ui/colors/windows':
+        return 'win:' + name
+    return val
 
 
 def int_of(node, default=0):
@@ -231,61 +276,50 @@ def main():
 
     raw_lines = []
     for l_node in findall(root, "d:line"):
-        raw_lines.append({"Width": int(l_node.get("width", "0"))})
+        st = find(l_node, "v8ui:style")
+        raw_lines.append({
+            "Width": int(l_node.get("width", "0")),
+            "Gap": l_node.get("gap", "false"),
+            "Style": (text_of(st) or "Solid") if st is not None else "Solid",
+        })
 
     # --- 4. Extract format palette ---
 
+    # Формат читаем целиком — «тег → значение», а не выборочные девять полей. Тип значения
+    # берём из общей таблицы, она же у компилятора.
+    kinds = format_tag_kind()
+    ml_tags = format_ml_tags()
+
     raw_formats = []
     for fmt_node in findall(root, "d:format"):
+        # Совместимость с прежними полями: ими пользуются ширина колонки, высота строки и
+        # признак заполнения — они не часть стиля.
         fmt = {
-            "FontIdx": -1,
-            "LB": -1, "TB": -1, "RB": -1, "BB": -1,
-            "Width": 0, "Height": 0,
-            "HA": "", "VA": "",
-            "Wrap": False, "FillType": "", "DataFormat": "",
+            "FontIdx": -1, "Width": 0, "Height": 0, "FillType": "", "Props": OrderedDict(),
         }
+        for child in fmt_node:
+            tag = etree.QName(child).localname
+            if tag in ml_tags:
+                item = find(child, "v8:item/v8:content")
+                val = text_of(item) if item is not None else None
+                if val:
+                    fmt["Props"][tag] = val
+                continue
+            val = (child.text or "").strip()
+            if not val:
+                continue
+            if kinds.get(tag) == "color":
+                val = color_to_dsl(child, val)
+            fmt["Props"][tag] = val
 
-        n = find(fmt_node, "d:font")
-        if n is not None and n.text:
-            fmt["FontIdx"] = int(n.text)
-        n = find(fmt_node, "d:leftBorder")
-        if n is not None and n.text:
-            fmt["LB"] = int(n.text)
-        n = find(fmt_node, "d:topBorder")
-        if n is not None and n.text:
-            fmt["TB"] = int(n.text)
-        n = find(fmt_node, "d:rightBorder")
-        if n is not None and n.text:
-            fmt["RB"] = int(n.text)
-        n = find(fmt_node, "d:bottomBorder")
-        if n is not None and n.text:
-            fmt["BB"] = int(n.text)
-
-        n = find(fmt_node, "d:width")
-        if n is not None and n.text:
-            fmt["Width"] = int(n.text)
-        n = find(fmt_node, "d:height")
-        if n is not None and n.text:
-            fmt["Height"] = int(n.text)
-
-        n = find(fmt_node, "d:horizontalAlignment")
-        if n is not None and n.text:
-            fmt["HA"] = n.text
-        n = find(fmt_node, "d:verticalAlignment")
-        if n is not None and n.text:
-            fmt["VA"] = n.text
-
-        n = find(fmt_node, "d:textPlacement")
-        if n is not None and n.text == "Wrap":
-            fmt["Wrap"] = True
-
-        n = find(fmt_node, "d:fillType")
-        if n is not None and n.text:
-            fmt["FillType"] = n.text
-
-        n = find(fmt_node, "d:format/v8:item/v8:content")
-        if n is not None and n.text:
-            fmt["DataFormat"] = n.text
+        if "font" in fmt["Props"]:
+            fmt["FontIdx"] = int(fmt["Props"]["font"])
+        if "width" in fmt["Props"]:
+            fmt["Width"] = int(fmt["Props"]["width"])
+        if "height" in fmt["Props"]:
+            fmt["Height"] = int(fmt["Props"]["height"])
+        if "fillType" in fmt["Props"]:
+            fmt["FillType"] = fmt["Props"]["fillType"]
 
         raw_formats.append(fmt)
 
@@ -493,45 +527,54 @@ def main():
 
     # --- 9. Build style key (ignoring fillType) ---
 
-    def get_border_desc(fmt):
+    # Свойства формата, которые стилем НЕ являются: ширина принадлежит колонке, высота —
+    # строке, вид заполнения выводится из того, чем задано содержимое ячейки.
+    NON_STYLE_TAGS = ("width", "height", "fillType", "font")
+    BORDER_TAGS = ("border", "leftBorder", "topBorder", "rightBorder", "bottomBorder")
+
+    def line_to_dsl(idx):
+        """Ссылку в палитру разворачиваем в описание линии. Ширина 1 подразумевается,
+        поэтому обычная линия пишется просто именем стиля."""
+        i = int(idx)
+        if i < 0 or i >= len(raw_lines):
+            return "Solid"
+        ln = raw_lines[i]
+        out = OrderedDict()
+        out["style"] = ln["Style"]
+        if ln["Width"] != 1:
+            out["width"] = ln["Width"]
+        if ln["Gap"] == "true":
+            out["gap"] = True
+        if len(out) == 1:
+            return out["style"]
+        return out
+
+    def style_props(fmt):
+        """Свойства формата, попадающие в стиль, — в каноническом порядке тегов."""
         if not fmt:
-            return {"Border": "none", "Thick": False}
-
-        lb = fmt["LB"] >= 0
-        tb = fmt["TB"] >= 0
-        rb = fmt["RB"] >= 0
-        bb = fmt["BB"] >= 0
-
-        if not lb and not tb and not rb and not bb:
-            return {"Border": "none", "Thick": False}
-
-        thick = False
-        for b_idx in [fmt["LB"], fmt["TB"], fmt["RB"], fmt["BB"]]:
-            if b_idx >= 0 and b_idx < len(raw_lines) and raw_lines[b_idx]["Width"] >= 2:
-                thick = True
-                break
-
-        if lb and tb and rb and bb:
-            return {"Border": "all", "Thick": thick}
-
-        sides = []
-        if tb:
-            sides.append("top")
-        if bb:
-            sides.append("bottom")
-        if lb:
-            sides.append("left")
-        if rb:
-            sides.append("right")
-
-        return {"Border": ",".join(sides), "Thick": thick}
+            return OrderedDict()
+        out = OrderedDict()
+        for tag, val in fmt["Props"].items():
+            if tag in NON_STYLE_TAGS:
+                continue
+            if tag in BORDER_TAGS:
+                out[tag] = line_to_dsl(val)
+            elif kinds.get(tag) == "bool":
+                out[tag] = (val == "true")
+            elif kinds.get(tag) == "int":
+                out[tag] = int(val)
+            else:
+                out[tag] = val
+        return out
 
     def get_style_key(fmt):
         if not fmt:
             return "empty"
         fi = fmt["FontIdx"] if fmt["FontIdx"] >= 0 else 0
-        bd = get_border_desc(fmt)
-        return f"f={fi}|b={bd['Border']}|bw={bd['Thick']}|ha={fmt['HA']}|va={fmt['VA']}|wr={fmt['Wrap']}|df={fmt['DataFormat']}"
+        parts = [f"f={fi}"]
+        for tag, val in style_props(fmt).items():
+            parts.append(f"{tag}={val}")
+        return "|".join(parts)
 
     # --- 10. Name fonts ---
 
@@ -614,32 +657,40 @@ def main():
             format_to_style_key[cell["FormatIdx"]] = key
 
     def name_style(fmt):
+        """Имя стиля — читаемая метка по самым заметным свойствам. Полнота тут не нужна:
+        различает стили ключ, имя лишь помогает автору ориентироваться."""
         if not fmt:
             return "default"
         parts = []
+        props = style_props(fmt)
 
         fi = fmt["FontIdx"] if fmt["FontIdx"] >= 0 else 0
         if fi in font_names and font_names[fi] != "default":
             parts.append(font_names[fi])
 
-        bd = get_border_desc(fmt)
-        if bd["Border"] != "none":
-            if bd["Border"] == "all":
-                parts.append("bordered")
-            else:
-                parts.append(f"border-{bd['Border']}")
+        if "border" in props:
+            parts.append("bordered")
+        else:
+            sides = [s[:-6] for s in ("leftBorder", "topBorder", "rightBorder", "bottomBorder")
+                     if s in props]
+            if sides:
+                parts.append("border-" + ",".join(sides))
 
-        if fmt["HA"] == "Center":
+        ha = props.get("horizontalAlignment")
+        if ha == "Center":
             parts.append("center")
-        elif fmt["HA"] == "Right":
+        elif ha == "Right":
             parts.append("right")
-        if fmt["VA"] == "Center":
+        va = props.get("verticalAlignment")
+        if va == "Center":
             parts.append("vcenter")
-        elif fmt["VA"] == "Top":
+        elif va == "Top":
             parts.append("vtop")
-        if fmt["Wrap"]:
+        if props.get("textPlacement") == "Wrap":
             parts.append("wrap")
-        if fmt["DataFormat"]:
+        if "backColor" in props:
+            parts.append("bg")
+        if "format" in props:
             parts.append("fmt")
 
         if len(parts) == 0:
@@ -665,25 +716,7 @@ def main():
         fi = fmt["FontIdx"] if fmt["FontIdx"] >= 0 else 0
         if fi in font_names and font_names[fi] != "default":
             s_def["font"] = font_names[fi]
-        if fmt["HA"]:
-            a_map = {"Left": "left", "Center": "center", "Right": "right"}
-            a = a_map.get(fmt["HA"])
-            if a:
-                s_def["align"] = a
-        if fmt["VA"]:
-            va_map = {"Top": "top", "Center": "center"}
-            a = va_map.get(fmt["VA"])
-            if a:
-                s_def["valign"] = a
-        bd = get_border_desc(fmt)
-        if bd["Border"] != "none":
-            s_def["border"] = bd["Border"]
-            if bd["Thick"]:
-                s_def["borderWidth"] = "thick"
-        if fmt["Wrap"]:
-            s_def["wrap"] = True
-        if fmt["DataFormat"]:
-            s_def["format"] = fmt["DataFormat"]
+        s_def.update(style_props(fmt))
 
         style_defs[name] = s_def
 

@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.9 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.10 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -28,6 +28,51 @@ $ns.AddNamespace("d", "http://v8.1c.ru/8.2/data/spreadsheet")
 $ns.AddNamespace("v8", "http://v8.1c.ru/8.1/data/core")
 $ns.AddNamespace("v8ui", "http://v8.1c.ru/8.1/data/ui")
 $ns.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
+
+# Тип значения каждого тега формата — выведен из корпуса, а не выписан на глаз.
+# line — ссылка в палитру <line>; color — #RRGGBB / style: / web: / win:
+# ml — многоязычная строка; enum — замкнутый список.
+# containsValue / valueType / controlType сюда НЕ входят: это свойства конкретной ячейки,
+# а стиль — сущность общая, один на многие ячейки.
+function Get-FormatTagKind {
+	return @{
+		'autoIndent' = 'int'; 'autoMarkIncomplete' = 'bool'; 'autoWidthCalculation' = 'bool'
+		'backColor' = 'color'; 'border' = 'line'; 'borderColor' = 'color'
+		'bottomBorder' = 'line'; 'bySelectedColumns' = 'bool'; 'columnSizeChange' = 'enum'
+		'detailsUse' = 'enum'; 'drawingBorder' = 'int'
+		'drawingHaveBottomBorder' = 'bool'; 'drawingHaveLeftBorder' = 'bool'
+		'drawingHaveRightBorder' = 'bool'; 'drawingHaveTopBorder' = 'bool'
+		'editFormat' = 'ml'; 'fillType' = 'enum'; 'font' = 'int'; 'format' = 'ml'
+		'height' = 'int'; 'hidden' = 'bool'; 'horizontalAlignment' = 'enum'
+		'hyperLink' = 'bool'; 'indent' = 'int'; 'leftBorder' = 'line'
+		'markNegatives' = 'bool'; 'mask' = 'ml'; 'pattern' = 'enum'; 'patternColor' = 'color'
+		'picHorizontalAlignment' = 'enum'; 'picIndex' = 'int'; 'picVerticalAlignment' = 'enum'
+		'pictureSizeMode' = 'enum'; 'print' = 'bool'; 'protection' = 'bool'
+		'rightBorder' = 'line'; 'textColor' = 'color'; 'textOrientation' = 'int'
+		'textPlacement' = 'enum'; 'textPosition' = 'enum'; 'topBorder' = 'line'
+		'verticalAlignment' = 'enum'; 'width' = 'int'; 'widthWeightFactor' = 'int'
+	}
+}
+
+# Теги, значение которых — многоязычная строка (<v8:item> на язык), а не скаляр.
+function Get-FormatMlTags {
+	return @{ 'format' = $true; 'editFormat' = $true; 'mask' = $true }
+}
+
+# Цвет платформа хранит значением с префиксом пространства имён. style: объявлен в корне
+# документа и читается как есть; web/win объявлены прямо на узле сгенерированным префиксом
+# (d3p1), поэтому его надо разрешить в URI и вернуть привычное web:/win:.
+function ConvertTo-DslColor {
+	param($node, [string]$val)
+	if ($val -notlike '*:*' -or $val -like 'style:*') { return $val }
+	$prefix = $val.Substring(0, $val.IndexOf(':'))
+	$name = $val.Substring($val.IndexOf(':') + 1)
+	# get_*(): XML-адаптер PowerShell перекрывает .NET-члены одноимёнными атрибутами узла.
+	$uri = $node.GetNamespaceOfPrefix($prefix)
+	if ($uri -ceq 'http://v8.1c.ru/8.1/data/ui/colors/web') { return "web:$name" }
+	if ($uri -ceq 'http://v8.1c.ru/8.1/data/ui/colors/windows') { return "win:$name" }
+	return $val
+}
 
 # --- 2. Extract font palette ---
 
@@ -61,50 +106,47 @@ foreach ($fNode in $root.SelectNodes("d:font", $ns)) {
 
 $rawLines = @()
 foreach ($lNode in $root.SelectNodes("d:line", $ns)) {
-	$rawLines += @{ Width = [int]$lNode.GetAttribute("width") }
+	$st = $lNode.SelectSingleNode("v8ui:style", $ns)
+	$rawLines += @{
+		Width = [int]$lNode.GetAttribute("width")
+		Gap   = $lNode.GetAttribute("gap")
+		Style = if ($st) { $st.InnerText } else { "Solid" }
+	}
 }
 
 # --- 4. Extract format palette ---
+# Формат читаем целиком — «тег → значение», а не выборочные девять полей. Тип значения
+# берём из общей таблицы, она же у компилятора.
+$formatKinds = Get-FormatTagKind
+$formatMl = Get-FormatMlTags
 
 $rawFormats = @()
 foreach ($fmtNode in $root.SelectNodes("d:format", $ns)) {
+	# Совместимость с прежними полями: ими пользуются ширина колонки, высота строки и
+	# признак заполнения — они не часть стиля.
 	$fmt = @{
-		FontIdx = -1
-		LB = -1; TB = -1; RB = -1; BB = -1
-		Width = 0; Height = 0
-		HA = ""; VA = ""
-		Wrap = $false; FillType = ""; DataFormat = ""
+		FontIdx = -1; Width = 0; Height = 0; FillType = ""
+		Props = [ordered]@{}
 	}
 
-	$n = $fmtNode.SelectSingleNode("d:font", $ns)
-	if ($n) { $fmt.FontIdx = [int]$n.InnerText }
-	$n = $fmtNode.SelectSingleNode("d:leftBorder", $ns)
-	if ($n) { $fmt.LB = [int]$n.InnerText }
-	$n = $fmtNode.SelectSingleNode("d:topBorder", $ns)
-	if ($n) { $fmt.TB = [int]$n.InnerText }
-	$n = $fmtNode.SelectSingleNode("d:rightBorder", $ns)
-	if ($n) { $fmt.RB = [int]$n.InnerText }
-	$n = $fmtNode.SelectSingleNode("d:bottomBorder", $ns)
-	if ($n) { $fmt.BB = [int]$n.InnerText }
+	foreach ($child in $fmtNode.ChildNodes) {
+		if ($child.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
+		$tag = $child.get_LocalName()
+		if ($formatMl.ContainsKey($tag)) {
+			$item = $child.SelectSingleNode("v8:item/v8:content", $ns)
+			if ($item -and $item.InnerText) { $fmt.Props[$tag] = $item.InnerText }
+			continue
+		}
+		$val = $child.InnerText
+		if ([string]::IsNullOrWhiteSpace($val)) { continue }
+		if ($formatKinds[$tag] -ceq 'color') { $val = ConvertTo-DslColor $child $val }
+		$fmt.Props[$tag] = $val
+	}
 
-	$n = $fmtNode.SelectSingleNode("d:width", $ns)
-	if ($n) { $fmt.Width = [int]$n.InnerText }
-	$n = $fmtNode.SelectSingleNode("d:height", $ns)
-	if ($n) { $fmt.Height = [int]$n.InnerText }
-
-	$n = $fmtNode.SelectSingleNode("d:horizontalAlignment", $ns)
-	if ($n) { $fmt.HA = $n.InnerText }
-	$n = $fmtNode.SelectSingleNode("d:verticalAlignment", $ns)
-	if ($n) { $fmt.VA = $n.InnerText }
-
-	$n = $fmtNode.SelectSingleNode("d:textPlacement", $ns)
-	if ($n -and $n.InnerText -eq "Wrap") { $fmt.Wrap = $true }
-
-	$n = $fmtNode.SelectSingleNode("d:fillType", $ns)
-	if ($n) { $fmt.FillType = $n.InnerText }
-
-	$n = $fmtNode.SelectSingleNode("d:format/v8:item/v8:content", $ns)
-	if ($n) { $fmt.DataFormat = $n.InnerText }
+	if ($fmt.Props.Contains('font')) { $fmt.FontIdx = [int]$fmt.Props['font'] }
+	if ($fmt.Props.Contains('width')) { $fmt.Width = [int]$fmt.Props['width'] }
+	if ($fmt.Props.Contains('height')) { $fmt.Height = [int]$fmt.Props['height'] }
+	if ($fmt.Props.Contains('fillType')) { $fmt.FillType = $fmt.Props['fillType'] }
 
 	$rawFormats += $fmt
 }
@@ -317,43 +359,60 @@ function Get-DslText {
 
 # --- 9. Build style key (ignoring fillType) ---
 
-function Get-BorderDesc {
+# Свойства формата, которые стилем НЕ являются: ширина принадлежит колонке, высота —
+# строке, вид заполнения выводится из того, чем задано содержимое ячейки.
+$nonStyleTags = @('width', 'height', 'fillType', 'font')
+$borderTags = @('border', 'leftBorder', 'topBorder', 'rightBorder', 'bottomBorder')
+
+function ConvertTo-DslLine {
+	# Ссылку в палитру разворачиваем в описание линии. Ширина 1 подразумевается, поэтому
+	# обычная линия пишется просто именем стиля.
+	param($idx)
+	$i = [int]$idx
+	if ($i -lt 0 -or $i -ge $rawLines.Count) { return "Solid" }
+	$ln = $rawLines[$i]
+	$out = [ordered]@{ style = $ln.Style }
+	if ($ln.Width -ne 1) { $out['width'] = $ln.Width }
+	if ($ln.Gap -ceq 'true') { $out['gap'] = $true }
+	if ($out.Count -eq 1) { return $ln.Style }
+	return $out
+}
+
+function Get-StyleProps {
+	# Свойства формата, попадающие в стиль, — в каноническом порядке тегов.
 	param($fmt)
-	if (-not $fmt) { return @{ Border = "none"; Thick = $false } }
-
-	$lb = $fmt.LB -ge 0; $tb = $fmt.TB -ge 0
-	$rb = $fmt.RB -ge 0; $bb = $fmt.BB -ge 0
-
-	if (-not $lb -and -not $tb -and -not $rb -and -not $bb) {
-		return @{ Border = "none"; Thick = $false }
-	}
-
-	$thick = $false
-	foreach ($bIdx in @($fmt.LB, $fmt.TB, $fmt.RB, $fmt.BB)) {
-		if ($bIdx -ge 0 -and $bIdx -lt $rawLines.Count -and $rawLines[$bIdx].Width -ge 2) {
-			$thick = $true; break
+	$out = [ordered]@{}
+	if (-not $fmt) { return $out }
+	foreach ($tag in $fmt.Props.Keys) {
+		if ($nonStyleTags -ccontains $tag) { continue }
+		$val = $fmt.Props[$tag]
+		if ($borderTags -ccontains $tag) {
+			$out[$tag] = ConvertTo-DslLine $val
+		} elseif ($formatKinds[$tag] -ceq 'bool') {
+			$out[$tag] = ($val -ceq 'true')
+		} elseif ($formatKinds[$tag] -ceq 'int') {
+			$out[$tag] = [int]$val
+		} else {
+			$out[$tag] = $val
 		}
 	}
-
-	if ($lb -and $tb -and $rb -and $bb) {
-		return @{ Border = "all"; Thick = $thick }
-	}
-
-	$sides = @()
-	if ($tb) { $sides += "top" }
-	if ($bb) { $sides += "bottom" }
-	if ($lb) { $sides += "left" }
-	if ($rb) { $sides += "right" }
-
-	return @{ Border = ($sides -join ","); Thick = $thick }
+	return $out
 }
 
 function Get-StyleKey {
 	param($fmt)
 	if (-not $fmt) { return "empty" }
 	$fi = if ($fmt.FontIdx -ge 0) { $fmt.FontIdx } else { 0 }
-	$bd = Get-BorderDesc $fmt
-	return "f=$fi|b=$($bd.Border)|bw=$($bd.Thick)|ha=$($fmt.HA)|va=$($fmt.VA)|wr=$($fmt.Wrap)|df=$($fmt.DataFormat)"
+	$parts = @("f=$fi")
+	$props = Get-StyleProps $fmt
+	foreach ($tag in $props.Keys) {
+		$v = $props[$tag]
+		if ($v -is [System.Collections.IDictionary]) {
+			$v = (($v.Keys | ForEach-Object { "$_=$($v[$_])" }) -join ',')
+		}
+		$parts += "$tag=$v"
+	}
+	return ($parts -join '|')
 }
 
 # --- 10. Name fonts ---
@@ -435,28 +494,36 @@ foreach ($r in $rowData.Values) {
 	}
 }
 
+# Имя стиля — читаемая метка по самым заметным свойствам. Полнота тут не нужна:
+# различает стили ключ, имя лишь помогает автору ориентироваться.
 function Name-Style {
 	param($fmt)
 	if (-not $fmt) { return "default" }
 	$parts = @()
+	$props = Get-StyleProps $fmt
 
 	$fi = if ($fmt.FontIdx -ge 0) { $fmt.FontIdx } else { 0 }
 	if ($fontNames.ContainsKey($fi) -and $fontNames[$fi] -ne "default") {
 		$parts += $fontNames[$fi]
 	}
 
-	$bd = Get-BorderDesc $fmt
-	if ($bd.Border -ne "none") {
-		if ($bd.Border -eq "all") { $parts += "bordered" }
-		else { $parts += "border-$($bd.Border)" }
+	if ($props.Contains('border')) {
+		$parts += "bordered"
+	} else {
+		$sides = @()
+		foreach ($s in @('leftBorder', 'topBorder', 'rightBorder', 'bottomBorder')) {
+			if ($props.Contains($s)) { $sides += $s.Substring(0, $s.Length - 6) }
+		}
+		if ($sides.Count -gt 0) { $parts += "border-$($sides -join ',')" }
 	}
 
-	if ($fmt.HA -eq "Center") { $parts += "center" }
-	elseif ($fmt.HA -eq "Right") { $parts += "right" }
-	if ($fmt.VA -eq "Center") { $parts += "vcenter" }
-	elseif ($fmt.VA -eq "Top") { $parts += "vtop" }
-	if ($fmt.Wrap) { $parts += "wrap" }
-	if ($fmt.DataFormat) { $parts += "fmt" }
+	if ($props['horizontalAlignment'] -ceq "Center") { $parts += "center" }
+	elseif ($props['horizontalAlignment'] -ceq "Right") { $parts += "right" }
+	if ($props['verticalAlignment'] -ceq "Center") { $parts += "vcenter" }
+	elseif ($props['verticalAlignment'] -ceq "Top") { $parts += "vtop" }
+	if ($props['textPlacement'] -ceq "Wrap") { $parts += "wrap" }
+	if ($props.Contains('backColor')) { $parts += "bg" }
+	if ($props.Contains('format')) { $parts += "fmt" }
 
 	if ($parts.Count -eq 0) { return "default" }
 	return ($parts -join "-")
@@ -479,21 +546,8 @@ foreach ($key in $styleKeys.Keys) {
 	if ($fontNames.ContainsKey($fi) -and $fontNames[$fi] -ne "default") {
 		$sDef["font"] = $fontNames[$fi]
 	}
-	if ($fmt.HA) {
-		$a = switch ($fmt.HA) { "Left" { "left" } "Center" { "center" } "Right" { "right" } }
-		if ($a) { $sDef["align"] = $a }
-	}
-	if ($fmt.VA) {
-		$a = switch ($fmt.VA) { "Top" { "top" } "Center" { "center" } }
-		if ($a) { $sDef["valign"] = $a }
-	}
-	$bd = Get-BorderDesc $fmt
-	if ($bd.Border -ne "none") {
-		$sDef["border"] = $bd.Border
-		if ($bd.Thick) { $sDef["borderWidth"] = "thick" }
-	}
-	if ($fmt.Wrap) { $sDef["wrap"] = $true }
-	if ($fmt.DataFormat) { $sDef["format"] = $fmt.DataFormat }
+	$props = Get-StyleProps $fmt
+	foreach ($tag in $props.Keys) { $sDef[$tag] = $props[$tag] }
 
 	$styleDefs[$name] = $sDef
 }
