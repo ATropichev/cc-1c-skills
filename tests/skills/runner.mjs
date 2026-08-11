@@ -275,7 +275,10 @@ function buildArgs(skillConfig, caseData, workDir, inputFilePath, runtime) {
 
     switch (mapping.from) {
       case 'inputFile':
-        args.push(inputFilePath);
+        // inputFrom: взять вход из файла в workDir, а не из case.input. Нужно, когда вход
+        // производит preRun (например, декомпилятор) — case.input пишется ПОСЛЕ preRun и
+        // затёр бы его.
+        args.push(caseData.inputFrom ? join(workDir, caseData.inputFrom) : inputFilePath);
         break;
       case 'workDir':
         args.push(workDir);
@@ -407,13 +410,36 @@ function checkFileContains(workDir, spec, expectPresent) {
 // поэтому он ошибка, а не игнор.
 const KNOWN_EXPECT_KEYS = new Set([
   'files', 'stdoutContains', 'stdoutNotContains', 'preserves',
-  'fileContains', 'fileNotContains',
+  'fileContains', 'fileNotContains', 'filesEqual',
 ]);
 
 function checkExpectKeys(caseData) {
   if (!caseData.expect) return [];
   const unknown = Object.keys(caseData.expect).filter(k => !KNOWN_EXPECT_KEYS.has(k));
   return unknown.map(k => `expect.${k}: раннер такого ключа не знает — кейс ничего не проверяет`);
+}
+
+// ─── Побайтовое равенство двух файлов ───────────────────────────────────────
+// Нужно там, где эталон — не наш снэпшот, а файл, произведённый ПЛАТФОРМОЙ: снэпшот
+// такую проверку не заменяет, потому что --update-snapshots молча принял бы дрейф.
+// spec: { actual, expected }. Пути относительно workDir.
+function checkFilesEqual(workDir, spec) {
+  const errs = [];
+  const a = join(workDir, spec.actual);
+  const b = join(workDir, spec.expected);
+  if (!existsSync(a)) { errs.push(`filesEqual: нет файла ${spec.actual}`); return errs; }
+  if (!existsSync(b)) { errs.push(`filesEqual: нет файла ${spec.expected}`); return errs; }
+  const bufA = readFileSync(a);
+  const bufB = readFileSync(b);
+  if (bufA.equals(bufB)) return errs;
+  const linesA = bufA.toString('utf8').split('\n');
+  const linesB = bufB.toString('utf8').split('\n');
+  let i = 0;
+  while (i < linesA.length && i < linesB.length && linesA[i] === linesB[i]) i++;
+  errs.push(`filesEqual: ${spec.actual} != ${spec.expected}, первое расхождение в строке ${i + 1}`
+    + `\n        ожидалось: ${(linesB[i] ?? '<конец файла>').trim()}`
+    + `\n        получено:  ${(linesA[i] ?? '<конец файла>').trim()}`);
+  return errs;
 }
 
 // ─── Byte-style preservation check (round-trip #44/#46/#47, канон #57) ──────
@@ -805,6 +831,11 @@ async function runCaseAsync(testCase, opts) {
         const specs = Array.isArray(caseData.expect.preserves)
           ? caseData.expect.preserves : [caseData.expect.preserves];
         for (const spec of specs) errors.push(...checkPreserves(workDir, spec));
+      }
+      if (caseData.expect?.filesEqual) {
+        const specs = Array.isArray(caseData.expect.filesEqual)
+          ? caseData.expect.filesEqual : [caseData.expect.filesEqual];
+        for (const spec of specs) errors.push(...checkFilesEqual(workDir, spec));
       }
       if (caseData.expect?.fileContains) {
         const specs = Array.isArray(caseData.expect.fileContains)
