@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.27 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.28 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -480,14 +480,19 @@ function Resolve-Style {
 		}
 	}
 
-	return @{
-		FontIdx      = $fontIdx
-		LB           = $lb; TB = $tb; RB = $rb; BB = $bb
-		HA           = $ha; VA = $va
-		Wrap         = $wrap
-		FillType     = $fillType
-		NumberFormat = $nf
-	}
+	# Набор свойств формата — «тег платформы → значение», только заданные. Порядок вставки
+	# роли не играет: и ключ дедупликации, и эмиссия идут по каноническому порядку тегов.
+	$props = @{ font = $fontIdx }
+	if ($lb -ge 0) { $props['leftBorder'] = $lb }
+	if ($tb -ge 0) { $props['topBorder'] = $tb }
+	if ($rb -ge 0) { $props['rightBorder'] = $rb }
+	if ($bb -ge 0) { $props['bottomBorder'] = $bb }
+	if ($ha) { $props['horizontalAlignment'] = $ha }
+	if ($va) { $props['verticalAlignment'] = $va }
+	if ($wrap) { $props['textPlacement'] = 'Wrap' }
+	if ($fillType) { $props['fillType'] = $fillType }
+	if ($nf) { $props['format'] = $nf }
+	return $props
 }
 
 # --- 6. Format palette builder ---
@@ -495,22 +500,45 @@ function Resolve-Style {
 $formatRegistry = [ordered]@{}  # key -> hashtable with properties
 $formatOrder = @()              # ordered keys for index assignment
 
-function Get-FormatKey {
-	param(
-		[int]$fontIdx = -1,
-		[int]$lb = -1, [int]$tb = -1, [int]$rb = -1, [int]$bb = -1,
-		[string]$ha = "", [string]$va = "",
-		[bool]$wrap = $false,
-		[string]$fillType = "",
-		[string]$numberFormat = "",
-		[int]$width = -1,
-		[int]$height = -1
+# Канонический порядок тегов внутри <format>. Снят с корпуса: 766 960 форматов, ни один
+# его не нарушает — платформа пишет теги строго в этой последовательности, и от неё
+# зависит побайтовое совпадение с выгрузкой.
+function Get-FormatTagOrder {
+	return @(
+	'print', 'drawingBorder',
+	'drawingHaveLeftBorder', 'drawingHaveTopBorder', 'drawingHaveRightBorder', 'drawingHaveBottomBorder',
+	'font', 'leftBorder', 'topBorder', 'rightBorder', 'bottomBorder', 'border',
+	'height', 'borderColor', 'width', 'autoWidthCalculation', 'widthWeightFactor',
+	'horizontalAlignment', 'verticalAlignment', 'textColor', 'backColor',
+	'patternColor', 'pattern', 'textPlacement', 'fillType', 'protection', 'hidden',
+	'textOrientation', 'detailsUse', 'bySelectedColumns', 'markNegatives',
+	'containsValue', 'valueType', 'format', 'controlType', 'hyperLink',
+	'autoMarkIncomplete', 'indent', 'autoIndent', 'editFormat', 'columnSizeChange',
+	'mask', 'picIndex', 'pictureSizeMode', 'picHorizontalAlignment',
+	'picVerticalAlignment', 'textPosition'
 	)
-	return "f=$fontIdx|lb=$lb|tb=$tb|rb=$rb|bb=$bb|ha=$ha|va=$va|wr=$wrap|ft=$fillType|nf=$numberFormat|w=$width|h=$height"
+}
+
+# Теги, значение которых — многоязычная строка (<v8:item> на язык), а не скаляр.
+function Get-FormatMlTags {
+	return @{ 'format' = $true; 'editFormat' = $true; 'mask' = $true }
+}
+
+$script:formatTagOrder = Get-FormatTagOrder
+$script:formatMlTags = Get-FormatMlTags
+
+function Get-FormatKey {
+	param([hashtable]$props)
+	$parts = @()
+	foreach ($tag in $script:formatTagOrder) {
+		if ($props.ContainsKey($tag)) { $parts += "$tag=$($props[$tag])" }
+	}
+	return ($parts -join '|')
 }
 
 function Register-Format {
-	param([string]$key, [hashtable]$props)
+	param([hashtable]$props)
+	$key = Get-FormatKey $props
 	if (-not $script:formatRegistry.Contains($key)) {
 		$script:formatRegistry[$key] = $props
 		$script:formatOrder += $key
@@ -525,16 +553,14 @@ function Register-Format {
 }
 
 # 6a. Default width format
-$defaultFormatKey = Get-FormatKey -width $defaultWidth
-$defaultFormatIndex = Register-Format -key $defaultFormatKey -props @{ Width = $defaultWidth }
+$defaultFormatIndex = Register-Format @{ width = $defaultWidth }
 
 # 6b. Column width formats — по одной карте на каждую колоночную раскладку
 foreach ($layout in $columnLayouts) {
 	$map = @{}  # 1-based col -> format index
 	foreach ($col in ($layout.Widths.Keys | Sort-Object)) {
 		$w = $layout.Widths[$col]
-		$key = Get-FormatKey -width $w
-		$map[[int]$col] = Register-Format -key $key -props @{ Width = $w }
+		$map[[int]$col] = Register-Format @{ width = $w }
 	}
 	$layout.FormatMap = $map
 }
@@ -606,27 +632,10 @@ function Register-CellFormat {
 	# платформа: в её палитре у неоформленного макета один формат (ширина колонки), и все
 	# ячейки указывают на него. Мы же заводили каждой свой формат с <font>0</font>, где ноль
 	# означает «шрифт не задан», то есть формат был пуст по смыслу.
-	if ($resolved.FontIdx -eq $fontMap["default"] -and
-		$resolved.LB -lt 0 -and $resolved.TB -lt 0 -and $resolved.RB -lt 0 -and $resolved.BB -lt 0 -and
-		-not $resolved.HA -and -not $resolved.VA -and -not $resolved.Wrap -and
-		-not $resolved.FillType -and -not $resolved.NumberFormat) {
+	if ($resolved.Count -eq 1 -and $resolved['font'] -eq $fontMap["default"]) {
 		return $script:defaultFormatIndex
 	}
-	$key = Get-FormatKey -fontIdx $resolved.FontIdx `
-		-lb $resolved.LB -tb $resolved.TB -rb $resolved.RB -bb $resolved.BB `
-		-ha $resolved.HA -va $resolved.VA `
-		-wrap $resolved.Wrap -fillType $resolved.FillType `
-		-numberFormat $resolved.NumberFormat
-	$props = @{
-		FontIdx      = $resolved.FontIdx
-		LB           = $resolved.LB; TB = $resolved.TB
-		RB           = $resolved.RB; BB = $resolved.BB
-		HA           = $resolved.HA; VA = $resolved.VA
-		Wrap         = $resolved.Wrap
-		FillType     = $resolved.FillType
-		NumberFormat = $resolved.NumberFormat
-	}
-	return Register-Format -key $key -props $props
+	return Register-Format $resolved
 }
 
 # --- 5.5. Шорткат строк: строка-массив ячеек ---
@@ -792,8 +801,7 @@ foreach ($area in $def.areas) {
 
 		# Row height format
 		if ($row.height) {
-			$hKey = Get-FormatKey -height ([int]$row.height)
-			Register-Format -key $hKey -props @{ Height = [int]$row.height } | Out-Null
+			Register-Format @{ height = [int]$row.height } | Out-Null
 		}
 
 		# rowStyle gap-fill format (no content → no fillType)
@@ -955,13 +963,7 @@ foreach ($area in $def.areas) {
 		# Determine row height format
 		$rowFormatIdx = 0
 		if ($row.height) {
-			$hKey = Get-FormatKey -height ([int]$row.height)
-			# Find format index for this key
-			$rIdx = 0
-			foreach ($k in $formatRegistry.Keys) {
-				$rIdx++
-				if ($k -eq $hKey) { $rowFormatIdx = $rIdx; break }
-			}
+			$rowFormatIdx = Register-Format @{ height = [int]$row.height }
 		}
 
 		if ($row.cells -and $row.cells.Count -gt 0) {
@@ -1334,46 +1336,19 @@ foreach ($key in $formatRegistry.Keys) {
 	$fmt = $formatRegistry[$key]
 	X "`t<format>"
 
-	if ($fmt.FontIdx -ne $null -and $fmt.FontIdx -ge 0) {
-		X "`t`t<font>$($fmt.FontIdx)</font>"
-	}
-	if ($fmt.LB -ne $null -and $fmt.LB -ge 0) {
-		X "`t`t<leftBorder>$($fmt.LB)</leftBorder>"
-	}
-	if ($fmt.TB -ne $null -and $fmt.TB -ge 0) {
-		X "`t`t<topBorder>$($fmt.TB)</topBorder>"
-	}
-	if ($fmt.RB -ne $null -and $fmt.RB -ge 0) {
-		X "`t`t<rightBorder>$($fmt.RB)</rightBorder>"
-	}
-	if ($fmt.BB -ne $null -and $fmt.BB -ge 0) {
-		X "`t`t<bottomBorder>$($fmt.BB)</bottomBorder>"
-	}
-	if ($fmt.Width) {
-		X "`t`t<width>$($fmt.Width)</width>"
-	}
-	if ($fmt.Height) {
-		X "`t`t<height>$($fmt.Height)</height>"
-	}
-	if ($fmt.HA) {
-		X "`t`t<horizontalAlignment>$($fmt.HA)</horizontalAlignment>"
-	}
-	if ($fmt.VA) {
-		X "`t`t<verticalAlignment>$($fmt.VA)</verticalAlignment>"
-	}
-	if ($fmt.Wrap -eq $true) {
-		X "`t`t<textPlacement>Wrap</textPlacement>"
-	}
-	if ($fmt.FillType) {
-		X "`t`t<fillType>$($fmt.FillType)</fillType>"
-	}
-	if ($fmt.NumberFormat) {
-		X "`t`t<format>"
-		X "`t`t`t<v8:item>"
-		X "`t`t`t`t<v8:lang>ru</v8:lang>"
-		X "`t`t`t`t<v8:content>$(Esc-XmlText $fmt.NumberFormat)</v8:content>"
-		X "`t`t`t</v8:item>"
-		X "`t`t</format>"
+	foreach ($tag in $script:formatTagOrder) {
+		if (-not $fmt.ContainsKey($tag)) { continue }
+		$val = $fmt[$tag]
+		if ($script:formatMlTags.ContainsKey($tag)) {
+			X "`t`t<$tag>"
+			X "`t`t`t<v8:item>"
+			X "`t`t`t`t<v8:lang>ru</v8:lang>"
+			X "`t`t`t`t<v8:content>$(Esc-XmlText $val)</v8:content>"
+			X "`t`t`t</v8:item>"
+			X "`t`t</$tag>"
+		} else {
+			X "`t`t<$tag>$val</$tag>"
+		}
 	}
 
 	X "`t</format>"

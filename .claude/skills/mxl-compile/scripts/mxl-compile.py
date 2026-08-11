@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.27 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.28 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -326,6 +326,38 @@ def parse_col_value(val):
         return None
 
 
+def format_tag_order():
+    """Канонический порядок тегов внутри <format>. Снят с корпуса: 766 960 форматов, ни один
+    его не нарушает — платформа пишет теги строго в этой последовательности, и от неё
+    зависит побайтовое совпадение с выгрузкой."""
+    return [
+        'print', 'drawingBorder',
+        'drawingHaveLeftBorder', 'drawingHaveTopBorder', 'drawingHaveRightBorder', 'drawingHaveBottomBorder',
+        'font', 'leftBorder', 'topBorder', 'rightBorder', 'bottomBorder', 'border',
+        'height', 'borderColor', 'width', 'autoWidthCalculation', 'widthWeightFactor',
+        'horizontalAlignment', 'verticalAlignment', 'textColor', 'backColor',
+        'patternColor', 'pattern', 'textPlacement', 'fillType', 'protection', 'hidden',
+        'textOrientation', 'detailsUse', 'bySelectedColumns', 'markNegatives',
+        'containsValue', 'valueType', 'format', 'controlType', 'hyperLink',
+        'autoMarkIncomplete', 'indent', 'autoIndent', 'editFormat', 'columnSizeChange',
+        'mask', 'picIndex', 'pictureSizeMode', 'picHorizontalAlignment',
+        'picVerticalAlignment', 'textPosition',
+    ]
+
+
+def format_ml_tags():
+    """Теги, значение которых — многоязычная строка (<v8:item> на язык), а не скаляр."""
+    return {'format': True, 'editFormat': True, 'mask': True}
+
+
+def get_format_key(props):
+    parts = []
+    for tag in format_tag_order():
+        if tag in props:
+            parts.append(f'{tag}={props[tag]}')
+    return '|'.join(parts)
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -568,24 +600,35 @@ def main():
                 if style.get('format'):
                     nf = style['format']
 
-        return {
-            'FontIdx': font_idx,
-            'LB': lb, 'TB': tb, 'RB': rb, 'BB': bb,
-            'HA': ha, 'VA': va,
-            'Wrap': wrap,
-            'FillType': fill_type,
-            'NumberFormat': nf,
-        }
+        # Набор свойств формата — «тег платформы → значение», только заданные. Порядок вставки
+        # роли не играет: и ключ дедупликации, и эмиссия идут по каноническому порядку тегов.
+        props = {'font': font_idx}
+        if lb >= 0:
+            props['leftBorder'] = lb
+        if tb >= 0:
+            props['topBorder'] = tb
+        if rb >= 0:
+            props['rightBorder'] = rb
+        if bb >= 0:
+            props['bottomBorder'] = bb
+        if ha:
+            props['horizontalAlignment'] = ha
+        if va:
+            props['verticalAlignment'] = va
+        if wrap:
+            props['textPlacement'] = 'Wrap'
+        if fill_type:
+            props['fillType'] = fill_type
+        if nf:
+            props['format'] = nf
+        return props
 
     # --- 6. Format palette builder ---
     format_registry = {}   # key -> props
     format_order = []       # ordered keys for index assignment
 
-    def get_format_key(font_idx=-1, lb=-1, tb=-1, rb=-1, bb=-1, ha='', va='',
-                       wrap=False, fill_type='', number_format='', width=-1, height=-1):
-        return f'f={font_idx}|lb={lb}|tb={tb}|rb={rb}|bb={bb}|ha={ha}|va={va}|wr={wrap}|ft={fill_type}|nf={number_format}|w={width}|h={height}'
-
-    def register_format(key, props):
+    def register_format(props):
+        key = get_format_key(props)
         if key not in format_registry:
             format_registry[key] = props
             format_order.append(key)
@@ -593,15 +636,14 @@ def main():
         return format_order.index(key) + 1
 
     # 6a. Default width format
-    default_format_key = get_format_key(width=default_width)
-    default_format_index = register_format(default_format_key, {'Width': default_width})
+    default_format_index = register_format({'width': default_width})
 
     # 6b. Column width formats — по одной карте на каждую колоночную раскладку
     for layout in column_layouts:
         fmap = {}  # 1-based col -> format index
         for col in sorted(layout['Widths']):
             w = layout['Widths'][col]
-            fmap[int(col)] = register_format(get_format_key(width=w), {'Width': w})
+            fmap[int(col)] = register_format({'width': w})
         layout['FormatMap'] = fmap
     col_format_map = column_layouts[0]['FormatMap']
 
@@ -644,28 +686,9 @@ def main():
         # платформа: в её палитре у неоформленного макета один формат (ширина колонки), и все
         # ячейки указывают на него. Мы же заводили каждой свой формат с <font>0</font>, где ноль
         # означает «шрифт не задан», то есть формат был пуст по смыслу.
-        if (resolved['FontIdx'] == font_map.get('default', 0)
-                and resolved['LB'] < 0 and resolved['TB'] < 0
-                and resolved['RB'] < 0 and resolved['BB'] < 0
-                and not resolved['HA'] and not resolved['VA'] and not resolved['Wrap']
-                and not resolved['FillType'] and not resolved['NumberFormat']):
+        if len(resolved) == 1 and resolved.get('font') == font_map.get('default', 0):
             return default_format_index
-        key = get_format_key(
-            font_idx=resolved['FontIdx'],
-            lb=resolved['LB'], tb=resolved['TB'], rb=resolved['RB'], bb=resolved['BB'],
-            ha=resolved['HA'], va=resolved['VA'],
-            wrap=resolved['Wrap'], fill_type=resolved['FillType'],
-            number_format=resolved['NumberFormat'])
-        props = {
-            'FontIdx': resolved['FontIdx'],
-            'LB': resolved['LB'], 'TB': resolved['TB'],
-            'RB': resolved['RB'], 'BB': resolved['BB'],
-            'HA': resolved['HA'], 'VA': resolved['VA'],
-            'Wrap': resolved['Wrap'],
-            'FillType': resolved['FillType'],
-            'NumberFormat': resolved['NumberFormat'],
-        }
-        return register_format(key, props)
+        return register_format(resolved)
 
     # --- 5.5. Шорткат строк: строка-массив ячеек ---
     # Та же форма, что у макетов СКД (skd-compile): позиция ячейки = индекс в массиве,
@@ -814,8 +837,7 @@ def main():
 
             # Row height format
             if row.get('height'):
-                h_key = get_format_key(height=int(row['height']))
-                register_format(h_key, {'Height': int(row['height'])})
+                register_format({'height': int(row['height'])})
 
             # rowStyle gap-fill format
             if row.get('rowStyle'):
@@ -962,9 +984,7 @@ def main():
             # Determine row height format
             row_format_idx = 0
             if row.get('height'):
-                h_key = get_format_key(height=int(row['height']))
-                if h_key in format_registry:
-                    row_format_idx = format_order.index(h_key) + 1
+                row_format_idx = register_format({'height': int(row['height'])})
 
             if row.get('cells') and len(row['cells']) > 0:
                 row_has_content = True
@@ -1292,35 +1312,20 @@ def main():
         fmt = format_registry[key]
         lines.append('\t<format>')
 
-        if fmt.get('FontIdx') is not None and fmt.get('FontIdx', -1) >= 0:
-            lines.append(f'\t\t<font>{fmt["FontIdx"]}</font>')
-        if fmt.get('LB') is not None and fmt.get('LB', -1) >= 0:
-            lines.append(f'\t\t<leftBorder>{fmt["LB"]}</leftBorder>')
-        if fmt.get('TB') is not None and fmt.get('TB', -1) >= 0:
-            lines.append(f'\t\t<topBorder>{fmt["TB"]}</topBorder>')
-        if fmt.get('RB') is not None and fmt.get('RB', -1) >= 0:
-            lines.append(f'\t\t<rightBorder>{fmt["RB"]}</rightBorder>')
-        if fmt.get('BB') is not None and fmt.get('BB', -1) >= 0:
-            lines.append(f'\t\t<bottomBorder>{fmt["BB"]}</bottomBorder>')
-        if fmt.get('Width'):
-            lines.append(f'\t\t<width>{fmt["Width"]}</width>')
-        if fmt.get('Height'):
-            lines.append(f'\t\t<height>{fmt["Height"]}</height>')
-        if fmt.get('HA'):
-            lines.append(f'\t\t<horizontalAlignment>{fmt["HA"]}</horizontalAlignment>')
-        if fmt.get('VA'):
-            lines.append(f'\t\t<verticalAlignment>{fmt["VA"]}</verticalAlignment>')
-        if fmt.get('Wrap') is True:
-            lines.append('\t\t<textPlacement>Wrap</textPlacement>')
-        if fmt.get('FillType'):
-            lines.append(f'\t\t<fillType>{fmt["FillType"]}</fillType>')
-        if fmt.get('NumberFormat'):
-            lines.append('\t\t<format>')
-            lines.append('\t\t\t<v8:item>')
-            lines.append('\t\t\t\t<v8:lang>ru</v8:lang>')
-            lines.append(f'\t\t\t\t<v8:content>{esc_xml_text(fmt["NumberFormat"])}</v8:content>')
-            lines.append('\t\t\t</v8:item>')
-            lines.append('\t\t</format>')
+        ml_tags = format_ml_tags()
+        for tag in format_tag_order():
+            if tag not in fmt:
+                continue
+            val = fmt[tag]
+            if tag in ml_tags:
+                lines.append(f'\t\t<{tag}>')
+                lines.append('\t\t\t<v8:item>')
+                lines.append('\t\t\t\t<v8:lang>ru</v8:lang>')
+                lines.append(f'\t\t\t\t<v8:content>{esc_xml_text(val)}</v8:content>')
+                lines.append('\t\t\t</v8:item>')
+                lines.append(f'\t\t</{tag}>')
+            else:
+                lines.append(f'\t\t<{tag}>{val}</{tag}>')
 
         lines.append('\t</format>')
 
