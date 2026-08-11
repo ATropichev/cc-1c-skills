@@ -27,27 +27,28 @@
 	<rowsItem>
 		<index>1</index>
 		<row>
+			<formatIndex>4</formatIndex>
 			<c>
 				<c>
-					<f>5</f>
+					<f>6</f>
 					<parameter>Номер</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>5</f>
+					<f>6</f>
 					<parameter>Товар</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>7</f>
 					<parameter>Количество</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>7</f>
 					<parameter>Сумма</parameter>
 				</c>
 			</c>
@@ -59,7 +60,7 @@
 			<c>
 				<i>2</i>
 				<c>
-					<f>7</f>
+					<f>8</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -70,7 +71,7 @@
 			</c>
 			<c>
 				<c>
-					<f>8</f>
+					<f>9</f>
 					<parameter>Всего</parameter>
 				</c>
 			</c>
@@ -129,6 +130,9 @@
 	<format>
 		<font>0</font>
 		<fillType>Parameter</fillType>
+	</format>
+	<format>
+		<border>0</border>
 	</format>
 	<format>
 		<font>0</font>

@@ -45,6 +45,7 @@
 	<rowsItem>
 		<index>0</index>
 		<row>
+			<formatIndex>3</formatIndex>
 			<c>
 				<c>
 					<f>3</f>
@@ -105,33 +106,34 @@
 	<rowsItem>
 		<index>1</index>
 		<row>
+			<formatIndex>4</formatIndex>
 			<c>
 				<c>
-					<f>5</f>
+					<f>6</f>
 					<parameter>Номер</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>7</f>
 					<parameter>Описание</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>5</f>
+					<f>6</f>
 					<parameter>ЕдИзм</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>5</f>
+					<f>6</f>
 					<parameter>Количество</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>7</f>
 					<parameter>Сумма</parameter>
 				</c>
 			</c>
@@ -176,6 +178,9 @@
 		<font>1</font>
 		<border>0</border>
 		<horizontalAlignment>Center</horizontalAlignment>
+	</format>
+	<format>
+		<border>0</border>
 	</format>
 	<format>
 		<font>0</font>

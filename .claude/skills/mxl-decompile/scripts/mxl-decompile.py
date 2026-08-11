@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.12 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.13 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -659,6 +659,31 @@ def main():
                 style_keys[key] = fmt
             format_to_style_key[cell["FormatIdx"]] = key
 
+    def row_style_fmt(fmt):
+        """Оформление строки без её собственных свойств: скрытие уезжает инлайном к height,
+        поэтому в именованный стиль попадать не должно."""
+        if not fmt:
+            return None
+        props = style_props(fmt)
+        props.pop("hidden", None)
+        if not props:
+            return None
+        reduced = OrderedDict()
+        for tag, raw in fmt["Props"].items():
+            if tag != "hidden":
+                reduced[tag] = raw
+        return {"FontIdx": fmt["FontIdx"], "Width": 0, "Height": 0,
+                "FillType": "", "Props": reduced}
+
+    # Строка — тоже владелец формата: её оформление становится именованным стилем.
+    for rd in row_data.values():
+        rf = row_style_fmt(get_format(rd["FormatIdx"])) if rd["FormatIdx"] > 0 else None
+        if not rf:
+            continue
+        key = get_style_key(rf)
+        if key not in style_keys:
+            style_keys[key] = rf
+
     # Колонка — третий владелец формата, её оформление тоже становится именованным стилем.
     for cs in column_sets:
         for fi in cs["FmtIdx"].values():
@@ -870,11 +895,15 @@ def main():
 
             dsl_row = OrderedDict()
 
-            # Row height
-            if rd["FormatIdx"] > 0:
-                row_fmt = get_format(rd["FormatIdx"])
-                if row_fmt and row_fmt["Height"] > 0:
-                    dsl_row["height"] = row_fmt["Height"]
+            # Формат самой строки: высота и скрытие — её собственные свойства (у ячейки
+            # таких нет), остальное — оформление, оно же может лежать и на ячейках.
+            row_fmt = get_format(rd["FormatIdx"]) if rd["FormatIdx"] > 0 else None
+            row_own = style_props(row_fmt) if row_fmt else OrderedDict()
+            row_hidden = row_own.pop("hidden", False)
+            if row_fmt and row_fmt["Height"] > 0:
+                dsl_row["height"] = row_fmt["Height"]
+            if row_hidden:
+                dsl_row["hidden"] = True
 
             # Separate content cells from gap-fill cells
             content_cells = []
@@ -904,8 +933,25 @@ def main():
                     if row_style_key in style_names:
                         row_style_name = style_names[row_style_key]
 
-            if row_style_name and row_style_name != "default":
-                dsl_row["rowStyle"] = row_style_name
+            # Стиль строки и стиль ячеек — независимые вещи: платформа их часто, но не всегда
+            # пишет одинаковыми. Один ключ с модификатором apply покрывает все три случая.
+            own_fmt = row_style_fmt(row_fmt)
+            own_key = get_style_key(own_fmt) if own_fmt else None
+            own_name = style_names.get(own_key) if own_key else None
+            cells_name = row_style_name if row_style_name and row_style_name != "default" else None
+
+            if own_name and cells_name and own_key == row_style_key:
+                dsl_row["rowStyle"] = own_name
+            elif own_name and not cells_name:
+                dsl_row["rowStyle"] = OrderedDict([("style", own_name), ("apply", "row")])
+            elif cells_name and not own_name:
+                dsl_row["rowStyle"] = OrderedDict([("style", cells_name), ("apply", "cells")])
+            elif own_name and cells_name:
+                # Стили разные — строке своё, ячейкам своё; ячейкам стиль раздаётся ниже
+                # поячеечно, поэтому здесь пишем только строку.
+                dsl_row["rowStyle"] = OrderedDict([("style", own_name), ("apply", "row")])
+                row_style_name = None
+                row_style_key = None
 
             # Build cell list
             dsl_cells = []
@@ -1075,7 +1121,8 @@ def main():
                 cell_list = r
             else:
                 if "rowStyle" in r:
-                    used_styles.add(r["rowStyle"])
+                    rs = r["rowStyle"]
+                    used_styles.add(rs["style"] if isinstance(rs, dict) else rs)
                 cell_list = r.get("cells") or []
             # Список ячеек может быть позиционным: строки, None и маркеры стиля не несут,
             # стиль бывает только у объектного элемента.

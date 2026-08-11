@@ -58,7 +58,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
   fonts: { name: { face, size, bold, italic, underline, strikeout } },
   styles: { name: { font, horizontalAlignment, verticalAlignment, textPlacement,
                     backColor, textColor, border, borderColor, format, hidden } },
-  areas: [{ name, columnSet, rows: [{ height, rowStyle, cells: [
+  areas: [{ name, columnSet, rows: [{ height, hidden, rowStyle, cells: [
     { col, span, rowspan, style, param, detail, text, template }
   ]}]}],
   namedAreas: [{ name, rows, cols }],
@@ -73,7 +73,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 - `columnSet` у области — ссылка на раскладку из `columnSets`, когда группе строк нужны свои ширины колонок; без него действует документная раскладка
 - Ключ стиля — имя свойства как в выгрузке; `columnStyles` вешает стиль на колонку так же, как `style` на ячейку
 - Рамка — `border` (все стороны) или `leftBorder`/`topBorder`/`rightBorder`/`bottomBorder`; значение `"Solid"` либо `{ style, width }`
-- `rowStyle` — автозаполнение пустот стилем (рамки по всей ширине)
+- `rowStyle` — стиль строки: ложится и на строку, и на все её колонки, заполняя пустоты (рамки по всей ширине)
+- `height` и `hidden` — собственные свойства строки, у ячейки таких нет
 - `empty` в строке — шорткат для N подряд пустых строк (`{ "empty": 3 }` = три `{}`)
 - Строку можно писать массивом ячеек — позиция из порядка, `col` не нужен: `"текст"`, `"{Имя}"` — параметр, `">"` — продолжить ячейку слева, `"|"` — сверху, `null` — пропуск колонки
 - `col` — 1-based позиция колонки

@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.32 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.33 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -669,6 +669,39 @@ def main():
             sys.exit(1)
         return {'Style': canon, 'Width': width, 'Gap': gap}
 
+    def row_style_spec(val, where):
+        """Стиль строки: имя строкой либо объект { style, apply }. apply — куда лёг стиль:
+        "both" (умолчание) — и в формат строки, и в форматы ячеек, как пишет платформа, когда
+        автор оформляет строку целиком; "row" — только строке (так хранится, например,
+        скрытие); "cells" — только ячейкам. Модификатор нужен раундтрипу, в описании DSL его нет."""
+        if val is None:
+            return None, 'both'
+        if not isinstance(val, dict):
+            return str(val), 'both'
+        name = str(val.get('style') or '')
+        apply_to = str(val.get('apply') or 'both').lower()
+        if apply_to not in ('both', 'row', 'cells'):
+            print(f"Unknown 'apply' value \"{val.get('apply')}\" ({where})."
+                  f" Allowed: both, row, cells", file=sys.stderr)
+            sys.exit(1)
+        if not name:
+            print(f"rowStyle object requires 'style' ({where})", file=sys.stderr)
+            sys.exit(1)
+        return name, apply_to
+
+    def row_format_props(row):
+        """Формат самой строки: собственные свойства строки (высота, скрытие) плюс стиль
+        строки, если он ложится на строку. Пустой набор = у строки формата нет."""
+        props = {}
+        name, apply_to = row_style_spec(row.get('rowStyle'), 'row')
+        if name and apply_to != 'cells':
+            props = resolve_style(name, '', no_default_font=True)
+        if row.get('height'):
+            props['height'] = int(row['height'])
+        if row.get('hidden') is True:
+            props['hidden'] = 'true'
+        return props
+
     def resolve_style(style_name, fill_type, no_default_font=False):
         # Набор свойств формата — «тег платформы → значение», только заданные. Порядок вставки
         # роли не играет: и ключ дедупликации, и эмиссия идут по каноническому порядку тегов.
@@ -986,18 +1019,23 @@ def main():
             if row.get('empty'):
                 continue
 
-            # Row height format
-            if row.get('height'):
-                register_format({'height': int(row['height'])})
+            # Формат САМОЙ строки: высота и скрытие — её собственные свойства (у ячейки
+            # таких нет), плюс стиль строки, если он ложится на строку.
+            row_props = row_format_props(row)
+            if row_props:
+                register_format(row_props)
+
+            rs_name, rs_apply = row_style_spec(row.get('rowStyle'), 'row')
+            cells_style = None if rs_apply == 'row' else rs_name
 
             # rowStyle gap-fill format
-            if row.get('rowStyle'):
-                register_cell_format(row['rowStyle'], '')
+            if cells_style:
+                register_cell_format(cells_style, '')
 
             # Explicit cell formats
             if row.get('cells'):
                 for cell in row['cells']:
-                    cell_style = cell.get('style') or row.get('rowStyle') or 'default'
+                    cell_style = cell.get('style') or cells_style or 'default'
                     ft = get_fill_type(cell)
                     register_cell_format(cell_style, ft)
 
@@ -1133,9 +1171,14 @@ def main():
             row_cells = []
 
             # Determine row height format
+            # Формат самой строки — высота, скрытие и стиль строки, если он ложится на строку
             row_format_idx = 0
-            if row.get('height'):
-                row_format_idx = register_format({'height': int(row['height'])})
+            row_props = row_format_props(row)
+            if row_props:
+                row_format_idx = register_format(row_props)
+
+            rs_name, rs_apply = row_style_spec(row.get('rowStyle'), 'row')
+            cells_style = None if rs_apply == 'row' else rs_name
 
             if row.get('cells') and len(row['cells']) > 0:
                 row_has_content = True
@@ -1185,7 +1228,7 @@ def main():
                     col_start = int(cell['col'])
                     col_span = int(cell.get('span', 1))
                     rowspan = int(cell.get('rowspan', 1))
-                    cell_style = cell.get('style') or row.get('rowStyle') or 'default'
+                    cell_style = cell.get('style') or cells_style or 'default'
                     ft = get_fill_type(cell)
                     fmt_idx = register_cell_format(cell_style, ft)
 
@@ -1216,8 +1259,8 @@ def main():
                         merges.append(merge)
 
                 # Generate gap-fill cells for rowStyle
-                if row.get('rowStyle'):
-                    gap_fmt_idx = register_cell_format(row['rowStyle'], '')
+                if cells_style:
+                    gap_fmt_idx = register_cell_format(cells_style, '')
                     for c in range(1, total_columns + 1):
                         if c not in occupied_cols:
                             row_cells.append({
@@ -1232,10 +1275,10 @@ def main():
                 # Sort cells by column
                 row_cells.sort(key=lambda x: x['Col'])
 
-            elif row.get('rowStyle'):
+            elif cells_style:
                 # Row with only rowStyle, no explicit cells
                 row_has_content = True
-                gap_fmt_idx = register_cell_format(row['rowStyle'], '')
+                gap_fmt_idx = register_cell_format(cells_style, '')
                 for c in range(1, total_columns + 1):
                     if c in rowspan_occupied:
                         continue

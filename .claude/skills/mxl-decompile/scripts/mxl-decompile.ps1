@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.12 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.13 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -499,6 +499,30 @@ foreach ($r in $rowData.Values) {
 	}
 }
 
+# Оформление строки без её собственных свойств: скрытие уезжает инлайном к height,
+# поэтому в именованный стиль попадать не должно.
+function Get-RowStyleFmt {
+	param($fmt)
+	if (-not $fmt) { return $null }
+	$props = Get-StyleProps $fmt
+	$props.Remove('hidden') | Out-Null
+	if ($props.Count -eq 0) { return $null }
+	$reduced = [ordered]@{}
+	foreach ($tag in $fmt.Props.Keys) {
+		if ($tag -cne 'hidden') { $reduced[$tag] = $fmt.Props[$tag] }
+	}
+	return @{ FontIdx = $fmt.FontIdx; Width = 0; Height = 0; FillType = ""; Props = $reduced }
+}
+
+# Строка — тоже владелец формата: её оформление становится именованным стилем.
+foreach ($rd in $rowData.Values) {
+	if ($rd.FormatIdx -le 0) { continue }
+	$rf = Get-RowStyleFmt (Get-Format $rd.FormatIdx)
+	if (-not $rf) { continue }
+	$key = Get-StyleKey $rf
+	if (-not $styleKeys.Contains($key)) { $styleKeys[$key] = $rf }
+}
+
 # Колонка — третий владелец формата, её оформление тоже становится именованным стилем.
 foreach ($cs in $columnSets) {
 	foreach ($fi in $cs.FmtIdx.Values) {
@@ -740,11 +764,13 @@ foreach ($area in $blocks) {
 
 		$dslRow = [ordered]@{}
 
-		# Row height
-		if ($rd.FormatIdx -gt 0) {
-			$rowFmt = Get-Format $rd.FormatIdx
-			if ($rowFmt -and $rowFmt.Height -gt 0) { $dslRow["height"] = $rowFmt.Height }
-		}
+		# Формат самой строки: высота и скрытие — её собственные свойства (у ячейки таких
+		# нет), остальное — оформление, оно же может лежать и на ячейках.
+		$rowFmt = if ($rd.FormatIdx -gt 0) { Get-Format $rd.FormatIdx } else { $null }
+		$rowOwn = if ($rowFmt) { Get-StyleProps $rowFmt } else { [ordered]@{} }
+		$rowHidden = ($rowOwn['hidden'] -eq $true)
+		if ($rowFmt -and $rowFmt.Height -gt 0) { $dslRow["height"] = $rowFmt.Height }
+		if ($rowHidden) { $dslRow["hidden"] = $true }
 
 		# Separate content cells from gap-fill cells
 		$contentCells = @()
@@ -780,7 +806,25 @@ foreach ($area in $blocks) {
 			}
 		}
 
-		if ($rowStyleName -and $rowStyleName -ne "default") { $dslRow["rowStyle"] = $rowStyleName }
+		# Стиль строки и стиль ячеек — независимые вещи: платформа их часто, но не всегда
+		# пишет одинаковыми. Один ключ с модификатором apply покрывает все три случая.
+		$ownFmt = Get-RowStyleFmt $rowFmt
+		$ownKey = if ($ownFmt) { Get-StyleKey $ownFmt } else { $null }
+		$ownName = if ($ownKey -and $styleNames.Contains($ownKey)) { $styleNames[$ownKey] } else { $null }
+		$cellsName = if ($rowStyleName -and $rowStyleName -ne "default") { $rowStyleName } else { $null }
+
+		if ($ownName -and $cellsName -and $ownKey -ceq $rowStyleKey) {
+			$dslRow["rowStyle"] = $ownName
+		} elseif ($ownName -and -not $cellsName) {
+			$dslRow["rowStyle"] = [ordered]@{ style = $ownName; apply = "row" }
+		} elseif ($cellsName -and -not $ownName) {
+			$dslRow["rowStyle"] = [ordered]@{ style = $cellsName; apply = "cells" }
+		} elseif ($ownName -and $cellsName) {
+			# Стили разные — строке своё, ячейкам своё; ячейкам стиль раздаётся поячеечно.
+			$dslRow["rowStyle"] = [ordered]@{ style = $ownName; apply = "row" }
+			$rowStyleName = $null
+			$rowStyleKey = $null
+		}
 
 		# Build cell list
 		$dslCells = @()
@@ -938,7 +982,10 @@ foreach ($a in $dslAreas) {
 		# Строка может быть массивом (короткая форма) — у неё нет свойства cells, и без этой
 		# ветки стиль, использованный только внутри такой строки, вырезался как «неиспользуемый».
 		$cellList = if ($r -is [array]) { $r } else { $r.cells }
-		if ($r -isnot [array] -and $r.rowStyle) { $usedStyles[$r.rowStyle] = $true }
+		if ($r -isnot [array] -and $r.rowStyle) {
+			$rs = $r.rowStyle
+			$usedStyles[$(if ($rs -is [System.Collections.IDictionary]) { $rs['style'] } else { $rs })] = $true
+		}
 		if ($cellList) { foreach ($c in $cellList) { if ($c -isnot [string] -and $c.style) { $usedStyles[$c.style] = $true } } }
 	}
 }

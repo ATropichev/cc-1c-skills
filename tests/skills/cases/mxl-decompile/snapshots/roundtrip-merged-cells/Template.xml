@@ -15,9 +15,10 @@
 	<rowsItem>
 		<index>0</index>
 		<row>
+			<formatIndex>2</formatIndex>
 			<c>
 				<c>
-					<f>3</f>
+					<f>4</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -28,7 +29,7 @@
 			</c>
 			<c>
 				<c>
-					<f>3</f>
+					<f>4</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -42,10 +43,11 @@
 	<rowsItem>
 		<index>1</index>
 		<row>
+			<formatIndex>2</formatIndex>
 			<c>
 				<i>1</i>
 				<c>
-					<f>2</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -56,7 +58,7 @@
 			</c>
 			<c>
 				<c>
-					<f>2</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -99,6 +101,9 @@
 	<font faceName="Arial" height="12" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
 		<width>10</width>
+	</format>
+	<format>
+		<border>0</border>
 	</format>
 	<format>
 		<font>0</font>

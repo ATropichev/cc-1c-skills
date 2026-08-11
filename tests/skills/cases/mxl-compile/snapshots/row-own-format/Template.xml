@@ -15,13 +15,14 @@
 	<rowsItem>
 		<index>0</index>
 		<row>
+			<formatIndex>2</formatIndex>
 			<c>
 				<c>
-					<f>2</f>
+					<f>0</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>Отчёт</v8:content>
+							<v8:content>скрытая строка</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -30,31 +31,70 @@
 	</rowsItem>
 	<rowsItem>
 		<index>1</index>
-		<indexTo>2</indexTo>
 		<row>
-			<empty>true</empty>
+			<formatIndex>3</formatIndex>
+			<c>
+				<c>
+					<f>4</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>и строке, и ячейкам</v8:content>
+						</v8:item>
+					</tl>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>4</f>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>4</f>
+				</c>
+			</c>
+		</row>
+	</rowsItem>
+	<rowsItem>
+		<index>2</index>
+		<row>
+			<formatIndex>5</formatIndex>
+			<c>
+				<c>
+					<f>0</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>только строке</v8:content>
+						</v8:item>
+					</tl>
+				</c>
+			</c>
 		</row>
 	</rowsItem>
 	<rowsItem>
 		<index>3</index>
 		<row>
-			<formatIndex>3</formatIndex>
 			<c>
 				<c>
-					<f>5</f>
-					<parameter>Код</parameter>
+					<f>6</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>только ячейкам</v8:content>
+						</v8:item>
+					</tl>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>5</f>
-					<parameter>Имя</parameter>
+					<f>6</f>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>5</f>
-					<parameter>Значение</parameter>
+					<f>6</f>
 				</c>
 			</c>
 		</row>
@@ -63,27 +103,12 @@
 	<defaultFormatIndex>1</defaultFormatIndex>
 	<height>4</height>
 	<vgRows>4</vgRows>
-	<merge>
-		<r>0</r>
-		<c>0</c>
-		<w>2</w>
-	</merge>
 	<namedItem xsi:type="NamedItemCells">
-		<name>Данные</name>
-		<area>
-			<type>Rows</type>
-			<beginRow>3</beginRow>
-			<endRow>3</endRow>
-			<beginColumn>-1</beginColumn>
-			<endColumn>-1</endColumn>
-		</area>
-	</namedItem>
-	<namedItem xsi:type="NamedItemCells">
-		<name>Заголовок</name>
+		<name>Тело</name>
 		<area>
 			<type>Rows</type>
 			<beginRow>0</beginRow>
-			<endRow>2</endRow>
+			<endRow>3</endRow>
 			<beginColumn>-1</beginColumn>
 			<endColumn>-1</endColumn>
 		</area>
@@ -92,24 +117,26 @@
 		<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Solid</v8ui:style>
 	</line>
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
-	<font faceName="Arial" height="12" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
+	<font faceName="Arial" height="10" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
-		<width>10</width>
+		<width>20</width>
+	</format>
+	<format>
+		<height>20</height>
+		<hidden>true</hidden>
+	</format>
+	<format>
+		<backColor>#EBEBEB</backColor>
+	</format>
+	<format>
+		<font>0</font>
+		<backColor>#EBEBEB</backColor>
 	</format>
 	<format>
 		<font>1</font>
-		<horizontalAlignment>Center</horizontalAlignment>
-	</format>
-	<format>
-		<border>0</border>
 	</format>
 	<format>
 		<font>0</font>
 		<border>0</border>
-	</format>
-	<format>
-		<font>0</font>
-		<border>0</border>
-		<fillType>Parameter</fillType>
 	</format>
 </document>

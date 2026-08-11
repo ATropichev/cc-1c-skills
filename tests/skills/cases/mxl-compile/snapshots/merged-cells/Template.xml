@@ -15,9 +15,10 @@
 	<rowsItem>
 		<index>0</index>
 		<row>
+			<formatIndex>2</formatIndex>
 			<c>
 				<c>
-					<f>3</f>
+					<f>4</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -28,7 +29,7 @@
 			</c>
 			<c>
 				<c>
-					<f>3</f>
+					<f>4</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -40,7 +41,7 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>3</f>
+					<f>4</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -54,10 +55,11 @@
 	<rowsItem>
 		<index>1</index>
 		<row>
+			<formatIndex>2</formatIndex>
 			<c>
 				<i>1</i>
 				<c>
-					<f>4</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -68,7 +70,7 @@
 			</c>
 			<c>
 				<c>
-					<f>4</f>
+					<f>5</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -82,27 +84,28 @@
 	<rowsItem>
 		<index>2</index>
 		<row>
+			<formatIndex>2</formatIndex>
 			<c>
 				<c>
-					<f>5</f>
+					<f>6</f>
 					<parameter>Номер</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>7</f>
 					<parameter>Наименование</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>7</f>
 					<parameter>Артикул</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>7</f>
 					<parameter>Итого</parameter>
 				</c>
 			</c>
@@ -156,6 +159,9 @@
 	<font faceName="Arial" height="12" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
 		<width>10</width>
+	</format>
+	<format>
+		<border>0</border>
 	</format>
 	<format>
 		<font>0</font>

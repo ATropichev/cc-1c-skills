@@ -15,9 +15,10 @@
 	<rowsItem>
 		<index>0</index>
 		<row>
+			<formatIndex>2</formatIndex>
 			<c>
 				<c>
-					<f>2</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -28,7 +29,7 @@
 			</c>
 			<c>
 				<c>
-					<f>2</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -39,7 +40,7 @@
 			</c>
 			<c>
 				<c>
-					<f>2</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -50,7 +51,7 @@
 			</c>
 			<c>
 				<c>
-					<f>2</f>
+					<f>3</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -64,27 +65,28 @@
 	<rowsItem>
 		<index>1</index>
 		<row>
+			<formatIndex>4</formatIndex>
 			<c>
 				<c>
-					<f>4</f>
+					<f>6</f>
 					<parameter>Дата</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>5</f>
+					<f>7</f>
 					<parameter>Товар</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>8</f>
 					<parameter>Количество</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>8</f>
 					<parameter>Цена</parameter>
 				</c>
 			</c>
@@ -122,9 +124,16 @@
 		<width>10</width>
 	</format>
 	<format>
+		<border>0</border>
+		<horizontalAlignment>Center</horizontalAlignment>
+	</format>
+	<format>
 		<font>0</font>
 		<border>0</border>
 		<horizontalAlignment>Center</horizontalAlignment>
+	</format>
+	<format>
+		<border>0</border>
 	</format>
 	<format>
 		<font>0</font>

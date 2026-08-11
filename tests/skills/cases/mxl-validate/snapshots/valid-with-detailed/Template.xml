@@ -15,15 +15,16 @@
 	<rowsItem>
 		<index>0</index>
 		<row>
+			<formatIndex>2</formatIndex>
 			<c>
 				<c>
-					<f>3</f>
+					<f>4</f>
 					<parameter>Ключ</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>3</f>
+					<f>4</f>
 					<parameter>Значение</parameter>
 				</c>
 			</c>
@@ -49,6 +50,9 @@
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
 		<width>10</width>
+	</format>
+	<format>
+		<border>0</border>
 	</format>
 	<format>
 		<font>0</font>

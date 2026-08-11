@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.32 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.33 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -472,6 +472,41 @@ function Get-ColorNamespace {
 	if ($val -like 'web:*') { return 'http://v8.1c.ru/8.1/data/ui/colors/web' }
 	if ($val -like 'win:*') { return 'http://v8.1c.ru/8.1/data/ui/colors/windows' }
 	return ''
+}
+
+# Стиль строки: имя строкой либо объект { style, apply }. apply — куда лёг стиль:
+# "both" (умолчание) — и в формат строки, и в форматы ячеек, как пишет платформа, когда
+# автор оформляет строку целиком; "row" — только строке (так хранится, например, скрытие);
+# "cells" — только ячейкам. Модификатор нужен раундтрипу, в описании DSL его нет.
+function Get-RowStyleSpec {
+	param($val, [string]$where)
+	if ($null -eq $val) { return @{ Name = $null; Apply = 'both' } }
+	if ($val -is [string]) { return @{ Name = $val; Apply = 'both' } }
+	$name = "$($val.style)"
+	$apply = if ($val.apply) { "$($val.apply)".ToLower() } else { 'both' }
+	if ($apply -notin @('both', 'row', 'cells')) {
+		[Console]::Error.WriteLine("Unknown 'apply' value `"$($val.apply)`" ($where). Allowed: both, row, cells")
+		exit 1
+	}
+	if (-not $name) {
+		[Console]::Error.WriteLine("rowStyle object requires 'style' ($where)")
+		exit 1
+	}
+	return @{ Name = $name; Apply = $apply }
+}
+
+# Формат самой строки: собственные свойства строки (высота, скрытие) плюс стиль строки,
+# если он ложится на строку. Пустой набор = у строки формата нет.
+function Get-RowFormatProps {
+	param($row)
+	$props = @{}
+	$spec = Get-RowStyleSpec $row.rowStyle "row"
+	if ($spec.Name -and $spec.Apply -cne 'cells') {
+		$props = Resolve-Style -styleName $spec.Name -fillType "" -noDefaultFont
+	}
+	if ($row.height) { $props['height'] = [int]$row.height }
+	if ($row.hidden -eq $true) { $props['hidden'] = 'true' }
+	return $props
 }
 
 function Resolve-Style {
@@ -957,20 +992,23 @@ foreach ($area in $def.areas) {
 		# Skip empty row placeholder
 		if ($row.empty) { continue }
 
-		# Row height format
-		if ($row.height) {
-			Register-Format @{ height = [int]$row.height } | Out-Null
-		}
+		# Формат САМОЙ строки: высота и скрытие — её собственные свойства (у ячейки таких
+		# нет), плюс стиль строки, если он ложится на строку.
+		$rowProps = Get-RowFormatProps $row
+		if ($rowProps.Count -gt 0) { Register-Format $rowProps | Out-Null }
+
+		$spec = Get-RowStyleSpec $row.rowStyle "row"
+		$cellsStyle = if ($spec.Apply -ceq 'row') { $null } else { $spec.Name }
 
 		# rowStyle gap-fill format (no content → no fillType)
-		if ($row.rowStyle) {
-			Register-CellFormat -styleName $row.rowStyle -fillType "" | Out-Null
+		if ($cellsStyle) {
+			Register-CellFormat -styleName $cellsStyle -fillType "" | Out-Null
 		}
 
 		# Explicit cell formats
 		if ($row.cells) {
 			foreach ($cell in $row.cells) {
-				$cellStyle = if ($cell.style) { $cell.style } elseif ($row.rowStyle) { $row.rowStyle } else { "default" }
+				$cellStyle = if ($cell.style) { $cell.style } elseif ($cellsStyle) { $cellsStyle } else { "default" }
 				$ft = Get-FillType $cell
 				Register-CellFormat -styleName $cellStyle -fillType $ft | Out-Null
 			}
@@ -1118,11 +1156,13 @@ foreach ($area in $def.areas) {
 		$rowHasContent = $false
 		$rowCells = @()  # array of { Col(0-based), FormatIdx, Content }
 
-		# Determine row height format
+		# Формат самой строки — высота, скрытие и стиль строки, если он ложится на строку
 		$rowFormatIdx = 0
-		if ($row.height) {
-			$rowFormatIdx = Register-Format @{ height = [int]$row.height }
-		}
+		$rowProps = Get-RowFormatProps $row
+		if ($rowProps.Count -gt 0) { $rowFormatIdx = Register-Format $rowProps }
+
+		$spec = Get-RowStyleSpec $row.rowStyle "row"
+		$cellsStyle = if ($spec.Apply -ceq 'row') { $null } else { $spec.Name }
 
 		if ($row.cells -and $row.cells.Count -gt 0) {
 			$rowHasContent = $true
@@ -1186,7 +1226,7 @@ foreach ($area in $def.areas) {
 				$colStart = [int]$cell.col
 				$colSpan = if ($cell.span) { [int]$cell.span } else { 1 }
 				$rowspan = if ($cell.rowspan) { [int]$cell.rowspan } else { 1 }
-				$cellStyle = if ($cell.style) { $cell.style } elseif ($row.rowStyle) { $row.rowStyle } else { "default" }
+				$cellStyle = if ($cell.style) { $cell.style } elseif ($cellsStyle) { $cellsStyle } else { "default" }
 				$ft = Get-FillType $cell
 				$fmtIdx = Register-CellFormat -styleName $cellStyle -fillType $ft
 
@@ -1219,8 +1259,8 @@ foreach ($area in $def.areas) {
 			}
 
 			# Generate gap-fill cells for rowStyle
-			if ($row.rowStyle) {
-				$gapFmtIdx = Register-CellFormat -styleName $row.rowStyle -fillType ""
+			if ($cellsStyle) {
+				$gapFmtIdx = Register-CellFormat -styleName $cellsStyle -fillType ""
 				for ($c = 1; $c -le $totalColumns; $c++) {
 					if (-not $occupiedCols.ContainsKey($c)) {
 						$rowCells += @{
@@ -1238,10 +1278,10 @@ foreach ($area in $def.areas) {
 			# Sort cells by column
 			$rowCells = $rowCells | Sort-Object { $_.Col }
 
-		} elseif ($row.rowStyle) {
+		} elseif ($cellsStyle) {
 			# Row with only rowStyle, no explicit cells — fill non-rowspan columns
 			$rowHasContent = $true
-			$gapFmtIdx = Register-CellFormat -styleName $row.rowStyle -fillType ""
+			$gapFmtIdx = Register-CellFormat -styleName $cellsStyle -fillType ""
 			for ($c = 1; $c -le $totalColumns; $c++) {
 				if ($rowspanOccupied.ContainsKey($c)) { continue }
 				$rowCells += @{

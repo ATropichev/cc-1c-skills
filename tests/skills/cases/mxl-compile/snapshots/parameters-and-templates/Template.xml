@@ -69,21 +69,22 @@
 	<rowsItem>
 		<index>2</index>
 		<row>
+			<formatIndex>4</formatIndex>
 			<c>
 				<c>
-					<f>5</f>
+					<f>6</f>
 					<parameter>Позиция</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>5</f>
+					<f>6</f>
 					<parameter>Товар</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>5</f>
+					<f>6</f>
 					<parameter>Цена</parameter>
 				</c>
 			</c>
@@ -137,6 +138,9 @@
 	<format>
 		<font>0</font>
 		<fillType>Template</fillType>
+	</format>
+	<format>
+		<border>0</border>
 	</format>
 	<format>
 		<font>0</font>
