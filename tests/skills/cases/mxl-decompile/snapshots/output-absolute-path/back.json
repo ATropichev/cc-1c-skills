@@ -1,1 +1,1 @@
-{ "columns": 2, "defaultWidth": 10, "fonts": { "default": { "face": "Arial", "size": 10 } }, "styles": {}, "areas": [{ "name": "Test", "rows": [["A", "B"]] }] }
+{ "columns": 2, "defaultWidth": 10, "fonts": {}, "styles": {}, "areas": [{ "name": "Test", "rows": [["A", "B"]] }] }

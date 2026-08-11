@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.34 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.35 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1020,6 +1020,30 @@ foreach ($area in $def.areas) {
 
 # Формат по умолчанию — последняя запись палитры (см. выше).
 $defaultFormatIndex = Register-Format @{ width = $defaultWidth }
+
+# Шрифт, на который не ссылается ни один формат, платформа в палитру не кладёт: у макета
+# без оформления элемента <font> нет вовсе. Мы же всегда заводили Arial 10 по умолчанию.
+# Отбрасываем неиспользуемые и перенумеровываем ссылки — индексы шрифтов позиционные.
+$usedFonts = @{}
+foreach ($k in $formatRegistry.Keys) {
+	$fp = $formatRegistry[$k]
+	if ($fp.ContainsKey('font')) { $usedFonts[[int]$fp['font']] = $true }
+}
+if ($usedFonts.Count -lt $fontEntries.Count) {
+	$fontRemap = @{}
+	$kept = @()
+	for ($i = 0; $i -lt $fontEntries.Count; $i++) {
+		if ($usedFonts.ContainsKey($i)) {
+			$fontRemap[$i] = $kept.Count
+			$kept += $fontEntries[$i]
+		}
+	}
+	foreach ($k in @($formatRegistry.Keys)) {
+		$fp = $formatRegistry[$k]
+		if ($fp.ContainsKey('font')) { $fp['font'] = $fontRemap[[int]$fp['font']] }
+	}
+	$fontEntries = $kept
+}
 
 # --- 7. Generate XML ---
 

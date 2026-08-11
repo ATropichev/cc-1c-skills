@@ -280,7 +280,6 @@
 	</line>
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="10" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
-	<font faceName="Arial" height="10" bold="false" italic="true" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Times New Roman" height="14" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="8" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="true" strikeout="false" kind="Absolute" scale="100"/>
@@ -288,7 +287,7 @@
 		<height>25</height>
 	</format>
 	<format>
-		<font>3</font>
+		<font>2</font>
 		<horizontalAlignment>Center</horizontalAlignment>
 	</format>
 	<format>
@@ -296,7 +295,7 @@
 		<bottomBorder>0</bottomBorder>
 	</format>
 	<format>
-		<font>5</font>
+		<font>4</font>
 		<fillType>Parameter</fillType>
 	</format>
 	<format>
@@ -340,7 +339,7 @@
 		<fillType>Parameter</fillType>
 	</format>
 	<format>
-		<font>4</font>
+		<font>3</font>
 		<horizontalAlignment>Center</horizontalAlignment>
 	</format>
 	<format>

@@ -10,7 +10,7 @@
 		</languageInfo>
 	</languageSettings>
 	<columns>
-		<size>2</size>
+		<size>3</size>
 	</columns>
 	<rowsItem>
 		<index>0</index>
@@ -37,10 +37,21 @@
 					</tl>
 				</c>
 			</c>
+			<c>
+				<c>
+					<f>3</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>обычный</v8:content>
+						</v8:item>
+					</tl>
+				</c>
+			</c>
 		</row>
 	</rowsItem>
 	<templateMode>true</templateMode>
-	<defaultFormatIndex>3</defaultFormatIndex>
+	<defaultFormatIndex>4</defaultFormatIndex>
 	<height>1</height>
 	<vgRows>1</vgRows>
 	<namedItem xsi:type="NamedItemCells">
@@ -61,6 +72,10 @@
 	</format>
 	<format>
 		<font>1</font>
+	</format>
+	<format>
+		<font>0</font>
+		<horizontalAlignment>Center</horizontalAlignment>
 	</format>
 	<format>
 		<width>10</width>

@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.34 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.35 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -1043,6 +1043,22 @@ def main():
 
     # Формат по умолчанию — последняя запись палитры (см. выше).
     default_format_index = register_format({'width': default_width})
+
+    # Шрифт, на который не ссылается ни один формат, платформа в палитру не кладёт: у макета
+    # без оформления элемента <font> нет вовсе. Мы же всегда заводили Arial 10 по умолчанию.
+    # Отбрасываем неиспользуемые и перенумеровываем ссылки — индексы шрифтов позиционные.
+    used_fonts = {int(fp['font']) for fp in format_registry.values() if 'font' in fp}
+    if len(used_fonts) < len(font_entries):
+        font_remap = {}
+        kept = []
+        for i in range(len(font_entries)):
+            if i in used_fonts:
+                font_remap[i] = len(kept)
+                kept.append(font_entries[i])
+        for fp in format_registry.values():
+            if 'font' in fp:
+                fp['font'] = font_remap[int(fp['font'])]
+        font_entries = kept
 
     # --- 7. Generate XML ---
     lines = []
