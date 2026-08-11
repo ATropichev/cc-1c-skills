@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.31 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.32 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -787,12 +787,11 @@ function Get-FillType {
 function Register-CellFormat {
 	param($styleName, [string]$fillType)
 	$resolved = Resolve-Style -styleName $styleName -fillType $fillType
-	# Ячейка без собственного оформления ссылается на формат ПО УМОЛЧАНИЮ — так делает
-	# платформа: в её палитре у неоформленного макета один формат (ширина колонки), и все
-	# ячейки указывают на него. Мы же заводили каждой свой формат с <font>0</font>, где ноль
-	# означает «шрифт не задан», то есть формат был пуст по смыслу.
+	# У ячейки без собственного оформления формата НЕТ вовсе: <f>0</f>, где ноль — не индекс
+	# записи, а «формата нет». В корпусе так у 170 710 ячеек против 50 635, ссылающихся на
+	# формат по умолчанию; <f>0</f> встречается в 71% макетов.
 	if ($resolved.Count -eq 1 -and $resolved['font'] -eq $fontMap["default"]) {
-		return $script:defaultFormatIndex
+		return 0
 	}
 	return Register-Format $resolved
 }
