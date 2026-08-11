@@ -16,14 +16,12 @@
 		<index>0</index>
 		<row>
 			<c>
-				<i>0</i>
 				<c>
 					<f>3</f>
 					<parameter>НомерСтроки</parameter>
 				</c>
 			</c>
 			<c>
-				<i>1</i>
 				<c>
 					<f>3</f>
 					<parameter>Товар</parameter>
@@ -31,7 +29,6 @@
 				</c>
 			</c>
 			<c>
-				<i>2</i>
 				<c>
 					<f>3</f>
 					<parameter>Сумма</parameter>

@@ -16,7 +16,6 @@
 		<index>0</index>
 		<row>
 			<c>
-				<i>0</i>
 				<c>
 					<f>2</f>
 					<parameter>Заголовок</parameter>
@@ -28,7 +27,6 @@
 		<index>1</index>
 		<row>
 			<c>
-				<i>0</i>
 				<c>
 					<f>3</f>
 					<tl>
@@ -40,7 +38,6 @@
 				</c>
 			</c>
 			<c>
-				<i>1</i>
 				<c>
 					<f>3</f>
 					<tl>
@@ -81,7 +78,6 @@
 				</c>
 			</c>
 			<c>
-				<i>2</i>
 				<c>
 					<f>4</f>
 					<tl>
@@ -98,28 +94,24 @@
 		<index>3</index>
 		<row>
 			<c>
-				<i>0</i>
 				<c>
 					<f>5</f>
 					<parameter>Номер</parameter>
 				</c>
 			</c>
 			<c>
-				<i>1</i>
 				<c>
 					<f>5</f>
 					<parameter>Имя</parameter>
 				</c>
 			</c>
 			<c>
-				<i>2</i>
 				<c>
 					<f>5</f>
 					<parameter>Код</parameter>
 				</c>
 			</c>
 			<c>
-				<i>3</i>
 				<c>
 					<f>5</f>
 					<parameter>Сумма</parameter>

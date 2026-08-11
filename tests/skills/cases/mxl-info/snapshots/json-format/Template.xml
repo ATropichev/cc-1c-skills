@@ -16,14 +16,12 @@
 		<index>0</index>
 		<row>
 			<c>
-				<i>0</i>
 				<c>
 					<f>2</f>
 					<parameter>Ключ</parameter>
 				</c>
 			</c>
 			<c>
-				<i>1</i>
 				<c>
 					<f>2</f>
 					<parameter>Значение</parameter>
