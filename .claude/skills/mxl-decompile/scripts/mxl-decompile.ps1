@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.13 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.14 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -53,6 +53,8 @@ function Get-FormatTagKind {
 		'verticalAlignment' = 'enum'; 'width' = 'int'; 'widthWeightFactor' = 'int'
 	}
 }
+
+$RU_NAME = 'Русский'
 
 # Теги, значение которых — многоязычная строка (<v8:item> на язык), а не скаляр.
 function Get-FormatMlTags {
@@ -407,8 +409,9 @@ function Get-StyleProps {
 function Get-StyleKey {
 	param($fmt)
 	if (-not $fmt) { return "empty" }
-	$fi = if ($fmt.FontIdx -ge 0) { $fmt.FontIdx } else { 0 }
-	$parts = @("f=$fi")
+	# «шрифта нет» и «шрифт с индексом 0» — разные форматы: нулевой шрифт вовсе не обязан
+	# быть обычным, в макете он бывает курсивным или жирным.
+	$parts = @("f=" + $(if ($fmt.FontIdx -ge 0) { "$($fmt.FontIdx)" } else { "none" }))
 	$props = Get-StyleProps $fmt
 	foreach ($tag in $props.Keys) {
 		$v = $props[$tag]
@@ -506,7 +509,9 @@ function Get-RowStyleFmt {
 	if (-not $fmt) { return $null }
 	$props = Get-StyleProps $fmt
 	$props.Remove('hidden') | Out-Null
-	if ($props.Count -eq 0) { return $null }
+	# Шрифт в Get-StyleProps не входит (он адресуется именем), поэтому формат строки,
+	# несущий ТОЛЬКО шрифт, здесь выглядел пустым и терялся.
+	if ($props.Count -eq 0 -and $fmt.FontIdx -lt 0) { return $null }
 	$reduced = [ordered]@{}
 	foreach ($tag in $fmt.Props.Keys) {
 		if ($tag -cne 'hidden') { $reduced[$tag] = $fmt.Props[$tag] }
@@ -543,8 +548,8 @@ function Name-Style {
 	$parts = @()
 	$props = Get-StyleProps $fmt
 
-	$fi = if ($fmt.FontIdx -ge 0) { $fmt.FontIdx } else { 0 }
-	if ($fontNames.ContainsKey($fi) -and $fontNames[$fi] -ne "default") {
+	$fi = $fmt.FontIdx
+	if ($fi -ge 0 -and $fontNames.ContainsKey($fi) -and $fontNames[$fi] -ne "default") {
 		$parts += $fontNames[$fi]
 	}
 
@@ -569,7 +574,13 @@ function Name-Style {
 	# Имя "default" зарезервировано за стилем БЕЗ свойств: под ним компилятор понимает
 	# отсутствие оформления. Набор из одних неприметных свойств (отступ, защита) обязан
 	# получить своё имя, иначе он потеряется.
-	if ($parts.Count -eq 0) { return $(if ($props.Count -eq 0) { "default" } else { "style" }) }
+	# Имя "default" зарезервировано за стилем БЕЗ свойств: под ним компилятор понимает
+	# отсутствие оформления, и ячейка такой стиль не записывает. Набор из одних неприметных
+	# свойств или из одного шрифта обязан получить своё имя, иначе он потеряется.
+	if ($parts.Count -eq 0) {
+		$hasContent = ($props.Count -gt 0) -or ($fmt.FontIdx -ge 0)
+		return $(if ($hasContent) { "style" } else { "default" })
+	}
 	return ($parts -join "-")
 }
 
@@ -586,9 +597,8 @@ foreach ($key in $styleKeys.Keys) {
 	$styleNames[$key] = $name
 
 	$sDef = [ordered]@{}
-	$fi = if ($fmt.FontIdx -ge 0) { $fmt.FontIdx } else { 0 }
-	if ($fontNames.ContainsKey($fi) -and $fontNames[$fi] -ne "default") {
-		$sDef["font"] = $fontNames[$fi]
+	if ($fmt.FontIdx -ge 0) {
+		$sDef["font"] = $(if ($fontNames.ContainsKey($fmt.FontIdx)) { $fontNames[$fmt.FontIdx] } else { "default" })
 	}
 	$props = Get-StyleProps $fmt
 	foreach ($tag in $props.Keys) { $sDef[$tag] = $props[$tag] }
@@ -969,6 +979,31 @@ if ($defaultSet) {
 # Набор языков объявляем, только если он отличается от умолчания компилятора (один ru).
 if ($textLanguages.Count -gt 0 -and -not ($textLanguages.Count -eq 1 -and $textLanguages[0] -ceq 'ru')) {
 	$result["textLanguages"] = [array]$textLanguages
+}
+
+# Объявление языков МАКЕТА — не то же, что языки текста: почти во всех макетах ERP объявлен
+# один ru, а текст лежит и под ru, и под en. Пишем, только если отличается от умолчания.
+$lsNode = $root.SelectSingleNode("d:languageSettings", $ns)
+if ($lsNode) {
+	$langs = @()
+	foreach ($li in $lsNode.SelectNodes("d:languageInfo", $ns)) {
+		$idN = $li.SelectSingleNode("d:id", $ns)
+		$codeN = $li.SelectSingleNode("d:code", $ns)
+		$descN = $li.SelectSingleNode("d:description", $ns)
+		$langs += [ordered]@{
+			id = $(if ($idN) { $idN.InnerText } else { "" })
+			code = $(if ($codeN) { $codeN.InnerText } else { "" })
+			description = $(if ($descN) { $descN.InnerText } else { "" })
+		}
+	}
+	$isDefault = ($langs.Count -eq 1 -and $langs[0].id -ceq 'ru' -and
+		$langs[0].code -ceq $RU_NAME -and $langs[0].description -ceq $RU_NAME)
+	if (-not $isDefault) { $result["languages"] = [array]$langs }
+	$curN = $lsNode.SelectSingleNode("d:currentLanguage", $ns)
+	$cur = if ($curN) { $curN.InnerText } else { $null }
+	if ($cur -cne 'ru') { $result["currentLanguage"] = $cur }
+	$dfltN = $lsNode.SelectSingleNode("d:defaultLanguage", $ns)
+	if ($dfltN -and $dfltN.InnerText -cne 'ru') { $result["defaultLanguage"] = $dfltN.InnerText }
 }
 # Remove empty "default" style
 if ($styleDefs.Contains("default") -and $styleDefs["default"].Count -eq 0) {

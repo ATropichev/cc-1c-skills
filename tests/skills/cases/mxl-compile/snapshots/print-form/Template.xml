@@ -142,7 +142,7 @@
 			<formatIndex>6</formatIndex>
 			<c>
 				<c>
-					<f>8</f>
+					<f>7</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -153,7 +153,7 @@
 			</c>
 			<c>
 				<c>
-					<f>8</f>
+					<f>7</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -165,7 +165,7 @@
 			<c>
 				<i>6</i>
 				<c>
-					<f>8</f>
+					<f>7</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -176,7 +176,7 @@
 			</c>
 			<c>
 				<c>
-					<f>8</f>
+					<f>7</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -187,7 +187,7 @@
 			</c>
 			<c>
 				<c>
-					<f>8</f>
+					<f>7</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -198,7 +198,7 @@
 			</c>
 			<c>
 				<c>
-					<f>8</f>
+					<f>7</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -215,13 +215,13 @@
 			<formatIndex>6</formatIndex>
 			<c>
 				<c>
-					<f>9</f>
+					<f>8</f>
 					<parameter>НомерСтроки</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>10</f>
+					<f>9</f>
 					<parameter>Товар</parameter>
 					<detailParameter>Номенклатура</detailParameter>
 				</c>
@@ -229,25 +229,25 @@
 			<c>
 				<i>6</i>
 				<c>
-					<f>9</f>
+					<f>8</f>
 					<parameter>ЕдИзм</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>11</f>
+					<f>10</f>
 					<parameter>Количество</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>11</f>
+					<f>10</f>
 					<parameter>Цена</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>11</f>
+					<f>10</f>
 					<parameter>Сумма</parameter>
 				</c>
 			</c>
@@ -259,7 +259,7 @@
 			<c>
 				<i>7</i>
 				<c>
-					<f>12</f>
+					<f>11</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -271,7 +271,7 @@
 			<c>
 				<i>9</i>
 				<c>
-					<f>13</f>
+					<f>12</f>
 					<parameter>ИтогоСумма</parameter>
 				</c>
 			</c>
@@ -283,7 +283,7 @@
 			<c>
 				<i>7</i>
 				<c>
-					<f>12</f>
+					<f>11</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -295,7 +295,7 @@
 			<c>
 				<i>9</i>
 				<c>
-					<f>13</f>
+					<f>12</f>
 					<parameter>ИтогоНДС</parameter>
 				</c>
 			</c>
@@ -325,7 +325,7 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>14</f>
+					<f>13</f>
 					<parameter>Отпустил</parameter>
 				</c>
 			</c>
@@ -337,7 +337,7 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>15</f>
+					<f>14</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -371,7 +371,7 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>14</f>
+					<f>13</f>
 					<parameter>Получил</parameter>
 				</c>
 			</c>
@@ -383,7 +383,7 @@
 			<c>
 				<i>3</i>
 				<c>
-					<f>15</f>
+					<f>14</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
@@ -526,7 +526,6 @@
 	<line width="1" gap="false">
 		<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Solid</v8ui:style>
 	</line>
-	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="10" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="14" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="8" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
@@ -537,63 +536,53 @@
 		<height>20</height>
 	</format>
 	<format>
-		<font>2</font>
-		<horizontalAlignment>Center</horizontalAlignment>
-		<fillType>Parameter</fillType>
-	</format>
-	<format>
 		<font>1</font>
-	</format>
-	<format>
-		<font>0</font>
-		<fillType>Parameter</fillType>
-	</format>
-	<format>
-		<border>0</border>
-	</format>
-	<format>
-		<font>0</font>
-		<border>0</border>
-	</format>
-	<format>
-		<font>0</font>
-		<border>0</border>
-		<horizontalAlignment>Center</horizontalAlignment>
-	</format>
-	<format>
-		<font>0</font>
-		<border>0</border>
 		<horizontalAlignment>Center</horizontalAlignment>
 		<fillType>Parameter</fillType>
 	</format>
 	<format>
 		<font>0</font>
+	</format>
+	<format>
+		<fillType>Parameter</fillType>
+	</format>
+	<format>
+		<border>0</border>
+	</format>
+	<format>
+		<border>0</border>
+		<horizontalAlignment>Center</horizontalAlignment>
+	</format>
+	<format>
+		<border>0</border>
+		<horizontalAlignment>Center</horizontalAlignment>
+		<fillType>Parameter</fillType>
+	</format>
+	<format>
 		<border>0</border>
 		<fillType>Parameter</fillType>
 	</format>
 	<format>
-		<font>0</font>
 		<border>0</border>
 		<horizontalAlignment>Right</horizontalAlignment>
 		<fillType>Parameter</fillType>
 	</format>
 	<format>
-		<font>1</font>
+		<font>0</font>
 		<horizontalAlignment>Right</horizontalAlignment>
 	</format>
 	<format>
-		<font>1</font>
+		<font>0</font>
 		<topBorder>0</topBorder>
 		<horizontalAlignment>Right</horizontalAlignment>
 		<fillType>Parameter</fillType>
 	</format>
 	<format>
-		<font>0</font>
 		<bottomBorder>0</bottomBorder>
 		<fillType>Parameter</fillType>
 	</format>
 	<format>
-		<font>3</font>
+		<font>2</font>
 		<horizontalAlignment>Center</horizontalAlignment>
 	</format>
 </document>

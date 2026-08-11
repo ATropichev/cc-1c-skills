@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.35 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.36 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -695,17 +695,19 @@ def main():
         props = {}
         name, apply_to = row_style_spec(row.get('rowStyle'), 'row')
         if name and apply_to != 'cells':
-            props = resolve_style(name, '', no_default_font=True)
+            props = resolve_style(name, '')
         if row.get('height'):
             props['height'] = int(row['height'])
         if row.get('hidden') is True:
             props['hidden'] = 'true'
         return props
 
-    def resolve_style(style_name, fill_type, no_default_font=False):
+    def resolve_style(style_name, fill_type):
         # Набор свойств формата — «тег платформы → значение», только заданные. Порядок вставки
         # роли не играет: и ключ дедупликации, и эмиссия идут по каноническому порядку тегов.
-        props = {} if no_default_font else {'font': font_map.get('default', 0)}
+        # <font> пишем только когда стиль задал шрифт: треть форматов корпуса (23 003 из
+        # 69 581) обходится без него, а мы раньше подставляли шрифт по умолчанию всегда.
+        props = {}
 
         if style_name and defn.get('styles'):
             style = defn['styles'].get(style_name)
@@ -827,7 +829,7 @@ def main():
             if style_name:
                 # Шрифт по умолчанию колонке не навязываем: формат колонки без оформления —
                 # это ровно <width>, как пишет платформа.
-                props = resolve_style(style_name, '', no_default_font=True)
+                props = resolve_style(style_name, '')
             if col in layout['Widths']:
                 props['width'] = layout['Widths'][col]
             fmap[col] = register_format(props)
@@ -872,7 +874,7 @@ def main():
         # У ячейки без собственного оформления формата НЕТ вовсе: <f>0</f>, где ноль — не
         # индекс записи, а «формата нет». В корпусе так у 170 710 ячеек против 50 635,
         # ссылающихся на формат по умолчанию; <f>0</f> встречается в 71% макетов.
-        if len(resolved) == 1 and resolved.get('font') == font_map.get('default', 0):
+        if not resolved:
             return 0
         return register_format(resolved)
 
@@ -1077,15 +1079,43 @@ def main():
     lines.append(f'<document {doc_ns_decl}>')
 
     # 7b. Language settings
-    lines.append('\t<languageSettings>')
-    lines.append('\t\t<currentLanguage>ru</currentLanguage>')
-    lines.append('\t\t<defaultLanguage>ru</defaultLanguage>')
-    lines.append('\t\t<languageInfo>')
-    lines.append('\t\t\t<id>ru</id>')
-    lines.append('\t\t\t<code>\u0420\u0443\u0441\u0441\u043a\u0438\u0439</code>')
-    lines.append('\t\t\t<description>\u0420\u0443\u0441\u0441\u043a\u0438\u0439</description>')
-    lines.append('\t\t</languageInfo>')
-    lines.append('\t</languageSettings>')
+    # Языки МАКЕТА — не то же, что textLanguages: там языки, на которые разворачивается текст
+    # ячейки, здесь объявление в шапке. Почти во всех макетах ERP объявлен один ru, а текст
+    # лежит и под ru, и под en, поэтому выводить одно из другого нельзя. Ключи
+    # недокументированные: автору они не нужны, нужны раундтрипу.
+    RU = '\u0420\u0443\u0441\u0441\u043a\u0438\u0439'
+    lang_codes = {'ru': RU, 'en': '\u0410\u043d\u0433\u043b\u0438\u0439\u0441\u043a\u0438\u0439'}
+    lang_list = []
+    for lang in (defn.get('languages') or []):
+        if isinstance(lang, dict):
+            # description отсутствует и пустая строка — одно и то же: тег есть всегда, но
+            # бывает самозакрывающимся (77 записей корпуса против 11 017 со значением).
+            lang_list.append({'Id': str(lang.get('id') or ''),
+                              'Code': str(lang.get('code') or ''),
+                              'Description': '' if lang.get('description') is None
+                                             else str(lang['description'])})
+        else:
+            code = lang_codes.get(str(lang), str(lang))
+            lang_list.append({'Id': str(lang), 'Code': code, 'Description': code})
+    if not lang_list:
+        lang_list = [{'Id': 'ru', 'Code': RU, 'Description': RU}]
+    current_lang = defn['currentLanguage'] if 'currentLanguage' in defn else 'ru'
+    default_lang = str(defn.get('defaultLanguage') or 'ru')
+
+    lines.append('	<languageSettings>')
+    if current_lang is not None and str(current_lang) != '':
+        lines.append(f'		<currentLanguage>{esc_xml_text(str(current_lang))}</currentLanguage>')
+    lines.append(f'		<defaultLanguage>{esc_xml_text(default_lang)}</defaultLanguage>')
+    for lang in lang_list:
+        lines.append('		<languageInfo>')
+        lines.append(f'			<id>{esc_xml_text(lang["Id"])}</id>')
+        lines.append(f'			<code>{esc_xml_text(lang["Code"])}</code>')
+        if lang['Description'] == '':
+            lines.append('			<description/>')
+        else:
+            lines.append(f'			<description>{esc_xml_text(lang["Description"])}</description>')
+        lines.append('		</languageInfo>')
+    lines.append('	</languageSettings>')
 
     # 7c. Columns
     # Раскладка по умолчанию идёт первой и без <id> — так их хранит платформа.

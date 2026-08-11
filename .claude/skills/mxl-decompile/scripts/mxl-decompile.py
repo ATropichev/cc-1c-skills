@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.13 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.14 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -92,6 +92,9 @@ def format_tag_kind():
         'textPlacement': 'enum', 'textPosition': 'enum', 'topBorder': 'line',
         'verticalAlignment': 'enum', 'width': 'int', 'widthWeightFactor': 'int',
     }
+
+
+RU_NAME = 'Русский'
 
 
 def format_ml_tags():
@@ -573,8 +576,9 @@ def main():
     def get_style_key(fmt):
         if not fmt:
             return "empty"
-        fi = fmt["FontIdx"] if fmt["FontIdx"] >= 0 else 0
-        parts = [f"f={fi}"]
+        # «шрифта нет» и «шрифт с индексом 0» — разные форматы: нулевой шрифт вовсе не
+        # обязан быть обычным, в макете он бывает курсивным или жирным.
+        parts = ["f=" + (str(fmt["FontIdx"]) if fmt["FontIdx"] >= 0 else "none")]
         for tag, val in style_props(fmt).items():
             parts.append(f"{tag}={val}")
         return "|".join(parts)
@@ -666,7 +670,9 @@ def main():
             return None
         props = style_props(fmt)
         props.pop("hidden", None)
-        if not props:
+        # Шрифт в style_props не входит (он адресуется именем), поэтому формат строки,
+        # несущий ТОЛЬКО шрифт, здесь выглядел пустым и терялся.
+        if not props and fmt["FontIdx"] < 0:
             return None
         reduced = OrderedDict()
         for tag, raw in fmt["Props"].items():
@@ -703,8 +709,8 @@ def main():
         parts = []
         props = style_props(fmt)
 
-        fi = fmt["FontIdx"] if fmt["FontIdx"] >= 0 else 0
-        if fi in font_names and font_names[fi] != "default":
+        fi = fmt["FontIdx"]
+        if fi >= 0 and font_names.get(fi, "default") != "default":
             parts.append(font_names[fi])
 
         if "border" in props:
@@ -734,9 +740,11 @@ def main():
 
         if len(parts) == 0:
             # Имя "default" зарезервировано за стилем БЕЗ свойств: под ним компилятор
-            # понимает отсутствие оформления. Набор из одних неприметных свойств
-            # (отступ, защита) обязан получить своё имя, иначе он потеряется.
-            return "default" if not props else "style"
+            # понимает отсутствие оформления, и ячейка такой стиль не записывает. Набор
+            # из одних неприметных свойств (отступ, защита) или из одного шрифта обязан
+            # получить своё имя, иначе он потеряется.
+            has_content = bool(props) or fmt["FontIdx"] >= 0
+            return "style" if has_content else "default"
         return "-".join(parts)
 
     style_names = OrderedDict()
@@ -755,9 +763,8 @@ def main():
         style_names[key] = name
 
         s_def = OrderedDict()
-        fi = fmt["FontIdx"] if fmt["FontIdx"] >= 0 else 0
-        if fi in font_names and font_names[fi] != "default":
-            s_def["font"] = font_names[fi]
+        if fmt["FontIdx"] >= 0:
+            s_def["font"] = font_names.get(fmt["FontIdx"], "default")
         s_def.update(style_props(fmt))
 
         style_defs[name] = s_def
@@ -1106,6 +1113,29 @@ def main():
     # Набор языков объявляем, только если он отличается от умолчания компилятора (один ru).
     if text_languages and text_languages != ['ru']:
         result["textLanguages"] = text_languages
+
+    # Объявление языков МАКЕТА — не то же, что языки текста: почти во всех макетах ERP
+    # объявлен один ru, а текст лежит и под ru, и под en. Пишем, только если отличается
+    # от умолчания компилятора.
+    ls_node = find(root, "d:languageSettings")
+    if ls_node is not None:
+        langs = []
+        for li in findall(ls_node, "d:languageInfo"):
+            desc_node = find(li, "d:description")
+            langs.append(OrderedDict([
+                ("id", text_of(find(li, "d:id")) or ""),
+                ("code", text_of(find(li, "d:code")) or ""),
+                ("description", text_of(desc_node) or "" if desc_node is not None else ""),
+            ]))
+        if langs != [OrderedDict([("id", "ru"), ("code", RU_NAME), ("description", RU_NAME)])]:
+            result["languages"] = langs
+        cur_node = find(ls_node, "d:currentLanguage")
+        cur = text_of(cur_node) if cur_node is not None else None
+        if cur != "ru":
+            result["currentLanguage"] = cur
+        dflt = text_of(find(ls_node, "d:defaultLanguage"))
+        if dflt and dflt != "ru":
+            result["defaultLanguage"] = dflt
 
     # Remove empty "default" style
     if "default" in style_defs and len(style_defs["default"]) == 0:

@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.35 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.36 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -502,7 +502,7 @@ function Get-RowFormatProps {
 	$props = @{}
 	$spec = Get-RowStyleSpec $row.rowStyle "row"
 	if ($spec.Name -and $spec.Apply -cne 'cells') {
-		$props = Resolve-Style -styleName $spec.Name -fillType "" -noDefaultFont
+		$props = Resolve-Style -styleName $spec.Name -fillType ""
 	}
 	if ($row.height) { $props['height'] = [int]$row.height }
 	if ($row.hidden -eq $true) { $props['hidden'] = 'true' }
@@ -510,12 +510,13 @@ function Get-RowFormatProps {
 }
 
 function Resolve-Style {
-	param([string]$styleName, [string]$fillType, [switch]$noDefaultFont)
+	param([string]$styleName, [string]$fillType)
 
 	# Набор свойств формата — «тег платформы → значение», только заданные. Порядок вставки
 	# роли не играет: и ключ дедупликации, и эмиссия идут по каноническому порядку тегов.
+	# <font> пишем только когда стиль задал шрифт: треть форматов корпуса (23 003 из 69 581)
+	# обходится без него, а мы раньше подставляли шрифт по умолчанию всегда.
 	$props = @{}
-	if (-not $noDefaultFont) { $props['font'] = $fontMap["default"] }
 
 	if ($styleName -and $def.styles) {
 		$style = $def.styles.$styleName
@@ -753,7 +754,7 @@ foreach ($layout in $columnLayouts) {
 		if ($styleName) {
 			# Шрифт по умолчанию колонке не навязываем: формат колонки без оформления —
 			# это ровно <width>, как пишет платформа.
-			$props = Resolve-Style -styleName $styleName -fillType "" -noDefaultFont
+			$props = Resolve-Style -styleName $styleName -fillType ""
 		}
 		if ($layout.Widths.ContainsKey($col)) { $props['width'] = $layout.Widths[$col] }
 		$map[$col] = Register-Format $props
@@ -827,7 +828,7 @@ function Register-CellFormat {
 	# У ячейки без собственного оформления формата НЕТ вовсе: <f>0</f>, где ноль — не индекс
 	# записи, а «формата нет». В корпусе так у 170 710 ячеек против 50 635, ссылающихся на
 	# формат по умолчанию; <f>0</f> встречается в 71% макетов.
-	if ($resolved.Count -eq 1 -and $resolved['font'] -eq $fontMap["default"]) {
+	if ($resolved.Count -eq 0) {
 		return 0
 	}
 	return Register-Format $resolved
@@ -1065,14 +1066,50 @@ X '<?xml version="1.0" encoding="UTF-8"?>'
 X "<document $docNsDecl>"
 
 # 7b. Language settings
+# Языки МАКЕТА — не то же, что textLanguages: там языки, на которые разворачивается текст
+# ячейки, здесь объявление в шапке. В 98% макетов ERP объявлен один ru, а текст лежит и под
+# ru, и под en, поэтому выводить одно из другого нельзя. Ключи недокументированные: автору
+# они не нужны, нужны раундтрипу.
+$langCodes = @{ 'ru' = 'Русский'; 'en' = 'Английский' }
+$langList = @()
+if ($def.languages) {
+	foreach ($l in @($def.languages)) {
+		if ($l -is [string]) {
+			$code = if ($langCodes.ContainsKey("$l")) { $langCodes["$l"] } else { "$l" }
+			$langList += @{ Id = "$l"; Code = $code; Description = $code }
+		} else {
+			# description отсутствует и пустая строка — одно и то же: тег есть всегда, но
+			# бывает самозакрывающимся (77 записей корпуса против 11 017 со значением).
+			$langList += @{
+				Id = "$($l.id)"
+				Code = "$($l.code)"
+				Description = if ($null -eq $l.description) { '' } else { "$($l.description)" }
+			}
+		}
+	}
+}
+if ($langList.Count -eq 0) {
+	$langList = @(@{ Id = 'ru'; Code = 'Русский'; Description = 'Русский' })
+}
+$currentLang = if ($def.PSObject.Properties['currentLanguage']) { $def.currentLanguage } else { 'ru' }
+$defaultLang = if ($def.defaultLanguage) { "$($def.defaultLanguage)" } else { 'ru' }
+
 X "`t<languageSettings>"
-X "`t`t<currentLanguage>ru</currentLanguage>"
-X "`t`t<defaultLanguage>ru</defaultLanguage>"
-X "`t`t<languageInfo>"
-X "`t`t`t<id>ru</id>"
-X "`t`t`t<code>Русский</code>"
-X "`t`t`t<description>Русский</description>"
-X "`t`t</languageInfo>"
+if ($null -ne $currentLang -and "$currentLang" -ne '') {
+	X "`t`t<currentLanguage>$(Esc-XmlText "$currentLang")</currentLanguage>"
+}
+X "`t`t<defaultLanguage>$(Esc-XmlText $defaultLang)</defaultLanguage>"
+foreach ($l in $langList) {
+	X "`t`t<languageInfo>"
+	X "`t`t`t<id>$(Esc-XmlText $l.Id)</id>"
+	X "`t`t`t<code>$(Esc-XmlText $l.Code)</code>"
+	if ($l.Description -eq '') {
+		X "`t`t`t<description/>"
+	} else {
+		X "`t`t`t<description>$(Esc-XmlText $l.Description)</description>"
+	}
+	X "`t`t</languageInfo>"
+}
 X "`t</languageSettings>"
 
 # 7c. Columns

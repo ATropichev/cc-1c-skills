@@ -107,13 +107,10 @@
 	<line width="1" gap="false">
 		<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Solid</v8ui:style>
 	</line>
-	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
-		<font>0</font>
 		<fillType>Parameter</fillType>
 	</format>
 	<format>
-		<font>0</font>
 		<border>0</border>
 		<horizontalAlignment>Center</horizontalAlignment>
 	</format>

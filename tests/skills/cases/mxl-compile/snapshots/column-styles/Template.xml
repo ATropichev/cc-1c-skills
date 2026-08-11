@@ -127,7 +127,6 @@
 			<endColumn>-1</endColumn>
 		</area>
 	</namedItem>
-	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="10" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
 		<width>30</width>
@@ -143,11 +142,10 @@
 		<width>12</width>
 	</format>
 	<format>
-		<font>1</font>
+		<font>0</font>
 		<backColor>#EBEBEB</backColor>
 	</format>
 	<format>
-		<font>0</font>
 		<fillType>Parameter</fillType>
 	</format>
 	<format>

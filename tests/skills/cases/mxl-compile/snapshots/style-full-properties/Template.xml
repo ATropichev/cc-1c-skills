@@ -113,10 +113,9 @@
 	<line width="1" gap="false">
 		<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Solid</v8ui:style>
 	</line>
-	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="10" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
-		<font>1</font>
+		<font>0</font>
 		<horizontalAlignment>Center</horizontalAlignment>
 		<verticalAlignment>Center</verticalAlignment>
 		<textColor>style:FormTextColor</textColor>
@@ -125,26 +124,22 @@
 		<protection>true</protection>
 	</format>
 	<format>
-		<font>0</font>
 		<leftBorder>0</leftBorder>
 		<topBorder>1</topBorder>
 		<bottomBorder>2</bottomBorder>
 		<borderColor>#C8C8C8</borderColor>
 	</format>
 	<format>
-		<font>0</font>
 		<textColor xmlns:d3p1="http://v8.1c.ru/8.1/data/ui/colors/windows">d3p1:ButtonText</textColor>
 		<backColor xmlns:d3p1="http://v8.1c.ru/8.1/data/ui/colors/web">d3p1:Gainsboro</backColor>
 	</format>
 	<format>
-		<font>0</font>
 		<fillType>Parameter</fillType>
 		<hidden>true</hidden>
 		<textOrientation>900</textOrientation>
 		<indent>2</indent>
 	</format>
 	<format>
-		<font>0</font>
 		<border>3</border>
 	</format>
 	<format>

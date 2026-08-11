@@ -109,31 +109,31 @@
 			<formatIndex>4</formatIndex>
 			<c>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<parameter>Номер</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>7</f>
+					<f>6</f>
 					<parameter>Описание</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<parameter>ЕдИзм</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>6</f>
+					<f>5</f>
 					<parameter>Количество</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>7</f>
+					<f>6</f>
 					<parameter>Сумма</parameter>
 				</c>
 			</c>
@@ -166,7 +166,6 @@
 	<line width="1" gap="false">
 		<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Solid</v8ui:style>
 	</line>
-	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="10" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
 		<width>111</width>
@@ -175,7 +174,7 @@
 		<width>333</width>
 	</format>
 	<format>
-		<font>1</font>
+		<font>0</font>
 		<border>0</border>
 		<horizontalAlignment>Center</horizontalAlignment>
 	</format>
@@ -183,17 +182,11 @@
 		<border>0</border>
 	</format>
 	<format>
-		<font>0</font>
-		<border>0</border>
-	</format>
-	<format>
-		<font>0</font>
 		<border>0</border>
 		<horizontalAlignment>Center</horizontalAlignment>
 		<fillType>Parameter</fillType>
 	</format>
 	<format>
-		<font>0</font>
 		<border>0</border>
 		<fillType>Parameter</fillType>
 	</format>
