@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.30 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.31 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -389,7 +389,11 @@ function Build-ColStyleMap {
 	$map = @{}
 	if ($styles) {
 		foreach ($prop in $styles.PSObject.Properties) {
-			foreach ($c in (Parse-ColumnSpec $prop.Name)) { $map[$c] = "$($prop.Value)" }
+			# Пустое значение = колонка перечислена, формата у неё нет. Записи для авторинга
+			# в этом смысла нет, поэтому в описании DSL её не показываем — она нужна
+			# декомпилятору, чтобы раундтрип не терял байты.
+			$v = if ($null -eq $prop.Value) { $null } else { "$($prop.Value)" }
+			foreach ($c in (Parse-ColumnSpec $prop.Name)) { $map[$c] = $v }
 		}
 	}
 	return $map
@@ -701,11 +705,18 @@ foreach ($layout in $columnLayouts) {
 	$cols = @($layout.Widths.Keys) + @($layout.Styles.Keys) | ForEach-Object { [int]$_ } |
 		Select-Object -Unique | Sort-Object
 	foreach ($col in $cols) {
+		$styleName = if ($layout.Styles.ContainsKey($col)) { $layout.Styles[$col] } else { $null }
+		# Колонка перечислена без формата вовсе (<formatIndex>0</formatIndex>): в корпусе так
+		# бывает у 4% макетов. Ноль — не индекс записи, а «формата нет».
+		if (-not $layout.Widths.ContainsKey($col) -and [string]::IsNullOrEmpty($styleName)) {
+			$map[$col] = 0
+			continue
+		}
 		$props = @{}
-		if ($layout.Styles.ContainsKey($col)) {
+		if ($styleName) {
 			# Шрифт по умолчанию колонке не навязываем: формат колонки без оформления —
 			# это ровно <width>, как пишет платформа.
-			$props = Resolve-Style -styleName $layout.Styles[$col] -fillType "" -noDefaultFont
+			$props = Resolve-Style -styleName $styleName -fillType "" -noDefaultFont
 		}
 		if ($layout.Widths.ContainsKey($col)) { $props['width'] = $layout.Widths[$col] }
 		$map[$col] = Register-Format $props

@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.30 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.31 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -601,8 +601,12 @@ def main():
         out = {}
         if styles:
             for prop_name, prop_value in styles.items():
+                # Пустое значение = колонка перечислена, формата у неё нет. Записи для
+                # авторинга в этом смысла нет, поэтому в описании DSL её не показываем —
+                # она нужна декомпилятору, чтобы раундтрип не терял байты.
+                v = None if prop_value is None else str(prop_value)
                 for c in parse_column_spec(prop_name):
-                    out[c] = str(prop_value)
+                    out[c] = v
         return out
 
     col_style_map = build_col_style_map(defn.get('columnStyles'))
@@ -778,11 +782,17 @@ def main():
     for layout in column_layouts:
         fmap = {}  # 1-based col -> format index
         for col in sorted({int(c) for c in list(layout['Widths']) + list(layout['Styles'])}):
+            style_name = layout['Styles'].get(col)
+            # Колонка перечислена без формата вовсе (<formatIndex>0</formatIndex>): в корпусе
+            # так бывает у 4% макетов. Ноль — не индекс записи, а «формата нет».
+            if col not in layout['Widths'] and not style_name:
+                fmap[col] = 0
+                continue
             props = {}
-            if col in layout['Styles']:
+            if style_name:
                 # Шрифт по умолчанию колонке не навязываем: формат колонки без оформления —
                 # это ровно <width>, как пишет платформа.
-                props = resolve_style(layout['Styles'][col], '', no_default_font=True)
+                props = resolve_style(style_name, '', no_default_font=True)
             if col in layout['Widths']:
                 props['width'] = layout['Widths'][col]
             fmap[col] = register_format(props)

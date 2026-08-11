@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.11 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.12 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -585,6 +585,12 @@ function Get-ColumnStyles {
 	$out = [ordered]@{}
 	foreach ($col in $cs.FmtIdx.Keys) {
 		$fi = $cs.FmtIdx[$col]
+		if ($fi -eq 0) {
+			# Колонка перечислена, формата у неё нет. Для авторинга бесполезно, но без
+			# этого раундтрип теряет элемент целиком.
+			$out[$col] = $null
+			continue
+		}
 		$fmt = Get-Format $fi
 		if ($fmt -and (Get-StyleProps $fmt).Count -gt 0) { $out[$col] = Get-StyleName $fi }
 	}
@@ -938,7 +944,9 @@ foreach ($a in $dslAreas) {
 }
 # Стиль бывает не только у ячейки и строки: колонка — третий владелец формата.
 foreach ($cs in $columnSets) {
-	foreach ($name in (Get-ColumnStyles $cs).Values) { $usedStyles[$name] = $true }
+	foreach ($name in (Get-ColumnStyles $cs).Values) {
+		if ($name) { $usedStyles[$name] = $true }
+	}
 }
 $toRemove = @($styleDefs.Keys | Where-Object { -not $usedStyles.ContainsKey($_) })
 foreach ($s in $toRemove) { $styleDefs.Remove($s)

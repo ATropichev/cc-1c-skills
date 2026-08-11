@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.11 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.12 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -747,6 +747,11 @@ def main():
         """Колонки раскладки, у которых формат несёт не только ширину, — «колонка → стиль»."""
         out = OrderedDict()
         for col, fi in cs["FmtIdx"].items():
+            if fi == 0:
+                # Колонка перечислена, формата у неё нет. Для авторинга бесполезно, но без
+                # этого раундтрип теряет элемент целиком.
+                out[col] = None
+                continue
             fmt = get_format(fi)
             if fmt and style_props(fmt):
                 out[col] = get_style_name(fi)
