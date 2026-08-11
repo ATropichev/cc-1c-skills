@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.25 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# mxl-compile v1.26 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -559,8 +559,14 @@ function Esc-XmlText {
 }
 
 # Текст ячейки платформа хранит по элементу на язык. Конвенция ML-значений (та же, что у
-# synonym/tooltip/title в метаданных и формах): строка — русский текст, объект — по элементу
-# на язык В ПОРЯДКЕ КЛЮЧЕЙ.
+# synonym/tooltip/title в метаданных и формах): объект — по элементу на язык В ПОРЯДКЕ КЛЮЧЕЙ,
+# строка — один и тот же текст на всех языках макета (textLanguages, по умолчанию только ru).
+$textLanguages = @('ru')
+if ($def.textLanguages) {
+	$declared = @($def.textLanguages | ForEach-Object { "$_" } | Where-Object { $_ })
+	if ($declared.Count -gt 0) { $textLanguages = $declared }
+}
+
 function Emit-CellText {
 	param($value)
 	$pairs = @()
@@ -569,7 +575,7 @@ function Emit-CellText {
 	} elseif ($value -is [System.Management.Automation.PSCustomObject]) {
 		foreach ($p in $value.PSObject.Properties) { $pairs += @{ Lang = $p.Name; Text = "$($p.Value)" } }
 	} else {
-		$pairs += @{ Lang = 'ru'; Text = "$value" }
+		foreach ($l in $textLanguages) { $pairs += @{ Lang = $l; Text = "$value" } }
 	}
 	X "`t`t`t`t`t<tl>"
 	foreach ($p in $pairs) {
@@ -1094,9 +1100,11 @@ foreach ($area in $def.areas) {
 					}
 				}
 
-				if ($cellInfo.Text) { Emit-CellText $cellInfo.Text }
+				# Проверяем НАЛИЧИЕ ключа, а не истинность: пустая строка — это текст, платформа
+				# такие ячейки пишет с пустым <tl>, и по истинности он терялся.
+				if ($null -ne $cellInfo.Text) { Emit-CellText $cellInfo.Text }
 
-				if ($cellInfo.Template) { Emit-CellText $cellInfo.Template }
+				if ($null -ne $cellInfo.Template) { Emit-CellText $cellInfo.Template }
 
 				X "`t`t`t`t</c>"
 				X "`t`t`t</c>"

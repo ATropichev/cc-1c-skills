@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.8 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.9 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -209,6 +209,8 @@ foreach ($niNode in $root.SelectNodes("d:namedItem", $ns)) {
 # --- 8. Extract rows ---
 
 $rowData = @{}
+# Языки, на которых в макете вообще есть текст. Порядок — первого появления.
+$docLangs = [ordered]@{}
 foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 	$rowIdx = [int]$riNode.SelectSingleNode("d:index", $ns).InnerText
 	$rowNode = $riNode.SelectSingleNode("d:row", $ns)
@@ -250,8 +252,10 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 
 			# Текст ячейки платформа хранит по элементу на язык. Раньше брался ПЕРВЫЙ, и всё
 			# остальное терялось — в корпусе ERP 98% макетов держат текст и под ru, и под en.
-			# Конвенция ML-значений: только ru → строка, иначе объект «язык → текст».
+			# Здесь собираем «язык → текст» как есть; свернётся в строку позже, когда станет
+			# известен набор языков всего макета (Get-DslText).
 			$text = $null
+			$hasText = $false
 			$items = $cContent.SelectNodes("d:tl/v8:item", $ns)
 			if ($items -and $items.Count -gt 0) {
 				$byLang = [ordered]@{}
@@ -260,9 +264,12 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 					$contentNode = $it.SelectSingleNode("v8:content", $ns)
 					$lang = if ($langNode) { $langNode.InnerText } else { '' }
 					$byLang[$lang] = if ($contentNode) { $contentNode.InnerText } else { '' }
+					$docLangs[$lang] = $true
 				}
-				if ($byLang.Count -eq 1 -and $byLang.Contains('ru')) { $text = $byLang['ru'] }
-				else { $text = $byLang }
+				$text = $byLang
+				# Единственный пустой русский текст содержимым не считается — такая ячейка
+				# уходит в заполнители строки.
+				$hasText = -not ($byLang.Count -eq 1 -and $byLang.Contains('ru') -and "$($byLang['ru'])" -eq '')
 			}
 
 			$cells += @{
@@ -271,6 +278,7 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 				Param     = $param
 				Detail    = $detail
 				Text      = $text
+				HasText   = $hasText
 			}
 		}
 	}
@@ -288,6 +296,23 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 			ColumnsId = $rowColumnsId
 		}
 	}
+}
+
+# Языки текстов макета и языки, объявленные в конфигурации, — разные вещи: у типовых они не
+# совпадают. Строкой пишем текст, одинаковый на ВСЁМ наборе языков макета; остальное — объектом.
+$textLanguages = @($docLangs.Keys)
+
+function Get-DslText {
+	param($byLang)
+	if ($byLang -isnot [System.Collections.IDictionary]) { return $byLang }
+	if ($byLang.Count -ne $textLanguages.Count) { return $byLang }
+	$common = $null
+	foreach ($l in $textLanguages) {
+		if (-not $byLang.Contains($l)) { return $byLang }
+		if ($null -eq $common) { $common = "$($byLang[$l])" }
+		elseif ("$($byLang[$l])" -cne $common) { return $byLang }
+	}
+	return $common
 }
 
 # --- 9. Build style key (ignoring fillType) ---
@@ -634,7 +659,7 @@ foreach ($area in $blocks) {
 		$gapCells = @()
 
 		foreach ($cell in $rd.Cells) {
-			$hasContent = $cell.Param -or $cell.Text
+			$hasContent = $cell.Param -or $cell.HasText
 			$hasMerge = $mergeMap.ContainsKey("$globalRow,$($cell.Col)")
 
 			if ($hasContent -or $hasMerge) {
@@ -703,10 +728,10 @@ foreach ($area in $blocks) {
 			if ($cell.Param) {
 				$dslCell["param"] = $cell.Param
 				if ($cell.Detail) { $dslCell["detail"] = $cell.Detail }
-			} elseif ($fillType -eq "Template" -and $cell.Text) {
-				$dslCell["template"] = $cell.Text
-			} elseif ($cell.Text) {
-				$dslCell["text"] = $cell.Text
+			} elseif ($fillType -eq "Template" -and $cell.HasText) {
+				$dslCell["template"] = Get-DslText $cell.Text
+			} elseif ($cell.HasText) {
+				$dslCell["text"] = Get-DslText $cell.Text
 			}
 
 			$dslCells += $dslCell
@@ -801,6 +826,10 @@ $result = [ordered]@{
 	defaultWidth = $defaultWidth
 }
 if ($compressedWidths.Count -gt 0) { $result["columnWidths"] = $compressedWidths }
+# Набор языков объявляем, только если он отличается от умолчания компилятора (один ru).
+if ($textLanguages.Count -gt 0 -and -not ($textLanguages.Count -eq 1 -and $textLanguages[0] -ceq 'ru')) {
+	$result["textLanguages"] = [array]$textLanguages
+}
 # Remove empty "default" style
 if ($styleDefs.Contains("default") -and $styleDefs["default"].Count -eq 0) {
 	$styleDefs.Remove("default")

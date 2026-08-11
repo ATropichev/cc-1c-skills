@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.8 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.9 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -380,6 +380,8 @@ def main():
     # --- 8. Extract rows ---
 
     row_data = {}
+    # Языки, на которых в макете вообще есть текст. Порядок — первого появления.
+    doc_langs = OrderedDict()
     for ri_node in findall(root, "d:rowsItem"):
         row_idx = int_of(find(ri_node, "d:index"))
         row_node = find(ri_node, "d:row")
@@ -430,8 +432,10 @@ def main():
 
                 # Текст ячейки платформа хранит по элементу на язык. Раньше брался ПЕРВЫЙ, и всё
                 # остальное терялось — в корпусе ERP 98% макетов держат текст и под ru, и под en.
-                # Конвенция ML-значений: только ru → строка, иначе объект «язык → текст».
+                # Здесь собираем «язык → текст» как есть; свернётся в строку позже, когда станет
+                # известен набор языков всего макета (get_dsl_text).
                 text = None
+                has_text = False
                 items = findall(c_content, "d:tl/v8:item")
                 if items:
                     by_lang = OrderedDict()
@@ -440,10 +444,11 @@ def main():
                         content_node = find(it, "v8:content")
                         lang = (text_of(lang_node) or '') if lang_node is not None else ''
                         by_lang[lang] = (text_of(content_node) or '') if content_node is not None else ''
-                    if len(by_lang) == 1 and 'ru' in by_lang:
-                        text = by_lang['ru']
-                    else:
-                        text = by_lang
+                        doc_langs[lang] = True
+                    text = by_lang
+                    # Единственный пустой русский текст содержимым не считается — такая ячейка
+                    # уходит в заполнители строки.
+                    has_text = not (len(by_lang) == 1 and by_lang.get('ru') == '')
 
                 cells.append({
                     "Col": col,
@@ -451,6 +456,7 @@ def main():
                     "Param": param,
                     "Detail": detail,
                     "Text": text,
+                    "HasText": has_text,
                 })
 
         # Ссылка строки на колоночную раскладку; пусто = раскладка по умолчанию.
@@ -464,6 +470,26 @@ def main():
                 "Empty": is_empty,
                 "ColumnsId": row_columns_id,
             }
+
+    # Языки текстов макета и языки, объявленные в конфигурации, — разные вещи: у типовых они
+    # не совпадают. Строкой пишем текст, одинаковый на ВСЁМ наборе языков макета; остальное —
+    # объектом.
+    text_languages = list(doc_langs.keys())
+
+    def get_dsl_text(by_lang):
+        if not isinstance(by_lang, dict):
+            return by_lang
+        if len(by_lang) != len(text_languages):
+            return by_lang
+        common = None
+        for lang in text_languages:
+            if lang not in by_lang:
+                return by_lang
+            if common is None:
+                common = by_lang[lang]
+            elif by_lang[lang] != common:
+                return by_lang
+        return common
 
     # --- 9. Build style key (ignoring fillType) ---
 
@@ -791,7 +817,7 @@ def main():
             gap_cells = []
 
             for cell in rd["Cells"]:
-                has_content = cell["Param"] or cell["Text"]
+                has_content = cell["Param"] or cell["HasText"]
                 has_merge = f"{global_row},{cell['Col']}" in merge_map
 
                 if has_content or has_merge:
@@ -856,10 +882,10 @@ def main():
                     dsl_cell["param"] = cell["Param"]
                     if cell["Detail"]:
                         dsl_cell["detail"] = cell["Detail"]
-                elif fill_type == "Template" and cell["Text"]:
-                    dsl_cell["template"] = cell["Text"]
-                elif cell["Text"]:
-                    dsl_cell["text"] = cell["Text"]
+                elif fill_type == "Template" and cell["HasText"]:
+                    dsl_cell["template"] = get_dsl_text(cell["Text"])
+                elif cell["HasText"]:
+                    dsl_cell["text"] = get_dsl_text(cell["Text"])
 
                 dsl_cells.append(dsl_cell)
 
@@ -963,6 +989,9 @@ def main():
     result["defaultWidth"] = default_width
     if len(compressed_widths) > 0:
         result["columnWidths"] = compressed_widths
+    # Набор языков объявляем, только если он отличается от умолчания компилятора (один ru).
+    if text_languages and text_languages != ['ru']:
+        result["textLanguages"] = text_languages
 
     # Remove empty "default" style
     if "default" in style_defs and len(style_defs["default"]) == 0:

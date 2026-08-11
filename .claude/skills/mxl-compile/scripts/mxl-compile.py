@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.25 — Compile 1C spreadsheet from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# mxl-compile v1.26 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -607,13 +607,18 @@ def main():
 
     # 6c. Helper: determine fillType from cell content
     # Текст ячейки платформа хранит по элементу на язык. Конвенция ML-значений (та же, что у
-    # synonym/tooltip/title в метаданных и формах): строка — русский текст, объект — по элементу
-    # на язык В ПОРЯДКЕ КЛЮЧЕЙ.
+    # synonym/tooltip/title в метаданных и формах): объект — по элементу на язык В ПОРЯДКЕ
+    # КЛЮЧЕЙ, строка — один и тот же текст на всех языках макета (textLanguages, по умолчанию
+    # только ru).
+    text_languages = [str(x) for x in (defn.get('textLanguages') or []) if str(x)]
+    if not text_languages:
+        text_languages = ['ru']
+
     def emit_cell_text(lines, value):
         if isinstance(value, dict):
             pairs = [(str(k), str(v)) for k, v in value.items()]
         else:
-            pairs = [('ru', str(value))]
+            pairs = [(lang, str(value)) for lang in text_languages]
         lines.append('\t\t\t\t\t<tl>')
         for lang, content in pairs:
             lines.append('\t\t\t\t\t\t<v8:item>')
@@ -1072,10 +1077,12 @@ def main():
                         if cell_info['Detail']:
                             lines.append(f'\t\t\t\t\t<detailParameter>{cell_info["Detail"]}</detailParameter>')
 
-                    if cell_info['Text']:
+                    # Проверяем НАЛИЧИЕ ключа, а не истинность: пустая строка — это текст,
+                    # платформа такие ячейки пишет с пустым <tl>, и по истинности он терялся.
+                    if cell_info['Text'] is not None:
                         emit_cell_text(lines, cell_info['Text'])
 
-                    if cell_info['Template']:
+                    if cell_info['Template'] is not None:
                         emit_cell_text(lines, cell_info['Template'])
 
                     lines.append('\t\t\t\t</c>')
