@@ -845,8 +845,9 @@ function Set-CellProp {
 	$cell | Add-Member -NotePropertyName $name -NotePropertyValue $value -Force
 }
 
-# Ячейка это или многоязычный текст: у ячейки есть хоть один ключ её схемы, у ML-значения
-# ключи — идентификаторы языков. Пересечений нет: в корпусе это ru, en, ru1, Русский.
+# Объект описывает СВОЙСТВА ячейки или является её ЗНАЧЕНИЕМ: в первом случае среди ключей
+# есть ключ схемы ячейки, во втором ключи — идентификаторы языков. Пересечений нет: в корпусе
+# это ru, en, ru1, Русский.
 function Test-CellObject {
 	param($el)
 	$cellKeys = @('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template')
