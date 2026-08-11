@@ -16,7 +16,6 @@
 		<index>0</index>
 		<row>
 			<c>
-				<i>0</i>
 				<c>
 					<f>1</f>
 					<tl>
@@ -28,7 +27,6 @@
 				</c>
 			</c>
 			<c>
-				<i>1</i>
 				<c>
 					<f>1</f>
 					<tl>
@@ -40,7 +38,6 @@
 				</c>
 			</c>
 			<c>
-				<i>2</i>
 				<c>
 					<f>1</f>
 					<tl>
@@ -52,7 +49,6 @@
 				</c>
 			</c>
 			<c>
-				<i>3</i>
 				<c>
 					<f>1</f>
 					<tl>
@@ -69,14 +65,12 @@
 		<index>1</index>
 		<row>
 			<c>
-				<i>0</i>
 				<c>
 					<f>2</f>
 					<parameter>Товар</parameter>
 				</c>
 			</c>
 			<c>
-				<i>1</i>
 				<c>
 					<f>2</f>
 					<parameter>Кол</parameter>

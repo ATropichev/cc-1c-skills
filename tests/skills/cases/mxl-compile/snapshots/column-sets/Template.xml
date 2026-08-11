@@ -56,7 +56,6 @@
 		<index>0</index>
 		<row>
 			<c>
-				<i>0</i>
 				<c>
 					<f>1</f>
 					<tl>
@@ -68,7 +67,6 @@
 				</c>
 			</c>
 			<c>
-				<i>1</i>
 				<c>
 					<f>1</f>
 					<tl>
@@ -80,7 +78,6 @@
 				</c>
 			</c>
 			<c>
-				<i>2</i>
 				<c>
 					<f>1</f>
 					<tl>
@@ -98,21 +95,18 @@
 		<row>
 			<columnsID>12320174-2b07-3806-9f7f-ec3834007fdb</columnsID>
 			<c>
-				<i>0</i>
 				<c>
 					<f>4</f>
 					<parameter>Товар</parameter>
 				</c>
 			</c>
 			<c>
-				<i>1</i>
 				<c>
 					<f>4</f>
 					<parameter>Кол</parameter>
 				</c>
 			</c>
 			<c>
-				<i>2</i>
 				<c>
 					<f>4</f>
 					<parameter>Сумма</parameter>

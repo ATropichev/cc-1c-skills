@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.26 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.27 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -870,6 +870,35 @@ $merges = @()
 $namedItems = @()
 $totalRowCount = 0
 
+# Копилка подряд идущих одинаковых пустых строк — пишется одним rowsItem с indexTo.
+$pendingGap = $null
+function Add-GapRow {
+	param([string]$key, [int]$row, [string]$columnSet, [int]$formatIdx)
+	$gap = $script:pendingGap
+	# -ceq: ключ несёт GUID раскладки, а обычное -eq в PowerShell регистр не различает.
+	if ($gap -and $gap.Key -ceq $key -and $gap.End -eq ($row - 1)) {
+		$gap.End = $row
+		return
+	}
+	Flush-Gap
+	$script:pendingGap = @{ Key = $key; Start = $row; End = $row
+		ColumnSet = $columnSet; FormatIdx = $formatIdx }
+}
+function Flush-Gap {
+	if (-not $script:pendingGap) { return }
+	$gap = $script:pendingGap
+	$script:pendingGap = $null
+	X "`t<rowsItem>"
+	X "`t`t<index>$($gap.Start)</index>"
+	if ($gap.End -gt $gap.Start) { X "`t`t<indexTo>$($gap.End)</indexTo>" }
+	X "`t`t<row>"
+	if ($gap.ColumnSet) { X "`t`t`t<columnsID>$($gap.ColumnSet)</columnsID>" }
+	if ($gap.FormatIdx -gt 0) { X "`t`t`t<formatIndex>$($gap.FormatIdx)</formatIndex>" }
+	X "`t`t`t<empty>true</empty>"
+	X "`t`t</row>"
+	X "`t</rowsItem>"
+}
+
 foreach ($area in $def.areas) {
 	$areaStartRow = $globalRow
 	$areaName = $area.name
@@ -904,12 +933,7 @@ foreach ($area in $def.areas) {
 		if ($row.empty) {
 			$count = [int]$row.empty
 			for ($ei = 0; $ei -lt $count; $ei++) {
-				X "`t<rowsItem>"
-				X "`t`t<index>$globalRow</index>"
-				X "`t`t<row>"
-				X "`t`t`t<empty>true</empty>"
-				X "`t`t</row>"
-				X "`t</rowsItem>"
+				Add-GapRow -key '|0' -row $globalRow -columnSet '' -formatIdx 0
 				$globalRow++; $localRow++
 			}
 			continue
@@ -1071,7 +1095,19 @@ foreach ($area in $def.areas) {
 			}
 		}
 
-		# Emit rowsItem
+		# Emit rowsItem.
+		# Подряд идущие ОДИНАКОВЫЕ пустые строки платформа хранит одним элементом с indexTo;
+		# непустые не схлопывает, даже когда они совпадают. Поэтому пустую строку не пишем
+		# сразу, а копим в пробеле и сбрасываем, когда он оборвался.
+		if (-not $rowHasContent) {
+			Add-GapRow -key "$areaColumnSet|$rowFormatIdx" -row $globalRow `
+				-columnSet $areaColumnSet -formatIdx $rowFormatIdx
+			$localRow++
+			$globalRow++
+			continue
+		}
+		Flush-Gap
+
 		X "`t<rowsItem>"
 		X "`t`t<index>$globalRow</index>"
 		X "`t`t<row>"
@@ -1084,31 +1120,34 @@ foreach ($area in $def.areas) {
 			X "`t`t`t<formatIndex>$rowFormatIdx</formatIndex>"
 		}
 
-		if (-not $rowHasContent) {
-			X "`t`t`t<empty>true</empty>"
-		} else {
-			foreach ($cellInfo in $rowCells) {
-				X "`t`t`t<c>"
+		# Номер колонки платформа пишет только при разрыве: подряд идущая ячейка его не
+		# несёт, читатель ведёт счётчик сам. Начальное значение счётчика -1, то есть у
+		# ячейки в колонке 0 номера тоже нет.
+		$prevCol = -1
+		foreach ($cellInfo in $rowCells) {
+			X "`t`t`t<c>"
+			if ($cellInfo.Col -ne ($prevCol + 1)) {
 				X "`t`t`t`t<i>$($cellInfo.Col)</i>"
-				X "`t`t`t`t<c>"
-				X "`t`t`t`t`t<f>$($cellInfo.FormatIdx)</f>"
-
-				if ($cellInfo.Param) {
-					X "`t`t`t`t`t<parameter>$($cellInfo.Param)</parameter>"
-					if ($cellInfo.Detail) {
-						X "`t`t`t`t`t<detailParameter>$($cellInfo.Detail)</detailParameter>"
-					}
-				}
-
-				# Проверяем НАЛИЧИЕ ключа, а не истинность: пустая строка — это текст, платформа
-				# такие ячейки пишет с пустым <tl>, и по истинности он терялся.
-				if ($null -ne $cellInfo.Text) { Emit-CellText $cellInfo.Text }
-
-				if ($null -ne $cellInfo.Template) { Emit-CellText $cellInfo.Template }
-
-				X "`t`t`t`t</c>"
-				X "`t`t`t</c>"
 			}
+			$prevCol = $cellInfo.Col
+			X "`t`t`t`t<c>"
+			X "`t`t`t`t`t<f>$($cellInfo.FormatIdx)</f>"
+
+			if ($cellInfo.Param) {
+				X "`t`t`t`t`t<parameter>$($cellInfo.Param)</parameter>"
+				if ($cellInfo.Detail) {
+					X "`t`t`t`t`t<detailParameter>$($cellInfo.Detail)</detailParameter>"
+				}
+			}
+
+			# Проверяем НАЛИЧИЕ ключа, а не истинность: пустая строка — это текст, платформа
+			# такие ячейки пишет с пустым <tl>, и по истинности он терялся.
+			if ($null -ne $cellInfo.Text) { Emit-CellText $cellInfo.Text }
+
+			if ($null -ne $cellInfo.Template) { Emit-CellText $cellInfo.Template }
+
+			X "`t`t`t`t</c>"
+			X "`t`t`t</c>"
 		}
 
 		X "`t`t</row>"
@@ -1132,6 +1171,7 @@ foreach ($area in $def.areas) {
 		}
 	}
 }
+Flush-Gap
 
 $totalRowCount = $globalRow
 

@@ -16,7 +16,6 @@
 		<index>0</index>
 		<row>
 			<c>
-				<i>0</i>
 				<c>
 					<f>2</f>
 					<tl>
@@ -31,12 +30,7 @@
 	</rowsItem>
 	<rowsItem>
 		<index>1</index>
-		<row>
-			<empty>true</empty>
-		</row>
-	</rowsItem>
-	<rowsItem>
-		<index>2</index>
+		<indexTo>2</indexTo>
 		<row>
 			<empty>true</empty>
 		</row>
@@ -45,21 +39,18 @@
 		<index>3</index>
 		<row>
 			<c>
-				<i>0</i>
 				<c>
 					<f>4</f>
 					<parameter>Код</parameter>
 				</c>
 			</c>
 			<c>
-				<i>1</i>
 				<c>
 					<f>4</f>
 					<parameter>Имя</parameter>
 				</c>
 			</c>
 			<c>
-				<i>2</i>
 				<c>
 					<f>4</f>
 					<parameter>Значение</parameter>

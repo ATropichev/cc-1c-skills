@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.26 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.27 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -882,6 +882,36 @@ def main():
     named_items = []
     active_rowspans = []  # list of {ColStart, ColEnd, StartLocalRow, EndLocalRow}
 
+    # Копилка подряд идущих одинаковых пустых строк — пишется одним rowsItem с indexTo.
+    pending_gap = [None]
+
+    def flush_gap():
+        gap = pending_gap[0]
+        if gap is None:
+            return
+        pending_gap[0] = None
+        lines.append('\t<rowsItem>')
+        lines.append(f'\t\t<index>{gap["Start"]}</index>')
+        if gap['End'] > gap['Start']:
+            lines.append(f'\t\t<indexTo>{gap["End"]}</indexTo>')
+        lines.append('\t\t<row>')
+        if gap['ColumnSet']:
+            lines.append(f'\t\t\t<columnsID>{gap["ColumnSet"]}</columnsID>')
+        if gap['FormatIdx'] > 0:
+            lines.append(f'\t\t\t<formatIndex>{gap["FormatIdx"]}</formatIndex>')
+        lines.append('\t\t\t<empty>true</empty>')
+        lines.append('\t\t</row>')
+        lines.append('\t</rowsItem>')
+
+    def add_gap_row(key, row, column_set, format_idx):
+        gap = pending_gap[0]
+        if gap is not None and gap['Key'] == key and gap['End'] == row - 1:
+            gap['End'] = row
+            return
+        flush_gap()
+        pending_gap[0] = {'Key': key, 'Start': row, 'End': row,
+                          'ColumnSet': column_set, 'FormatIdx': format_idx}
+
     for area in defn['areas']:
         area_start_row = global_row
         area_name = area.get('name', '')
@@ -914,12 +944,7 @@ def main():
             if row.get('empty'):
                 count = int(row['empty'])
                 for ei in range(count):
-                    lines.append('\t<rowsItem>')
-                    lines.append(f'\t\t<index>{global_row}</index>')
-                    lines.append('\t\t<row>')
-                    lines.append('\t\t\t<empty>true</empty>')
-                    lines.append('\t\t</row>')
-                    lines.append('\t</rowsItem>')
+                    add_gap_row('|0', global_row, '', 0)
                     global_row += 1
                     local_row += 1
                 continue
@@ -1052,7 +1077,18 @@ def main():
                         'Template': None,
                     })
 
-            # Emit rowsItem
+            # Emit rowsItem.
+            # Подряд идущие ОДИНАКОВЫЕ пустые строки платформа хранит одним элементом с indexTo;
+            # непустые не схлопывает, даже когда они совпадают. Поэтому пустую строку не пишем
+            # сразу, а копим в пробеле и сбрасываем, когда он оборвался.
+            if not row_has_content:
+                add_gap_row(f'{area_column_set}|{row_format_idx}', global_row,
+                            area_column_set, row_format_idx)
+                local_row += 1
+                global_row += 1
+                continue
+            flush_gap()
+
             lines.append('\t<rowsItem>')
             lines.append(f'\t\t<index>{global_row}</index>')
             lines.append('\t\t<row>')
@@ -1063,30 +1099,33 @@ def main():
             if row_format_idx > 0:
                 lines.append(f'\t\t\t<formatIndex>{row_format_idx}</formatIndex>')
 
-            if not row_has_content:
-                lines.append('\t\t\t<empty>true</empty>')
-            else:
-                for cell_info in row_cells:
-                    lines.append('\t\t\t<c>')
+            # Номер колонки платформа пишет только при разрыве: подряд идущая ячейка его не
+            # несёт, читатель ведёт счётчик сам. Начальное значение счётчика -1, то есть у
+            # ячейки в колонке 0 номера тоже нет.
+            prev_col = -1
+            for cell_info in row_cells:
+                lines.append('\t\t\t<c>')
+                if cell_info['Col'] != prev_col + 1:
                     lines.append(f'\t\t\t\t<i>{cell_info["Col"]}</i>')
-                    lines.append('\t\t\t\t<c>')
-                    lines.append(f'\t\t\t\t\t<f>{cell_info["FormatIdx"]}</f>')
+                prev_col = cell_info['Col']
+                lines.append('\t\t\t\t<c>')
+                lines.append(f'\t\t\t\t\t<f>{cell_info["FormatIdx"]}</f>')
 
-                    if cell_info['Param']:
-                        lines.append(f'\t\t\t\t\t<parameter>{cell_info["Param"]}</parameter>')
-                        if cell_info['Detail']:
-                            lines.append(f'\t\t\t\t\t<detailParameter>{cell_info["Detail"]}</detailParameter>')
+                if cell_info['Param']:
+                    lines.append(f'\t\t\t\t\t<parameter>{cell_info["Param"]}</parameter>')
+                    if cell_info['Detail']:
+                        lines.append(f'\t\t\t\t\t<detailParameter>{cell_info["Detail"]}</detailParameter>')
 
-                    # Проверяем НАЛИЧИЕ ключа, а не истинность: пустая строка — это текст,
-                    # платформа такие ячейки пишет с пустым <tl>, и по истинности он терялся.
-                    if cell_info['Text'] is not None:
-                        emit_cell_text(lines, cell_info['Text'])
+                # Проверяем НАЛИЧИЕ ключа, а не истинность: пустая строка — это текст,
+                # платформа такие ячейки пишет с пустым <tl>, и по истинности он терялся.
+                if cell_info['Text'] is not None:
+                    emit_cell_text(lines, cell_info['Text'])
 
-                    if cell_info['Template'] is not None:
-                        emit_cell_text(lines, cell_info['Template'])
+                if cell_info['Template'] is not None:
+                    emit_cell_text(lines, cell_info['Template'])
 
-                    lines.append('\t\t\t\t</c>')
-                    lines.append('\t\t\t</c>')
+                lines.append('\t\t\t\t</c>')
+                lines.append('\t\t\t</c>')
 
             lines.append('\t\t</row>')
             lines.append('\t</rowsItem>')
@@ -1106,6 +1145,8 @@ def main():
                 'BeginCol': -1,
                 'EndCol': -1,
             })
+
+    flush_gap()
 
     total_row_count = global_row
 
