@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.29 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.30 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -382,6 +382,21 @@ function Build-ColWidthMap {
 
 $colWidthMap = Build-ColWidthMap $def.columnWidths
 
+# Стиль колонки — тот же именованный стиль, что у ячейки и строки: колонка третий владелец
+# формата, и своих свойств у неё нет. Ключи те же, что у columnWidths.
+function Build-ColStyleMap {
+	param($styles)
+	$map = @{}
+	if ($styles) {
+		foreach ($prop in $styles.PSObject.Properties) {
+			foreach ($c in (Parse-ColumnSpec $prop.Name)) { $map[$c] = "$($prop.Value)" }
+		}
+	}
+	return $map
+}
+
+$colStyleMap = Build-ColStyleMap $def.columnStyles
+
 # Колоночные раскладки: документные columns/columnWidths — раскладка по умолчанию (в XML
 # элемент <columns> БЕЗ <id>, он всегда идёт первым). Дополнительные объявляются в
 # columnSets, ключ — идентификатор, на него ссылается область ключом columnSet.
@@ -407,7 +422,7 @@ function ConvertTo-LayoutId {
 }
 
 $columnLayouts = @()
-$columnLayouts += @{ Id = $null; Name = $null; Size = $totalColumns; Widths = $colWidthMap }
+$columnLayouts += @{ Id = $null; Name = $null; Size = $totalColumns; Widths = $colWidthMap; Styles = $colStyleMap }
 if ($def.columnSets) {
 	foreach ($prop in $def.columnSets.PSObject.Properties) {
 		$cs = $prop.Value
@@ -417,6 +432,7 @@ if ($def.columnSets) {
 			Name   = $prop.Name
 			Size   = $size
 			Widths = Build-ColWidthMap $cs.columnWidths
+			Styles = Build-ColStyleMap $cs.columnStyles
 		}
 	}
 }
@@ -455,11 +471,12 @@ function Get-ColorNamespace {
 }
 
 function Resolve-Style {
-	param([string]$styleName, [string]$fillType)
+	param([string]$styleName, [string]$fillType, [switch]$noDefaultFont)
 
 	# Набор свойств формата — «тег платформы → значение», только заданные. Порядок вставки
 	# роли не играет: и ключ дедупликации, и эмиссия идут по каноническому порядку тегов.
-	$props = @{ font = $fontMap["default"] }
+	$props = @{}
+	if (-not $noDefaultFont) { $props['font'] = $fontMap["default"] }
 
 	if ($styleName -and $def.styles) {
 		$style = $def.styles.$styleName
@@ -677,12 +694,21 @@ function Register-Format {
 # 6a. Default width format
 $defaultFormatIndex = Register-Format @{ width = $defaultWidth }
 
-# 6b. Column width formats — по одной карте на каждую колоночную раскладку
+# 6b. Column formats — по одной карте на каждую колоночную раскладку.
+# У колонки бывает и ширина, и оформление: формат один, свойства складываются.
 foreach ($layout in $columnLayouts) {
 	$map = @{}  # 1-based col -> format index
-	foreach ($col in ($layout.Widths.Keys | Sort-Object)) {
-		$w = $layout.Widths[$col]
-		$map[[int]$col] = Register-Format @{ width = $w }
+	$cols = @($layout.Widths.Keys) + @($layout.Styles.Keys) | ForEach-Object { [int]$_ } |
+		Select-Object -Unique | Sort-Object
+	foreach ($col in $cols) {
+		$props = @{}
+		if ($layout.Styles.ContainsKey($col)) {
+			# Шрифт по умолчанию колонке не навязываем: формат колонки без оформления —
+			# это ровно <width>, как пишет платформа.
+			$props = Resolve-Style -styleName $layout.Styles[$col] -fillType "" -noDefaultFont
+		}
+		if ($layout.Widths.ContainsKey($col)) { $props['width'] = $layout.Widths[$col] }
+		$map[$col] = Register-Format $props
 	}
 	$layout.FormatMap = $map
 }

@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.29 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.30 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -595,6 +595,18 @@ def main():
 
     col_width_map = build_col_width_map(defn.get('columnWidths'))
 
+    # Стиль колонки — тот же именованный стиль, что у ячейки и строки: колонка третий
+    # владелец формата, и своих свойств у неё нет. Ключи те же, что у columnWidths.
+    def build_col_style_map(styles):
+        out = {}
+        if styles:
+            for prop_name, prop_value in styles.items():
+                for c in parse_column_spec(prop_name):
+                    out[c] = str(prop_value)
+        return out
+
+    col_style_map = build_col_style_map(defn.get('columnStyles'))
+
     # Колоночные раскладки: документные columns/columnWidths — раскладка по умолчанию (в XML
     # элемент <columns> БЕЗ <id>, он всегда идёт первым). Дополнительные объявляются в
     # columnSets, ключ — идентификатор, на него ссылается область ключом columnSet.
@@ -616,7 +628,8 @@ def main():
         h = b.hex()
         return f'{h[0:8]}-{h[8:12]}-{h[12:16]}-{h[16:20]}-{h[20:32]}'
 
-    column_layouts = [{'Id': None, 'Name': None, 'Size': total_columns, 'Widths': col_width_map}]
+    column_layouts = [{'Id': None, 'Name': None, 'Size': total_columns,
+                       'Widths': col_width_map, 'Styles': col_style_map}]
     for set_name, cs in (defn.get('columnSets') or {}).items():
         size = int(cs['columns']) if cs.get('columns') is not None else total_columns
         column_layouts.append({
@@ -624,6 +637,7 @@ def main():
             'Name': set_name,
             'Size': size,
             'Widths': build_col_width_map(cs.get('columnWidths')),
+            'Styles': build_col_style_map(cs.get('columnStyles')),
         })
 
     # --- 5. Style resolver ---
@@ -651,10 +665,10 @@ def main():
             sys.exit(1)
         return {'Style': canon, 'Width': width, 'Gap': gap}
 
-    def resolve_style(style_name, fill_type):
+    def resolve_style(style_name, fill_type, no_default_font=False):
         # Набор свойств формата — «тег платформы → значение», только заданные. Порядок вставки
         # роли не играет: и ключ дедупликации, и эмиссия идут по каноническому порядку тегов.
-        props = {'font': font_map.get('default', 0)}
+        props = {} if no_default_font else {'font': font_map.get('default', 0)}
 
         if style_name and defn.get('styles'):
             style = defn['styles'].get(style_name)
@@ -759,12 +773,19 @@ def main():
     # 6a. Default width format
     default_format_index = register_format({'width': default_width})
 
-    # 6b. Column width formats — по одной карте на каждую колоночную раскладку
+    # 6b. Column formats — по одной карте на каждую колоночную раскладку.
+    # У колонки бывает и ширина, и оформление: формат один, свойства складываются.
     for layout in column_layouts:
         fmap = {}  # 1-based col -> format index
-        for col in sorted(layout['Widths']):
-            w = layout['Widths'][col]
-            fmap[int(col)] = register_format({'width': w})
+        for col in sorted({int(c) for c in list(layout['Widths']) + list(layout['Styles'])}):
+            props = {}
+            if col in layout['Styles']:
+                # Шрифт по умолчанию колонке не навязываем: формат колонки без оформления —
+                # это ровно <width>, как пишет платформа.
+                props = resolve_style(layout['Styles'][col], '', no_default_font=True)
+            if col in layout['Widths']:
+                props['width'] = layout['Widths'][col]
+            fmap[col] = register_format(props)
         layout['FormatMap'] = fmap
     col_format_map = column_layouts[0]['FormatMap']
 

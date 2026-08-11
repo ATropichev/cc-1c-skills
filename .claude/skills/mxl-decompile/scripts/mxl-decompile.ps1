@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.10 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.11 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -191,12 +191,17 @@ function Read-ColumnSet {
 			$widths.Add([string]($col0 + 1), $fmt.Width)
 		}
 	}
+	# Формат колонки несёт не только ширину — имя стиля подставим ниже, когда стили
+	# будут поименованы.
+	$fmtIdx = [ordered]@{}
+	foreach ($col0 in ($byIdx.Keys | Sort-Object)) { $fmtIdx.Add([string]($col0 + 1), $byIdx[$col0]) }
 	$sizeNode = $node.SelectSingleNode("d:size", $ns)
 	$idNode = $node.SelectSingleNode("d:id", $ns)
 	return @{
 		Id     = if ($idNode) { $idNode.InnerText } else { $null }
 		Size   = if ($sizeNode) { [int]$sizeNode.InnerText } else { 0 }
 		Widths = $widths
+		FmtIdx = $fmtIdx
 	}
 }
 
@@ -494,6 +499,18 @@ foreach ($r in $rowData.Values) {
 	}
 }
 
+# Колонка — третий владелец формата, её оформление тоже становится именованным стилем.
+foreach ($cs in $columnSets) {
+	foreach ($fi in $cs.FmtIdx.Values) {
+		$fmt = Get-Format $fi
+		if (-not $fmt) { continue }
+		if ((Get-StyleProps $fmt).Count -eq 0) { continue }
+		$key = Get-StyleKey $fmt
+		if (-not $styleKeys.Contains($key)) { $styleKeys[$key] = $fmt }
+		$formatToStyleKey[$fi] = $key
+	}
+}
+
 # Имя стиля — читаемая метка по самым заметным свойствам. Полнота тут не нужна:
 # различает стили ключ, имя лишь помогает автору ориентироваться.
 function Name-Style {
@@ -525,7 +542,10 @@ function Name-Style {
 	if ($props.Contains('backColor')) { $parts += "bg" }
 	if ($props.Contains('format')) { $parts += "fmt" }
 
-	if ($parts.Count -eq 0) { return "default" }
+	# Имя "default" зарезервировано за стилем БЕЗ свойств: под ним компилятор понимает
+	# отсутствие оформления. Набор из одних неприметных свойств (отступ, защита) обязан
+	# получить своё имя, иначе он потеряется.
+	if ($parts.Count -eq 0) { return $(if ($props.Count -eq 0) { "default" } else { "style" }) }
 	return ($parts -join "-")
 }
 
@@ -557,6 +577,18 @@ function Get-StyleName {
 	$key = $formatToStyleKey[$fmtIdx]
 	if ($key -and $styleNames.Contains($key)) { return $styleNames[$key] }
 	return "default"
+}
+
+# Колонки раскладки, у которых формат несёт не только ширину, — «колонка → стиль».
+function Get-ColumnStyles {
+	param($cs)
+	$out = [ordered]@{}
+	foreach ($col in $cs.FmtIdx.Keys) {
+		$fi = $cs.FmtIdx[$col]
+		$fmt = Get-Format $fi
+		if ($fmt -and (Get-StyleProps $fmt).Count -gt 0) { $out[$col] = Get-StyleName $fi }
+	}
+	return $out
 }
 
 # Список признаётся позиционным по тому же правилу, что и в компиляторе: есть элемент-строка
@@ -880,6 +912,10 @@ $result = [ordered]@{
 	defaultWidth = $defaultWidth
 }
 if ($compressedWidths.Count -gt 0) { $result["columnWidths"] = $compressedWidths }
+if ($defaultSet) {
+	$defaultColStyles = Get-ColumnStyles $defaultSet
+	if ($defaultColStyles.Count -gt 0) { $result["columnStyles"] = $defaultColStyles }
+}
 # Набор языков объявляем, только если он отличается от умолчания компилятора (один ru).
 if ($textLanguages.Count -gt 0 -and -not ($textLanguages.Count -eq 1 -and $textLanguages[0] -ceq 'ru')) {
 	$result["textLanguages"] = [array]$textLanguages
@@ -900,6 +936,10 @@ foreach ($a in $dslAreas) {
 		if ($cellList) { foreach ($c in $cellList) { if ($c -isnot [string] -and $c.style) { $usedStyles[$c.style] = $true } } }
 	}
 }
+# Стиль бывает не только у ячейки и строки: колонка — третий владелец формата.
+foreach ($cs in $columnSets) {
+	foreach ($name in (Get-ColumnStyles $cs).Values) { $usedStyles[$name] = $true }
+}
 $toRemove = @($styleDefs.Keys | Where-Object { -not $usedStyles.ContainsKey($_) })
 foreach ($s in $toRemove) { $styleDefs.Remove($s)
 }
@@ -916,6 +956,8 @@ if ($extraSets.Count -gt 0) {
 	foreach ($cs in $extraSets) {
 		$entry = [ordered]@{ columns = $cs.Size }
 		if ($cs.Widths.Count -gt 0) { $entry["columnWidths"] = $cs.Widths }
+		$csStyles = Get-ColumnStyles $cs
+		if ($csStyles.Count -gt 0) { $entry["columnStyles"] = $csStyles }
 		$setsOut[$cs.Id] = $entry
 	}
 	$result["columnSets"] = $setsOut

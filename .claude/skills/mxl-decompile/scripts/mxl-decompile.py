@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.10 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.11 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -363,6 +363,9 @@ def main():
             "Id": (text_of(id_node) or None) if id_node is not None else None,
             "Size": int_of(size_node) if size_node is not None else 0,
             "Widths": widths,
+            # Формат колонки несёт не только ширину — имя стиля подставим ниже, когда стили
+            # будут поименованы.
+            "FmtIdx": {str(c0 + 1): by_idx[c0] for c0 in sorted(by_idx.keys())},
         }
 
     column_sets = [read_column_set(cn) for cn in findall(root, "d:columns")]
@@ -656,6 +659,17 @@ def main():
                 style_keys[key] = fmt
             format_to_style_key[cell["FormatIdx"]] = key
 
+    # Колонка — третий владелец формата, её оформление тоже становится именованным стилем.
+    for cs in column_sets:
+        for fi in cs["FmtIdx"].values():
+            fmt = get_format(fi)
+            if not fmt or not style_props(fmt):
+                continue
+            key = get_style_key(fmt)
+            if key not in style_keys:
+                style_keys[key] = fmt
+            format_to_style_key[fi] = key
+
     def name_style(fmt):
         """Имя стиля — читаемая метка по самым заметным свойствам. Полнота тут не нужна:
         различает стили ключ, имя лишь помогает автору ориентироваться."""
@@ -694,7 +708,10 @@ def main():
             parts.append("fmt")
 
         if len(parts) == 0:
-            return "default"
+            # Имя "default" зарезервировано за стилем БЕЗ свойств: под ним компилятор
+            # понимает отсутствие оформления. Набор из одних неприметных свойств
+            # (отступ, защита) обязан получить своё имя, иначе он потеряется.
+            return "default" if not props else "style"
         return "-".join(parts)
 
     style_names = OrderedDict()
@@ -725,6 +742,15 @@ def main():
         if key and key in style_names:
             return style_names[key]
         return "default"
+
+    def column_styles_of(cs):
+        """Колонки раскладки, у которых формат несёт не только ширину, — «колонка → стиль»."""
+        out = OrderedDict()
+        for col, fi in cs["FmtIdx"].items():
+            fmt = get_format(fi)
+            if fmt and style_props(fmt):
+                out[col] = get_style_name(fi)
+        return out
 
     def to_positional_cells(cells):
         """Позиционная запись списка ячеек: позиция берётся из порядка, `col` не пишется.
@@ -1022,6 +1048,10 @@ def main():
     result["defaultWidth"] = default_width
     if len(compressed_widths) > 0:
         result["columnWidths"] = compressed_widths
+    if default_set:
+        default_col_styles = column_styles_of(default_set)
+        if default_col_styles:
+            result["columnStyles"] = default_col_styles
     # Набор языков объявляем, только если он отличается от умолчания компилятора (один ru).
     if text_languages and text_languages != ['ru']:
         result["textLanguages"] = text_languages
@@ -1047,6 +1077,11 @@ def main():
             for c in cell_list:
                 if isinstance(c, dict) and "style" in c:
                     used_styles.add(c["style"])
+    # Стиль бывает не только у ячейки и строки: колонка — третий владелец формата.
+    for src in [result.get("columnStyles")] + [
+            (cs or {}).get("columnStyles") for cs in (result.get("columnSets") or {}).values()]:
+        for name in (src or {}).values():
+            used_styles.add(name)
     to_remove = [s for s in style_defs if s not in used_styles]
     for s in to_remove:
         del style_defs[s]
@@ -1064,6 +1099,9 @@ def main():
             entry = OrderedDict([("columns", cs["Size"])])
             if cs["Widths"]:
                 entry["columnWidths"] = cs["Widths"]
+            styles_out = column_styles_of(cs)
+            if styles_out:
+                entry["columnStyles"] = styles_out
             sets_out[cs["Id"]] = entry
         result["columnSets"] = sets_out
 
