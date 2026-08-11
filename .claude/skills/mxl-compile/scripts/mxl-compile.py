@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.28 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.29 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -350,6 +350,87 @@ def format_ml_tags():
     return {'format': True, 'editFormat': True, 'mask': True}
 
 
+def format_tag_kind():
+    """Тип значения каждого тега — выведен из корпуса, а не выписан на глаз.
+    line — ссылка в палитру <line>; color — #RRGGBB / style: / web: / win:
+    ml — многоязычная строка; enum — замкнутый список (см. format_enum_values).
+    containsValue / valueType / controlType сюда НЕ входят: это свойства конкретной ячейки,
+    а стиль — сущность общая, один на многие ячейки."""
+    return {
+        'autoIndent': 'int', 'autoMarkIncomplete': 'bool', 'autoWidthCalculation': 'bool',
+        'backColor': 'color', 'border': 'line', 'borderColor': 'color',
+        'bottomBorder': 'line', 'bySelectedColumns': 'bool', 'columnSizeChange': 'enum',
+        'detailsUse': 'enum', 'drawingBorder': 'int',
+        'drawingHaveBottomBorder': 'bool', 'drawingHaveLeftBorder': 'bool',
+        'drawingHaveRightBorder': 'bool', 'drawingHaveTopBorder': 'bool',
+        'editFormat': 'ml', 'fillType': 'enum', 'font': 'int', 'format': 'ml',
+        'height': 'int', 'hidden': 'bool', 'horizontalAlignment': 'enum',
+        'hyperLink': 'bool', 'indent': 'int', 'leftBorder': 'line',
+        'markNegatives': 'bool', 'mask': 'ml', 'pattern': 'enum', 'patternColor': 'color',
+        'picHorizontalAlignment': 'enum', 'picIndex': 'int', 'picVerticalAlignment': 'enum',
+        'pictureSizeMode': 'enum', 'print': 'bool', 'protection': 'bool',
+        'rightBorder': 'line', 'textColor': 'color', 'textOrientation': 'int',
+        'textPlacement': 'enum', 'textPosition': 'enum', 'topBorder': 'line',
+        'verticalAlignment': 'enum', 'width': 'int', 'widthWeightFactor': 'int',
+    }
+
+
+def format_enum_values():
+    """Допустимые значения перечислений — тоже сняты с корпуса."""
+    return {
+        'columnSizeChange': ['Normal', 'QuickChange'],
+        'detailsUse': ['Cell', 'Row', 'WithoutProcessing'],
+        'fillType': ['Parameter', 'Template', 'Text'],
+        'horizontalAlignment': ['Auto', 'Center', 'Justify', 'Left', 'Right'],
+        'pattern': ['Pattern7', 'Pattern10', 'Pattern12', 'Pattern13', 'Pattern14',
+                    'Pattern16', 'Solid', 'WithoutPattern'],
+        'picHorizontalAlignment': ['Auto', 'Center', 'Left', 'Right'],
+        'picVerticalAlignment': ['Bottom', 'Center', 'Top'],
+        'pictureSizeMode': ['AutoSize', 'Proportionally', 'RealSize'],
+        'textPlacement': ['Auto', 'Block', 'Cut', 'Wrap'],
+        'textPosition': ['Auto', 'Bottom', 'Right', 'Top'],
+        'verticalAlignment': ['Bottom', 'Center', 'Top'],
+    }
+
+
+def style_key_synonyms():
+    """Прощающий ввод: ключ стиля, написанный иначе, чем тег платформы. Канон побеждает —
+    если заданы оба, синоним отбрасывается. Ключи карты нормализованы (lower, без пробелов).
+    Инвертированных синонимов (visible для hidden) НЕ заводим — это баг семантики, не удобство."""
+    return {
+        'align': 'horizontalAlignment', 'textalign': 'horizontalAlignment',
+        'halign': 'horizontalAlignment', 'горизонтальноеположение': 'horizontalAlignment',
+        'valign': 'verticalAlignment', 'verticalalign': 'verticalAlignment',
+        'вертикальноеположение': 'verticalAlignment',
+        'background': 'backColor', 'bgcolor': 'backColor', 'цветфона': 'backColor',
+        'color': 'textColor', 'forecolor': 'textColor', 'цветтекста': 'textColor',
+        'цветрамки': 'borderColor', 'цветузора': 'patternColor',
+        'borderleft': 'leftBorder', 'border-left': 'leftBorder',
+        'bordertop': 'topBorder', 'border-top': 'topBorder',
+        'borderright': 'rightBorder', 'border-right': 'rightBorder',
+        'borderbottom': 'bottomBorder', 'border-bottom': 'bottomBorder',
+        'protected': 'protection', 'защита': 'protection',
+        'отступ': 'indent', 'узор': 'pattern', 'гиперссылка': 'hyperLink',
+        'ориентациятекста': 'textOrientation', 'размещениетекста': 'textPlacement',
+        'переноспословам': 'wrap',
+    }
+
+
+def line_styles():
+    """Стили линии, встречающиеся в палитрах корпуса."""
+    return ['Solid', 'None', 'Dotted', 'ThinDashed', 'LargeDashed', 'ThickDashed', 'Double']
+
+
+def color_namespace(val):
+    """Цвет — значение с префиксом пространства имён (нотация платформы). style: объявлен
+    в корне документа, web/win — нет, поэтому платформа дописывает объявление прямо на узел."""
+    if val.startswith('web:'):
+        return 'http://v8.1c.ru/8.1/data/ui/colors/web'
+    if val.startswith('win:'):
+        return 'http://v8.1c.ru/8.1/data/ui/colors/windows'
+    return ''
+
+
 def get_format_key(props):
     parts = []
     for tag in format_tag_order():
@@ -430,27 +511,18 @@ def main():
     if not has_default:
         add_font('default', {'face': 'Arial', 'size': 10})
 
-    # --- 3. Determine line palette ---
-    has_thin_borders = False
-    has_thick_borders = False
+    # --- 3. Line palette ---
+    # Рамка хранится не в формате, а в палитре <line>: формат ссылается на запись индексом.
+    # Запись — тройка (стиль, ширина, gap); в корпусе gap всегда false, но тег платформа пишет.
+    line_registry = []
 
-    if defn.get('styles'):
-        for sname, sval in defn['styles'].items():
-            if sval.get('border') and sval['border'] != 'none':
-                if sval.get('borderWidth') == 'thick':
-                    has_thick_borders = True
-                else:
-                    has_thin_borders = True
-
-    thin_line_index = -1
-    thick_line_index = -1
-    line_count = 0
-    if has_thin_borders:
-        thin_line_index = line_count
-        line_count += 1
-    if has_thick_borders:
-        thick_line_index = line_count
-        line_count += 1
+    def register_line(ln):
+        key = (ln['Style'], str(ln['Width']), ln['Gap'])
+        for i, existing in enumerate(line_registry):
+            if (existing['Style'], str(existing['Width']), existing['Gap']) == key:
+                return i
+        line_registry.append(ln)
+        return len(line_registry) - 1
 
     # --- 4. Parse column width specs ---
     def parse_column_spec(spec):
@@ -555,72 +627,121 @@ def main():
         })
 
     # --- 5. Style resolver ---
+    def to_line_value(val, where):
+        """Значение рамки: строка стиля ("Dotted") либо объект { style, width, gap }.
+        Прежняя запись borderWidth: thin/thick — это ширина 1 и 2."""
+        style, width, gap = 'Solid', 1, 'false'
+        if isinstance(val, dict):
+            if val.get('style') is not None:
+                style = str(val['style'])
+            if val.get('width') is not None:
+                width = val['width']
+            if val.get('gap') is not None:
+                gap = 'true' if val['gap'] is True else 'false'
+        else:
+            style = str(val)
+        if style == 'thin':
+            style, width = 'Solid', 1
+        elif style == 'thick':
+            style, width = 'Solid', 2
+        canon = next((s for s in line_styles() if s.lower() == style.lower()), None)
+        if not canon:
+            print(f'Unknown border style "{style}" ({where}). Allowed: {", ".join(line_styles())}',
+                  file=sys.stderr)
+            sys.exit(1)
+        return {'Style': canon, 'Width': width, 'Gap': gap}
+
     def resolve_style(style_name, fill_type):
-        font_idx = font_map.get('default', 0)
-        lb = -1; tb = -1; rb = -1; bb = -1
-        ha = ''; va = ''; nf = ''
-        wrap = False
+        # Набор свойств формата — «тег платформы → значение», только заданные. Порядок вставки
+        # роли не играет: и ключ дедупликации, и эмиссия идут по каноническому порядку тегов.
+        props = {'font': font_map.get('default', 0)}
 
         if style_name and defn.get('styles'):
             style = defn['styles'].get(style_name)
             if style:
-                # Font
-                if style.get('font') and style['font'] in font_map:
-                    font_idx = font_map[style['font']]
+                kinds = format_tag_kind()
+                enums = format_enum_values()
+                synonyms = style_key_synonyms()
+                where = f'style "{style_name}"'
+                side_keys = {'left': 'leftBorder', 'top': 'topBorder',
+                             'right': 'rightBorder', 'bottom': 'bottomBorder'}
 
-                # Borders
-                if style.get('border') and style['border'] != 'none':
-                    line_idx = thick_line_index if style.get('borderWidth') == 'thick' else thin_line_index
-                    for side in style['border'].split(','):
-                        side = side.strip()
-                        if side == 'all':
-                            lb = line_idx; tb = line_idx; rb = line_idx; bb = line_idx
-                        elif side == 'left':
-                            lb = line_idx
-                        elif side == 'top':
-                            tb = line_idx
-                        elif side == 'right':
-                            rb = line_idx
-                        elif side == 'bottom':
-                            bb = line_idx
+                # Прежняя запись рамки: стороны строкой + borderWidth. Разворачиваем в
+                # посторонние ключи ДО общего разбора, чтобы дальше был один путь.
+                legacy = style.get('border')
+                legacy_sides = (isinstance(legacy, str) and legacy
+                                and not any(s.lower() == legacy.lower() for s in line_styles()))
+                if legacy_sides:
+                    idx = register_line(to_line_value(
+                        {'style': 'Solid', 'width': 2 if str(style.get('borderWidth')) == 'thick' else 1},
+                        where))
+                    for side in legacy.split(','):
+                        s = side.strip().lower()
+                        if s == 'none':
+                            continue
+                        if s == 'all':
+                            for k in side_keys.values():
+                                props[k] = idx
+                        elif s in side_keys:
+                            props[side_keys[s]] = idx
+                        else:
+                            print(f'Unknown border side "{side.strip()}" ({where}).'
+                                  f' Allowed: all, left, top, right, bottom, none', file=sys.stderr)
+                            sys.exit(1)
 
-                # Alignment
-                if style.get('align'):
-                    align_map = {'left': 'Left', 'center': 'Center', 'right': 'Right'}
-                    ha = align_map.get(style['align'], '')
-                if style.get('valign'):
-                    valign_map = {'top': 'Top', 'center': 'Center'}
-                    va = valign_map.get(style['valign'], '')
+                for raw, val in style.items():
+                    # Синонимы: канон побеждает, сравнение без регистра и пробелов.
+                    norm = re.sub(r'\s', '', raw).lower()
+                    tag = synonyms.get(norm, raw)
+                    if tag == 'borderWidth':
+                        continue
+                    if tag == 'border' and legacy_sides:
+                        continue
+                    if val is None or (isinstance(val, str) and val == ''):
+                        continue
 
-                # Wrap
-                if style.get('wrap') is True:
-                    wrap = True
+                    if tag == 'font':
+                        if str(val) in font_map:
+                            props['font'] = font_map[str(val)]
+                        continue
+                    # wrap — не имя, а сокращение: булево вместо перечисления textPlacement.
+                    if tag == 'wrap':
+                        if val is True or str(val) == 'true':
+                            props['textPlacement'] = 'Wrap'
+                        continue
+                    if tag not in kinds:
+                        print(f"Warning: unknown style key '{raw}' ({where}) — ignored.", file=sys.stderr)
+                        continue
+                    kind = kinds[tag]
+                    if kind == 'line':
+                        props[tag] = register_line(to_line_value(val, where))
+                    elif kind == 'bool':
+                        props[tag] = 'true' if (val is True or str(val) == 'true') else 'false'
+                    elif kind == 'int':
+                        props[tag] = int(val)
+                    elif kind == 'enum':
+                        allowed = enums[tag]
+                        canon = next((a for a in allowed if a.lower() == str(val).lower()), None)
+                        if not canon:
+                            print(f'Unknown \'{tag}\' value "{val}" ({where}).'
+                                  f' Allowed: {", ".join(allowed)}', file=sys.stderr)
+                            sys.exit(1)
+                        props[tag] = canon
+                    else:
+                        props[tag] = str(val)
 
-                # Number format
-                if style.get('format'):
-                    nf = style['format']
-
-        # Набор свойств формата — «тег платформы → значение», только заданные. Порядок вставки
-        # роли не играет: и ключ дедупликации, и эмиссия идут по каноническому порядку тегов.
-        props = {'font': font_idx}
-        if lb >= 0:
-            props['leftBorder'] = lb
-        if tb >= 0:
-            props['topBorder'] = tb
-        if rb >= 0:
-            props['rightBorder'] = rb
-        if bb >= 0:
-            props['bottomBorder'] = bb
-        if ha:
-            props['horizontalAlignment'] = ha
-        if va:
-            props['verticalAlignment'] = va
-        if wrap:
-            props['textPlacement'] = 'Wrap'
         if fill_type:
             props['fillType'] = fill_type
-        if nf:
-            props['format'] = nf
+
+        # Одинаковые четыре стороны платформа пишет одним <border>. Правило проверено на корпусе:
+        # 70 265 свёрнутых форматов, 36 783 записанных по сторонам — и среди вторых нет ни одного
+        # с четырьмя совпадающими значениями.
+        sides = ['leftBorder', 'topBorder', 'rightBorder', 'bottomBorder']
+        if all(s in props for s in sides) and len({props[s] for s in sides}) == 1:
+            val = props[sides[0]]
+            for s in sides:
+                del props[s]
+            props['border'] = val
         return props
 
     # --- 6. Format palette builder ---
@@ -1294,13 +1415,9 @@ def main():
         lines.append('\t</namedItem>')
 
     # 7h. Line palette
-    if has_thin_borders:
-        lines.append('\t<line width="1" gap="false">')
-        lines.append('\t\t<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Solid</v8ui:style>')
-        lines.append('\t</line>')
-    if has_thick_borders:
-        lines.append('\t<line width="2" gap="false">')
-        lines.append('\t\t<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Solid</v8ui:style>')
+    for ln in line_registry:
+        lines.append(f'\t<line width="{ln["Width"]}" gap="{ln["Gap"]}">')
+        lines.append(f'\t\t<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">{ln["Style"]}</v8ui:style>')
         lines.append('\t</line>')
 
     # 7i. Font palette
@@ -1313,6 +1430,7 @@ def main():
         lines.append('\t<format>')
 
         ml_tags = format_ml_tags()
+        kinds = format_tag_kind()
         for tag in format_tag_order():
             if tag not in fmt:
                 continue
@@ -1324,6 +1442,12 @@ def main():
                 lines.append(f'\t\t\t\t<v8:content>{esc_xml_text(val)}</v8:content>')
                 lines.append('\t\t\t</v8:item>')
                 lines.append(f'\t\t</{tag}>')
+            elif kinds.get(tag) == 'color' and color_namespace(str(val)):
+                # web/win-палитры в корне документа не объявлены — платформа дописывает
+                # объявление прямо на узел и пишет значение с этим префиксом.
+                ns = color_namespace(str(val))
+                name = str(val)[str(val).index(':') + 1:]
+                lines.append(f'\t\t<{tag} xmlns:d3p1="{ns}">d3p1:{name}</{tag}>')
             else:
                 lines.append(f'\t\t<{tag}>{val}</{tag}>')
 
@@ -1351,7 +1475,7 @@ def main():
     if defn.get('page'):
         print(f"     Page: {page_name} -> target {target_width}, defaultWidth={default_width}")
     print(f"     Areas: {len(named_items)}, Rows: {total_row_count}, Columns: {total_columns}")
-    print(f"     Fonts: {len(font_entries)}, Lines: {line_count}, Formats: {len(format_registry)}")
+    print(f"     Fonts: {len(font_entries)}, Lines: {len(line_registry)}, Formats: {len(format_registry)}")
     print(f"     Merges: {len(merges)}")
 
 

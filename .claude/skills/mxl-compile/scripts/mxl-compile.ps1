@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.28 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.29 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -268,33 +268,29 @@ if (-not $hasDefault) {
 	Add-Font -name "default" -fontDef $defaultDef
 }
 
-# --- 3. Determine line palette ---
+# --- 3. Line palette ---
+# Рамка хранится не в формате, а в палитре <line>: формат ссылается на запись индексом.
+# Запись — тройка (стиль, ширина, gap); в корпусе gap всегда false, но тег платформа пишет.
+$script:lineRegistry = @()
 
-$hasThinBorders = $false
-$hasThickBorders = $false
+function Get-LineKey {
+	param($ln)
+	return "$($ln.Style)|$($ln.Width)|$($ln.Gap)"
+}
 
-# Scan styles for border usage
-if ($def.styles) {
-	foreach ($prop in $def.styles.PSObject.Properties) {
-		$s = $prop.Value
-		if ($s.border -and $s.border -ne "none") {
-			if ($s.borderWidth -eq "thick") {
-				$hasThickBorders = $true
-			} else {
-				$hasThinBorders = $true
-			}
-		}
+function Register-Line {
+	param($ln)
+	$key = Get-LineKey $ln
+	for ($i = 0; $i -lt $script:lineRegistry.Count; $i++) {
+		if ((Get-LineKey $script:lineRegistry[$i]) -ceq $key) { return $i }
 	}
+	$script:lineRegistry += $ln
+	return $script:lineRegistry.Count - 1
 }
 
-$thinLineIndex = -1
-$thickLineIndex = -1
-$lineCount = 0
-if ($hasThinBorders) {
-	$thinLineIndex = $lineCount; $lineCount++
-}
-if ($hasThickBorders) {
-	$thickLineIndex = $lineCount; $lineCount++
+function Get-LineStyles {
+	# Стили линии, встречающиеся в палитрах корпуса.
+	return @('Solid', 'None', 'Dotted', 'ThinDashed', 'LargeDashed', 'ThickDashed', 'Double')
 }
 
 # --- 4. Parse column width specs ---
@@ -427,71 +423,131 @@ if ($def.columnSets) {
 
 # --- 5. Style resolver ---
 
+# Значение рамки: строка стиля ("Dotted") либо объект { style, width, gap }.
+# Прежняя запись borderWidth: thin/thick — это ширина 1 и 2.
+function ConvertTo-LineValue {
+	param($val, [string]$where)
+	$style = 'Solid'; $width = 1; $gap = 'false'
+	if ($val -is [string] -or $val -is [int]) {
+		$style = "$val"
+	} else {
+		if ($null -ne $val.style) { $style = "$($val.style)" }
+		if ($null -ne $val.width) { $width = "$($val.width)" }
+		if ($null -ne $val.gap) { $gap = if ($val.gap -eq $true) { 'true' } else { 'false' } }
+	}
+	if ($style -ceq 'thin') { $style = 'Solid'; $width = 1 }
+	elseif ($style -ceq 'thick') { $style = 'Solid'; $width = 2 }
+	$canon = Get-LineStyles | Where-Object { $_ -eq $style } | Select-Object -First 1
+	if (-not $canon) {
+		[Console]::Error.WriteLine("Unknown border style `"$style`" ($where). Allowed: $((Get-LineStyles) -join ', ')")
+		exit 1
+	}
+	return @{ Style = $canon; Width = $width; Gap = $gap }
+}
+
+# Цвет — значение с префиксом пространства имён (нотация платформы). style: объявлен в корне
+# документа, web/win — нет, поэтому платформа дописывает объявление прямо на узел.
+function Get-ColorNamespace {
+	param([string]$val)
+	if ($val -like 'web:*') { return 'http://v8.1c.ru/8.1/data/ui/colors/web' }
+	if ($val -like 'win:*') { return 'http://v8.1c.ru/8.1/data/ui/colors/windows' }
+	return ''
+}
+
 function Resolve-Style {
 	param([string]$styleName, [string]$fillType)
 
-	$fontIdx = $fontMap["default"]
-	$lb = -1; $tb = -1; $rb = -1; $bb = -1
-	$ha = ""; $va = ""; $nf = ""
-	$wrap = $false
+	# Набор свойств формата — «тег платформы → значение», только заданные. Порядок вставки
+	# роли не играет: и ключ дедупликации, и эмиссия идут по каноническому порядку тегов.
+	$props = @{ font = $fontMap["default"] }
 
 	if ($styleName -and $def.styles) {
 		$style = $def.styles.$styleName
 		if ($style) {
-			# Font
-			if ($style.font -and $fontMap.Contains($style.font)) {
-				$fontIdx = $fontMap[$style.font]
-			}
+			$kinds = Get-FormatTagKind
+			$enums = Get-FormatEnumValues
+			$synonyms = Get-StyleKeySynonyms
+			$where = "style `"$styleName`""
 
-			# Borders
-			if ($style.border -and $style.border -ne "none") {
-				$lineIdx = if ($style.borderWidth -eq "thick") { $thickLineIndex } else { $thinLineIndex }
-				foreach ($side in ($style.border -split ',')) {
-					switch ($side.Trim()) {
-						"all"    { $lb = $lineIdx; $tb = $lineIdx; $rb = $lineIdx; $bb = $lineIdx }
-						"left"   { $lb = $lineIdx }
-						"top"    { $tb = $lineIdx }
-						"right"  { $rb = $lineIdx }
-						"bottom" { $bb = $lineIdx }
+			# Прежняя запись рамки: стороны строкой + borderWidth. Разворачиваем в посторонние
+			# ключи ДО общего разбора, чтобы дальше был один путь.
+			$sideKeys = @{ left = 'leftBorder'; top = 'topBorder'; right = 'rightBorder'; bottom = 'bottomBorder' }
+			$legacyBorder = $style.border
+			if ($legacyBorder -is [string] -and $legacyBorder -and (Get-LineStyles | Where-Object { $_ -eq $legacyBorder }).Count -eq 0) {
+				$ln = ConvertTo-LineValue @{ style = 'Solid'; width = $(if ("$($style.borderWidth)" -ceq 'thick') { 2 } else { 1 }) } $where
+				$idx = Register-Line $ln
+				foreach ($side in ($legacyBorder -split ',')) {
+					$s = $side.Trim().ToLower()
+					if ($s -eq 'none') { continue }
+					if ($s -eq 'all') {
+						foreach ($k in $sideKeys.Values) { $props[$k] = $idx }
+					} elseif ($sideKeys.ContainsKey($s)) {
+						$props[$sideKeys[$s]] = $idx
+					} else {
+						[Console]::Error.WriteLine("Unknown border side `"$($side.Trim())`" ($where). Allowed: all, left, top, right, bottom, none")
+						exit 1
 					}
 				}
 			}
 
-			# Alignment
-			if ($style.align) {
-				switch ($style.align) {
-					"left"   { $ha = "Left" }
-					"center" { $ha = "Center" }
-					"right"  { $ha = "Right" }
+			foreach ($p in $style.PSObject.Properties) {
+				$raw = $p.Name
+				# Синонимы: канон побеждает, сравнение без регистра и пробелов.
+				$norm = ($raw -replace '\s', '').ToLower()
+				$tag = if ($synonyms.ContainsKey($norm)) { $synonyms[$norm] } else { $raw }
+				if ($tag -ceq 'borderWidth') { continue }
+				if ($tag -ceq 'border' -and $legacyBorder -is [string] -and
+					(Get-LineStyles | Where-Object { $_ -eq $legacyBorder }).Count -eq 0) { continue }
+
+				$val = $p.Value
+				if ($null -eq $val -or ($val -is [string] -and $val -eq '')) { continue }
+
+				if ($tag -ceq 'font') {
+					if ($fontMap.Contains("$val")) { $props['font'] = $fontMap["$val"] }
+					continue
+				}
+				# wrap — не имя, а сокращение: булево вместо перечисления textPlacement.
+				if ($tag -ceq 'wrap') {
+					if ($val -eq $true -or "$val" -eq 'true') { $props['textPlacement'] = 'Wrap' }
+					continue
+				}
+				if (-not $kinds.ContainsKey($tag)) {
+					Write-Warning "Unknown style key '$raw' ($where) — ignored."
+					continue
+				}
+				switch ($kinds[$tag]) {
+					'line' { $props[$tag] = Register-Line (ConvertTo-LineValue $val $where) }
+					'bool' { $props[$tag] = if ($val -eq $true -or "$val" -eq 'true') { 'true' } else { 'false' } }
+					'int'  { $props[$tag] = [int]$val }
+					'enum' {
+						$allowed = $enums[$tag]
+						$canon = $allowed | Where-Object { $_ -eq "$val" } | Select-Object -First 1
+						if (-not $canon) {
+							[Console]::Error.WriteLine("Unknown '$tag' value `"$val`" ($where). Allowed: $($allowed -join ', ')")
+							exit 1
+						}
+						$props[$tag] = $canon
+					}
+					default { $props[$tag] = "$val" }
 				}
 			}
-			if ($style.valign) {
-				switch ($style.valign) {
-					"top"    { $va = "Top" }
-					"center" { $va = "Center" }
-				}
-			}
-
-			# Wrap
-			if ($style.wrap -eq $true) { $wrap = $true }
-
-			# Number format
-			if ($style.format) { $nf = $style.format }
 		}
 	}
 
-	# Набор свойств формата — «тег платформы → значение», только заданные. Порядок вставки
-	# роли не играет: и ключ дедупликации, и эмиссия идут по каноническому порядку тегов.
-	$props = @{ font = $fontIdx }
-	if ($lb -ge 0) { $props['leftBorder'] = $lb }
-	if ($tb -ge 0) { $props['topBorder'] = $tb }
-	if ($rb -ge 0) { $props['rightBorder'] = $rb }
-	if ($bb -ge 0) { $props['bottomBorder'] = $bb }
-	if ($ha) { $props['horizontalAlignment'] = $ha }
-	if ($va) { $props['verticalAlignment'] = $va }
-	if ($wrap) { $props['textPlacement'] = 'Wrap' }
 	if ($fillType) { $props['fillType'] = $fillType }
-	if ($nf) { $props['format'] = $nf }
+
+	# Одинаковые четыре стороны платформа пишет одним <border>. Правило проверено на корпусе:
+	# 70 265 свёрнутых форматов, 36 783 записанных по сторонам — и среди вторых нет ни одного
+	# с четырьмя совпадающими значениями.
+	$sides = @('leftBorder', 'topBorder', 'rightBorder', 'bottomBorder')
+	$present = @($sides | Where-Object { $props.ContainsKey($_) })
+	if ($present.Count -eq 4) {
+		$vals = @($sides | ForEach-Object { $props[$_] } | Select-Object -Unique)
+		if ($vals.Count -eq 1) {
+			foreach ($s in $sides) { $props.Remove($s) }
+			$props['border'] = $vals[0]
+		}
+	}
 	return $props
 }
 
@@ -524,8 +580,74 @@ function Get-FormatMlTags {
 	return @{ 'format' = $true; 'editFormat' = $true; 'mask' = $true }
 }
 
+# Тип значения каждого тега — выведен из корпуса, а не выписан на глаз.
+# line  — ссылка в палитру <line>;  color — #RRGGBB / style: / web: / win:
+# ml    — многоязычная строка;      enum  — замкнутый список (см. Get-FormatEnumValues)
+# containsValue / valueType / controlType сюда НЕ входят: это свойства конкретной ячейки,
+# а стиль — сущность общая, один на многие ячейки.
+function Get-FormatTagKind {
+	return @{
+		'autoIndent' = 'int'; 'autoMarkIncomplete' = 'bool'; 'autoWidthCalculation' = 'bool'
+		'backColor' = 'color'; 'border' = 'line'; 'borderColor' = 'color'
+		'bottomBorder' = 'line'; 'bySelectedColumns' = 'bool'; 'columnSizeChange' = 'enum'
+		'detailsUse' = 'enum'; 'drawingBorder' = 'int'
+		'drawingHaveBottomBorder' = 'bool'; 'drawingHaveLeftBorder' = 'bool'
+		'drawingHaveRightBorder' = 'bool'; 'drawingHaveTopBorder' = 'bool'
+		'editFormat' = 'ml'; 'fillType' = 'enum'; 'font' = 'int'; 'format' = 'ml'
+		'height' = 'int'; 'hidden' = 'bool'; 'horizontalAlignment' = 'enum'
+		'hyperLink' = 'bool'; 'indent' = 'int'; 'leftBorder' = 'line'
+		'markNegatives' = 'bool'; 'mask' = 'ml'; 'pattern' = 'enum'; 'patternColor' = 'color'
+		'picHorizontalAlignment' = 'enum'; 'picIndex' = 'int'; 'picVerticalAlignment' = 'enum'
+		'pictureSizeMode' = 'enum'; 'print' = 'bool'; 'protection' = 'bool'
+		'rightBorder' = 'line'; 'textColor' = 'color'; 'textOrientation' = 'int'
+		'textPlacement' = 'enum'; 'textPosition' = 'enum'; 'topBorder' = 'line'
+		'verticalAlignment' = 'enum'; 'width' = 'int'; 'widthWeightFactor' = 'int'
+	}
+}
+
+# Допустимые значения перечислений — тоже сняты с корпуса.
+function Get-FormatEnumValues {
+	return @{
+		'columnSizeChange' = @('Normal', 'QuickChange')
+		'detailsUse' = @('Cell', 'Row', 'WithoutProcessing')
+		'fillType' = @('Parameter', 'Template', 'Text')
+		'horizontalAlignment' = @('Auto', 'Center', 'Justify', 'Left', 'Right')
+		'pattern' = @('Pattern7', 'Pattern10', 'Pattern12', 'Pattern13', 'Pattern14', 'Pattern16', 'Solid', 'WithoutPattern')
+		'picHorizontalAlignment' = @('Auto', 'Center', 'Left', 'Right')
+		'picVerticalAlignment' = @('Bottom', 'Center', 'Top')
+		'pictureSizeMode' = @('AutoSize', 'Proportionally', 'RealSize')
+		'textPlacement' = @('Auto', 'Block', 'Cut', 'Wrap')
+		'textPosition' = @('Auto', 'Bottom', 'Right', 'Top')
+		'verticalAlignment' = @('Bottom', 'Center', 'Top')
+	}
+}
+
+# Прощающий ввод: ключ стиля, написанный иначе, чем тег платформы. Канон побеждает —
+# если заданы оба, синоним отбрасывается. Ключи карты нормализованы (lower, без пробелов).
+# Инвертированных синонимов (visible для hidden) НЕ заводим — это баг семантики, не удобство.
+function Get-StyleKeySynonyms {
+	return @{
+		'align' = 'horizontalAlignment'; 'textalign' = 'horizontalAlignment'
+		'halign' = 'horizontalAlignment'; 'горизонтальноеположение' = 'horizontalAlignment'
+		'valign' = 'verticalAlignment'; 'verticalalign' = 'verticalAlignment'
+		'вертикальноеположение' = 'verticalAlignment'
+		'background' = 'backColor'; 'bgcolor' = 'backColor'; 'цветфона' = 'backColor'
+		'color' = 'textColor'; 'forecolor' = 'textColor'; 'цветтекста' = 'textColor'
+		'цветрамки' = 'borderColor'; 'цветузора' = 'patternColor'
+		'borderleft' = 'leftBorder'; 'border-left' = 'leftBorder'
+		'bordertop' = 'topBorder'; 'border-top' = 'topBorder'
+		'borderright' = 'rightBorder'; 'border-right' = 'rightBorder'
+		'borderbottom' = 'bottomBorder'; 'border-bottom' = 'bottomBorder'
+		'protected' = 'protection'; 'защита' = 'protection'
+		'отступ' = 'indent'; 'узор' = 'pattern'; 'гиперссылка' = 'hyperLink'
+		'ориентациятекста' = 'textOrientation'; 'размещениетекста' = 'textPlacement'
+		'переноспословам' = 'wrap'
+	}
+}
+
 $script:formatTagOrder = Get-FormatTagOrder
 $script:formatMlTags = Get-FormatMlTags
+$script:formatTagKind = Get-FormatTagKind
 
 function Get-FormatKey {
 	param([hashtable]$props)
@@ -1315,14 +1437,9 @@ foreach ($ni in $sortedNamedItems) {
 }
 
 # 7h. Line palette
-if ($hasThinBorders) {
-	X "`t<line width=`"1`" gap=`"false`">"
-	X "`t`t<v8ui:style xsi:type=`"v8ui:SpreadsheetDocumentCellLineType`">Solid</v8ui:style>"
-	X "`t</line>"
-}
-if ($hasThickBorders) {
-	X "`t<line width=`"2`" gap=`"false`">"
-	X "`t`t<v8ui:style xsi:type=`"v8ui:SpreadsheetDocumentCellLineType`">Solid</v8ui:style>"
+foreach ($ln in $script:lineRegistry) {
+	X "`t<line width=`"$($ln.Width)`" gap=`"$($ln.Gap)`">"
+	X "`t`t<v8ui:style xsi:type=`"v8ui:SpreadsheetDocumentCellLineType`">$($ln.Style)</v8ui:style>"
 	X "`t</line>"
 }
 
@@ -1346,6 +1463,12 @@ foreach ($key in $formatRegistry.Keys) {
 			X "`t`t`t`t<v8:content>$(Esc-XmlText $val)</v8:content>"
 			X "`t`t`t</v8:item>"
 			X "`t`t</$tag>"
+		} elseif ($script:formatTagKind[$tag] -ceq 'color' -and (Get-ColorNamespace "$val")) {
+			# web/win-палитры в корне документа не объявлены — платформа дописывает объявление
+			# прямо на узел и пишет значение с этим префиксом.
+			$ns = Get-ColorNamespace "$val"
+			$name = "$val".Substring("$val".IndexOf(':') + 1)
+			X "`t`t<$tag xmlns:d3p1=`"$ns`">d3p1:$name</$tag>"
 		} else {
 			X "`t`t<$tag>$val</$tag>"
 		}
@@ -1376,5 +1499,5 @@ if ($def.page) {
 	Write-Host "     Page: $pageName -> target $targetWidth, defaultWidth=$defaultWidth"
 }
 Write-Host "     Areas: $($namedItems.Count), Rows: $totalRowCount, Columns: $totalColumns"
-Write-Host "     Fonts: $($fontEntries.Count), Lines: $lineCount, Formats: $($formatRegistry.Count)"
+Write-Host "     Fonts: $($fontEntries.Count), Lines: $($script:lineRegistry.Count), Formats: $($formatRegistry.Count)"
 Write-Host "     Merges: $($merges.Count)"

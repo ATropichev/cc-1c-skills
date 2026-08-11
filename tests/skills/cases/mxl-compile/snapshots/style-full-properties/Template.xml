@@ -10,92 +10,18 @@
 		</languageInfo>
 	</languageSettings>
 	<columns>
-		<size>5</size>
-		<columnsItem>
-			<index>0</index>
-			<column>
-				<formatIndex>1</formatIndex>
-			</column>
-		</columnsItem>
-		<columnsItem>
-			<index>1</index>
-			<column>
-				<formatIndex>2</formatIndex>
-			</column>
-		</columnsItem>
-		<columnsItem>
-			<index>2</index>
-			<column>
-				<formatIndex>1</formatIndex>
-			</column>
-		</columnsItem>
-		<columnsItem>
-			<index>3</index>
-			<column>
-				<formatIndex>1</formatIndex>
-			</column>
-		</columnsItem>
-		<columnsItem>
-			<index>4</index>
-			<column>
-				<formatIndex>1</formatIndex>
-			</column>
-		</columnsItem>
+		<size>4</size>
 	</columns>
 	<rowsItem>
 		<index>0</index>
 		<row>
 			<c>
 				<c>
-					<f>3</f>
+					<f>2</f>
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>№</v8:content>
-						</v8:item>
-					</tl>
-				</c>
-			</c>
-			<c>
-				<c>
-					<f>3</f>
-					<tl>
-						<v8:item>
-							<v8:lang>ru</v8:lang>
-							<v8:content>Описание</v8:content>
-						</v8:item>
-					</tl>
-				</c>
-			</c>
-			<c>
-				<c>
-					<f>3</f>
-					<tl>
-						<v8:item>
-							<v8:lang>ru</v8:lang>
-							<v8:content>Ед.</v8:content>
-						</v8:item>
-					</tl>
-				</c>
-			</c>
-			<c>
-				<c>
-					<f>3</f>
-					<tl>
-						<v8:item>
-							<v8:lang>ru</v8:lang>
-							<v8:content>Кол-во</v8:content>
-						</v8:item>
-					</tl>
-				</c>
-			</c>
-			<c>
-				<c>
-					<f>3</f>
-					<tl>
-						<v8:item>
-							<v8:lang>ru</v8:lang>
-							<v8:content>Сумма</v8:content>
+							<v8:content>Отчёт о движении</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -107,32 +33,41 @@
 		<row>
 			<c>
 				<c>
+					<f>3</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Слева пунктир</v8:content>
+						</v8:item>
+					</tl>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>4</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Цвет из палитры</v8:content>
+						</v8:item>
+					</tl>
+				</c>
+			</c>
+			<c>
+				<c>
 					<f>5</f>
-					<parameter>Номер</parameter>
+					<parameter>Скрытое</parameter>
 				</c>
 			</c>
 			<c>
 				<c>
 					<f>6</f>
-					<parameter>Описание</parameter>
-				</c>
-			</c>
-			<c>
-				<c>
-					<f>5</f>
-					<parameter>ЕдИзм</parameter>
-				</c>
-			</c>
-			<c>
-				<c>
-					<f>5</f>
-					<parameter>Количество</parameter>
-				</c>
-			</c>
-			<c>
-				<c>
-					<f>6</f>
-					<parameter>Сумма</parameter>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Рамка свёрнута</v8:content>
+						</v8:item>
+					</tl>
 				</c>
 			</c>
 		</row>
@@ -141,8 +76,13 @@
 	<defaultFormatIndex>1</defaultFormatIndex>
 	<height>2</height>
 	<vgRows>2</vgRows>
+	<merge>
+		<r>0</r>
+		<c>0</c>
+		<w>3</w>
+	</merge>
 	<namedItem xsi:type="NamedItemCells">
-		<name>Строка</name>
+		<name>Тело</name>
 		<area>
 			<type>Rows</type>
 			<beginRow>1</beginRow>
@@ -152,7 +92,7 @@
 		</area>
 	</namedItem>
 	<namedItem xsi:type="NamedItemCells">
-		<name>ШапкаТаблицы</name>
+		<name>Шапка</name>
 		<area>
 			<type>Rows</type>
 			<beginRow>0</beginRow>
@@ -162,34 +102,52 @@
 		</area>
 	</namedItem>
 	<line width="1" gap="false">
+		<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Dotted</v8ui:style>
+	</line>
+	<line width="2" gap="false">
+		<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Solid</v8ui:style>
+	</line>
+	<line width="1" gap="false">
+		<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">ThinDashed</v8ui:style>
+	</line>
+	<line width="1" gap="false">
 		<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">Solid</v8ui:style>
 	</line>
 	<font faceName="Arial" height="10" bold="false" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<font faceName="Arial" height="10" bold="true" italic="false" underline="false" strikeout="false" kind="Absolute" scale="100"/>
 	<format>
-		<width>111</width>
-	</format>
-	<format>
-		<width>333</width>
+		<width>20</width>
 	</format>
 	<format>
 		<font>1</font>
-		<border>0</border>
 		<horizontalAlignment>Center</horizontalAlignment>
+		<verticalAlignment>Center</verticalAlignment>
+		<textColor>style:FormTextColor</textColor>
+		<backColor>#EBEBEB</backColor>
+		<textPlacement>Wrap</textPlacement>
+		<protection>true</protection>
 	</format>
 	<format>
 		<font>0</font>
-		<border>0</border>
+		<leftBorder>0</leftBorder>
+		<topBorder>1</topBorder>
+		<bottomBorder>2</bottomBorder>
+		<borderColor>#C8C8C8</borderColor>
 	</format>
 	<format>
 		<font>0</font>
-		<border>0</border>
-		<horizontalAlignment>Center</horizontalAlignment>
+		<textColor xmlns:d3p1="http://v8.1c.ru/8.1/data/ui/colors/windows">d3p1:ButtonText</textColor>
+		<backColor xmlns:d3p1="http://v8.1c.ru/8.1/data/ui/colors/web">d3p1:Gainsboro</backColor>
+	</format>
+	<format>
+		<font>0</font>
 		<fillType>Parameter</fillType>
+		<hidden>true</hidden>
+		<textOrientation>900</textOrientation>
+		<indent>2</indent>
 	</format>
 	<format>
 		<font>0</font>
-		<border>0</border>
-		<fillType>Parameter</fillType>
+		<border>3</border>
 	</format>
 </document>
