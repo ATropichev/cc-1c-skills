@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.16 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.17 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -308,6 +308,10 @@ def main():
                 if val:
                     fmt["Props"][tag] = val
                 continue
+            # Вложенный элемент скаляром не является: .text дал бы пустоту, а ps1-порт брал
+            # InnerText и получал склейку поддерева — отсюда расхождение портов.
+            if len(child):
+                continue
             val = (child.text or "").strip()
             if not val:
                 continue
@@ -409,6 +413,9 @@ def main():
             return int_of(n) if n is not None else -1
 
         named_areas.append({
+            # Порядок в исходнике — явный ключ сортировки: sorted тут стабилен, а
+            # Sort-Object в ps1 нет, и без него порты расходились.
+            "Ord": len(named_areas),
             "Name": text_of(find(ni_node, "d:name")) or "",
             "Type": text_of(find(area_node, "d:type")) or "",
             "BeginRow": coord("beginRow"),
@@ -535,7 +542,11 @@ def main():
 
     # Свойства формата, которые стилем НЕ являются: ширина принадлежит колонке, высота —
     # строке, вид заполнения выводится из того, чем задано содержимое ячейки.
-    NON_STYLE_TAGS = ("width", "height", "fillType", "font")
+    # containsValue/valueType/controlType — свойства ЗНАЧЕНИЯ ячейки, а не оформления: стиль
+    # общий на многие ячейки, а они индивидуальны. Компилятор таких ключей не знает, так что
+    # в DSL они были чистым шумом.
+    NON_STYLE_TAGS = ("width", "height", "fillType", "font",
+                      "containsValue", "valueType", "controlType")
     BORDER_TAGS = ("border", "leftBorder", "topBorder", "rightBorder", "bottomBorder")
 
     def line_to_dsl(idx):
@@ -853,7 +864,7 @@ def main():
     block_areas = []
     overlay_areas = []
     claimed = set()
-    for a in sorted(named_areas, key=lambda x: (x["BeginRow"], x["EndRow"])):
+    for a in sorted(named_areas, key=lambda x: (x["BeginRow"], x["EndRow"], x["Ord"])):
         fits = a["Type"] == "Rows" and a["BeginRow"] >= 0 and a["EndRow"] >= a["BeginRow"]
         if fits:
             for r in range(a["BeginRow"], a["EndRow"] + 1):

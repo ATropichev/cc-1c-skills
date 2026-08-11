@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.16 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.17 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -19,7 +19,9 @@ if (-not (Test-Path $TemplatePath)) {
 }
 
 $xmlDoc = New-Object System.Xml.XmlDocument
-$xmlDoc.PreserveWhitespace = $false
+# PreserveWhitespace = $false схлопывает узел из одних пробелов в пустой, и текст ячейки
+# вида "  " терялся молча (25 макетов пилота). Значащие пробелы в тексте надписи есть.
+$xmlDoc.PreserveWhitespace = $true
 $xmlDoc.Load((Resolve-Path $TemplatePath).Path)
 
 $root = $xmlDoc.DocumentElement
@@ -139,6 +141,9 @@ foreach ($fmtNode in $root.SelectNodes("d:format", $ns)) {
 			if ($item -and $item.InnerText) { $fmt.Props[$tag] = $item.InnerText }
 			continue
 		}
+		# Вложенный элемент скаляром не является: InnerText склеил бы всё поддерево вместе
+		# с переводами строк. py-порт брал .text и получал пустоту — отсюда расхождение портов.
+		if ($child.SelectNodes('*').Count -gt 0) { continue }
 		$val = $child.InnerText
 		if ([string]::IsNullOrWhiteSpace($val)) { continue }
 		if ($formatKinds[$tag] -ceq 'color') { $val = ConvertTo-DslColor $child $val }
@@ -246,6 +251,10 @@ foreach ($niNode in $root.SelectNodes("d:namedItem", $ns)) {
 	}
 
 	$namedAreas += @{
+		# Порядок в исходнике: Sort-Object в PowerShell 5.1 НЕстабилен (-Stable появился
+		# в 6.2), поэтому области с одинаковыми границами получали произвольный порядок,
+		# и вывод расходился с py-портом от запуска к запуску.
+		Ord      = $namedAreas.Count
 		Name     = $niNode.SelectSingleNode("d:name", $ns).InnerText
 		Type     = $areaNode.SelectSingleNode("d:type", $ns).InnerText
 		BeginRow = & $getCoord 'beginRow'
@@ -368,7 +377,11 @@ function Get-DslText {
 
 # Свойства формата, которые стилем НЕ являются: ширина принадлежит колонке, высота —
 # строке, вид заполнения выводится из того, чем задано содержимое ячейки.
-$nonStyleTags = @('width', 'height', 'fillType', 'font')
+# containsValue/valueType/controlType — свойства ЗНАЧЕНИЯ ячейки, а не оформления: стиль
+# общий на многие ячейки, а они индивидуальны. Компилятор таких ключей не знает, так что
+# в DSL они были чистым шумом.
+$nonStyleTags = @('width', 'height', 'fillType', 'font',
+	'containsValue', 'valueType', 'controlType')
 $borderTags = @('border', 'leftBorder', 'topBorder', 'rightBorder', 'bottomBorder')
 
 function ConvertTo-DslLine {
@@ -492,7 +505,11 @@ for ($i = 1; $i -lt $rawFonts.Count; $i++) {
 $styleKeys = [ordered]@{}
 $formatToStyleKey = @{}
 
-foreach ($r in $rowData.Values) {
+# Обход по ВОЗРАСТАНИЮ номера строки: у обычной хэш-таблицы порядок в PowerShell не
+# определён, и стили обнаруживались в порядке хэшей. Платформа же кладёт записи палитры
+# в порядке документа, поэтому порядок обхода здесь — часть верности вывода.
+# ([ordered] с целочисленными ключами не годится: он индексируется по позиции, а не по ключу.)
+foreach ($r in ($rowData.Keys | Sort-Object { [int]$_ } | ForEach-Object { $rowData[$_] })) {
 	foreach ($cell in $r.Cells) {
 		$fmt = Get-Format $cell.FormatIdx
 		if (-not $fmt) { continue }
@@ -520,7 +537,7 @@ function Get-RowStyleFmt {
 }
 
 # Строка — тоже владелец формата: её оформление становится именованным стилем.
-foreach ($rd in $rowData.Values) {
+foreach ($rd in ($rowData.Keys | Sort-Object { [int]$_ } | ForEach-Object { $rowData[$_] })) {
 	if ($rd.FormatIdx -le 0) { continue }
 	$rf = Get-RowStyleFmt (Get-Format $rd.FormatIdx)
 	if (-not $rf) { continue }
@@ -844,7 +861,7 @@ function Test-UniformColumnSet {
 $blockAreas = @()
 $overlayAreas = @()
 $claimed = @{}   # строка → занята областью-диапазоном
-foreach ($a in @($namedAreas | Sort-Object @{ Expression = { $_.BeginRow } }, @{ Expression = { $_.EndRow } })) {
+foreach ($a in @($namedAreas | Sort-Object @{ Expression = { $_.BeginRow } }, @{ Expression = { $_.EndRow } }, @{ Expression = { $_.Ord } })) {
 	$fitsBlock = ($a.Type -eq 'Rows' -and $a.BeginRow -ge 0 -and $a.EndRow -ge $a.BeginRow)
 	if ($fitsBlock) {
 		for ($r = $a.BeginRow; $r -le $a.EndRow; $r++) {
