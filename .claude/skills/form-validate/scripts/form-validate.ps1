@@ -1,4 +1,4 @@
-﻿# form-validate v1.13 — Validate 1C managed form
+﻿# form-validate v1.14 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -56,6 +56,7 @@ try {
 $nsMgr = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
 $nsMgr.AddNamespace("f", "http://v8.1c.ru/8.3/xcf/logform")
 $nsMgr.AddNamespace("v8", "http://v8.1c.ru/8.1/data/core")
+$nsMgr.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
 
 $root = $xmlDoc.DocumentElement
 
@@ -68,6 +69,7 @@ for ($i = 0; $i -lt 15; $i++) {
 	if (-not $walkDir -or $walkDir -eq (Split-Path $walkDir)) { break }
 	if (Test-Path (Join-Path $walkDir "Configuration.xml")) {
 		$script:isConfigContext = $true
+		$script:configXmlPath = Join-Path $walkDir "Configuration.xml"
 		break
 	}
 	$walkDir = Split-Path $walkDir
@@ -876,6 +878,75 @@ if (-not $stopped) {
 		Report-OK "12. Types: no type values to check"
 	} elseif ($typeOk) {
 		Report-OK "12. Types: $typeChecked values, all valid"
+	}
+}
+
+# --- Check 13: префиксы в значениях объявлены в самом файле ---
+# `cfg:DataProcessorObject.X` в <v8:Type> при незадекларированном xmlns:cfg — валидный XML, который
+# платформа не читает вовсе: «Исключение XDTO произошло при чтении файла». Ошибка типична для
+# рукописного XML: префикс скопирован из чужой формы, а объявление в корне забыто. Область видимости
+# считаем по узлу (GetNamespaceOfPrefix), а не по корню: локальная xmlns на элементе законна.
+
+if (-not $stopped) {
+	$prefixErrors = 0
+	$prefixChecked = 0
+
+	$prefixPattern = '^([A-Za-z_][A-Za-z0-9_.-]*):.+$'
+	# Значения, где префикс обязан резолвиться: тип реквизита/колонки и xsi:type
+	# Только листовые узлы: под local-name()='Type' подходит и обёртка <Type>, и вложенный <v8:Type>,
+	# а InnerText обёртки — то же значение, иначе одна ошибка сообщалась бы дважды.
+	foreach ($node in $xmlDoc.SelectNodes("//*[local-name()='Type' or local-name()='TypeSet']", $nsMgr)) {
+		if ($node.SelectSingleNode("*")) { continue }
+		$val = $node.InnerText.Trim()
+		if (-not $val) { continue }
+		$m = [regex]::Match($val, $prefixPattern)
+		if (-not $m.Success) { continue }
+		$prefixChecked++
+		$pfx = $m.Groups[1].Value
+		if (-not $node.GetNamespaceOfPrefix($pfx)) {
+			Report-Error "13. Type '$val': namespace prefix '${pfx}:' is not declared — the platform cannot read the file (XDTO)"
+			$prefixErrors++
+		}
+	}
+	foreach ($node in $xmlDoc.SelectNodes("//*[@xsi:type]", $nsMgr)) {
+		$val = $node.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance")
+		$m = [regex]::Match($val, $prefixPattern)
+		if (-not $m.Success) { continue }
+		$prefixChecked++
+		$pfx = $m.Groups[1].Value
+		if (-not $node.GetNamespaceOfPrefix($pfx)) {
+			Report-Error "13. xsi:type='$val': namespace prefix '${pfx}:' is not declared — the platform cannot read the file (XDTO)"
+			$prefixErrors++
+		}
+	}
+
+	if ($prefixChecked -eq 0) {
+		Report-OK "13. Namespace prefixes: nothing to check"
+	} elseif ($prefixErrors -eq 0) {
+		Report-OK "13. Namespace prefixes: $prefixChecked values, all declared"
+	}
+}
+
+# --- Check 14: версия формата формы совпадает с версией конфигурации ---
+# Версию задаёт платформа, которой выгружали, и в пределах одной выгрузки она едина. Форма из
+# другой версии — «Неизвестная версия формата N загружаемого файла»: платформа не читает файл,
+# который новее её самой. Типичный след ручной сборки: форму скопировали из свежей конфигурации.
+
+if (-not $stopped -and $script:configXmlPath) {
+	$formVer = $root.GetAttribute("version")
+	$cfgVer = ""
+	try {
+		$cfgHead = [System.IO.File]::ReadAllText($script:configXmlPath, [System.Text.Encoding]::UTF8)
+		$vm = [regex]::Match($cfgHead.Substring(0, [Math]::Min(4000, $cfgHead.Length)), '<MetaDataObject[^>]*\bversion="([^"]+)"')
+		if ($vm.Success) { $cfgVer = $vm.Groups[1].Value }
+	} catch { }
+
+	if (-not $cfgVer -or -not $formVer) {
+		Report-OK "14. Format version: not comparable"
+	} elseif ($formVer -ne $cfgVer) {
+		Report-Error "14. Format version $formVer differs from configuration ($cfgVer) — a dump carries one version, the platform refuses a file it cannot read"
+	} else {
+		Report-OK "14. Format version: $formVer, matches configuration"
 	}
 }
 

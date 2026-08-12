@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.13 — Validate 1C managed form
+# form-validate v1.14 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -128,6 +128,7 @@ def main():
 
     # Detect context: config vs EPF/ERF
     is_config_context = False
+    config_xml_path = ''
     walk_dir = os.path.dirname(os.path.abspath(form_path))
     for _ in range(15):
         parent = os.path.dirname(walk_dir)
@@ -135,6 +136,7 @@ def main():
             break
         if os.path.isfile(os.path.join(walk_dir, 'Configuration.xml')):
             is_config_context = True
+            config_xml_path = os.path.join(walk_dir, 'Configuration.xml')
             break
         walk_dir = parent
 
@@ -807,6 +809,69 @@ def main():
                 report_ok(f'12. Types: {type_count} values, all valid')
             else:
                 report_ok('12. Types: no type values to check')
+
+    # --- Check 13: префиксы в значениях объявлены в самом файле ---
+    # `cfg:DataProcessorObject.X` в <v8:Type> при незадекларированном xmlns:cfg — валидный XML, который
+    # платформа не читает вовсе: «Исключение XDTO произошло при чтении файла». Ошибка типична для
+    # рукописного XML: префикс скопирован из чужой формы, а объявление в корне забыто. Область видимости
+    # считаем по узлу (nsmap элемента), а не по корню: локальная xmlns на элементе законна.
+    if not stopped:
+        prefix_errors = 0
+        prefix_checked = 0
+        prefix_re = re.compile(r'^([A-Za-z_][A-Za-z0-9_.-]*):.+$')
+
+        for node in root.iter():
+            if not isinstance(node.tag, str):
+                continue
+            ln = localname(node)
+            values = []
+            if ln in ('Type', 'TypeSet'):
+                values.append((node.text or '').strip())
+            xsi_type = node.get(f'{{{"http://www.w3.org/2001/XMLSchema-instance"}}}type')
+            if xsi_type:
+                values.append(xsi_type.strip())
+            for val in values:
+                if not val:
+                    continue
+                m = prefix_re.match(val)
+                if not m:
+                    continue
+                prefix_checked += 1
+                pfx = m.group(1)
+                if pfx not in node.nsmap:
+                    kind = "xsi:type" if val == xsi_type else "Type"
+                    report_error(f"13. {kind} '{val}': namespace prefix '{pfx}:' is not declared "
+                                 "— the platform cannot read the file (XDTO)")
+                    prefix_errors += 1
+
+        if prefix_checked == 0:
+            report_ok('13. Namespace prefixes: nothing to check')
+        elif prefix_errors == 0:
+            report_ok(f'13. Namespace prefixes: {prefix_checked} values, all declared')
+
+    # --- Check 14: версия формата формы совпадает с версией конфигурации ---
+    # Версию задаёт платформа, которой выгружали, и в пределах одной выгрузки она едина. Форма из
+    # другой версии — «Неизвестная версия формата N загружаемого файла»: платформа не читает файл,
+    # который новее её самой. Типичный след ручной сборки: форму скопировали из свежей конфигурации.
+    if not stopped and config_xml_path:
+        form_ver = root.get('version', '')
+        cfg_ver = ''
+        try:
+            with open(config_xml_path, 'r', encoding='utf-8-sig', errors='ignore') as fh:
+                head = fh.read(4000)
+            vm = re.search(r'<MetaDataObject[^>]*[ \t]version="([^"]+)"', head)
+            if vm:
+                cfg_ver = vm.group(1)
+        except OSError:
+            pass
+
+        if not cfg_ver or not form_ver:
+            report_ok('14. Format version: not comparable')
+        elif form_ver != cfg_ver:
+            report_error(f'14. Format version {form_ver} differs from configuration ({cfg_ver}) '
+                         '— a dump carries one version, the platform refuses a file it cannot read')
+        else:
+            report_ok(f'14. Format version: {form_ver}, matches configuration')
 
     # --- Finalize ---
     checks = ok_count + errors + warnings
