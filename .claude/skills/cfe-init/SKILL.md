@@ -33,7 +33,7 @@ allowed-tools:
 | `Name` | Имя расширения (обязат.) | — |
 | `Synonym` | Синоним | = Name |
 | `NamePrefix` | Префикс собственных объектов | = Name + "_" |
-| `OutputDir` | Каталог для создания | `src` (клади расширение в отдельный подкаталог: `src\cfe\extname`) |
+| `OutputDir` | Каталог для создания; клади расширение в свой подкаталог, названный по имени: `src\cfe\<Name>` | `src` |
 | `Purpose` | `Patch` (исправление) / `Customization` (доработка) / `AddOn` (дополнение) | `Customization` |
 | `Version` | Версия расширения | — |
 | `Vendor` | Поставщик | — |
@@ -44,23 +44,23 @@ allowed-tools:
 ## Команда
 
 ```powershell
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/cfe-init.ps1" -Name "МоёРасширение"
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/cfe-init.ps1" -Name "МоёРасширение" -OutputDir "src\cfe\МоёРасширение" -ConfigPath "src\cf"
 ```
 
 ## Примеры
 
 ```powershell
 # Расширение для ERP с авто-определением совместимости из базовой конфигурации
-... -Name Расш1 -ConfigPath src\cf -OutputDir src\cfe\extname
+... -Name Расш1 -ConfigPath src\cf -OutputDir src\cfe\Расш1
 
 # Расширение-исправление с явным режимом совместимости
-... -Name Расш1 -Purpose Patch -CompatibilityMode Version8_3_17 -OutputDir src\cfe\extname
+... -Name Расш1 -Purpose Patch -CompatibilityMode Version8_3_17 -OutputDir src\cfe\Расш1
 
 # Расширение-доработка с версией
-... -Name МоёРасширение -Version "1.0.0.1" -Vendor "Компания" -OutputDir src\cfe\extname
+... -Name МоёРасширение -Version "1.0.0.1" -Vendor "Компания" -OutputDir src\cfe\МоёРасширение
 
 # Без роли, с явным префиксом
-... -Name ИсправлениеБага -NamePrefix "ИБ_" -Purpose Patch -NoRole -OutputDir src\cfe\extname
+... -Name ИсправлениеБага -NamePrefix "ИБ_" -Purpose Patch -NoRole -OutputDir src\cfe\ИсправлениеБага
 ```
 
 ## Верификация
