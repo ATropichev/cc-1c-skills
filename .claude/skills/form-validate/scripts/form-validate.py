@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.10 — Validate 1C managed form
+# form-validate v1.11 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -707,6 +707,33 @@ def main():
             ext_cmd_count = sum(1 for c in cmd_nodes if c.get("name", "") not in base_cmd_names)
             if (ext_attr_count + ext_cmd_count) > 0:
                 report_ok(f"Extension ID ranges: {ext_attr_count} attr(s), {ext_cmd_count} cmd(s) \u2014 all >= 1000000")
+
+        # 11d. \u041f\u0443\u0442\u0438 \u043d\u0430 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442, \u043a\u043e\u0442\u043e\u0440\u043e\u0433\u043e \u0444\u043e\u0440\u043c\u0430 \u043d\u0435 \u043e\u0431\u044a\u044f\u0432\u043b\u044f\u0435\u0442.
+        # Check 5 \u0442\u0430\u043a\u043e\u0435 \u043f\u0440\u043e\u043f\u0443\u0441\u043a\u0430\u0435\u0442: \u0443 \u0437\u0430\u0438\u043c\u0441\u0442\u0432\u043e\u0432\u0430\u043d\u043d\u043e\u0439 \u0444\u043e\u0440\u043c\u044b \u043e\u043d \u043d\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442 \u0431\u0430\u0437\u043e\u0432\u044b\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442\u044b (id < 1000000),
+        # \u0430 \u043f\u0440\u0438\u0432\u044f\u0437\u043a\u0438 \u0432 <xr:Link> \u0432\u043e\u043e\u0431\u0449\u0435 \u0432\u043d\u0435 \u0435\u0433\u043e \u0441\u043f\u0438\u0441\u043a\u0430 \u0442\u0435\u0433\u043e\u0432. \u041c\u0435\u0436\u0434\u0443 \u0442\u0435\u043c \u044d\u0442\u043e \u0440\u043e\u0432\u043d\u043e \u0442\u043e\u0442 \u0441\u043b\u0443\u0447\u0430\u0439, \u043d\u0430 \u043a\u043e\u0442\u043e\u0440\u043e\u043c
+        # \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u0430 \u043e\u0442\u0432\u0435\u0440\u0433\u0430\u0435\u0442 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0443: \u00ab\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u043f\u0443\u0442\u044c \u043a \u043f\u043e\u043b\u044e - \u041e\u0431\u044a\u0435\u043a\u0442.X\u00bb. \u041f\u0440\u0430\u0432\u0438\u043b\u043e: \u0435\u0441\u043b\u0438 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442
+        # \u043d\u0435 \u043e\u0431\u044a\u044f\u0432\u043b\u0435\u043d \u0432 <Attributes> \u0444\u043e\u0440\u043c\u044b, \u043b\u044e\u0431\u043e\u0439 \u043f\u0443\u0442\u044c \u0441 \u043a\u043e\u0440\u043d\u0435\u043c \u00ab\u041e\u0431\u044a\u0435\u043a\u0442\u00bb \u043d\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0441\u044f.
+        main_attr_declared = False
+        for attr in attr_nodes:
+            ma_node = attr.find(f"{{{F_NS}}}MainAttribute")
+            if ma_node is not None and (ma_node.text or "").strip() == "true":
+                main_attr_declared = True
+                break
+
+        if not main_attr_declared:
+            # \u0417\u043d\u0430\u0447\u0435\u043d\u0438\u044f \u043f\u0440\u0438\u0432\u044f\u0437\u043e\u043a \u0438\u0449\u0435\u043c \u0442\u0435\u043a\u0441\u0442\u043e\u043c: \u0438\u043d\u0442\u0435\u0440\u0435\u0441\u0443\u044e\u0442 \u0438 \u043e\u0431\u044b\u0447\u043d\u044b\u0435 \u0442\u0435\u0433\u0438, \u0438 <xr:DataPath> \u0432\u043d\u0443\u0442\u0440\u0438
+            # <ChoiceParameterLinks>, \u0430 \u0442\u0435 \u0436\u0438\u0432\u0443\u0442 \u0432 \u0447\u0443\u0436\u043e\u043c \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u0435 \u0438\u043c\u0451\u043d.
+            with open(form_path, "r", encoding="utf-8-sig") as fh:
+                raw_form = fh.read()
+            main_base = base_form_node.find(f"{{{F_NS}}}Attributes/{{{F_NS}}}Attribute[{{{F_NS}}}MainAttribute='true']")
+            dangling_paths = set(re.findall(r'<(?:\w+:)?\w*DataPath[^>]*>(\u041e\u0431\u044a\u0435\u043a\u0442\.[^<]+)</(?:\w+:)?\w*DataPath>', raw_form))
+            if dangling_paths:
+                shown = sorted(dangling_paths)
+                sample = ", ".join(shown[:3])
+                suffix = f" (\u0438 \u0435\u0449\u0451 {len(shown) - 3})" if len(shown) > 3 else ""
+                report_error(f"Path(s) rooted at '\u041e\u0431\u044a\u0435\u043a\u0442' but the form declares no MainAttribute: {sample}{suffix}")
+            elif main_base is not None:
+                report_ok("Object paths: none dangling (MainAttribute not declared)")
 
     # Check callType without BaseForm
     if not stopped and not is_extension:

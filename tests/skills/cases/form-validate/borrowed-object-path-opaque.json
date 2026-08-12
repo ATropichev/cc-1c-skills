@@ -1,0 +1,5 @@
+{
+  "name": "Заимствованная форма без основного реквизита: непрозрачный путь 1/0:uuid ошибкой не считается",
+  "setup": "fixture:borrowed-object-path-opaque",
+  "params": { "formPath": "Documents/Заказ/Forms/ФормаДокумента" }
+}

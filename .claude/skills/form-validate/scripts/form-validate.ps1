@@ -1,4 +1,4 @@
-﻿# form-validate v1.10 — Validate 1C managed form
+﻿# form-validate v1.11 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -740,6 +740,36 @@ if (-not $stopped -and $isExtension) {
 		$extCmdCount = ($cmdNodes | Where-Object { -not $baseCmdNames.ContainsKey($_.GetAttribute("name")) }).Count
 		if (($extAttrCount + $extCmdCount) -gt 0) {
 			Report-OK "Extension ID ranges: $extAttrCount attr(s), $extCmdCount cmd(s) — all >= 1000000"
+		}
+	}
+
+	# 11d. Пути на основной реквизит, которого форма не объявляет.
+	# Check 5 такое пропускает: у заимствованной формы он не проверяет базовые элементы (id < 1000000),
+	# а привязки в <xr:Link> вообще вне его списка тегов. Между тем это ровно тот случай, на котором
+	# платформа отвергает загрузку: «Неверный путь к полю - Объект.X». Правило: если основной реквизит
+	# не объявлен в <Attributes> формы, любой путь с корнем «Объект» не разрешится.
+	$mainAttrDeclared = $false
+	foreach ($attr in $attrNodes) {
+		$maNode = $attr.SelectSingleNode("f:MainAttribute", $nsMgr)
+		if ($maNode -and $maNode.InnerText.Trim() -eq "true") { $mainAttrDeclared = $true; break }
+	}
+
+	if (-not $mainAttrDeclared) {
+		# Значения привязок ищем текстом: интересуют и обычные теги, и <xr:DataPath> внутри
+		# <ChoiceParameterLinks>, а те живут в чужом пространстве имён.
+		$rawForm = [System.IO.File]::ReadAllText($FormPath, [System.Text.Encoding]::UTF8)
+		$mainBase = $baseFormNode.SelectSingleNode("f:Attributes/f:Attribute[f:MainAttribute='true']", $bfNs)
+		$danglingPaths = @{}
+		foreach ($m in [regex]::Matches($rawForm, '<(?:\w+:)?\w*DataPath[^>]*>(Объект\.[^<]+)</(?:\w+:)?\w*DataPath>')) {
+			$danglingPaths[$m.Groups[1].Value] = $true
+		}
+		if ($danglingPaths.Count -gt 0) {
+			$shown = @($danglingPaths.Keys | Sort-Object)
+			$sample = ($shown | Select-Object -First 3) -join ", "
+			$suffix = if ($shown.Count -gt 3) { " (и ещё $($shown.Count - 3))" } else { "" }
+			Report-Error "Path(s) rooted at 'Объект' but the form declares no MainAttribute: $sample$suffix"
+		} elseif ($mainBase) {
+			Report-OK "Object paths: none dangling (MainAttribute not declared)"
 		}
 	}
 }
