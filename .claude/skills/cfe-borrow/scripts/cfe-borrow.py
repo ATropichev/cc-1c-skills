@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.22 — Borrow objects from configuration into extension (CFE) (перенос UseAlways/Columns основного реквизита формы)
+# cfe-borrow v1.23 — Borrow objects from configuration into extension (CFE) (ссылки параметров выбора по uuid)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -55,6 +55,33 @@ def strip_form_bindings(xml, keep_objekt):
             xml = re.sub(rf'\s*<{tag}>[^<]*</{tag}>', '', xml)
     for tag in FORM_BINDING_PICTURE_TAGS:
         xml = re.sub(rf'\s*<{tag}>[^<]*</{tag}>', '', xml)
+    return xml
+
+
+def rewrite_choice_parameter_links(xml, attr_uuids):
+    """Ссылки параметров выбора (<ChoiceParameterLinks>/<xr:Link>) — привязка особого рода: путь лежит
+    в <xr:DataPath> и обычным стриппингом не снимается. Когда основной реквизит не заимствован,
+    текстовый «Объект.X» в расширении не разрешается («Неверный путь к полю»), поэтому Конфигуратор
+    переписывает его в непрозрачную форму «1/0:<uuid реквизита объекта>» — ссылка остаётся рабочей.
+    Реквизит, которого в источнике нет, недоступен и по uuid: такую связь вырезаем целиком.
+    Путь всегда односегментный (корпусная проверка: 285 из 285 у УТ), глубже — тоже вырезаем."""
+    if '<ChoiceParameterLinks>' not in xml:
+        return xml
+
+    def repl(m):
+        link = m.group(0)
+        dp = re.search(r'<xr:DataPath[^>]*>Объект\.([^<]+)</xr:DataPath>', link)
+        if not dp:
+            return link
+        attr_name = dp.group(1)
+        if attr_name in attr_uuids:
+            return re.sub(r'(<xr:DataPath[^>]*>)Объект\.[^<]+(</xr:DataPath>)',
+                          lambda mm: f"{mm.group(1)}1/0:{attr_uuids[attr_name]}{mm.group(2)}", link)
+        return ''
+
+    xml = re.sub(r'\s*<xr:Link>.*?</xr:Link>', repl, xml, flags=re.DOTALL)
+    # Опустевший контейнер платформе не нужен
+    xml = re.sub(r'\s*<ChoiceParameterLinks>\s*</ChoiceParameterLinks>', '', xml, flags=re.DOTALL)
     return xml
 
 
@@ -591,6 +618,45 @@ def main():
     borrowed_files = []
 
     # --- Helper functions ---
+    def get_source_attribute_uuids(type_name, obj_name):
+        """Имена реквизитов исходного объекта → uuid. Нужны для непрозрачной формы пути в ссылках
+        параметров выбора (см. rewrite_choice_parameter_links)."""
+        result = {}
+        dir_name = CHILD_TYPE_DIR_MAP.get(type_name)
+        if not dir_name:
+            return result
+        src_file = os.path.join(cfg_dir, dir_name, f"{obj_name}.xml")
+        if not os.path.isfile(src_file):
+            return result
+
+        tree = etree.parse(src_file, etree.XMLParser(remove_blank_text=True))
+        obj_el = None
+        for c in tree.getroot():
+            if isinstance(c.tag, str):
+                obj_el = c
+                break
+        if obj_el is None:
+            return result
+        for child in obj_el:
+            if not isinstance(child.tag, str) or localname(child) != "ChildObjects":
+                continue
+            for sub in child:
+                if not isinstance(sub.tag, str) or localname(sub) not in ("Attribute", "TabularSection"):
+                    continue
+                uuid_val = sub.get("uuid")
+                name_val = None
+                for props in sub:
+                    if isinstance(props.tag, str) and localname(props) == "Properties":
+                        for prop in props:
+                            if isinstance(prop.tag, str) and localname(prop) == "Name":
+                                name_val = (prop.text or "").strip()
+                                break
+                        break
+                if uuid_val and name_val:
+                    result[name_val] = uuid_val
+            break
+        return result
+
     def read_source_object(type_name, obj_name):
         dir_name = CHILD_TYPE_DIR_MAP.get(type_name)
         if not dir_name:
@@ -1448,6 +1514,10 @@ def main():
 
         ns_strip_pattern = re.compile(r'\s+xmlns(?::\w+)?="[^"]*"')
 
+        # uuid реквизитов объекта — только для формы без заимствованного основного реквизита:
+        # там ссылки параметров выбора переводятся на непрозрачную форму пути
+        src_attr_uuids = {} if borrow_main_attr else get_source_attribute_uuids(type_name, obj_name)
+
         # AutoCommandBar: keep ChildItems (buttons with CommandName->0), Autofill->false
         auto_cmd_xml = ""
         if src_auto_cmd is not None:
@@ -1459,6 +1529,8 @@ def main():
             auto_cmd_xml = re.sub(r'\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '', auto_cmd_xml)
             # Strip data-binding tags whose root attribute isn't borrowed
             auto_cmd_xml = strip_form_bindings(auto_cmd_xml, borrow_main_attr)
+            if not borrow_main_attr:
+                auto_cmd_xml = rewrite_choice_parameter_links(auto_cmd_xml, src_attr_uuids)
 
         # ChildItems: copy full tree, clean up base-config references
         child_items_xml = ""
@@ -1475,6 +1547,8 @@ def main():
             child_items_xml = re.sub(r'<CommandName>[^<]*</CommandName>', '<CommandName>0</CommandName>', child_items_xml)
             # Strip data-binding tags whose root attribute isn't borrowed
             child_items_xml = strip_form_bindings(child_items_xml, borrow_main_attr)
+            if not borrow_main_attr:
+                child_items_xml = rewrite_choice_parameter_links(child_items_xml, src_attr_uuids)
             # Strip ExcludedCommand in nested AutoCommandBars (references to standard commands invalid in extension)
             child_items_xml = re.sub(r'\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '', child_items_xml)
             # Strip TypeLink blocks with human-readable DataPath (Items.XXX)

@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.22 — Borrow objects from configuration into extension (CFE) (перенос UseAlways/Columns основного реквизита формы)
+﻿# cfe-borrow v1.23 — Borrow objects from configuration into extension (CFE) (ссылки параметров выбора по uuid)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -35,6 +35,34 @@ function Strip-FormBindings {
 	foreach ($tag in $script:formBindingPictureTags) {
 		$xml = [regex]::Replace($xml, "\s*<$tag>[^<]*</$tag>", '')
 	}
+	return $xml
+}
+
+# Ссылки параметров выбора (<ChoiceParameterLinks>/<xr:Link>) — привязка особого рода: путь лежит
+# в <xr:DataPath> и обычным стриппингом не снимается. Когда основной реквизит не заимствован,
+# текстовый «Объект.X» в расширении не разрешается («Неверный путь к полю»), поэтому Конфигуратор
+# переписывает его в непрозрачную форму «1/0:<uuid реквизита объекта>» — ссылка остаётся рабочей.
+# Реквизит, которого в источнике нет, недоступен и по uuid: такую связь вырезаем целиком.
+# Путь всегда односегментный (корпусная проверка: 285 из 285 у УТ), глубже — тоже вырезаем.
+function Rewrite-ChoiceParameterLinks {
+	param([string]$xml, $attrUuids)
+
+	if ($xml -notmatch '<ChoiceParameterLinks>') { return $xml }
+
+	$xml = [regex]::Replace($xml, '(?s)\s*<xr:Link>.*?</xr:Link>', {
+		param($m)
+		$link = $m.Value
+		$dp = [regex]::Match($link, '<xr:DataPath[^>]*>Объект\.([^<]+)</xr:DataPath>')
+		if (-not $dp.Success) { return $link }
+		$attrName = $dp.Groups[1].Value
+		if ($attrUuids.ContainsKey($attrName)) {
+			return [regex]::Replace($link, '(<xr:DataPath[^>]*>)Объект\.[^<]+(</xr:DataPath>)', "`${1}1/0:$($attrUuids[$attrName])`${2}")
+		}
+		return ''
+	})
+
+	# Опустевший контейнер платформе не нужен
+	$xml = [regex]::Replace($xml, '(?s)\s*<ChoiceParameterLinks>\s*</ChoiceParameterLinks>', '')
 	return $xml
 }
 
@@ -449,6 +477,37 @@ if ($BorrowMainAttribute) {
 }
 
 # --- 10. Helper: read source object XML ---
+# Имена реквизитов исходного объекта → uuid. Нужны для непрозрачной формы пути в ссылках
+# параметров выбора (см. Rewrite-ChoiceParameterLinks).
+function Get-SourceAttributeUuids {
+	param([string]$typeName, [string]$objName)
+
+	$result = @{}
+	$dirName = $childTypeDirMap[$typeName]
+	if (-not $dirName) { return $result }
+	$srcFile = Join-Path (Join-Path $cfgDir $dirName) "${objName}.xml"
+	if (-not (Test-Path $srcFile)) { return $result }
+
+	$doc = New-Object System.Xml.XmlDocument
+	$doc.PreserveWhitespace = $false
+	$doc.Load($srcFile)
+	$objEl = $null
+	foreach ($c in $doc.DocumentElement.ChildNodes) {
+		if ($c.NodeType -eq 'Element') { $objEl = $c; break }
+	}
+	if (-not $objEl) { return $result }
+	$childObjects = $objEl.SelectSingleNode("*[local-name()='ChildObjects']")
+	if (-not $childObjects) { return $result }
+	foreach ($child in $childObjects.ChildNodes) {
+		if ($child.NodeType -ne 'Element') { continue }
+		if ($child.LocalName -notin @('Attribute','TabularSection')) { continue }
+		$uuid = $child.GetAttribute("uuid")
+		$nameNode = $child.SelectSingleNode("*[local-name()='Properties']/*[local-name()='Name']")
+		if ($uuid -and $nameNode) { $result[$nameNode.InnerText.Trim()] = $uuid }
+	}
+	return $result
+}
+
 function Read-SourceObject {
 	param([string]$typeName, [string]$objName)
 
@@ -652,6 +711,11 @@ function Borrow-Form {
 	# Get OuterXml and strip redundant namespace redeclarations (they're on root <Form>)
 	$nsStripPattern = '\s+xmlns(?::\w+)?="[^"]*"'
 
+	# uuid реквизитов объекта — только для формы без заимствованного основного реквизита:
+	# там ссылки параметров выбора переводятся на непрозрачную форму пути
+	$srcAttrUuids = @{}
+	if (-not $BorrowMainAttr) { $srcAttrUuids = Get-SourceAttributeUuids $typeName $objName }
+
 	# AutoCommandBar: keep ChildItems (buttons with CommandName→0), Autofill→false
 	$autoCmdXml = ""
 	if ($srcAutoCmd) {
@@ -663,6 +727,7 @@ function Borrow-Form {
 		$autoCmdXml = [regex]::Replace($autoCmdXml, '\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '')
 		# Strip data-binding tags whose root attribute isn't borrowed
 		$autoCmdXml = Strip-FormBindings $autoCmdXml ([bool]$BorrowMainAttr)
+		if (-not $BorrowMainAttr) { $autoCmdXml = Rewrite-ChoiceParameterLinks $autoCmdXml $srcAttrUuids }
 	}
 
 	# ChildItems: copy full tree, clean up base-config references
@@ -675,6 +740,7 @@ function Borrow-Form {
 		# Strip data-binding tags whose root attribute isn't borrowed
 		# (DataPath/TitleDataPath/FooterDataPath/HeaderDataPath/MultipleValue*/RowPicture*)
 		$childItemsXml = Strip-FormBindings $childItemsXml ([bool]$BorrowMainAttr)
+		if (-not $BorrowMainAttr) { $childItemsXml = Rewrite-ChoiceParameterLinks $childItemsXml $srcAttrUuids }
 		# Strip ExcludedCommand in nested AutoCommandBars (references to standard commands invalid in extension)
 		$childItemsXml = [regex]::Replace($childItemsXml, '\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '')
 		# Strip TypeLink blocks with human-readable DataPath (Items.XXX — can't convert to UUID)
