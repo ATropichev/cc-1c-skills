@@ -86,6 +86,10 @@ const MAPS = [
     },
   },
   {
+    skill: 'cfe-validate', file: 'cfe-validate', kind: 'gencats',
+    py: 'GENERATED_TYPE_CATEGORIES', ps1: '$generatedTypeCategories',
+  },
+  {
     skill: 'meta-validate', file: 'meta-validate', kind: 'gencats',
     py: 'generated_type_categories', ps1: '$generatedTypeCategories',
     exclude: {
@@ -204,8 +208,8 @@ function extractGen(text, name, kind, lang) {
       cur = h[1];
       out.set(cur, []);
       if (kind === 'gencats') {
-        // категории лежат в той же строке: "Catalog" = @("Object","Ref",…)
-        for (const c of line.slice(h[0].length).matchAll(/"(\w+)"/g)) out.get(cur).push([null, c[1]]);
+        // категории лежат в той же строке: "Catalog" = @("Object","Ref",…) / 'Catalog': ['Object', …]
+        for (const c of line.slice(h[0].length).matchAll(/['"](\w+)['"]/g)) out.get(cur).push([null, c[1]]);
       }
       continue;
     }

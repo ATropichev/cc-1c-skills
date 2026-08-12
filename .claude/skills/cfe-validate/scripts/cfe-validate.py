@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.7 — Validate 1C configuration extension XML structure (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+# cfe-validate v1.8 — Validate 1C configuration extension XML structure (CFE) (полнота GeneratedType, ТЧ из AdditionalColumns, сверка путей с -ConfigPath)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -96,6 +96,46 @@ CHILD_TYPE_DIR_MAP = {
     'IntegrationService': 'IntegrationServices',
 }
 
+# Наборы GeneratedType по типу объекта (эталон — таблица §2.5 спецификации конфигурации).
+# Неполный набор в заимствованной оболочке платформа отвергает при загрузке: «отсутствует один
+# или более типов объекта <Тип>». Типы, у которых GeneratedType нет вовсе (общие модули,
+# подписки, регламентные задания и т.п.), в карте отсутствуют — для них проверка не выполняется.
+GENERATED_TYPE_CATEGORIES = {
+    'Catalog':                    ['Object', 'Ref', 'Selection', 'List', 'Manager'],
+    'Document':                   ['Object', 'Ref', 'Selection', 'List', 'Manager'],
+    'Enum':                       ['Ref', 'Manager', 'List'],
+    'Constant':                   ['Manager', 'ValueManager', 'ValueKey'],
+    'Report':                     ['Object', 'Manager'],
+    'DataProcessor':              ['Object', 'Manager'],
+    'ExchangePlan':               ['Object', 'Ref', 'Selection', 'List', 'Manager'],
+    'Task':                       ['Object', 'Ref', 'Selection', 'List', 'Manager'],
+    'BusinessProcess':            ['Object', 'Ref', 'Selection', 'List', 'Manager', 'RoutePointRef'],
+    'ChartOfCharacteristicTypes': ['Object', 'Ref', 'Selection', 'List', 'Manager', 'Characteristic'],
+    'ChartOfAccounts':            ['Object', 'Ref', 'Selection', 'List', 'Manager', 'ExtDimensionTypes', 'ExtDimensionTypesRow'],
+    'ChartOfCalculationTypes':    ['Object', 'Ref', 'Selection', 'List', 'Manager', 'DisplacingCalculationTypes', 'DisplacingCalculationTypesRow', 'BaseCalculationTypes', 'BaseCalculationTypesRow', 'LeadingCalculationTypes', 'LeadingCalculationTypesRow'],
+    'InformationRegister':        ['Record', 'Manager', 'Selection', 'List', 'RecordSet', 'RecordKey', 'RecordManager'],
+    'AccumulationRegister':       ['Record', 'Manager', 'Selection', 'List', 'RecordSet', 'RecordKey'],
+    'AccountingRegister':         ['Record', 'Manager', 'Selection', 'List', 'RecordSet', 'RecordKey', 'ExtDimensions'],
+    'CalculationRegister':        ['Record', 'Manager', 'Selection', 'List', 'RecordSet', 'RecordKey', 'Recalcs'],
+    'DocumentJournal':            ['Selection', 'List', 'Manager'],
+    'Sequence':                   ['Record', 'Manager', 'RecordSet'],
+    'FilterCriterion':            ['Manager', 'List'],
+    'SettingsStorage':            ['Manager'],
+    'IntegrationService':         ['Manager'],
+    'WSReference':                ['Manager'],
+    'DefinedType':                ['DefinedType'],
+}
+
+# Стандартные реквизиты объектов: в ChildObjects их нет, но пути Объект.<Стандартный> законны.
+# Имена зависят от варианта встроенного языка, поэтому держим оба написания.
+STANDARD_OBJECT_FIELDS = {
+    'Code', 'Description', 'Ref', 'Parent', 'Owner', 'DeletionMark', 'Predefined', 'IsFolder', 'LineNumber',
+    'Number', 'Date', 'Posted', 'PredefinedDataName', 'RegisterRecords', 'DataVersion', 'RowsCount',
+    'Код', 'Наименование', 'Ссылка', 'Родитель', 'Владелец', 'ПометкаУдаления', 'Предопределенный',
+    'ЭтоГруппа', 'НомерСтроки', 'Номер', 'Дата', 'Проведен', 'ИмяПредопределенныхДанных',
+    'Движения', 'ВерсияДанных', 'КоличествоСтрок',
+}
+
 # Valid enum values for extension properties
 VALID_ENUM_VALUES = {
     'ConfigurationExtensionCompatibilityMode': [
@@ -177,11 +217,15 @@ def main():
     parser.add_argument('-Detailed', action='store_true')
     parser.add_argument('-MaxErrors', dest='MaxErrors', type=int, default=30)
     parser.add_argument('-OutFile', dest='OutFile', default='')
+    # Конфигурация-источник. Без неё проверки, требующие сравнения с основной конфигурацией,
+    # пропускаются (о чём сказано в отчёте), остальные работают как раньше.
+    parser.add_argument('-ConfigPath', dest='ConfigPath', default='')
     args = ci_parse_args(parser)
 
     extension_path = args.ExtensionPath
     max_errors = args.MaxErrors
     out_file = args.OutFile
+    config_path_arg = args.ConfigPath
 
     # --- Resolve path ---
     if not os.path.isabs(extension_path):
@@ -560,6 +604,7 @@ def main():
     MD = NS['md']
     XR = NS['xr']
     enum_values_index = {}
+    borrowed_ts_index = {}
     form_list = []
 
     def is_borrowed_sub_item(sub_item):
@@ -659,6 +704,23 @@ def main():
                 else:
                     borrowed_ok_count += 1
 
+                # Полнота набора GeneratedType: платформа отвергает оболочку с неполным набором
+                # («отсутствует один или более типов объекта ChartOfCharacteristicTypes»)
+                expected_cats = GENERATED_TYPE_CATEGORIES.get(type_name)
+                if expected_cats:
+                    obj_info = obj_el.find(f'{{{MD}}}InternalInfo')
+                    found_cats = set()
+                    if obj_info is not None:
+                        for gt in obj_info.findall(f'{{{XR}}}GeneratedType'):
+                            cat = gt.get('category')
+                            if cat:
+                                found_cats.add(cat)
+                    missing_cats = [c for c in expected_cats if c not in found_cats]
+                    if missing_cats:
+                        word = 'category' if len(missing_cats) == 1 else 'categories'
+                        r.error(f"9. Borrowed {type_name}.{child_name}: missing GeneratedType {word} {', '.join(missing_cats)}")
+                        check9_ok = False
+
             # --- Check 10: Sub-items (Attribute, TabularSection, EnumValue, Form) ---
             obj_child_objects = obj_el.find(f'{{{MD}}}ChildObjects')
             if obj_child_objects is not None:
@@ -686,6 +748,9 @@ def main():
                             ts_info = sub_item.find(f'{{{MD}}}InternalInfo')
                             ts_name_el = sub_item.find(f'{{{MD}}}Properties/{{{MD}}}Name')
                             ts_label = (ts_name_el.text or '?') if ts_name_el is not None else '?'
+                            # Индекс заимствованных ТЧ — по нему Check 12 сверяет <AdditionalColumns table="Объект.X">
+                            if ts_name_el is not None and ts_name_el.text:
+                                borrowed_ts_index.setdefault(f'{type_name}.{child_name}', {})[ts_name_el.text.strip()] = True
                             if ts_info is None:
                                 r.error(f'10. {ctx}: TabularSection.{ts_label} missing InternalInfo')
                                 check10_ok = False
@@ -878,6 +943,22 @@ def main():
             elif entry['Enum'] not in enum_values_index or entry['Value'] not in enum_values_index.get(entry['Enum'], {}):
                 missing_items.append(f"Enum.{entry['Enum']}.EnumValue.{entry['Value']}")
 
+        # <AdditionalColumns table="Объект.X"> — доп. колонки табличной части, объявленные в самой форме.
+        # Колонки есть, а самой ТЧ в расширении нет → платформа отвергает загрузку: «Неверный путь к
+        # данным» плюс «Колонки не могут быть добавлены к реквизиту».
+        # Соседние проверки этого блока эвристичны (имя стиля добывается регуляркой), поэтому там
+        # предупреждение. Здесь сигнал точный — имя ТЧ берётся из атрибута, — а последствие жёсткое,
+        # поэтому ошибка.
+        ac_tables = set(re.findall(r'<AdditionalColumns table="Объект\.(\w+)"', raw))
+        if ac_tables:
+            owner_key = ctx.split('.Form.')[0]
+            owner_ts = borrowed_ts_index.get(owner_key, {})
+            for tbl_name in sorted(ac_tables):
+                dep_check_count += 1
+                if tbl_name not in owner_ts:
+                    r.error(f'12. {ctx}: <AdditionalColumns table="Объект.{tbl_name}"> — TabularSection.{tbl_name} not borrowed in extension')
+                    check12_ok = False
+
         for mi in missing_items:
             r.warn(f'12. {ctx}: references {mi} not borrowed in extension')
             check12_ok = False
@@ -908,6 +989,115 @@ def main():
         r.ok('13. TypeLink: no borrowed forms with tree')
     elif check13_ok:
         r.ok('13. TypeLink: clean')
+
+    # --- Check 14: пути Объект.* заимствованных форм против конфигурации-источника ---
+    # Требует -ConfigPath: отличить живой путь от висячего можно только по исходному объекту.
+    # «Объект.Партнер» валиден и без заимствования реквизита (наследуется от базы), а «Объект.Товары.Артикул»
+    # не разрешится нигде, если Артикул — не колонка ТЧ и не колонка из <Columns> самой формы.
+    # Такой путь платформа отвергает на загрузке: «Неверный путь к данным».
+    if not r.stopped and borrowed_forms_with_tree:
+        if not config_path_arg:
+            r.out('[INFO]  14. Пути Объект.* против конфигурации-источника не проверялись: не задан -ConfigPath')
+        else:
+            cfg_root = config_path_arg
+            if not os.path.isabs(cfg_root):
+                cfg_root = os.path.join(os.getcwd(), cfg_root)
+            if os.path.exists(cfg_root) and not os.path.isdir(cfg_root):
+                cfg_root = os.path.dirname(cfg_root)
+
+            if not os.path.isfile(os.path.join(cfg_root, 'Configuration.xml')):
+                r.warn(f"14. -ConfigPath '{config_path_arg}': Configuration.xml не найден — проверка путей пропущена")
+            else:
+                check14_ok = True
+                path_check_count = 0
+
+                for bf in borrowed_forms_with_tree:
+                    raw = bf['RawText']
+                    ctx = bf['Context']
+                    owner_key = ctx.split('.Form.')[0]
+                    owner_parts = owner_key.split('.', 1)
+                    if len(owner_parts) < 2:
+                        continue
+                    owner_type, owner_name = owner_parts
+                    owner_dir = CHILD_TYPE_DIR_MAP.get(owner_type)
+                    if not owner_dir:
+                        continue
+                    src_obj_file = os.path.join(cfg_root, owner_dir, f'{owner_name}.xml')
+                    if not os.path.isfile(src_obj_file):
+                        r.warn(f'14. {ctx}: объект-источник не найден в конфигурации ({owner_dir}/{owner_name}.xml)')
+                        continue
+
+                    # Имена, доступные первым сегментом пути: реквизиты и ТЧ объекта-источника.
+                    # Плюс для каждой ТЧ — её колонки: второй сегмент проверяем по ним (именно там
+                    # и жил дефект — Объект.Товары.Артикул при живой ТЧ Товары).
+                    src_names = set()
+                    src_ts_columns = {}
+                    src_tree = etree.parse(src_obj_file, etree.XMLParser(remove_blank_text=True))
+                    src_obj_el = None
+                    for c in src_tree.getroot():
+                        if isinstance(c.tag, str):
+                            src_obj_el = c
+                            break
+                    src_child_objects = src_obj_el.find(f'{{{MD}}}ChildObjects') if src_obj_el is not None else None
+                    if src_child_objects is not None:
+                        for sub in src_child_objects:
+                            if not isinstance(sub.tag, str):
+                                continue
+                            sub_ln = etree.QName(sub.tag).localname
+                            if sub_ln not in ('Attribute', 'TabularSection'):
+                                continue
+                            name_el = sub.find(f'{{{MD}}}Properties/{{{MD}}}Name')
+                            if name_el is None or not name_el.text:
+                                continue
+                            sub_name = name_el.text.strip()
+                            src_names.add(sub_name)
+                            if sub_ln != 'TabularSection':
+                                continue
+                            cols = set()
+                            for col_name in sub.findall(f'{{{MD}}}ChildObjects/{{{MD}}}Attribute/{{{MD}}}Properties/{{{MD}}}Name'):
+                                if col_name.text:
+                                    cols.add(col_name.text.strip())
+                            src_ts_columns[sub_name] = cols
+                    # Плюс колонки, объявленные в самой форме через <Columns>/<AdditionalColumns table="Объект.X">
+                    for acm in re.finditer(r'<AdditionalColumns table="Объект\.(\w+)">(.*?)</AdditionalColumns>', raw, re.DOTALL):
+                        tbl = acm.group(1)
+                        cols = src_ts_columns.setdefault(tbl, set())
+                        for cm in re.finditer(r'<Column name="(\w+)"', acm.group(2)):
+                            cols.add(cm.group(1))
+
+                    bad_paths = {}
+                    for m in re.finditer(r'<(?:\w+:)?\w*DataPath[^>]*>Объект\.([^<]+)</(?:\w+:)?\w*DataPath>', raw):
+                        segments = m.group(1).split('.')
+                        seg0 = segments[0]
+                        path_check_count += 1
+                        if seg0 in STANDARD_OBJECT_FIELDS:
+                            continue
+                        if seg0 not in src_names:
+                            bad_paths[f'Объект.{seg0}'] = f'у {owner_key} нет такого реквизита или табличной части'
+                            continue
+                        # Второй сегмент проверяем только для табличных частей: у ссылочного реквизита
+                        # он ведёт в чужой объект, и это уже другая проверка.
+                        if len(segments) < 2 or seg0 not in src_ts_columns:
+                            continue
+                        seg1 = segments[1]
+                        if seg1 in STANDARD_OBJECT_FIELDS:
+                            continue
+                        # Итог колонки — псевдополе платформы: Total<Колонка> при живой колонке законен
+                        if seg1.startswith('Total') and seg1[5:] in src_ts_columns[seg0]:
+                            continue
+                        if seg1 not in src_ts_columns[seg0]:
+                            bad_paths[f'Объект.{seg0}.{seg1}'] = f'у табличной части {seg0} нет колонки {seg1}, и <Columns> формы её не объявляет'
+
+                    for bad in sorted(bad_paths):
+                        r.error(f"14. {ctx}: путь '{bad}' — {bad_paths[bad]}")
+                        check14_ok = False
+
+                if check14_ok:
+                    r.ok(f'14. Object paths vs source config: {path_check_count} checked')
+
+    if r.stopped:
+        r.finalize(out_file)
+        sys.exit(1)
 
     # --- Breadcrumb: controlled methods (&ИзменениеИКонтроль) drift is not checked here ---
     ctrl_count = 0
