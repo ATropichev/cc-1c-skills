@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.37 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.38 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -850,6 +850,12 @@ def main():
             pairs = [(str(k), str(v)) for k, v in value.items()]
         else:
             pairs = [(lang, str(value)) for lang in text_languages]
+        # Пустой объект — отдельное состояние: тег текста есть, языков в нём нет. Платформа
+        # пишет его самозакрывающимся. Для авторинга бесполезно (визуально это тот же пустой
+        # текст, что и ""), поэтому в описании DSL записи нет — она нужна раундтрипу.
+        if not pairs:
+            lines.append('\t\t\t\t\t<tl/>')
+            return
         lines.append('\t\t\t\t\t<tl>')
         for lang, content in pairs:
             lines.append('\t\t\t\t\t\t<v8:item>')

@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.18 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.19 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -483,8 +483,14 @@ def main():
                 # известен набор языков всего макета (get_dsl_text).
                 text = None
                 has_text = False
+                # Пустой <tl/> — отдельное состояние: тег текста есть, языков в нём нет. Без
+                # этого ветвления такая ячейка теряла текст вовсе (1 из 15 ячеек с тегом текста).
+                tl_node = find(c_content, "d:tl")
                 items = findall(c_content, "d:tl/v8:item")
-                if items:
+                if tl_node is not None and not items:
+                    text = OrderedDict()
+                    has_text = True
+                elif items:
                     by_lang = OrderedDict()
                     for it in items:
                         lang_node = find(it, "v8:lang")

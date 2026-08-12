@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.38 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.39 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -799,6 +799,13 @@ function Emit-CellText {
 		foreach ($p in $value.PSObject.Properties) { $pairs += @{ Lang = $p.Name; Text = "$($p.Value)" } }
 	} else {
 		foreach ($l in $textLanguages) { $pairs += @{ Lang = $l; Text = "$value" } }
+	}
+	# Пустой объект — отдельное состояние: тег текста есть, языков в нём нет. Платформа
+	# пишет его самозакрывающимся. Для авторинга бесполезно (визуально это тот же пустой
+	# текст, что и ""), поэтому в описании DSL записи нет — она нужна раундтрипу.
+	if ($pairs.Count -eq 0) {
+		X "`t`t`t`t`t<tl/>"
+		return
 	}
 	X "`t`t`t`t`t<tl>"
 	foreach ($p in $pairs) {

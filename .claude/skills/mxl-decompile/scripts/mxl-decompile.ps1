@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.18 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.19 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -314,8 +314,14 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 			# известен набор языков всего макета (Get-DslText).
 			$text = $null
 			$hasText = $false
+			# Пустой <tl/> — отдельное состояние: тег текста есть, языков в нём нет. Без
+			# этого ветвления такая ячейка теряла текст вовсе (1 из 15 ячеек с тегом текста).
+			$tlNode = $cContent.SelectSingleNode("d:tl", $ns)
 			$items = $cContent.SelectNodes("d:tl/v8:item", $ns)
-			if ($items -and $items.Count -gt 0) {
+			if ($tlNode -and (-not $items -or $items.Count -eq 0)) {
+				$text = [ordered]@{}
+				$hasText = $true
+			} elseif ($items -and $items.Count -gt 0) {
 				$byLang = [ordered]@{}
 				foreach ($it in $items) {
 					$langNode = $it.SelectSingleNode("v8:lang", $ns)
