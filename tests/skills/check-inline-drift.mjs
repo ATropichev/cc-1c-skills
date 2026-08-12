@@ -59,7 +59,9 @@ const FAMILIES = [
           'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile', 'xdto-edit',
           // *-info навыки читают тем же хелпером СОСТОЯНИЕ поддержки для вывода, а не запрещают
           // правку. Тело то же, поэтому семья общая.
-          'form-info', 'meta-info', 'mxl-info', 'role-info', 'skd-info', 'subsystem-info'] },
+          'form-info', 'meta-info', 'mxl-info', 'role-info', 'skd-info', 'subsystem-info',
+          // form-validate отличает автономную обработку от конфигурации: границей служит тот же корень
+          'form-validate'] },
     ],
   },
   {
@@ -92,7 +94,7 @@ const FAMILIES = [
       // если <каталог>.xml — корень ExternalDataProcessor/ExternalReport, чего в дереве
       // конфигурации не бывает. Поэтому вариант один на всех, переключателя не нужно.
       { id: 'base', authority: 'form-compile',
-        consumers: ['cfe-borrow', 'form-add', 'help-add', 'interface-edit', 'meta-compile',
+        consumers: ['cfe-borrow', 'form-add', 'form-validate', 'help-add', 'interface-edit', 'meta-compile',
           'mxl-compile', 'role-compile', 'subsystem-compile', 'template-add', 'xdto-compile'] },
     ],
   },

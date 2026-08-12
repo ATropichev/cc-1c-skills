@@ -71,6 +71,49 @@ VALID_CFG_PREFIXES = {
 }
 
 
+# Корень автономной внешней обработки/отчёта. Копия общего эталона (семья
+# support-guard: is_external_root, авторитет — cf-edit).
+def _sg_is_external_root(xml_path):
+    if not os.path.isfile(xml_path):
+        return False
+    try:
+        mx = etree.parse(xml_path).getroot()
+        for child in mx:
+            if isinstance(child.tag, str):
+                return child.tag.split("}")[-1] in ("ExternalDataProcessor", "ExternalReport")
+    except Exception:
+        return False
+    return False
+
+
+# Версия формата выгрузки. Копия общего эталона (семья detect_format_version, авторитет —
+# form-compile): та же ветка для автономной EPF/ERF, где версию несёт корень обработки.
+def detect_format_version(d):
+    while d:
+        # Автономная внешняя обработка/отчёт: своего Configuration.xml у неё нет, версию несёт
+        # корень самой обработки. Без этого форма и макет внутри обработки 2.21 писались бы 2.17.
+        ext_path = d + ".xml"
+        if os.path.isfile(ext_path):
+            with open(ext_path, "r", encoding="utf-8-sig") as f:
+                ext_head = f.read(2000)
+            if re.search(r'<(ExternalDataProcessor|ExternalReport)[ >]', ext_head):
+                m = re.search(r'<MetaDataObject[^>]+version="(\d+\.\d+)"', ext_head)
+                if m:
+                    return m.group(1)
+        cfg_path = os.path.join(d, "Configuration.xml")
+        if os.path.isfile(cfg_path):
+            with open(cfg_path, "r", encoding="utf-8-sig") as f:
+                head = f.read(2000)
+            m = re.search(r'<MetaDataObject[^>]+version="(\d+\.\d+)"', head)
+            if m:
+                return m.group(1)
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return "2.17"
+
+
 def localname(el):
     return etree.QName(el.tag).localname
 
@@ -129,14 +172,28 @@ def main():
     # Detect context: config vs EPF/ERF
     is_config_context = False
     config_xml_path = ''
+    version_anchor = ''
     walk_dir = os.path.dirname(os.path.abspath(form_path))
     for _ in range(15):
         parent = os.path.dirname(walk_dir)
         if parent == walk_dir:
             break
+        # Порядок проверок тот же, что у detect_format_version: сначала корень автономной обработки,
+        # потом Configuration.xml — иначе форма внутри EPF, лежащей в дереве конфигурации, взяла бы
+        # версию конфигурации.
+        ext_root = walk_dir + '.xml'
+        if not version_anchor:
+            if _sg_is_external_root(ext_root):
+                # Ближайший якорь побеждает: автономная обработка остаётся автономной, даже если её
+                # исходники лежат внутри дерева с Configuration.xml (типовая раскладка проекта:
+                # src/cf рядом с src/epf). Иначе её собственные External*-типы считались бы ошибкой.
+                version_anchor = ext_root
+                break
         if os.path.isfile(os.path.join(walk_dir, 'Configuration.xml')):
             is_config_context = True
             config_xml_path = os.path.join(walk_dir, 'Configuration.xml')
+            if not version_anchor:
+                version_anchor = config_xml_path
             break
         walk_dir = parent
 
@@ -489,6 +546,8 @@ def main():
             path_msg = f"{path_msg}, {skip_note}" if path_msg else skip_note
         if path_errors == 0 and path_msg:
             report_ok(f"Data bindings: {path_msg}")
+        elif path_errors == 0:
+            report_ok("Data bindings: none")
 
     # --- Check 6: Button command references ---
     if not stopped:
@@ -849,29 +908,22 @@ def main():
         elif prefix_errors == 0:
             report_ok(f'13. Namespace prefixes: {prefix_checked} values, all declared')
 
-    # --- Check 14: версия формата формы совпадает с версией конфигурации ---
+    # --- Check 14: версия формата формы совпадает с версией выгрузки ---
     # Версию задаёт платформа, которой выгружали, и в пределах одной выгрузки она едина. Форма из
     # другой версии — «Неизвестная версия формата N загружаемого файла»: платформа не читает файл,
-    # который новее её самой. Типичный след ручной сборки: форму скопировали из свежей конфигурации.
-    if not stopped and config_xml_path:
+    # который новее её самой. Источник версии ищем общим helper-ом: он же покрывает автономную
+    # внешнюю обработку/отчёт, где Configuration.xml нет и версию несёт корень самой обработки.
+    if not stopped and version_anchor:
         form_ver = root.get('version', '')
-        cfg_ver = ''
-        try:
-            with open(config_xml_path, 'r', encoding='utf-8-sig', errors='ignore') as fh:
-                head = fh.read(4000)
-            vm = re.search(r'<MetaDataObject[^>]*[ \t]version="([^"]+)"', head)
-            if vm:
-                cfg_ver = vm.group(1)
-        except OSError:
-            pass
+        dump_ver = detect_format_version(os.path.dirname(os.path.abspath(form_path)))
 
-        if not cfg_ver or not form_ver:
+        if not form_ver:
             report_ok('14. Format version: not comparable')
-        elif form_ver != cfg_ver:
-            report_error(f'14. Format version {form_ver} differs from configuration ({cfg_ver}) '
+        elif form_ver != dump_ver:
+            report_error(f'14. Format version {form_ver} differs from the dump ({dump_ver}) '
                          '— a dump carries one version, the platform refuses a file it cannot read')
         else:
-            report_ok(f'14. Format version: {form_ver}, matches configuration')
+            report_ok(f'14. Format version: {form_ver}, matches the dump')
 
     # --- Finalize ---
     checks = ok_count + errors + warnings

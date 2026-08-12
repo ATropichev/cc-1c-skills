@@ -60,6 +60,19 @@ $nsMgr.AddNamespace("xsi", "http://www.w3.org/2001/XMLSchema-instance")
 
 $root = $xmlDoc.DocumentElement
 
+# Корень автономной внешней обработки/отчёта. Копия общего эталона (семья
+# support-guard: is_external_root, авторитет — cf-edit).
+function Test-ExternalObjectRoot([string]$xmlPath) {
+	if (-not (Test-Path $xmlPath)) { return $false }
+	try {
+		[xml]$mx = Get-Content -Path $xmlPath -Encoding UTF8
+		$el = $mx.DocumentElement.FirstChild
+		while ($el -and $el.NodeType -ne 'Element') { $el = $el.NextSibling }
+		if ($el) { return @('ExternalDataProcessor','ExternalReport') -contains $el.LocalName }
+	} catch {}
+	return $false
+}
+
 # --- Detect context: config vs EPF/ERF ---
 # Walk up from FormPath looking for Configuration.xml → config context
 # No Configuration.xml → external data processor / report (EPF/ERF)
@@ -67,12 +80,54 @@ $script:isConfigContext = $false
 $walkDir = Split-Path (Resolve-Path $FormPath) -Parent
 for ($i = 0; $i -lt 15; $i++) {
 	if (-not $walkDir -or $walkDir -eq (Split-Path $walkDir)) { break }
+	# Порядок проверок тот же, что у Detect-FormatVersion: сначала корень автономной обработки,
+	# потом Configuration.xml — иначе форма внутри EPF, лежащей в дереве конфигурации, взяла бы
+	# версию конфигурации.
+	$extRoot = "$walkDir.xml"
+	if (-not $script:versionAnchor) {
+		if (Test-ExternalObjectRoot $extRoot) {
+			# Ближайший якорь побеждает: автономная обработка остаётся автономной, даже если её
+			# исходники лежат внутри дерева с Configuration.xml (типовая раскладка проекта:
+			# src/cf рядом с src/epf). Иначе её собственные External*-типы считались бы ошибкой.
+			$script:versionAnchor = $extRoot
+			break
+		}
+	}
 	if (Test-Path (Join-Path $walkDir "Configuration.xml")) {
 		$script:isConfigContext = $true
 		$script:configXmlPath = Join-Path $walkDir "Configuration.xml"
+		if (-not $script:versionAnchor) { $script:versionAnchor = $script:configXmlPath }
 		break
 	}
 	$walkDir = Split-Path $walkDir
+}
+
+# Версия формата выгрузки. Копия общего эталона (семья detect_format_version, авторитет —
+# form-compile): та же ветка для автономной EPF/ERF, где версию несёт корень обработки.
+function Detect-FormatVersion([string]$dir) {
+	$d = $dir
+	while ($d) {
+		# Автономная внешняя обработка/отчёт: своего Configuration.xml у неё нет, версию несёт
+		# корень самой обработки. Без этого форма и макет внутри обработки 2.21 писались бы 2.17.
+		$extPath = "$d.xml"
+		if (Test-Path $extPath) {
+			$extText = [System.IO.File]::ReadAllText($extPath, [System.Text.Encoding]::UTF8)
+			$extHead = $extText.Substring(0, [Math]::Min(2000, $extText.Length))
+			if ($extHead -match '<(ExternalDataProcessor|ExternalReport)[ >]' -and $extHead -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { return $Matches[1] }
+		}
+		$cfgPath = Join-Path $d "Configuration.xml"
+		if (Test-Path $cfgPath) {
+			$cfgText = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
+			# Длину среза берём по СТРОКЕ, а не по размеру файла: размер в БАЙТАХ, Substring считает
+			# СИМВОЛЫ, и на кириллице байт больше — короткий Configuration.xml ронял навык исключением.
+			$head = $cfgText.Substring(0, [Math]::Min(2000, $cfgText.Length))
+			if ($head -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { return $Matches[1] }
+		}
+		$parent = Split-Path $d -Parent
+		if ($parent -eq $d) { break }
+		$d = $parent
+	}
+	return "2.17"
 }
 
 # --- Counters ---
@@ -927,26 +982,22 @@ if (-not $stopped) {
 	}
 }
 
-# --- Check 14: версия формата формы совпадает с версией конфигурации ---
+# --- Check 14: версия формата формы совпадает с версией выгрузки ---
 # Версию задаёт платформа, которой выгружали, и в пределах одной выгрузки она едина. Форма из
 # другой версии — «Неизвестная версия формата N загружаемого файла»: платформа не читает файл,
-# который новее её самой. Типичный след ручной сборки: форму скопировали из свежей конфигурации.
+# который новее её самой. Источник версии ищем общим helper-ом: он же покрывает автономную
+# внешнюю обработку/отчёт, где Configuration.xml нет и версию несёт корень самой обработки.
 
-if (-not $stopped -and $script:configXmlPath) {
+if (-not $stopped -and $script:versionAnchor) {
 	$formVer = $root.GetAttribute("version")
-	$cfgVer = ""
-	try {
-		$cfgHead = [System.IO.File]::ReadAllText($script:configXmlPath, [System.Text.Encoding]::UTF8)
-		$vm = [regex]::Match($cfgHead.Substring(0, [Math]::Min(4000, $cfgHead.Length)), '<MetaDataObject[^>]*\bversion="([^"]+)"')
-		if ($vm.Success) { $cfgVer = $vm.Groups[1].Value }
-	} catch { }
+	$dumpVer = Detect-FormatVersion (Split-Path (Resolve-Path $FormPath) -Parent)
 
-	if (-not $cfgVer -or -not $formVer) {
+	if (-not $formVer) {
 		Report-OK "14. Format version: not comparable"
-	} elseif ($formVer -ne $cfgVer) {
-		Report-Error "14. Format version $formVer differs from configuration ($cfgVer) — a dump carries one version, the platform refuses a file it cannot read"
+	} elseif ($formVer -ne $dumpVer) {
+		Report-Error "14. Format version $formVer differs from the dump ($dumpVer) — a dump carries one version, the platform refuses a file it cannot read"
 	} else {
-		Report-OK "14. Format version: $formVer, matches configuration"
+		Report-OK "14. Format version: $formVer, matches the dump"
 	}
 }
 
