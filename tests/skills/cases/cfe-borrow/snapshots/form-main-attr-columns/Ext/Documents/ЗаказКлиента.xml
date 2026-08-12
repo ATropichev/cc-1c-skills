@@ -31,7 +31,6 @@
 			<NumberType>String</NumberType>
 			<NumberLength>11</NumberLength>
 			<NumberAllowedLength>Variable</NumberAllowedLength>
-			<NumberPeriodicity>Year</NumberPeriodicity>
 		</Properties>
 		<ChildObjects>
 			<Form>ФормаДокумента</Form>

@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.23 — Borrow objects from configuration into extension (CFE) (ссылки параметров выбора по uuid)
+﻿# cfe-borrow v1.24 — Borrow objects from configuration into extension (CFE) (не переносить NumberPeriodicity в оболочку документа)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -1397,8 +1397,13 @@ function Resolve-SourceAttributes {
 	$extraProps = [ordered]@{}
 	$propsNode = $srcEl.SelectSingleNode("md:Properties", $srcNs)
 	if ($propsNode) {
+		# NumberPeriodicity сюда НЕ входит: платформа считает его модификацией настроек нумерации и
+		# тогда требует объявить ещё и <Numerator/>, иначе /UpdateDBCfg падает — «отключать
+		# контролируемость свойства "Нумератор" недопустимо». Конфигуратор его не переносит
+		# (эталон заимствования документа: NumberType/NumberLength/NumberAllowedLength и всё).
+		# Загрузку это не ломает, ошибка вылезает только на обновлении конфигурации БД.
 		$propsToExtract = @("Hierarchical","FoldersOnTop","CodeLength","DescriptionLength","CodeType","CodeAllowedLength",
-			"NumberType","NumberLength","NumberAllowedLength","NumberPeriodicity")
+			"NumberType","NumberLength","NumberAllowedLength")
 		foreach ($pName in $propsToExtract) {
 			$pNode = $propsNode.SelectSingleNode("md:${pName}", $srcNs)
 			if ($pNode) { $extraProps[$pName] = $pNode.InnerText }

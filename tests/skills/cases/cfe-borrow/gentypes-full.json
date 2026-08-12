@@ -3,45 +3,121 @@
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "ChartOfCharacteristicTypes", "name": "ВидыСубконто", "valueType": "String(50)" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
-    },
-    {
-      "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "ChartOfAccounts", "name": "Хозрасчетный", "extDimensionTypes": "ChartOfCharacteristicTypes.ВидыСубконто" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
-    },
-    {
-      "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "ChartOfCalculationTypes", "name": "ОсновныеНачисления" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "input": {
+        "type": "ChartOfCharacteristicTypes",
+        "name": "ВидыСубконто",
+        "valueType": "String(50)"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "meta-compile/scripts/meta-compile",
       "input": {
-        "type": "AccountingRegister", "name": "Хозрасчетный",
+        "type": "ChartOfAccounts",
+        "name": "Хозрасчетный",
+        "extDimensionTypes": "ChartOfCharacteristicTypes.ВидыСубконто"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "ChartOfCalculationTypes",
+        "name": "ОсновныеНачисления"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "AccountingRegister",
+        "name": "Хозрасчетный",
         "chartOfAccounts": "ChartOfAccounts.Хозрасчетный",
-        "resources": [ { "name": "Сумма", "type": "Number(15,2)", "balance": true } ]
+        "resources": [
+          {
+            "name": "Сумма",
+            "type": "Number(15,2)",
+            "balance": true
+          }
+        ]
       },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "meta-compile/scripts/meta-compile",
       "input": {
-        "type": "CalculationRegister", "name": "Начисления",
+        "type": "CalculationRegister",
+        "name": "Начисления",
         "chartOfCalculationTypes": "ChartOfCalculationTypes.ОсновныеНачисления",
-        "resources": [ { "name": "Результат", "type": "Number(15,2)" } ]
+        "resources": [
+          {
+            "name": "Результат",
+            "type": "Number(15,2)"
+          }
+        ]
       },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "BusinessProcess", "name": "Согласование" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "input": {
+        "type": "Task",
+        "name": "ЗадачаИсполнителя"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "BusinessProcess",
+        "name": "Согласование",
+        "task": "Task.ЗадачаИсполнителя"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Document",
+        "name": "Операция",
+        "registerRecords": [
+          "AccountingRegister.Хозрасчетный",
+          "CalculationRegister.Начисления"
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/ext",
+        "-ConfigPath": "{workDir}"
+      }
     }
   ],
   "params": {

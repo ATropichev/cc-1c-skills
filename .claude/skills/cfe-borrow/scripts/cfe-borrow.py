@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.23 — Borrow objects from configuration into extension (CFE) (ссылки параметров выбора по uuid)
+# cfe-borrow v1.24 — Borrow objects from configuration into extension (CFE) (не переносить NumberPeriodicity в оболочку документа)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1086,10 +1086,15 @@ def main():
         extra_props = {}
         props_node = src_el.find(f"{{{MD_NS}}}Properties")
         if props_node is not None:
+            # NumberPeriodicity сюда НЕ входит: платформа считает его модификацией настроек нумерации и
+            # тогда требует объявить ещё и <Numerator/>, иначе /UpdateDBCfg падает — «отключать
+            # контролируемость свойства "Нумератор" недопустимо». Конфигуратор его не переносит
+            # (эталон заимствования документа: NumberType/NumberLength/NumberAllowedLength и всё).
+            # Загрузку это не ломает, ошибка вылезает только на обновлении конфигурации БД.
             props_to_extract = [
                 "Hierarchical", "FoldersOnTop", "CodeLength", "DescriptionLength",
                 "CodeType", "CodeAllowedLength", "NumberType", "NumberLength",
-                "NumberAllowedLength", "NumberPeriodicity",
+                "NumberAllowedLength",
             ]
             for p_name in props_to_extract:
                 p_node = props_node.find(f"{{{MD_NS}}}{p_name}")

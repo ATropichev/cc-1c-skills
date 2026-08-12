@@ -251,7 +251,9 @@
 			<ChartOfCalculationTypes>ОсновныеНачисления</ChartOfCalculationTypes>
 			<AccountingRegister>Хозрасчетный</AccountingRegister>
 			<CalculationRegister>Начисления</CalculationRegister>
+			<Task>ЗадачаИсполнителя</Task>
 			<BusinessProcess>Согласование</BusinessProcess>
+			<Document>Операция</Document>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

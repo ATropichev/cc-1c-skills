@@ -22,11 +22,6 @@
 					<xr:DataPath xsi:type="xs:string">Объект.Партнер</xr:DataPath>
 					<xr:ValueChange>Clear</xr:ValueChange>
 				</xr:Link>
-				<xr:Link>
-					<xr:Name>Отбор.Прочее</xr:Name>
-					<xr:DataPath xsi:type="xs:string">Объект.НетТакогоРеквизита</xr:DataPath>
-					<xr:ValueChange>Clear</xr:ValueChange>
-				</xr:Link>
 			</ChoiceParameterLinks>
 			<ContextMenu name="КонтактноеЛицоКонтекстноеМеню" id="5"/>
 			<ExtendedTooltip name="КонтактноеЛицоРасширеннаяПодсказка" id="6"/>
