@@ -26,6 +26,8 @@ const SPEC = join(ROOT, 'docs', '1c-configuration-spec.md');
 //       'order' — список типов: порядок обязан совпадать с порядком таблицы
 //       'keys'  — ключи обязаны быть каноническими именами (значения свои)
 //       'alias' — значения обязаны быть каноническими именами (ключи — вокабуляр навыка)
+//       'gentypes' — тип → набор GeneratedType (префикс+категория), сверка с таблицей §2.5
+//       'gencats'  — то же, но карта хранит только категории (префиксов в ней нет)
 // exclude: { Тип: 'причина' } — тип, которого в карте нет намеренно. Без причины → WARN.
 // extraTargets — не-ChildObjects имена, законные для alias-карты (вложенные сущности и т. п.)
 
@@ -69,6 +71,31 @@ const MAPS = [
   { skill: 'cfe-borrow', file: 'cfe-borrow', kind: 'alias', py: 'SYNONYM_MAP', ps1: '$synonymMap' },
   { skill: 'cfe-patch-method', file: 'cfe-patch-method', kind: 'alias',
     py: 'DIR_TO_TYPE', ps1: '$script:dirToType' },
+  // наборы GeneratedType (эталон — таблица §2.5). Ишью 64: у cfe-borrow молча не хватало
+  // категории Characteristic у ПВХ — платформа отвергала заимствованную оболочку, а сверять
+  // было не с чем: карта категорий живёт в трёх навыках, и две из них были правы.
+  {
+    skill: 'cfe-borrow', file: 'cfe-borrow', kind: 'gentypes',
+    py: 'GENERATED_TYPES', ps1: '$script:generatedTypes',
+  },
+  {
+    skill: 'meta-compile', file: 'meta-compile', kind: 'gentypes',
+    py: 'generated_types', ps1: '$script:generatedTypes',
+    exclude: {
+      IntegrationService: '',
+    },
+  },
+  {
+    skill: 'meta-validate', file: 'meta-validate', kind: 'gencats',
+    py: 'generated_type_categories', ps1: '$generatedTypeCategories',
+    exclude: {
+      IntegrationService: '',
+      Sequence: 'в $structuralOnlyTypes — навык проверяет такие объекты только структурно (root/uuid/Name)',
+      FilterCriterion: 'в $structuralOnlyTypes — только структурная проверка',
+      SettingsStorage: 'в $structuralOnlyTypes — только структурная проверка',
+      WSReference: 'в $structuralOnlyTypes — только структурная проверка',
+    },
+  },
   {
     // Частичная карта тип→каталог: перехватывать метод можно только у объектов с модулями,
     // поэтому полнота не требуется. Плюс прощающий ввод — ключом принимается и имя каталога
@@ -91,7 +118,23 @@ function readSpec() {
     order.push(type);
     dirOf.set(type, r[3].replace(/\/$/, ''));
   }
-  return { order, dirOf };
+  return { order, dirOf, genTypes: readGenTypes(text) };
+}
+
+// Таблица §2.5 «InternalInfo объектов — наборы GeneratedType»: строка вида
+//   | `Catalog` | `CatalogObject`/Object, `CatalogRef`/Ref, … |
+// Сокращение `…X` в префиксе разворачивается в `<Тип>X` (так записано в самой таблице).
+function readGenTypes(text) {
+  const section = text.slice(text.indexOf('### 2.5.'), text.indexOf('## 3. ConfigDumpInfo'));
+  const genTypes = new Map();
+  for (const row of section.matchAll(/^\|\s*`(\w+)`\s*\|\s*(`[^|]+)\|/gm)) {
+    const type = row[1];
+    const pairs = [...row[2].matchAll(/`([\w…]+)`\/(\w+)/g)]
+      .map(([, prefix, category]) => [prefix.replace('…', type), category]);
+    if (pairs.length) genTypes.set(type, pairs);
+  }
+  if (genTypes.size < 20) throw new Error(`Таблица GeneratedType не распознана в ${SPEC} (типов: ${genTypes.size})`);
+  return genTypes;
 }
 
 // ─── Извлечение карт ────────────────────────────────────────────────────────
@@ -133,6 +176,46 @@ function extractPs1(text, name, kind) {
   return [...body.matchAll(/"([^"]+)"\s*=\s*"([^"]*)"/g)].map((x) => [x[1], x[2]]);
 }
 
+// Карты GeneratedType вложены на два уровня (тип → список пар), поэтому плоские extractPy/extractPs1
+// к ним не применимы: нужен разбор по блокам типа. Возвращаем Map<тип, [[префикс, категория], …]>;
+// для 'gencats' префикс неизвестен и остаётся null.
+function extractGen(text, name, kind, lang) {
+  const isPs1 = lang === 'ps1';
+  const head = isPs1
+    ? new RegExp(`^\\s*${name.replace(/[$]/g, '\\$')}\\s*=\\s*@\\{`, 'm')
+    : new RegExp(`^\\s*${name}\\s*=\\s*\\{`, 'm');
+  const m = head.exec(text);
+  if (!m) return null;
+  const body = sliceBlock(text, m.index + m[0].length - 1, isPs1 ? '{' : '{', '}');
+  if (body === null) return null;
+
+  // .py-порты навыков расходятся стилем кавычек (meta-compile — одинарные, cfe-borrow — двойные),
+  // поэтому в py-ветке принимаем оба.
+  const typeHead = isPs1 ? /^\s*"(\w+)"\s*=\s*@\(/ : /^\s*['"](\w+)['"]\s*:\s*\[/;
+  const pairRe = isPs1
+    ? /prefix\s*=\s*"(\w+)";\s*category\s*=\s*"(\w+)"/
+    : /['"]prefix['"]:\s*['"](\w+)['"],\s*['"]category['"]:\s*['"](\w+)['"]/;
+
+  const out = new Map();
+  let cur = null;
+  for (const line of body.split('\n')) {
+    const h = typeHead.exec(line);
+    if (h) {
+      cur = h[1];
+      out.set(cur, []);
+      if (kind === 'gencats') {
+        // категории лежат в той же строке: "Catalog" = @("Object","Ref",…)
+        for (const c of line.slice(h[0].length).matchAll(/"(\w+)"/g)) out.get(cur).push([null, c[1]]);
+      }
+      continue;
+    }
+    if (!cur || kind === 'gencats') continue;
+    const p = pairRe.exec(line);
+    if (p) out.get(cur).push([p[1], p[2]]);
+  }
+  return out;
+}
+
 function readSkill(skill, file, ext) {
   const p = join(SKILLS, skill, 'scripts', `${file}.${ext}`);
   if (!existsSync(p)) return null;
@@ -153,6 +236,12 @@ for (const entry of MAPS) {
     if (!name) continue;
     const text = readSkill(entry.skill, entry.file, lang === 'py' ? 'py' : 'ps1');
     if (text === null) continue;
+
+    if (entry.kind === 'gentypes' || entry.kind === 'gencats') {
+      checkGenTypes(entry, lang, text, name);
+      continue;
+    }
+
     const data = lang === 'py' ? extractPy(text, name, entry.kind) : extractPs1(text, name, entry.kind);
     if (data === null) {
       errors.push(`${entry.skill}.${name} [${lang}]: карта не найдена — реестр протух`);
@@ -218,6 +307,51 @@ for (const entry of MAPS) {
         errors.push(`${tag}: алиас '${alias}' ведёт на '${target}', которого нет в таблице`);
       }
     }
+  }
+}
+
+// Сверка набора GeneratedType с таблицей §2.5. Сравниваем СОСТАВ, не порядок: порядок в типовых
+// выгрузках стабилен, но на загрузку не влияет (ишью 64: вставка Characteristic в середину набора
+// заимствованной оболочки принята платформой), а карты навыков исторически расходятся порядком.
+function checkGenTypes(entry, lang, text, name) {
+  const tag = `${entry.skill}.${name} [${lang}]`;
+  const data = extractGen(text, name, entry.kind, lang);
+  if (data === null) {
+    errors.push(`${tag}: карта не найдена — реестр протух`);
+    return;
+  }
+  if (data.size === 0) {
+    errors.push(`${tag}: карта извлеклась пустой — сломан разбор формата`);
+    return;
+  }
+  seen.push({ tag, count: data.size });
+
+  const withPrefix = entry.kind === 'gentypes';
+  const key = ([prefix, category]) => (withPrefix ? `${prefix}/${category}` : category);
+
+  for (const [type, pairs] of data) {
+    const want = spec.genTypes.get(type);
+    if (!want) {
+      errors.push(`${tag}: тип '${type}' отсутствует в таблице GeneratedType спецификации`);
+      continue;
+    }
+    const have = new Set(pairs.map(key));
+    for (const w of want.map(key)) {
+      if (!have.has(w)) errors.push(`${tag}: у '${type}' нет '${w}' — в таблице он есть`);
+    }
+    for (const h of have) {
+      if (!want.map(key).includes(h)) errors.push(`${tag}: у '${type}' лишний '${h}' — в таблице его нет`);
+    }
+  }
+
+  const exclude = entry.exclude || {};
+  for (const type of spec.genTypes.keys()) {
+    if (data.has(type)) continue;
+    if (Object.prototype.hasOwnProperty.call(exclude, type)) {
+      if (!exclude[type]) warns.push(`${tag}: тип '${type}' исключён без причины`);
+      continue;
+    }
+    errors.push(`${tag}: тип '${type}' есть в таблице GeneratedType, но отсутствует в карте`);
   }
 }
 

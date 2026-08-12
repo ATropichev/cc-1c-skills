@@ -283,6 +283,44 @@ ClassId — фиксированные идентификаторы классо
 
 Внутри одного типа объекты отсортированы по имени (алфавитный порядок). Типы, для которых нет объектов, в ChildObjects не записываются.
 
+### 2.5. InternalInfo объектов — наборы GeneratedType
+
+У каждого объекта метаданных в `<InternalInfo>` перечислены порождаемые платформой типы. Набор фиксирован для типа объекта: имя элемента — `<префикс>.<ИмяОбъекта>`, атрибут `category` — категория из таблицы. **Неполный набор платформа отвергает при загрузке**: «отсутствует один или более типов объекта <Тип>» (для заимствованных оболочек в расширениях — тоже).
+
+Запись `префикс`/Категория; `…` в префиксе = имя типа объекта (`…Ref` у `ChartOfAccounts` читается `ChartOfAccountsRef`).
+
+| Тип объекта | Префикс + категория (в порядке типовой выгрузки) |
+|-------------|--------------------------------------------------|
+| `Catalog` | `CatalogObject`/Object, `CatalogRef`/Ref, `CatalogSelection`/Selection, `CatalogList`/List, `CatalogManager`/Manager |
+| `Document` | `DocumentObject`/Object, `DocumentRef`/Ref, `DocumentSelection`/Selection, `DocumentList`/List, `DocumentManager`/Manager |
+| `Enum` | `EnumRef`/Ref, `EnumManager`/Manager, `EnumList`/List |
+| `Constant` | `ConstantManager`/Manager, `ConstantValueManager`/ValueManager, `ConstantValueKey`/ValueKey |
+| `Report` | `ReportObject`/Object, `ReportManager`/Manager |
+| `DataProcessor` | `DataProcessorObject`/Object, `DataProcessorManager`/Manager |
+| `ExchangePlan` | `ExchangePlanObject`/Object, `ExchangePlanRef`/Ref, `ExchangePlanSelection`/Selection, `ExchangePlanList`/List, `ExchangePlanManager`/Manager |
+| `Task` | `TaskObject`/Object, `TaskRef`/Ref, `TaskSelection`/Selection, `TaskList`/List, `TaskManager`/Manager |
+| `BusinessProcess` | `BusinessProcessObject`/Object, `BusinessProcessRef`/Ref, `BusinessProcessSelection`/Selection, `BusinessProcessList`/List, `BusinessProcessManager`/Manager, `BusinessProcessRoutePointRef`/RoutePointRef |
+| `ChartOfCharacteristicTypes` | `ChartOfCharacteristicTypesObject`/Object, `…Ref`/Ref, `…Selection`/Selection, `…List`/List, `Characteristic`/Characteristic, `…Manager`/Manager |
+| `ChartOfAccounts` | `ChartOfAccountsObject`/Object, `…Ref`/Ref, `…Selection`/Selection, `…List`/List, `…Manager`/Manager, `…ExtDimensionTypes`/ExtDimensionTypes, `…ExtDimensionTypesRow`/ExtDimensionTypesRow |
+| `ChartOfCalculationTypes` | `ChartOfCalculationTypesObject`/Object, `…Ref`/Ref, `…Selection`/Selection, `…List`/List, `…Manager`/Manager, `DisplacingCalculationTypes`/DisplacingCalculationTypes, `DisplacingCalculationTypesRow`/DisplacingCalculationTypesRow, `BaseCalculationTypes`/BaseCalculationTypes, `BaseCalculationTypesRow`/BaseCalculationTypesRow, `LeadingCalculationTypes`/LeadingCalculationTypes, `LeadingCalculationTypesRow`/LeadingCalculationTypesRow |
+| `InformationRegister` | `InformationRegisterRecord`/Record, `…Manager`/Manager, `…Selection`/Selection, `…List`/List, `…RecordSet`/RecordSet, `…RecordKey`/RecordKey, `…RecordManager`/RecordManager |
+| `AccumulationRegister` | `AccumulationRegisterRecord`/Record, `…Manager`/Manager, `…Selection`/Selection, `…List`/List, `…RecordSet`/RecordSet, `…RecordKey`/RecordKey |
+| `AccountingRegister` | `AccountingRegisterRecord`/Record, `AccountingRegisterExtDimensions`/ExtDimensions, `…Manager`/Manager, `…Selection`/Selection, `…List`/List, `…RecordSet`/RecordSet, `…RecordKey`/RecordKey |
+| `CalculationRegister` | `CalculationRegisterRecord`/Record, `…Manager`/Manager, `…Selection`/Selection, `…List`/List, `…RecordSet`/RecordSet, `…RecordKey`/RecordKey, `RecalculationsManager`/Recalcs |
+| `DocumentJournal` | `DocumentJournalSelection`/Selection, `DocumentJournalList`/List, `DocumentJournalManager`/Manager |
+| `Sequence` | `SequenceRecord`/Record, `SequenceManager`/Manager, `SequenceRecordSet`/RecordSet |
+| `FilterCriterion` | `FilterCriterionManager`/Manager, `FilterCriterionList`/List |
+| `SettingsStorage` | `SettingsStorageManager`/Manager |
+| `IntegrationService` | `IntegrationServiceManager`/Manager |
+| `WSReference` | `WSReferenceManager`/Manager |
+| `DefinedType` | `DefinedType`/DefinedType |
+
+Табличные части объектов несут собственную пару в своём `<InternalInfo>`: `<Тип>TabularSection.<Объект>.<ТЧ>`/TabularSection и `<Тип>TabularSectionRow.<Объект>.<ТЧ>`/TabularSectionRow.
+
+Без `<InternalInfo>`/`GeneratedType` идут `CommonModule`, `ScheduledJob`, `EventSubscription` и прочие объекты без порождаемых типов.
+
+Порядок в таблице — как в типовых выгрузках; на загрузку он не влияет (проверено вставкой `Characteristic` в середину набора заимствованного плана видов характеристик), значим именно состав.
+
 ---
 
 ## 3. ConfigDumpInfo.xml — служебный файл выгрузки

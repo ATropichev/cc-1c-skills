@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.20 — Borrow objects from configuration into extension (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+﻿# cfe-borrow v1.21 — Borrow objects from configuration into extension (CFE) (полный набор GeneratedType у заимствованных оболочек)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -209,7 +209,8 @@ $script:generatedTypes = @{
 		@{ prefix = "AccumulationRegisterRecordKey"; category = "RecordKey" }
 	)
 	"AccountingRegister" = @(
-		@{ prefix = "AccountingRegisterRecord";    category = "Record" }
+		@{ prefix = "AccountingRegisterRecord";        category = "Record" }
+		@{ prefix = "AccountingRegisterExtDimensions"; category = "ExtDimensions" }
 		@{ prefix = "AccountingRegisterManager";   category = "Manager" }
 		@{ prefix = "AccountingRegisterSelection"; category = "Selection" }
 		@{ prefix = "AccountingRegisterList";      category = "List" }
@@ -223,6 +224,7 @@ $script:generatedTypes = @{
 		@{ prefix = "CalculationRegisterList";      category = "List" }
 		@{ prefix = "CalculationRegisterRecordSet"; category = "RecordSet" }
 		@{ prefix = "CalculationRegisterRecordKey"; category = "RecordKey" }
+		@{ prefix = "RecalculationsManager";        category = "Recalcs" }
 	)
 	"ChartOfAccounts" = @(
 		@{ prefix = "ChartOfAccountsObject";    category = "Object" }
@@ -230,12 +232,15 @@ $script:generatedTypes = @{
 		@{ prefix = "ChartOfAccountsSelection"; category = "Selection" }
 		@{ prefix = "ChartOfAccountsList";      category = "List" }
 		@{ prefix = "ChartOfAccountsManager";   category = "Manager" }
+		@{ prefix = "ChartOfAccountsExtDimensionTypes";    category = "ExtDimensionTypes" }
+		@{ prefix = "ChartOfAccountsExtDimensionTypesRow"; category = "ExtDimensionTypesRow" }
 	)
 	"ChartOfCharacteristicTypes" = @(
 		@{ prefix = "ChartOfCharacteristicTypesObject";    category = "Object" }
 		@{ prefix = "ChartOfCharacteristicTypesRef";       category = "Ref" }
 		@{ prefix = "ChartOfCharacteristicTypesSelection"; category = "Selection" }
 		@{ prefix = "ChartOfCharacteristicTypesList";      category = "List" }
+		@{ prefix = "Characteristic";                      category = "Characteristic" }
 		@{ prefix = "ChartOfCharacteristicTypesManager";   category = "Manager" }
 	)
 	"ChartOfCalculationTypes" = @(
@@ -245,8 +250,11 @@ $script:generatedTypes = @{
 		@{ prefix = "ChartOfCalculationTypesList";      category = "List" }
 		@{ prefix = "ChartOfCalculationTypesManager";   category = "Manager" }
 		@{ prefix = "DisplacingCalculationTypes";       category = "DisplacingCalculationTypes" }
+		@{ prefix = "DisplacingCalculationTypesRow";    category = "DisplacingCalculationTypesRow" }
 		@{ prefix = "BaseCalculationTypes";             category = "BaseCalculationTypes" }
+		@{ prefix = "BaseCalculationTypesRow";          category = "BaseCalculationTypesRow" }
 		@{ prefix = "LeadingCalculationTypes";          category = "LeadingCalculationTypes" }
+		@{ prefix = "LeadingCalculationTypesRow";       category = "LeadingCalculationTypesRow" }
 	)
 	"BusinessProcess" = @(
 		@{ prefix = "BusinessProcessObject";    category = "Object" }
@@ -254,6 +262,7 @@ $script:generatedTypes = @{
 		@{ prefix = "BusinessProcessSelection"; category = "Selection" }
 		@{ prefix = "BusinessProcessList";      category = "List" }
 		@{ prefix = "BusinessProcessManager";   category = "Manager" }
+		@{ prefix = "BusinessProcessRoutePointRef"; category = "RoutePointRef" }
 	)
 	"Task" = @(
 		@{ prefix = "TaskObject";    category = "Object" }
