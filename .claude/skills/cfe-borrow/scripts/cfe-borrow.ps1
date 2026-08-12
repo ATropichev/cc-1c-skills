@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.24 — Borrow objects from configuration into extension (CFE) (не переносить NumberPeriodicity в оболочку документа)
+﻿# cfe-borrow v1.25 — Borrow objects from configuration into extension (CFE) (не переносить FoldersOnTop — платформа его не хранит)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -1402,7 +1402,10 @@ function Resolve-SourceAttributes {
 		# контролируемость свойства "Нумератор" недопустимо». Конфигуратор его не переносит
 		# (эталон заимствования документа: NumberType/NumberLength/NumberAllowedLength и всё).
 		# Загрузку это не ломает, ошибка вылезает только на обновлении конфигурации БД.
-		$propsToExtract = @("Hierarchical","FoldersOnTop","CodeLength","DescriptionLength","CodeType","CodeAllowedLength",
+		# FoldersOnTop сюда НЕ входит: платформа его у заимствованной оболочки не хранит — при
+		# загрузке молча выбрасывает (проверено раундтрипом: записали, выгрузили обратно, свойства
+		# нет). Конфигуратор его тоже не переносит. Остальные из списка сохраняются.
+		$propsToExtract = @("Hierarchical","CodeLength","DescriptionLength","CodeType","CodeAllowedLength",
 			"NumberType","NumberLength","NumberAllowedLength")
 		foreach ($pName in $propsToExtract) {
 			$pNode = $propsNode.SelectSingleNode("md:${pName}", $srcNs)

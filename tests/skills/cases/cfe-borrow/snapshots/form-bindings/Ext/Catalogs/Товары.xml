@@ -29,7 +29,6 @@
 			<Comment/>
 			<ExtendedConfigurationObject>UUID-012</ExtendedConfigurationObject>
 			<Hierarchical>false</Hierarchical>
-			<FoldersOnTop>true</FoldersOnTop>
 			<CodeLength>9</CodeLength>
 			<DescriptionLength>25</DescriptionLength>
 			<CodeType>String</CodeType>
