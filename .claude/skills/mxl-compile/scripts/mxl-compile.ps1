@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.37 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.38 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1576,8 +1576,14 @@ foreach ($m in $merges) {
 # с несколькими элементами иного порядка нет ни разу. Сортировка регистронезависимая и
 # ординальная — Sort-Object брать нельзя, он сортирует по текущей культуре и на кириллице
 # даст другой порядок. NB: имён с «ё» в выборке не встретилось, этот случай не проверен.
-$sortedNamedItems = @($namedItems | Sort-Object -Property @{ Expression = { $_.Name.ToLowerInvariant() } } `
-	-CaseSensitive)
+# Sort-Object сортирует по текущей культуре даже с -CaseSensitive, поэтому сортируем по
+# ключу из кодов символов: в нём только 0-9A-F, и культурные правила его переупорядочить
+# не могут. Прежний вариант давал на кириллице не тот порядок, что py-порт.
+function Get-OrdinalKey {
+	param([string]$name)
+	return (($name.ToLowerInvariant().ToCharArray() | ForEach-Object { '{0:X4}' -f [int]$_ }) -join '')
+}
+$sortedNamedItems = @($namedItems | Sort-Object -Property @{ Expression = { Get-OrdinalKey $_.Name } })
 foreach ($ni in $sortedNamedItems) {
 	# Тип области выводится из указанных осей, как в ТабличныйДокумент.Область():
 	# нет колонок → полоса строк, нет строк → полоса колонок, обе → прямоугольник.

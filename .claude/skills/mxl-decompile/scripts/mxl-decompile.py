@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.17 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.18 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1184,11 +1184,14 @@ def main():
             for c in cell_list:
                 if isinstance(c, dict) and "style" in c:
                     used_styles.add(c["style"])
-    # Стиль бывает не только у ячейки и строки: колонка — третий владелец формата.
-    for src in [result.get("columnStyles")] + [
-            (cs or {}).get("columnStyles") for cs in (result.get("columnSets") or {}).values()]:
-        for name in (src or {}).values():
-            used_styles.add(name)
+    # Стиль бывает не только у ячейки и строки: колонка — третий владелец формата. Берём
+    # стили ИЗ САМИХ РАСКЛАДОК, а не из result: columnSets попадает в результат ПОЗЖЕ этой
+    # проверки, поэтому стиль, на который ссылается только дополнительная раскладка,
+    # отсекался, а ссылка на него оставалась висячей (5 макетов пилота из 40).
+    for cs in column_sets:
+        for name in column_styles_of(cs).values():
+            if name:
+                used_styles.add(name)
     to_remove = [s for s in style_defs if s not in used_styles]
     for s in to_remove:
         del style_defs[s]

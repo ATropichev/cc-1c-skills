@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.17 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.18 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1176,7 +1176,10 @@ foreach ($a in $dslAreas) {
 		if ($cellList) { foreach ($c in $cellList) { if ($c -isnot [string] -and $c.style) { $usedStyles[$c.style] = $true } } }
 	}
 }
-# Стиль бывает не только у ячейки и строки: колонка — третий владелец формата.
+# Стиль бывает не только у ячейки и строки: колонка — третий владелец формата. Берём стили
+# ИЗ САМИХ РАСКЛАДОК, а не из $result: columnSets попадает в результат ПОЗЖЕ этой проверки,
+# и стиль, на который ссылается только дополнительная раскладка, был бы отсечён, а ссылка
+# на него осталась бы висячей.
 foreach ($cs in $columnSets) {
 	foreach ($name in (Get-ColumnStyles $cs).Values) {
 		if ($name) { $usedStyles[$name] = $true }
