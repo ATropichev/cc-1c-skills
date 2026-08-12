@@ -55,7 +55,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 
 ```
 { columns, page, defaultWidth, columnWidths, columnStyles,
-  fonts: { name: { face, size, bold, italic, underline, strikeout } },
+  fonts: { name: { face, size, bold, italic, underline, strikeout } | { ref } },
   styles: { name: { font, horizontalAlignment, verticalAlignment, textPlacement,
                     backColor, textColor, border, borderColor, format, hidden } },
   areas: [{ name, columnSet, rows: [{ height, hidden, rowStyle, cells: [
