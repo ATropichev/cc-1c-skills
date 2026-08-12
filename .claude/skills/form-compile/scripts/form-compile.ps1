@@ -1,4 +1,4 @@
-﻿# form-compile v1.191 — Compile 1C managed form from JSON or object metadata (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# form-compile v1.192 — Compile 1C managed form from JSON or object metadata (гвард на группу additionalColumns без ключа columns)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -5926,9 +5926,17 @@ function Emit-Attributes {
 			}
 			if ($hasAddCols) {
 				foreach ($ac in @($attr.additionalColumns)) {
+					# Пустой список колонок задаётся ЯВНО (`"columns": []`) — это законная форма,
+					# платформа так пишет таблицу, у которой доп. колонок нет. А вот отсутствие ключа
+					# — недосказанность автора: «доп. колонки есть», а какие, не указано. Раньше на
+					# этом PS падал с «Не удается индексировать в массив NULL» (@($null).Count = 1).
+					if ($null -eq $ac.PSObject.Properties['columns'] -or $null -eq $ac.columns) {
+						Write-Error "additionalColumns group for table '$($ac.table)': key 'columns' is missing — list the columns, or pass an empty array for a table without extra columns"
+						exit 1
+					}
 					$acCols = @($ac.columns)
 					if ($acCols.Count -eq 0) {
-						# Пустая группа доп.колонок (table-ref без колонок) → self-closing (как платформа)
+						# Явно пустая группа → self-closing (как платформа)
 						X "$inner`t<AdditionalColumns table=`"$($ac.table)`"/>"
 						continue
 					}

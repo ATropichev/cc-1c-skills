@@ -71,19 +71,9 @@
 				<Field>Объект.Комментарий</Field>
 			</UseAlways>
 			<Columns>
-				<AdditionalColumns table="Объект.Оплата">
-					<Column name="СуммаПрописью" id="24">
-						<Type>
-							<v8:Type>xs:string</v8:Type>
-							<v8:StringQualifiers>
-								<v8:Length>200</v8:Length>
-								<v8:AllowedLength>Variable</v8:AllowedLength>
-							</v8:StringQualifiers>
-						</Type>
-					</Column>
-				</AdditionalColumns>
+				<AdditionalColumns table="Объект.Оплата"/>
 				<AdditionalColumns table="Объект.Товары">
-					<Column name="Артикул" id="25">
+					<Column name="Артикул" id="24">
 						<Type>
 							<v8:Type>xs:string</v8:Type>
 							<v8:StringQualifiers>
@@ -168,19 +158,9 @@
 					<Field>Объект.Комментарий</Field>
 				</UseAlways>
 				<Columns>
-					<AdditionalColumns table="Объект.Оплата">
-						<Column name="СуммаПрописью" id="24">
-							<Type>
-								<v8:Type>xs:string</v8:Type>
-								<v8:StringQualifiers>
-									<v8:Length>200</v8:Length>
-									<v8:AllowedLength>Variable</v8:AllowedLength>
-								</v8:StringQualifiers>
-							</Type>
-						</Column>
-					</AdditionalColumns>
+					<AdditionalColumns table="Объект.Оплата"/>
 					<AdditionalColumns table="Объект.Товары">
-						<Column name="Артикул" id="25">
+						<Column name="Артикул" id="24">
 							<Type>
 								<v8:Type>xs:string</v8:Type>
 								<v8:StringQualifiers>

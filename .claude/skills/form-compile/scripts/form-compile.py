@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.191 — Compile 1C managed form from JSON or object metadata (+write_xml_file/write_utf8_bom: общий эталон записи)
+# form-compile v1.192 — Compile 1C managed form from JSON or object metadata (гвард на группу additionalColumns без ключа columns)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -5773,9 +5773,18 @@ def emit_attributes(lines, attrs, indent, conditional_appearance=None):
                     emit_attr_column(lines, col, f'{inner}\t')
             if has_add_cols:
                 for ac in attr['additionalColumns']:
-                    ac_cols = ac.get('columns') or []
+                    # Пустой список колонок задаётся ЯВНО (`"columns": []`) — это законная форма,
+                    # платформа так пишет таблицу, у которой доп. колонок нет. А вот отсутствие ключа
+                    # — недосказанность автора: «доп. колонки есть», а какие, не указано. PS-порт на
+                    # этом падал с «Не удается индексировать в массив NULL» (@($null).Count = 1).
+                    if ac.get('columns') is None:
+                        print(f"additionalColumns group for table '{ac['table']}': key 'columns' is missing "
+                              "— list the columns, or pass an empty array for a table without extra columns",
+                              file=sys.stderr)
+                        sys.exit(1)
+                    ac_cols = ac['columns']
                     if not ac_cols:
-                        # Пустая группа доп.колонок (table-ref без колонок) → self-closing (как платформа)
+                        # Явно пустая группа → self-closing (как платформа)
                         lines.append(f'{inner}\t<AdditionalColumns table="{ac["table"]}"/>')
                         continue
                     lines.append(f'{inner}\t<AdditionalColumns table="{ac["table"]}">')
