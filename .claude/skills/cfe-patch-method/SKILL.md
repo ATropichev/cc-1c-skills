@@ -110,36 +110,36 @@ allowed-tools:
 ## Команда
 
 ```powershell
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/cfe-patch-method.ps1" -ExtensionPath src\cfe\ИмяРасширения -ConfigPath src\cf -ModulePath "Catalog.Контрагенты.ObjectModule" -MethodName "ПриЗаписи" -InterceptorType Before
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/cfe-patch-method.ps1" -ExtensionPath src\cfe\extname -ConfigPath src\cf -ModulePath "Catalog.Контрагенты.ObjectModule" -MethodName "ПриЗаписи" -InterceptorType Before
 ```
 
 ## Примеры
 
 ```powershell
 # Код перед записью
-... -ExtensionPath src\cfe\ИмяРасширения -ConfigPath src\cf -ModulePath "Catalog.Контрагенты.ObjectModule" -MethodName "ПриЗаписи" -InterceptorType Before
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -ModulePath "Catalog.Контрагенты.ObjectModule" -MethodName "ПриЗаписи" -InterceptorType Before
 
 # Перехват После на форме
-... -ExtensionPath src\cfe\ИмяРасширения -ConfigPath src\cf -ModulePath "Document.Заказ.Form.ФормаДокумента" -MethodName "ПослеЗаписиНаСервере" -InterceptorType After
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -ModulePath "Document.Заказ.Form.ФормаДокумента" -MethodName "ПослеЗаписиНаСервере" -InterceptorType After
 
 # Замена функции (ПродолжитьВызов)
-... -ExtensionPath src\cfe\ИмяРасширения -ConfigPath src\cf -ModulePath "CommonModule.ОбщийМодуль" -MethodName "ПолучитьДанные" -InterceptorType Instead
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -ModulePath "CommonModule.ОбщийМодуль" -MethodName "ПолучитьДанные" -InterceptorType Instead
 
 # ИзменениеИКонтроль — копия тела для правки маркерами
-... -ExtensionPath src\cfe\ИмяРасширения -ConfigPath src\cf -ModulePath "Document.РеализацияТоваров.ObjectModule" -MethodName "ОбработкаПроведения" -InterceptorType ModificationAndControl
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -ModulePath "Document.РеализацияТоваров.ObjectModule" -MethodName "ОбработкаПроведения" -InterceptorType ModificationAndControl
 
 # ModulePath как путь к файлу модуля-источника (без -ConfigPath)
-... -ExtensionPath src\cfe\ИмяРасширения -ModulePath "src\cf\CommonModules\ОбщийМодуль\Ext\Module.bsl" -MethodName "ПолучитьДанные" -InterceptorType Instead
+... -ExtensionPath src\cfe\extname -ModulePath "src\cf\CommonModules\ОбщийМодуль\Ext\Module.bsl" -MethodName "ПолучитьДанные" -InterceptorType Instead
 
 # Проверить все контролируемые методы расширения на дрейф
-... -ExtensionPath src\cfe\ИмяРасширения -ConfigPath src\cf -Check
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Check
 
 # Актуализировать дрейфнувшие контролируемые методы пачкой
-... -ExtensionPath src\cfe\ИмяРасширения -ConfigPath src\cf -Actualize
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Actualize
 ```
 
 ## Верификация
 
 ```
-/cfe-validate <ExtensionPath>
+/cfe-validate <ExtensionPath> -ConfigPath <ConfigPath>
 ```

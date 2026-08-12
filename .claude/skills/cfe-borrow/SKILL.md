@@ -70,31 +70,33 @@ allowed-tools:
 ## Команда
 
 ```powershell
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/cfe-borrow.ps1" -ExtensionPath src -ConfigPath C:\cfsrc\erp -Object "Catalog.Контрагенты"
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/cfe-borrow.ps1" -ExtensionPath src\cfe\extname -ConfigPath src\cf -Object "Catalog.Контрагенты"
 ```
 
 ## Примеры
 
 ```powershell
 # Заимствовать один объект
-... -ExtensionPath src -ConfigPath C:\cfsrc\erp -Object "Catalog.Контрагенты"
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Object "Catalog.Контрагенты"
 
 # Заимствовать форму (автоматически заимствует родительский объект)
-... -ExtensionPath src -ConfigPath C:\cfsrc\erp -Object "Catalog.Контрагенты.Form.ФормаЭлемента"
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Object "Catalog.Контрагенты.Form.ФормаЭлемента"
 
 # Несколько объектов за раз
-... -ExtensionPath src -ConfigPath C:\cfsrc\erp -Object "Catalog.Контрагенты ;; CommonModule.ОбщийМодуль ;; Enum.ВидыОплат"
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Object "Catalog.Контрагенты ;; CommonModule.ОбщийМодуль ;; Enum.ВидыОплат"
 
 # Заимствовать форму с основным реквизитом (реквизиты по DataPath формы)
-... -ExtensionPath src -ConfigPath C:\cfsrc\erp -Object "Catalog.Номенклатура.Form.ФормаЭлемента" -BorrowMainAttribute
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Object "Catalog.Номенклатура.Form.ФормаЭлемента" -BorrowMainAttribute
 
 # Заимствовать форму с ВСЕМИ реквизитами объекта
-... -ExtensionPath src -ConfigPath C:\cfsrc\erp -Object "Catalog.Номенклатура.Form.ФормаЭлемента" -BorrowMainAttribute All
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Object "Catalog.Номенклатура.Form.ФормаЭлемента" -BorrowMainAttribute All
 ```
 
 ## Верификация
 
 ```
-/cfe-validate <ExtensionPath>
+/cfe-validate <ExtensionPath> -ConfigPath <ConfigPath>
 ```
+
+Конфигурацию-источник передавай и валидатору: заимствованные формы он проверяет по ней.
 

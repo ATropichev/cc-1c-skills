@@ -23,7 +23,7 @@ allowed-tools:
 ## Команда
 
 ```powershell
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/cfe-diff.ps1" -ExtensionPath src -ConfigPath C:\cfsrc\erp -Mode A
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/cfe-diff.ps1" -ExtensionPath src\cfe\extname -ConfigPath src\cf -Mode A
 ```
 
 ## Mode A — обзор расширения
@@ -50,8 +50,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/cfe-diff.ps1" -Exte
 
 ```powershell
 # Обзор — что изменено в расширении
-... -ExtensionPath src -ConfigPath C:\cfsrc\erp -Mode A
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Mode A
 
 # Проверка переноса — все ли #Вставка перенесены
-... -ExtensionPath src -ConfigPath C:\cfsrc\erp -Mode B
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Mode B
 ```
