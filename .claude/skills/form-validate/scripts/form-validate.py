@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.11 — Validate 1C managed form
+# form-validate v1.12 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -521,6 +521,8 @@ def main():
 
         if cmd_errors == 0 and cmd_checked > 0:
             report_ok(f"Command references: {cmd_checked} buttons checked")
+        elif cmd_checked == 0:
+            report_ok("Command references: none")
 
     # --- Check 7: Events have handler names ---
     if not stopped:
@@ -560,6 +562,8 @@ def main():
 
         if event_errors == 0 and event_checked > 0:
             report_ok(f"Event handlers: {event_checked} events checked")
+        elif event_checked == 0:
+            report_ok("Event handlers: none")
 
     # --- Check 8: Command actions ---
     if not stopped:
@@ -578,6 +582,8 @@ def main():
 
         if action_errors == 0 and action_checked > 0:
             report_ok(f"Command actions: {action_checked} commands checked")
+        elif action_checked == 0:
+            report_ok("Command actions: none")
 
     # --- Check 9: MainAttribute count ---
     if not stopped:

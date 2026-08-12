@@ -1,4 +1,4 @@
-﻿# form-validate v1.11 — Validate 1C managed form
+﻿# form-validate v1.12 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
