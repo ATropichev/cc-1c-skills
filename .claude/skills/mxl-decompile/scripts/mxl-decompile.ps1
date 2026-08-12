@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.19 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.20 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -97,6 +97,9 @@ function ConvertTo-FontSize {
 $rawFonts = @()
 foreach ($fNode in $root.SelectNodes("d:font", $ns)) {
 	$rawFonts += @{
+		# Шрифт бывает ссылкой на элемент стиля (style:) или системный шрифт (sys:) —
+		# тогда своих атрибутов у него нет, и без этого он превращался в пустую запись.
+		Ref       = $fNode.GetAttribute("ref")
 		Face      = $fNode.GetAttribute("faceName")
 		Size      = ConvertTo-FontSize $fNode.GetAttribute("height")
 		Bold      = $fNode.GetAttribute("bold") -eq "true"
@@ -454,6 +457,7 @@ if ($rawFonts.Count -gt 0) {
 
 function Get-FontKey {
 	param($f)
+	if ($f.Ref) { return "ref=$($f.Ref)" }
 	return "$($f.Face)|$($f.Size)|$($f.Bold)|$($f.Italic)|$($f.Underline)|$($f.Strikeout)"
 }
 
@@ -473,7 +477,11 @@ for ($i = 1; $i -lt $rawFonts.Count; $i++) {
 
 	$name = $null
 
-	if ($f.Face -eq $df.Face -and $f.Size -eq $df.Size) {
+	if ($f.Ref) {
+		# Имя из ссылки: style:SmallTextFont → small-text-font-подобное читаемое имя не даёт
+		# ничего сверх самой ссылки, поэтому берём часть после префикса.
+		$name = ($f.Ref -replace '^[^:]+:', '').ToLowerInvariant()
+	} elseif ($f.Face -eq $df.Face -and $f.Size -eq $df.Size) {
 		if ($f.Bold -and -not $df.Bold -and -not $f.Italic -and -not $f.Underline -and -not $f.Strikeout) {
 			$name = "bold"
 		} elseif ($f.Italic -and -not $df.Italic -and -not $f.Bold) {
@@ -1115,6 +1123,7 @@ if ($colWidthMap.Count -gt 0) {
 $fontsOut = [ordered]@{}
 foreach ($name in $fontDefs.Keys) {
 	$f = $fontDefs[$name]
+	if ($f.Ref) { $fontsOut[$name] = [ordered]@{ ref = $f.Ref }; continue }
 	$fOut = [ordered]@{ face = $f.Face; size = $f.Size }
 	if ($f.Bold) { $fOut["bold"] = $true }
 	if ($f.Italic) { $fOut["italic"] = $true }

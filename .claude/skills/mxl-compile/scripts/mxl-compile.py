@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.38 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.39 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -480,7 +480,17 @@ def main():
     font_map = {}   # name -> 0-based index
     font_entries = []  # list of dicts
 
+    def font_ref_kind(ref):
+        """Шрифт бывает не собственным, а ссылкой: на элемент стиля конфигурации (style:)
+        или на системный шрифт (sys:). Вид ссылки определяет kind, он выводится из префикса."""
+        return 'WindowsFont' if ref.startswith('sys:') else 'StyleItem'
+
     def add_font(name, font_def):
+        if font_def and font_def.get('ref'):
+            ref = str(font_def['ref'])
+            font_map[name] = len(font_entries)
+            font_entries.append({'Ref': ref, 'Kind': font_ref_kind(ref)})
+            return
         face = font_def.get('face', 'Arial') if font_def else 'Arial'
         size = to_font_size(font_def.get('size', 10)) if font_def else 10
         bold = 'true' if font_def and font_def.get('bold') is True else 'false'
@@ -1564,6 +1574,15 @@ def main():
 
     # 7i. Font palette
     for fe in font_entries:
+        if fe.get('Ref'):
+            # Префикс sys в корне документа не объявлен, поэтому платформа дописывает
+            # объявление прямо на узел — тот же приём, что с цветами из web-палитры.
+            if fe['Ref'].startswith('sys:'):
+                lines.append(f'	<font xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system"'
+                             f' ref="{esc_xml(fe["Ref"])}" kind="{fe["Kind"]}"/>')
+            else:
+                lines.append(f'	<font ref="{esc_xml(fe["Ref"])}" kind="{fe["Kind"]}"/>')
+            continue
         lines.append(f'\t<font faceName="{fe["Face"]}" height="{fe["Size"]}" bold="{fe["Bold"]}" italic="{fe["Italic"]}" underline="{fe["Underline"]}" strikeout="{fe["Strikeout"]}" kind="Absolute" scale="100"/>')
 
     # 7j. Format palette

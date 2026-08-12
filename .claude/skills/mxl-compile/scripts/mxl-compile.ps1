@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.39 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.40 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -232,8 +232,21 @@ function Format-Num {
 	return [System.Convert]::ToString($v, [System.Globalization.CultureInfo]::InvariantCulture)
 }
 
+# Шрифт бывает не собственным, а ссылкой: на элемент стиля конфигурации (style:) или на
+# системный шрифт (sys:). Вид ссылки определяет kind, и он выводится из префикса.
+function Get-FontRefKind {
+	param([string]$ref)
+	if ($ref -like 'sys:*') { return 'WindowsFont' }
+	return 'StyleItem'
+}
+
 function Add-Font {
 	param([string]$name, $fontDef)
+	if ($fontDef.ref) {
+		$script:fontMap[$name] = $script:fontEntries.Count
+		$script:fontEntries += @{ Ref = "$($fontDef.ref)"; Kind = (Get-FontRefKind "$($fontDef.ref)") }
+		return
+	}
 	$face = if ($fontDef.face) { $fontDef.face } else { "Arial" }
 	$size = if ($fontDef.size) { ConvertTo-FontSize $fontDef.size } else { 10 }
 	$bold = if ($fontDef.bold -eq $true) { "true" } else { "false" }
@@ -1618,6 +1631,16 @@ foreach ($ln in $script:lineRegistry) {
 
 # 7i. Font palette
 foreach ($fe in $fontEntries) {
+	if ($fe.Ref) {
+		# Префикс sys в корне документа не объявлен, поэтому платформа дописывает объявление
+		# прямо на узел — тот же приём, что с цветами из web-палитры.
+		if ($fe.Ref -like 'sys:*') {
+			X "`t<font xmlns:sys=`"http://v8.1c.ru/8.1/data/ui/fonts/system`" ref=`"$(Esc-Xml $fe.Ref)`" kind=`"$($fe.Kind)`"/>"
+		} else {
+			X "`t<font ref=`"$(Esc-Xml $fe.Ref)`" kind=`"$($fe.Kind)`"/>"
+		}
+		continue
+	}
 	X "`t<font faceName=`"$($fe.Face)`" height=`"$(Format-Num $fe.Size)`" bold=`"$($fe.Bold)`" italic=`"$($fe.Italic)`" underline=`"$($fe.Underline)`" strikeout=`"$($fe.Strikeout)`" kind=`"Absolute`" scale=`"100`"/>"
 }
 

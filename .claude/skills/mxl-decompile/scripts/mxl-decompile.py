@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.19 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.20 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -267,6 +267,9 @@ def main():
     raw_fonts = []
     for f_node in findall(root, "d:font"):
         raw_fonts.append({
+            # Шрифт бывает ссылкой на элемент стиля (style:) или системный шрифт (sys:) —
+            # тогда своих атрибутов у него нет, и без этого он превращался в пустую запись.
+            "Ref": f_node.get("ref", ""),
             "Face": f_node.get("faceName", ""),
             "Size": to_font_size(f_node.get("height", "0")),
             "Bold": f_node.get("bold") == "true",
@@ -610,6 +613,10 @@ def main():
         font_defs["default"] = raw_fonts[0]
 
     def get_font_key(f):
+        # Ссылку различаем по ней самой: своих атрибутов у такого шрифта нет, и без этого
+        # две РАЗНЫЕ ссылки схлопывались в одну как «пустые».
+        if f.get("Ref"):
+            return "ref=" + f["Ref"]
         return f"{f['Face']}|{f['Size']}|{f['Bold']}|{f['Italic']}|{f['Underline']}|{f['Strikeout']}"
 
     font_key_map = {}
@@ -628,7 +635,10 @@ def main():
 
         name = None
 
-        if f["Face"] == df["Face"] and f["Size"] == df["Size"]:
+        if f.get("Ref"):
+            # Имя из ссылки: читаемее самой ссылки ничего не придумать.
+            name = f["Ref"].split(":", 1)[1].lower()
+        elif f["Face"] == df["Face"] and f["Size"] == df["Size"]:
             if f["Bold"] and not df["Bold"] and not f["Italic"] and not f["Underline"] and not f["Strikeout"]:
                 name = "bold"
             elif f["Italic"] and not df["Italic"] and not f["Bold"]:
@@ -1117,6 +1127,9 @@ def main():
 
     fonts_out = OrderedDict()
     for name, f in font_defs.items():
+        if f.get("Ref"):
+            fonts_out[name] = OrderedDict([("ref", f["Ref"])])
+            continue
         f_out = OrderedDict()
         f_out["face"] = f["Face"]
         f_out["size"] = f["Size"]
