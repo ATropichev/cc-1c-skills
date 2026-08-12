@@ -3,42 +3,106 @@
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "Report", "name": "ОстаткиТоваров" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "input": {
+        "type": "Document",
+        "name": "Накладная"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "DocumentJournal", "name": "Складские" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "input": {
+        "type": "Report",
+        "name": "ОстаткиТоваров"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "Sequence", "name": "ПартионныйУчет" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "input": {
+        "type": "DocumentJournal",
+        "name": "Складские",
+        "registeredDocuments": [
+          "Document.Накладная"
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "HTTPService", "name": "ОбменДанными" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "input": {
+        "type": "Sequence",
+        "name": "ПартионныйУчет",
+        "documents": [
+          "Document.Накладная"
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "WebService", "name": "СервисОбмена" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "input": {
+        "type": "HTTPService",
+        "name": "ОбменДанными"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "FilterCriterion", "name": "ПоКонтрагенту" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "input": {
+        "type": "WebService",
+        "name": "СервисОбмена",
+        "namespace": "http://example.org/СервисОбмена"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "SettingsStorage", "name": "ХранилищеОтчетов" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "input": {
+        "type": "FilterCriterion",
+        "name": "ПоКонтрагенту"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "SettingsStorage",
+        "name": "ХранилищеОтчетов"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/ext",
+        "-ConfigPath": "{workDir}"
+      }
     }
   ],
   "params": {

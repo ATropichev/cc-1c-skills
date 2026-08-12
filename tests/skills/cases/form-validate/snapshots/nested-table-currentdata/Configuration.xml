@@ -32,11 +32,11 @@
 			</xr:ContainedObject>
 		</InternalInfo>
 		<Properties>
-			<Name>TestConfig</Name>
+			<Name>ТестоваяКонфигурация</Name>
 			<Synonym>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
-					<v8:content>TestConfig</v8:content>
+					<v8:content>ТестоваяКонфигурация</v8:content>
 				</v8:item>
 			</Synonym>
 			<Comment/>
@@ -246,14 +246,8 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
-			<Document>Накладная</Document>
-			<Report>ОстаткиТоваров</Report>
-			<DocumentJournal>Складские</DocumentJournal>
-			<Sequence>ПартионныйУчет</Sequence>
-			<HTTPService>ОбменДанными</HTTPService>
-			<WebService>СервисОбмена</WebService>
-			<FilterCriterion>ПоКонтрагенту</FilterCriterion>
-			<SettingsStorage>ХранилищеОтчетов</SettingsStorage>
+			<DataProcessor>Spec</DataProcessor>
+			<Catalog>Источник</Catalog>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

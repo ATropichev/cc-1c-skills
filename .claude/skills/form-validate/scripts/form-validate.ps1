@@ -1,4 +1,4 @@
-﻿# form-validate v1.14 — Validate 1C managed form
+﻿# form-validate v1.15 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -201,10 +201,15 @@ if (-not $stopped) {
 	if ($acb) {
 		$acbName = $acb.GetAttribute("name")
 		$acbId = $acb.GetAttribute("id")
+		# id=-1 — соглашение, а не требование: в корпусе УТ/БП/ERP так у 21 094 форм из 21 097,
+		# но три формы платформа выгружает с обычным id и грузит их без нареканий. Поэтому
+		# предупреждение; ошибка — только если id вовсе не число.
 		if ($acbId -eq "-1") {
 			Report-OK "AutoCommandBar: name='$acbName', id=$acbId"
+		} elseif ($acbId -match '^-?\d+$') {
+			Report-Warn "AutoCommandBar id='$acbId', usually '-1'"
 		} else {
-			Report-Error "AutoCommandBar id='$acbId', expected '-1'"
+			Report-Error "AutoCommandBar id='$acbId' is not a number"
 		}
 	} else {
 		Report-Error "AutoCommandBar element missing"
@@ -484,11 +489,19 @@ if (-not $stopped) {
 			$segments = $cleanPath -split '\.'
 			$rootAttr = $segments[0]
 
-			# Resolve Items.<TableName>.CurrentData.<Field>... — table element, not attribute
-			if ($rootAttr -eq 'Items') {
+			# Resolve Items.<TableName>.CurrentData.<Field>... — table element, not attribute.
+			# Разрешаем ЦЕПОЧКОЙ: таблица во вложенной таблице сама привязана через Items.*, и один
+			# шаг оставлял корнем литерал «Items» — форма платформы объявлялась битой (типовые
+			# НастройкаПравилОбработкиЗаявокСотрудников в БП и ERP).
+			$itemsHops = 0
+			$itemsBroken = $false
+			while ($rootAttr -eq 'Items') {
+				$itemsHops++
+				if ($itemsHops -gt 10) { $itemsBroken = $true; break }   # страховка от кольца ссылок
 				if ($segments.Count -lt 3 -or $segments[2] -ne 'CurrentData') {
 					Report-Warn "[$tag] '$elName': $bTag='$dataPath' — unknown Items.* shape, expected Items.<Table>.CurrentData.*"
-					continue
+					$itemsBroken = $true
+					break
 				}
 				$tableName = $segments[1]
 				$tableEl = $null
@@ -501,17 +514,21 @@ if (-not $stopped) {
 				if (-not $tableEl) {
 					Report-Error "[$tag] '$elName': $bTag='$dataPath' — table element '$tableName' not found"
 					$pathErrors++
-					continue
+					$itemsBroken = $true
+					break
 				}
 				$tableDpNode = $tableEl.Node.SelectSingleNode("f:DataPath", $nsMgr)
 				if (-not $tableDpNode -or -not $tableDpNode.InnerText.Trim()) {
 					# Table without DataPath — can't resolve further, accept silently
-					continue
+					$itemsBroken = $true
+					break
 				}
 				$tableDp = $tableDpNode.InnerText.Trim() -replace '\[\d+\]', ''
 				if ($tableDp.StartsWith('~')) { $tableDp = $tableDp.Substring(1) }
-				$rootAttr = ($tableDp -split '\.')[0]
+				$segments = $tableDp -split '\.'
+				$rootAttr = $segments[0]
 			}
+			if ($itemsBroken) { continue }
 
 			if (-not $attrMap.ContainsKey($rootAttr)) {
 				Report-Error "[$tag] '$elName': $bTag='$dataPath' — attribute '$rootAttr' not found"

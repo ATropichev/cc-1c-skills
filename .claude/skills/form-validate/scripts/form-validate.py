@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.14 — Validate 1C managed form
+# form-validate v1.15 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -256,10 +256,15 @@ def main():
         if acb is not None:
             acb_name = acb.get("name", "")
             acb_id = acb.get("id", "")
+            # id=-1 — соглашение, а не требование: в корпусе УТ/БП/ERP так у 21 094 форм из 21 097,
+            # но три формы платформа выгружает с обычным id и грузит их без нареканий. Поэтому
+            # предупреждение; ошибка — только если id вовсе не число.
             if acb_id == "-1":
                 report_ok(f"AutoCommandBar: name='{acb_name}', id={acb_id}")
+            elif re.match(r'^-?\d+$', acb_id):
+                report_warn(f"AutoCommandBar id='{acb_id}', usually '-1'")
             else:
-                report_error(f"AutoCommandBar id='{acb_id}', expected '-1'")
+                report_error(f"AutoCommandBar id='{acb_id}' is not a number")
         else:
             report_error("AutoCommandBar element missing")
 
@@ -511,11 +516,21 @@ def main():
                 segments = clean_path.split(".")
                 root_attr = segments[0]
 
-                # Resolve Items.<TableName>.CurrentData.<Field>... — table element, not attribute
-                if root_attr == 'Items':
+                # Resolve Items.<TableName>.CurrentData.<Field>... — table element, not attribute.
+                # Разрешаем ЦЕПОЧКОЙ: таблица во вложенной таблице сама привязана через Items.*, и один
+                # шаг оставлял корнем литерал «Items» — форма платформы объявлялась битой (типовые
+                # НастройкаПравилОбработкиЗаявокСотрудников в БП и ERP).
+                items_hops = 0
+                items_broken = False
+                while root_attr == 'Items':
+                    items_hops += 1
+                    if items_hops > 10:          # страховка от кольца ссылок
+                        items_broken = True
+                        break
                     if len(segments) < 3 or segments[2] != 'CurrentData':
                         report_warn(f"[{tag}] '{el_name}': {b_tag}='{data_path}' — unknown Items.* shape, expected Items.<Table>.CurrentData.*")
-                        continue
+                        items_broken = True
+                        break
                     table_name = segments[1]
                     table_el = None
                     for candidate in all_elements:
@@ -525,14 +540,19 @@ def main():
                     if table_el is None:
                         report_error(f"[{tag}] '{el_name}': {b_tag}='{data_path}' — table element '{table_name}' not found")
                         path_errors += 1
-                        continue
+                        items_broken = True
+                        break
                     table_dp_node = table_el["Node"].find(f"{{{F_NS}}}DataPath")
                     if table_dp_node is None or not (table_dp_node.text or "").strip():
-                        continue
+                        items_broken = True
+                        break
                     table_dp = re.sub(r'\[\d+\]', '', (table_dp_node.text or "").strip())
                     if table_dp.startswith('~'):
                         table_dp = table_dp[1:]
-                    root_attr = table_dp.split(".")[0]
+                    segments = table_dp.split(".")
+                    root_attr = segments[0]
+                if items_broken:
+                    continue
 
                 if root_attr not in attr_map:
                     report_error(f"[{tag}] '{el_name}': {b_tag}='{data_path}' — attribute '{root_attr}' not found")

@@ -25,7 +25,9 @@
 			</Synonym>
 			<Comment/>
 			<MoveBoundaryOnPosting>DontMove</MoveBoundaryOnPosting>
-			<Documents/>
+			<Documents>
+				<xr:Item xsi:type="xr:MDObjectRef">Document.Накладная</xr:Item>
+			</Documents>
 			<RegisterRecords/>
 			<DataLockControlMode>Managed</DataLockControlMode>
 		</Properties>
