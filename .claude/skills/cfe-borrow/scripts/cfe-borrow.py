@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.21 — Borrow objects from configuration into extension (CFE) (полный набор GeneratedType у заимствованных оболочек)
+# cfe-borrow v1.22 — Borrow objects from configuration into extension (CFE) (перенос UseAlways/Columns основного реквизита формы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -815,6 +815,39 @@ def main():
         save_xml_bom(obj_tree, obj_file)
         info(f"  Registered form in: {obj_file}")
 
+    # --- 11b1. Секции основного реквизита исходной формы, кроме Type/MainAttribute/SavedData ---
+    # Это <UseAlways> и <Columns> (доп. колонки табличных частей, объявленные прямо в форме). Их
+    # переносит Конфигуратор, и без них платформа отвергает форму: «Неверный путь к данным» на
+    # колонке, которой у объекта нет (Объект.Товары.Артикул). Возвращает список XML без xmlns.
+    def get_main_attribute_extra_xml(form_el, ns_strip_pattern):
+        result = []
+        main_attr = None
+        for child in form_el:
+            if not isinstance(child.tag, str) or localname(child) != "Attributes":
+                continue
+            for attr in child:
+                if not isinstance(attr.tag, str) or localname(attr) != "Attribute":
+                    continue
+                for sub in attr:
+                    if isinstance(sub.tag, str) and localname(sub) == "MainAttribute" and (sub.text or "").strip() == "true":
+                        main_attr = attr
+                        break
+                if main_attr is not None:
+                    break
+            break
+        if main_attr is None:
+            return result
+        for sub in main_attr:
+            if not isinstance(sub.tag, str):
+                continue
+            if localname(sub) in ("Type", "MainAttribute", "SavedData"):
+                continue
+            # with_tail=False: хвостовой пробельный узел — часть родителя, а не секции; иначе в
+            # вывод попадают пустые строки, которых нет у PS (OuterXml хвост не включает).
+            xml = decode_numeric_entities(etree.tostring(sub, encoding="unicode", with_tail=False))
+            result.append(ns_strip_pattern.sub("", xml))
+        return result
+
     # --- 11b. Collect DataPath references from source Form.xml ---
     def collect_form_data_paths(form_xml_path):
         with open(form_xml_path, "r", encoding="utf-8-sig") as fh:
@@ -855,6 +888,15 @@ def main():
                     continue
                 seg2 = segments[2] if len(segments) >= 3 else None
                 deep_paths.append({"ObjectAttr": seg0, "SubAttr": seg1, "SubSubAttr": seg2})
+
+        # Also scan <AdditionalColumns table="Объект.X"> — доп. колонки табличной части, объявленные в
+        # самой форме (напр. Объект.Товары.Артикул). Такая ТЧ может больше нигде на форме не встречаться,
+        # и без её заимствования платформа отвергает форму: «Неверный путь к данным».
+        for m in re.finditer(r'<AdditionalColumns table="Объект\.(\w+)"', content):
+            seg0 = m.group(1)
+            if seg0 in STANDARD_FIELDS:
+                continue
+            first_level[seg0] = True
 
         # Deduplicate deep paths
         seen = set()
@@ -1194,6 +1236,18 @@ def main():
         for ts in src_ts:
             for tsa in ts["Attributes"]:
                 all_type_xmls.append(tsa["TypeXml"])
+        # Типы из <Columns> основного реквизита формы: колонку мы переносим (borrow_form), значит и её
+        # тип должен быть заимствован — иначе колонка ссылается на DefinedType/справочник, которого в
+        # расширении нет. Конфигуратор поступает так же (эталон: DefinedTypes/Артикул при заимствовании
+        # формы заказа поставщику).
+        src_form_for_cols = os.path.join(cfg_dir, dir_name, obj_name, "Forms", form_name, "Ext", "Form.xml")
+        if os.path.isfile(src_form_for_cols):
+            cols_tree = etree.parse(src_form_for_cols)
+            cols_ns_strip = re.compile(r'\s+xmlns(?::\w+)?="[^"]*"')
+            for extra_xml in get_main_attribute_extra_xml(cols_tree.getroot(), cols_ns_strip):
+                if extra_xml.startswith("<Columns"):
+                    all_type_xmls.append(extra_xml)
+
         ref_types = collect_reference_types(all_type_xmls)
         info(f"  Reference types to borrow: {len(ref_types)}")
 
@@ -1388,14 +1442,16 @@ def main():
                 continue
             if not reached_visual:
                 # Form-level properties before AutoCommandBar (WindowOpeningMode, AutoFillCheck, etc.)
-                form_props.append(decode_numeric_entities(etree.tostring(fc, encoding="unicode")))
+                # with_tail=False — хвостовой пробел принадлежит родителю; с ним в вывод попадали
+                # пустые строки, которых нет у PS-порта (OuterXml хвост не включает).
+                form_props.append(decode_numeric_entities(etree.tostring(fc, encoding="unicode", with_tail=False)))
 
         ns_strip_pattern = re.compile(r'\s+xmlns(?::\w+)?="[^"]*"')
 
         # AutoCommandBar: keep ChildItems (buttons with CommandName->0), Autofill->false
         auto_cmd_xml = ""
         if src_auto_cmd is not None:
-            auto_cmd_xml = decode_numeric_entities(etree.tostring(src_auto_cmd, encoding="unicode"))
+            auto_cmd_xml = decode_numeric_entities(etree.tostring(src_auto_cmd, encoding="unicode", with_tail=False))
             auto_cmd_xml = ns_strip_pattern.sub("", auto_cmd_xml)
             auto_cmd_xml = re.sub(r'<CommandName>[^<]*</CommandName>', '<CommandName>0</CommandName>', auto_cmd_xml)
             auto_cmd_xml = auto_cmd_xml.replace('<Autofill>true</Autofill>', '<Autofill>false</Autofill>')
@@ -1413,7 +1469,7 @@ def main():
                 break
 
         if src_child_items is not None:
-            child_items_xml = decode_numeric_entities(etree.tostring(src_child_items, encoding="unicode"))
+            child_items_xml = decode_numeric_entities(etree.tostring(src_child_items, encoding="unicode", with_tail=False))
             child_items_xml = ns_strip_pattern.sub("", child_items_xml)
             # Replace all CommandName values with 0
             child_items_xml = re.sub(r'<CommandName>[^<]*</CommandName>', '<CommandName>0</CommandName>', child_items_xml)
@@ -1602,6 +1658,11 @@ def main():
         if child_items_xml:
             parts.append(f"\t{child_items_xml}\r\n")
 
+        # Секции основного реквизита исходной формы (<UseAlways>, <Columns>) — их нельзя терять
+        main_attr_extra = []
+        if borrow_main_attr:
+            main_attr_extra = get_main_attribute_extra_xml(src_form_el, ns_strip_pattern)
+
         # Attributes: empty or with MainAttribute when borrow_main_attr
         if borrow_main_attr:
             obj_type_prefix = ""
@@ -1616,6 +1677,8 @@ def main():
             parts.append(f"\t\t\t<Type><v8:Type>{main_attr_type}</v8:Type></Type>\r\n")
             parts.append("\t\t\t<MainAttribute>true</MainAttribute>\r\n")
             parts.append("\t\t\t<SavedData>true</SavedData>\r\n")
+            for extra_xml in main_attr_extra:
+                parts.append(f"\t\t\t{extra_xml}\r\n")
             parts.append("\t\t</Attribute>\r\n")
             parts.append("\t</Attributes>")
         else:
@@ -1652,6 +1715,11 @@ def main():
             parts.append(f"\t\t\t\t<Type><v8:Type>{main_attr_type}</v8:Type></Type>\r\n")
             parts.append("\t\t\t\t<MainAttribute>true</MainAttribute>\r\n")
             parts.append("\t\t\t\t<SavedData>true</SavedData>\r\n")
+            for extra_xml in main_attr_extra:
+                # В BaseForm та же секция на уровень глубже — приём переиндентации тот же, что у ChildItems
+                for li, line in enumerate(extra_xml.split("\n")):
+                    parts.append(f"\t\t\t\t{line}" if li == 0 else f"\t{line}")
+                    parts.append("\r\n")
             parts.append("\t\t\t</Attribute>\r\n")
             parts.append("\t\t</Attributes>")
         else:

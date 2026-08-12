@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.21 — Borrow objects from configuration into extension (CFE) (полный набор GeneratedType у заимствованных оболочек)
+﻿# cfe-borrow v1.22 — Borrow objects from configuration into extension (CFE) (перенос UseAlways/Columns основного реквизита формы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -892,6 +892,12 @@ function Borrow-Form {
 		$formXmlSb.Append("`t$childItemsXml") | Out-Null
 		$formXmlSb.Append("`r`n") | Out-Null
 	}
+	# Секции основного реквизита исходной формы (<UseAlways>, <Columns>) — их нельзя терять
+	$mainAttrExtra = @()
+	if ($BorrowMainAttr) {
+		$mainAttrExtra = @(Get-MainAttributeExtraXml $srcFormEl $nsStripPattern)
+	}
+
 	# Attributes: empty or with MainAttribute when BorrowMainAttr
 	if ($BorrowMainAttr) {
 		$objTypePrefix = ""
@@ -903,6 +909,9 @@ function Borrow-Form {
 		$formXmlSb.Append("`t`t`t<Type><v8:Type>${mainAttrType}</v8:Type></Type>`r`n") | Out-Null
 		$formXmlSb.Append("`t`t`t<MainAttribute>true</MainAttribute>`r`n") | Out-Null
 		$formXmlSb.Append("`t`t`t<SavedData>true</SavedData>`r`n") | Out-Null
+		foreach ($extraXml in $mainAttrExtra) {
+			$formXmlSb.Append("`t`t`t$extraXml`r`n") | Out-Null
+		}
 		$formXmlSb.Append("`t`t</Attribute>`r`n") | Out-Null
 		$formXmlSb.Append("`t</Attributes>") | Out-Null
 	} else {
@@ -943,6 +952,15 @@ function Borrow-Form {
 		$formXmlSb.Append("`t`t`t`t<Type><v8:Type>${mainAttrType}</v8:Type></Type>`r`n") | Out-Null
 		$formXmlSb.Append("`t`t`t`t<MainAttribute>true</MainAttribute>`r`n") | Out-Null
 		$formXmlSb.Append("`t`t`t`t<SavedData>true</SavedData>`r`n") | Out-Null
+		foreach ($extraXml in $mainAttrExtra) {
+			# В BaseForm та же секция на уровень глубже — приём переиндентации тот же, что у ChildItems
+			$exLines = $extraXml -split "`r?`n"
+			for ($li = 0; $li -lt $exLines.Count; $li++) {
+				if ($li -eq 0) { $formXmlSb.Append("`t`t`t`t$($exLines[$li])") | Out-Null }
+				else { $formXmlSb.Append("`t$($exLines[$li])") | Out-Null }
+				$formXmlSb.Append("`r`n") | Out-Null
+			}
+		}
 		$formXmlSb.Append("`t`t`t</Attribute>`r`n") | Out-Null
 		$formXmlSb.Append("`t`t</Attributes>") | Out-Null
 	} else {
@@ -1129,6 +1147,24 @@ function Build-InternalInfoXml {
 }
 
 # --- 11b. Collect DataPath references from source Form.xml ---
+# --- 11b1. Секции основного реквизита исходной формы, кроме Type/MainAttribute/SavedData ---
+# Это <UseAlways> и <Columns> (доп. колонки табличных частей, объявленные прямо в форме). Их
+# переносит Конфигуратор, и без них платформа отвергает форму: «Неверный путь к данным» на
+# колонке, которой у объекта нет (Объект.Товары.Артикул). Возвращает список OuterXml без xmlns.
+function Get-MainAttributeExtraXml {
+	param($formEl, [string]$nsStripPattern)
+
+	$result = @()
+	$mainAttr = $formEl.SelectSingleNode("*[local-name()='Attributes']/*[local-name()='Attribute'][*[local-name()='MainAttribute']='true']")
+	if (-not $mainAttr) { return $result }
+	foreach ($child in $mainAttr.ChildNodes) {
+		if ($child.NodeType -ne 'Element') { continue }
+		if ($child.LocalName -in @('Type','MainAttribute','SavedData')) { continue }
+		$result += [regex]::Replace($child.OuterXml, $nsStripPattern, '')
+	}
+	return $result
+}
+
 function Collect-FormDataPaths {
 	param([string]$formXmlPath)
 
@@ -1171,6 +1207,16 @@ function Collect-FormDataPaths {
 			if ($script:standardFields -contains $seg1) { continue }
 			$deepPaths += @{ ObjectAttr = $seg0; SubAttr = $seg1 }
 		}
+	}
+
+	# Also scan <AdditionalColumns table="Объект.X"> — доп. колонки табличной части, объявленные в
+	# самой форме (напр. Объект.Товары.Артикул). Такая ТЧ может больше нигде на форме не встречаться,
+	# и без её заимствования платформа отвергает форму: «Неверный путь к данным».
+	$acMatches = [regex]::Matches($content, '<AdditionalColumns table="Объект\.(\w+)"')
+	foreach ($m in $acMatches) {
+		$seg0 = $m.Groups[1].Value
+		if ($script:standardFields -contains $seg0) { continue }
+		$firstLevel[$seg0] = $true
 	}
 
 	# Deduplicate deep paths
@@ -1589,6 +1635,20 @@ function Borrow-MainAttribute {
 	foreach ($ts in $srcTS) {
 		foreach ($tsa in $ts.Attributes) { $allTypeXmls += $tsa.TypeXml }
 	}
+	# Типы из <Columns> основного реквизита формы: колонку мы переносим (Borrow-Form), значит и её
+	# тип должен быть заимствован — иначе колонка ссылается на DefinedType/справочник, которого в
+	# расширении нет. Конфигуратор поступает так же (эталон: DefinedTypes/Артикул при заимствовании
+	# формы заказа поставщику).
+	$srcFormForCols = Join-Path (Join-Path (Join-Path (Join-Path (Join-Path $cfgDir $dirName) $objName) "Forms") $formName) "Ext/Form.xml"
+	if (Test-Path $srcFormForCols) {
+		$colsDoc = New-Object System.Xml.XmlDocument
+		$colsDoc.PreserveWhitespace = $true
+		$colsDoc.Load($srcFormForCols)
+		foreach ($extraXml in (Get-MainAttributeExtraXml $colsDoc.DocumentElement '\s+xmlns(?::\w+)?="[^"]*"')) {
+			if ($extraXml -like "<Columns*") { $allTypeXmls += $extraXml }
+		}
+	}
+
 	$refTypes = Collect-ReferenceTypes $allTypeXmls
 	Info "  Reference types to borrow: $($refTypes.Count)"
 
