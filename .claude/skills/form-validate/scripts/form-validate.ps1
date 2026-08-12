@@ -1,4 +1,4 @@
-﻿# form-validate v1.12 — Validate 1C managed form
+﻿# form-validate v1.13 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -569,13 +569,18 @@ if (-not $stopped) {
 	$actionErrors = 0
 	$actionChecked = 0
 
+	# Предупреждение, а не ошибка: <Action> может назначаться в рантайме
+	# (`Команда.Действие = "Подключаемый_…"` в ПриСозданииНаСервере) — приём типовых конфигураций
+	# там, где обработчик существует не во всякой сборке. Назначать может и чужой модуль
+	# (переопределяемый слой, подключаемые команды), так что по одному Form.xml не решить.
+	# Корпус УТ/БП/ERP: 406 таких команд на 275 формах, произведённых платформой.
 	foreach ($cmd in $cmdNodes) {
 		if ($stopped) { break }
 		$cmdName = $cmd.GetAttribute("name")
 		$actionNode = $cmd.SelectSingleNode("f:Action", $nsMgr)
 		$actionChecked++
 		if (-not $actionNode -or -not $actionNode.InnerText.Trim()) {
-			Report-Error "Command '$cmdName': missing or empty Action"
+			Report-Warn "Command '$cmdName': no Action — handler must be assigned at runtime, otherwise the command does nothing"
 			$actionErrors++
 		}
 	}

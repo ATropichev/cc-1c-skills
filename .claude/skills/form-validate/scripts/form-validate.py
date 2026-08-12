@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.12 — Validate 1C managed form
+# form-validate v1.13 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -570,6 +570,11 @@ def main():
         action_errors = 0
         action_checked = 0
 
+        # Предупреждение, а не ошибка: <Action> может назначаться в рантайме
+        # (`Команда.Действие = "Подключаемый_…"` в ПриСозданииНаСервере) — приём типовых конфигураций
+        # там, где обработчик существует не во всякой сборке. Назначать может и чужой модуль
+        # (переопределяемый слой, подключаемые команды), так что по одному Form.xml не решить.
+        # Корпус УТ/БП/ERP: 406 таких команд на 275 формах, произведённых платформой.
         for cmd in cmd_nodes:
             if stopped:
                 break
@@ -577,7 +582,7 @@ def main():
             action_node = cmd.find(f"{{{F_NS}}}Action")
             action_checked += 1
             if action_node is None or not (action_node.text or "").strip():
-                report_error(f"Command '{cmd_name}': missing or empty Action")
+                report_warn(f"Command '{cmd_name}': no Action — handler must be assigned at runtime, otherwise the command does nothing")
                 action_errors += 1
 
         if action_errors == 0 and action_checked > 0:
