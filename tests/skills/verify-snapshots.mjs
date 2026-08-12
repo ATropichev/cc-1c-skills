@@ -563,10 +563,16 @@ function buildSkillArgs(skillConfig, caseData, workDir, inputFile, runtime) {
     args.push(mapping.flag);
     switch (mapping.from) {
       case 'inputFile':
-        args.push(inputFile || '');
+        // inputFrom: вход берётся из файла в workDir, а не из case.input. Нужно, когда вход
+        // производит preRun (например, декомпилятор) — case.input пишется ПОСЛЕ preRun и
+        // затёр бы его. Как в runner.mjs.
+        args.push(caseData.inputFrom ? join(workDir, caseData.inputFrom) : (inputFile || ''));
         break;
       case 'workDir':
         args.push(workDir);
+        break;
+      case 'outputPath':
+        args.push(join(workDir, caseData.outputPath || ''));
         break;
       case 'workPath': {
         const field = mapping.field || 'objectPath';
@@ -592,10 +598,19 @@ function buildSkillArgs(skillConfig, caseData, workDir, inputFile, runtime) {
           args.push(String(caseData.params?.[field] ?? caseData[field] ?? ''));
         } else if (mapping.from === 'literal') {
           args.push(mapping.value || '');
+        } else {
+          // Незнакомый from раньше молча не давал значения — флаг уходил без аргумента, и
+          // это выглядело как дефект навыка. DSL читают два раннера, поэтому расхождение
+          // должно быть громким.
+          throw new Error(`_skill.json: неизвестный "from": "${mapping.from}" у флага ${mapping.flag}`
+            + ' — verify-snapshots.mjs не знает этого маппинга (см. buildSkillArgs)');
         }
     }
   }
-  if (caseData.args_extra) args.push(...caseData.args_extra);
+  // Плейсхолдер {workDir} раскрывается и в args_extra — как в runner.mjs.
+  if (caseData.args_extra) {
+    args.push(...caseData.args_extra.map(a => typeof a === 'string' ? a.replace('{workDir}', workDir) : a));
+  }
   return { scriptPath, args };
 }
 
@@ -631,7 +646,10 @@ function runPreSteps(preRun, workDir, runtime, log) {
     }
     const stepName = step.script.split('/').pop();
     try {
-      execSkill(runtime, step.script, preArgs);
+      // cwd: "{workDir}" — шаг запускается из рабочего каталога, чтобы относительные
+      // пути в его args (напр. -OutputPath Template.xml) легли в фикстуру, а не в репозиторий.
+      const preCwd = step.cwd === '{workDir}' ? workDir : REPO_ROOT;
+      execSkill(runtime, step.script, preArgs, 60_000, preCwd);
       log(`preRun: ${stepName}`, true);
     } catch (e) {
       log(`preRun: ${stepName}`, false, e.stderr || e.message);
@@ -875,7 +893,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
 
     try {
       const { args } = buildSkillArgs(skillConfig, caseData, workDir, inputFile, opts.runtime);
-      const mainCwd = skillConfig.cwd === 'workDir' ? workDir : REPO_ROOT;
+      const mainCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : REPO_ROOT;
       const output = execSkill(opts.runtime, skillConfig.script, args, 60_000, mainCwd);
       const lastLine = output.trim().split('\n').pop();
       if (caseData.expectError) {
