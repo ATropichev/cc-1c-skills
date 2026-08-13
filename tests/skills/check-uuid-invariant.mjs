@@ -14,15 +14,30 @@ import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const runtimes = process.argv.includes('--runtime')
+const IS_WIN = process.platform === 'win32';
+// PowerShell вне Windows не исполняется — это природа платформы, а не пробел в покрытии
+// (см. debug/macmini-testing.md). Отсеиваем порт по ОС, иначе гард падал бы на маке с
+// «spawnSync powershell.exe ENOENT» и красил весь check-all.
+const requested = process.argv.includes('--runtime')
   ? [process.argv[process.argv.indexOf('--runtime') + 1] === 'python' ? 'python' : 'powershell']
   : ['powershell', 'python'];
+const runtimes = requested.filter(rt => rt !== 'powershell' || IS_WIN);
+if (requested.includes('powershell') && !IS_WIN) {
+  console.log(`[powershell] пропущен: PowerShell не исполняется на ${process.platform}`);
+}
+if (runtimes.length === 0) {
+  console.log('Нечего проверять: запрошен только powershell, а он на этой ОС не исполняется.');
+  process.exit(1);
+}
+
+// На *nix интерпретатор зовётся python3; `python` там обычно отсутствует вовсе.
+const PY = process.env.PYTHON || (IS_WIN ? 'python' : 'python3');
 
 function skill(runtime, name, args, cwd) {
   const ext = runtime === 'python' ? '.py' : '.ps1';
   const p = join(ROOT, '.claude/skills', name, 'scripts', name + ext);
   if (runtime === 'python') {
-    execFileSync(process.env.PYTHON || 'python', [p, ...args], { cwd, stdio: 'pipe' });
+    execFileSync(PY, [p, ...args], { cwd, stdio: 'pipe' });
   } else {
     execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', p, ...args], { cwd, stdio: 'pipe' });
   }
@@ -107,7 +122,13 @@ for (const runtime of runtimes) {
     }
     console.log(`[${runtime}] проверено ${checked} uuid объекта + ${predefBefore.size} id предопределённых (сохранены при add)`);
   } catch (e) {
-    console.log(`[${runtime}] ОШИБКА прогона: ${(e.stderr || e.message || '').toString().slice(0, 300)}`);
+    const detail = (e.stderr || e.message || '').toString();
+    console.log(`[${runtime}] ОШИБКА прогона: ${detail.slice(0, 300)}`);
+    // Гард запускает НАВЫКИ, а им нужен интерпретатор с lxml. Системный python3 на маке его не
+    // имеет, и без подсказки ошибка читается как нарушение инварианта, а не как окружение.
+    if (runtime === 'python' && /ModuleNotFoundError|No module named|ENOENT/.test(detail)) {
+      console.log(`[python] интерпретатор: ${PY}. Если модулей нет — указать venv: PYTHON=<путь> node ${'tests/skills/check-uuid-invariant.mjs'}`);
+    }
     failures++;
   } finally {
     if (work) try { rmSync(work, { recursive: true, force: true }); } catch {}
