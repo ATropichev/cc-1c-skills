@@ -16,7 +16,7 @@
   "input": {
     "name": "Кладовщик",
     "objects": [
-      "Catalog.Товары: Read View"
+      "Catalog.Товары: Read, View"
     ]
   },
   "validatePath": "Roles/Кладовщик",

@@ -1,4 +1,4 @@
-﻿# role-compile v1.24 — Compile 1C role from JSON (+русские алиасы типов: формы с ё и без)
+﻿# role-compile v1.25 — Compile 1C role from JSON (+русские алиасы типов: формы с ё и без)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -217,7 +217,24 @@ $script:typeAliases = @{
 	"ПараметрСеанса" = "SessionParameter"
 	"ОбщийРеквизит" = "CommonAttribute"
 	"Конфигурация" = "Configuration"
+	"ВнешнийИсточникДанных" = "ExternalDataSource"
+	# Типы без прав в ролях: алиасы нужны не ради генерации, а ради отказа по делу —
+	# иначе на русскую запись навык ответит «неизвестный тип 'ОбщийМодуль'».
 	"Перечисление" = "Enum"
+	"ОбщийМодуль" = "CommonModule"
+	"ОпределяемыйТип" = "DefinedType"
+	"ОбщаяКартинка" = "CommonPicture"
+	"ОбщийМакет" = "CommonTemplate"
+	"Язык" = "Language"
+	"ФункциональнаяОпция" = "FunctionalOption"
+	"ПараметрФункциональныхОпций" = "FunctionalOptionsParameter"
+	"ПодпискаНаСобытие" = "EventSubscription"
+	"РегламентноеЗадание" = "ScheduledJob"
+	"ЭлементСтиля" = "StyleItem"
+	"ХранилищеНастроек" = "SettingsStorage"
+	"ПакетXDTO" = "XDTOPackage"
+	"WSСсылка" = "WSReference"
+	"Нумератор" = "DocumentNumerator"
 	# Nested
 	"Реквизит" = "Attribute"
 	"СтандартныйРеквизит" = "StandardAttribute"
@@ -403,11 +420,72 @@ $script:knownRights = @{
 	"IntegrationService" = @("Use")
 	"SessionParameter" = @("Get","Set")
 	"CommonAttribute" = @("View","Edit")
+	"ExternalDataSource" = @(
+		"Use","Administration","StandardAuthenticationChange",
+		"SessionStandardAuthenticationChange","SessionOSAuthenticationChange"
+	)
 }
 
-# Nested objects: Attribute, StandardAttribute, TabularSection, Dimension, Resource, AddressingAttribute
-$script:nestedRights = @("View","Edit")
-$script:commandRights = @("View")
+# Виды вложенности (предпоследний сегмент пути) → допустимые права. Списки сняты с корпуса
+# типовых конфигураций и с выгрузки роли, где права проставлены по всему дереву редактора:
+# догадкам тут не место — закрытый список превращает промах в ложный отказ.
+$script:nestedKindRights = @{
+	"Attribute"                  = @("View","Edit")
+	"StandardAttribute"          = @("View","Edit")
+	"TabularSection"             = @("View","Edit")
+	"StandardTabularSection"     = @("View","Edit")
+	"Dimension"                  = @("View","Edit")
+	"Resource"                   = @("View","Edit")
+	"AccountingFlag"             = @("View","Edit")
+	"ExtDimensionAccountingFlag" = @("View","Edit")
+	"AddressingAttribute"        = @("View","Edit")
+	"Field"                      = @("View","Edit")
+	"Command"                    = @("View")
+	"Subsystem"                  = @("View")
+	"Operation"                  = @("Use")
+	"Method"                     = @("Use")
+	"IntegrationServiceChannel"  = @("Use")
+	"Recalculation"              = @("Read","Update")
+	"Cube"                       = @("Read","View")
+	"DimensionTable"             = @("Read","View")
+	"Function"                   = @("Use","View")
+	"Table"                      = @(
+		"Read","Insert","Update","Delete","View","Edit","InputByString",
+		"InteractiveInsert","InteractiveDelete"
+	)
+}
+
+# Виды, существующие только у одного типа-родителя: без этой привязки
+# `Catalog.Товары.Field.Цена` прошёл бы как валидный вложенный объект.
+$script:kindOwners = @{
+	"Table"                     = "ExternalDataSource"
+	"Cube"                      = "ExternalDataSource"
+	"Function"                  = "ExternalDataSource"
+	"Field"                     = "ExternalDataSource"
+	"DimensionTable"            = "ExternalDataSource"
+	"Recalculation"             = "CalculationRegister"
+	"Operation"                 = "WebService"
+	"Method"                    = "HTTPService"
+	"IntegrationServiceChannel" = "IntegrationService"
+}
+
+# Один и тот же вид под разными родителями имеет разный набор: измерение регистра —
+# View + Edit, измерение куба внешнего источника — только View. Объединять нельзя,
+# объединение молча разрешило бы Edit там, где платформа его не даёт.
+$script:nestedKindRightsByType = @{
+	"ExternalDataSource" = @{
+		"Dimension" = @("View")
+		"Resource"  = @("View")
+	}
+}
+
+# Типы без прав в ролях (в дереве редактора ролей их нет). Таблица НЕ управляет поведением —
+# отказ даёт отсутствие типа в $knownRights; здесь только причина для сообщения.
+$script:noRightsTypes = @(
+	"Enum","CommonModule","DefinedType","CommonPicture","CommonTemplate","Language",
+	"FunctionalOption","FunctionalOptionsParameter","EventSubscription","ScheduledJob",
+	"StyleItem","Style","SettingsStorage","XDTOPackage","WSReference","DocumentNumerator"
+)
 
 # --- 4. Presets (@view, @edit) ---
 
@@ -472,6 +550,66 @@ function Is-NestedObject {
 	return ($objectName.Split(".").Count -ge 3)
 }
 
+# Вид вложенности — предпоследний сегмент: путь бывает и восьмисегментным
+# (ExternalDataSource.И.Cube.К.DimensionTable.Т.Field.П), считать от конца.
+function Get-NestedKind {
+	param([string]$objectName)
+	$parts = $objectName.Split(".")
+	if ($parts.Count -lt 3) { return $null }
+	return $parts[$parts.Count - 2]
+}
+
+function Get-NestedRights {
+	param([string]$objectType, [string]$kind)
+	if ($script:nestedKindRightsByType.ContainsKey($objectType) -and
+		$script:nestedKindRightsByType[$objectType].ContainsKey($kind)) {
+		return @($script:nestedKindRightsByType[$objectType][$kind])
+	}
+	if ($script:nestedKindRights.ContainsKey($kind)) { return @($script:nestedKindRights[$kind]) }
+	return $null
+}
+
+# Отказ копится, а не печатается сразу: роль пишется целиком, поэтому единственный
+# безопасный момент отказа — до первой записи, и показать надо все причины сразу.
+$script:validationErrors = @()
+
+function Add-ValidationError {
+	param([string]$message)
+	$script:validationErrors += $message
+}
+
+# Проверка имени объекта: тип по белому списку (всегда, включая вложенные пути) и вид
+# вложенности. Запрещённый и незнакомый тип — разные диагнозы.
+function Validate-ObjectName {
+	param([string]$objectName)
+
+	$objectType = Get-ObjectType $objectName
+	if (-not $script:knownRights.ContainsKey($objectType)) {
+		if ($script:noRightsTypes -contains $objectType) {
+			Add-ValidationError "${objectName}: тип '$objectType' не имеет прав в роли — уберите объект из списка"
+		} else {
+			$similar = @($script:knownRights.Keys | Where-Object { $_ -like "*$objectType*" -or $objectType -like "*$_*" })
+			$sug = if ($similar.Count -gt 0) { " Возможно: $(($similar | Select-Object -First 3) -join ', ')?" } else { "" }
+			Add-ValidationError "${objectName}: неизвестный тип объекта '$objectType'.$sug"
+		}
+		return $false
+	}
+
+	if (Is-NestedObject $objectName) {
+		$kind = Get-NestedKind $objectName
+		if ($script:kindOwners.ContainsKey($kind) -and $objectType -ne $script:kindOwners[$kind]) {
+			Add-ValidationError "${objectName}: вид '$kind' бывает только у $($script:kindOwners[$kind])"
+			return $false
+		}
+		if ($null -eq (Get-NestedRights $objectType $kind)) {
+			Add-ValidationError "${objectName}: неизвестный вид вложенности '$kind'"
+			return $false
+		}
+	}
+
+	return $true
+}
+
 function Resolve-Preset {
 	param([string]$objectType, [string]$presetName)
 
@@ -503,23 +641,18 @@ function Validate-RightName {
 
 	$objectType = Get-ObjectType $objectName
 
-	if (Is-NestedObject $objectName) {
-		if ($objectName -match '\.Command\.') {
-			if ($rightName -notin $script:commandRights) {
-				Write-Warning "${objectName}: '$rightName' not valid for commands (only: View)"
-				return $false
-			}
-		} else {
-			if ($rightName -notin $script:nestedRights) {
-				Write-Warning "${objectName}: '$rightName' not valid for nested objects (only: View, Edit)"
-				return $false
-			}
-		}
-		return $true
-	}
+	# Тип уже проверен Validate-ObjectName — здесь только права, иначе про один
+	# запрещённый тип напечатается столько строк, сколько у него перечислено прав.
+	if (-not $script:knownRights.ContainsKey($objectType)) { return $false }
 
-	if (-not $script:knownRights.ContainsKey($objectType)) {
-		Write-Warning "${objectName}: unknown object type '$objectType'"
+	if (Is-NestedObject $objectName) {
+		$kind = Get-NestedKind $objectName
+		$validNested = Get-NestedRights $objectType $kind
+		if ($null -eq $validNested) { return $false }
+		if ($rightName -notin $validNested) {
+			Add-ValidationError "${objectName}: право '$rightName' недопустимо для вида '$kind' (допустимо: $($validNested -join ', '))"
+			return $false
+		}
 		return $true
 	}
 
@@ -528,8 +661,8 @@ function Validate-RightName {
 		$suggestions = @($validRights | Where-Object {
 			$_ -like "*$rightName*" -or $rightName -like "*$_*"
 		})
-		$sugStr = if ($suggestions.Count -gt 0) { " Did you mean: $($suggestions -join ', ')?" } else { "" }
-		Write-Warning "${objectName}: unknown right '$rightName'.$sugStr"
+		$sugStr = if ($suggestions.Count -gt 0) { " Возможно: $(($suggestions | Select-Object -First 3) -join ', ')?" } else { "" }
+		Add-ValidationError "${objectName}: право '$rightName' не существует у типа '$objectType'.$sugStr"
 		return $false
 	}
 
@@ -550,6 +683,9 @@ function Parse-ObjectEntry {
 		}
 		$objName = Translate-ObjectName ($entry.Substring(0, $colonIdx).Trim())
 		$rightsStr = $entry.Substring($colonIdx + 1).Trim()
+		# Объект с непроходным именем дальше не разбираем: пресет для несуществующего типа
+		# добавил бы к отказу ещё и бессмысленное предупреждение.
+		if (-not (Validate-ObjectName $objName)) { return $null }
 		$objectType = Get-ObjectType $objName
 
 		if ($rightsStr.StartsWith('@')) {
@@ -574,6 +710,8 @@ function Parse-ObjectEntry {
 		Write-Warning "Object entry missing 'name' field"
 		return $null
 	}
+
+	if (-not (Validate-ObjectName $objName)) { return $null }
 
 	$objectType = Get-ObjectType $objName
 	$rightsMap = [ordered]@{}
@@ -646,6 +784,16 @@ if ($def.objects) {
 			$parsedObjects += ,$parsed
 		}
 	}
+}
+
+# Отказ ДО записи: роль пишется тремя файлами (метаданные, права, регистрация в
+# Configuration.xml), и частично записанная роль хуже отсутствующей. Печатаем все причины
+# разом — иначе пользователь чинит их по одной. Console.Error, а не Write-Error: под
+# ErrorActionPreference=Stop последний бросает исключение (см. комментарий в support-guard).
+if ($script:validationErrors.Count -gt 0) {
+	[Console]::Error.WriteLine("[role-compile] Роль не создана: $($script:validationErrors.Count) ошибок в описании прав.")
+	foreach ($e in $script:validationErrors) { [Console]::Error.WriteLine("  ERROR: $e") }
+	exit 1
 }
 
 # --- Detect format version ---

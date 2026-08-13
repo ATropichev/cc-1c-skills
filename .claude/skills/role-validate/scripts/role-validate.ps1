@@ -1,4 +1,4 @@
-﻿# role-validate v1.2 — Validate 1C role structure
+﻿# role-validate v1.3 — Validate 1C role structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -127,11 +127,72 @@ $script:knownRights = @{
 	"IntegrationService" = @("Use")
 	"SessionParameter" = @("Get","Set")
 	"CommonAttribute" = @("View","Edit")
+	"ExternalDataSource" = @(
+		"Use","Administration","StandardAuthenticationChange",
+		"SessionStandardAuthenticationChange","SessionOSAuthenticationChange"
+	)
 }
 
-$script:nestedRights = @("View","Edit")
-$script:channelRights = @("Use")
-$script:commandRights = @("View")
+# Виды вложенности (предпоследний сегмент пути) → допустимые права. Списки сняты с корпуса
+# типовых конфигураций и с выгрузки роли, где права проставлены по всему дереву редактора:
+# догадкам тут не место — закрытый список превращает промах в ложный отказ.
+$script:nestedKindRights = @{
+	"Attribute"                  = @("View","Edit")
+	"StandardAttribute"          = @("View","Edit")
+	"TabularSection"             = @("View","Edit")
+	"StandardTabularSection"     = @("View","Edit")
+	"Dimension"                  = @("View","Edit")
+	"Resource"                   = @("View","Edit")
+	"AccountingFlag"             = @("View","Edit")
+	"ExtDimensionAccountingFlag" = @("View","Edit")
+	"AddressingAttribute"        = @("View","Edit")
+	"Field"                      = @("View","Edit")
+	"Command"                    = @("View")
+	"Subsystem"                  = @("View")
+	"Operation"                  = @("Use")
+	"Method"                     = @("Use")
+	"IntegrationServiceChannel"  = @("Use")
+	"Recalculation"              = @("Read","Update")
+	"Cube"                       = @("Read","View")
+	"DimensionTable"             = @("Read","View")
+	"Function"                   = @("Use","View")
+	"Table"                      = @(
+		"Read","Insert","Update","Delete","View","Edit","InputByString",
+		"InteractiveInsert","InteractiveDelete"
+	)
+}
+
+# Виды, существующие только у одного типа-родителя: без этой привязки
+# `Catalog.Товары.Field.Цена` прошёл бы как валидный вложенный объект.
+$script:kindOwners = @{
+	"Table"                     = "ExternalDataSource"
+	"Cube"                      = "ExternalDataSource"
+	"Function"                  = "ExternalDataSource"
+	"Field"                     = "ExternalDataSource"
+	"DimensionTable"            = "ExternalDataSource"
+	"Recalculation"             = "CalculationRegister"
+	"Operation"                 = "WebService"
+	"Method"                    = "HTTPService"
+	"IntegrationServiceChannel" = "IntegrationService"
+}
+
+# Один и тот же вид под разными родителями имеет разный набор: измерение регистра —
+# View + Edit, измерение куба внешнего источника — только View. Объединять нельзя,
+# объединение молча разрешило бы Edit там, где платформа его не даёт.
+$script:nestedKindRightsByType = @{
+	"ExternalDataSource" = @{
+		"Dimension" = @("View")
+		"Resource"  = @("View")
+	}
+}
+
+# Типы без прав в ролях (в дереве редактора ролей их нет). Таблица НЕ управляет поведением —
+# отказ даёт отсутствие типа в $knownRights; здесь только причина для сообщения.
+$script:noRightsTypes = @(
+	"Enum","CommonModule","DefinedType","CommonPicture","CommonTemplate","Language",
+	"FunctionalOption","FunctionalOptionsParameter","EventSubscription","ScheduledJob",
+	"StyleItem","Style","SettingsStorage","XDTOPackage","WSReference","DocumentNumerator"
+)
 
 # --- 2. Output helpers ---
 
@@ -177,6 +238,37 @@ function Get-ObjectType {
 function Is-NestedObject {
 	param([string]$name)
 	return ($name.Split(".").Count -ge 3)
+}
+
+# Вид вложенности — предпоследний сегмент: путь бывает и восьмисегментным
+# (ExternalDataSource.И.Cube.К.DimensionTable.Т.Field.П), считать от конца.
+function Get-NestedKind {
+	param([string]$name)
+	$parts = $name.Split(".")
+	if ($parts.Count -lt 3) { return $null }
+	return $parts[$parts.Count - 2]
+}
+
+function Get-NestedRights {
+	param([string]$objectType, [string]$kind)
+	if ($script:nestedKindRightsByType.ContainsKey($objectType) -and
+		$script:nestedKindRightsByType[$objectType].ContainsKey($kind)) {
+		return @($script:nestedKindRightsByType[$objectType][$kind])
+	}
+	if ($script:nestedKindRights.ContainsKey($kind)) { return @($script:nestedKindRights[$kind]) }
+	return $null
+}
+
+# Запрещённый тип и незнакомый тип — разные диагнозы: первый документирован, второй
+# скорее опечатка или пробел в таблице.
+function Format-TypeError {
+	param([string]$objName, [string]$objectType)
+	if ($script:noRightsTypes -contains $objectType) {
+		return "${objName}: тип '$objectType' не имеет прав в роли — блок нужно удалить"
+	}
+	$similar = Find-Similar -needle $objectType -haystack @($script:knownRights.Keys)
+	$sug = if ($similar.Count -gt 0) { " Возможно: $($similar -join ', ')?" } else { "" }
+	return "${objName}: неизвестный тип объекта '$objectType'.$sug"
 }
 
 function Find-Similar {
@@ -303,9 +395,16 @@ foreach ($obj in $objects) {
 	$objectType = Get-ObjectType $objName
 	$isNested = Is-NestedObject $objName
 
-	# Check object type is known
-	if (-not $isNested -and -not $script:knownRights.ContainsKey($objectType)) {
-		Report-Warn "${objName}: unknown object type '$objectType'"
+	# Тип проверяется ВСЕГДА, включая вложенные пути: раньше `Enum.Х.Attribute.Y` не проверялся
+	# вообще, потому что ветка «unknown» стояла под `-not $isNested`.
+	$nestedKind = if ($isNested) { Get-NestedKind $objName } else { $null }
+	$typeKnown = $script:knownRights.ContainsKey($objectType)
+	if (-not $typeKnown) {
+		Report-Error (Format-TypeError $objName $objectType)
+	} elseif ($isNested -and $script:kindOwners.ContainsKey($nestedKind) -and $objectType -ne $script:kindOwners[$nestedKind]) {
+		Report-Error "${objName}: вид '$nestedKind' бывает только у $($script:kindOwners[$nestedKind])"
+	} elseif ($isNested -and $null -eq (Get-NestedRights $objectType $nestedKind)) {
+		Report-Error "${objName}: неизвестный вид вложенности '$nestedKind'"
 	}
 
 	# Check rights
@@ -345,27 +444,20 @@ foreach ($obj in $objects) {
 
 		$rightCount++
 
-		# Validate right name
-		if ($isNested) {
-			if ($objName -match '\.Command\.') {
-				if ($rName -notin $script:commandRights) {
-					Report-Warn "${objName}: '$rName' not valid for commands (only: View)"
-				}
-			} elseif ($objName -match '\.IntegrationServiceChannel\.') {
-				if ($rName -notin $script:channelRights) {
-					Report-Warn "${objName}: '$rName' not valid for channels (only: Use)"
-				}
-			} else {
-				if ($rName -notin $script:nestedRights) {
-					Report-Warn "${objName}: '$rName' not valid for nested objects (only: View, Edit)"
-				}
+		# Validate right name. Тип уже отвергнут выше — второй раз про него не пишем.
+		if (-not $typeKnown) {
+			# уже сообщено
+		} elseif ($isNested) {
+			$validNested = Get-NestedRights $objectType $nestedKind
+			if ($null -ne $validNested -and $rName -notin $validNested) {
+				Report-Error "${objName}: право '$rName' недопустимо для вида '$nestedKind' (допустимо: $($validNested -join ', '))"
 			}
-		} elseif ($script:knownRights.ContainsKey($objectType)) {
+		} else {
 			$validRights = $script:knownRights[$objectType]
 			if ($rName -notin $validRights) {
 				$similar = Find-Similar -needle $rName -haystack $validRights
-				$sugStr = if ($similar.Count -gt 0) { " Did you mean: $($similar -join ', ')?" } else { "" }
-				Report-Warn "${objName}: unknown right '$rName'.$sugStr"
+				$sugStr = if ($similar.Count -gt 0) { " Возможно: $($similar -join ', ')?" } else { "" }
+				Report-Error "${objName}: право '$rName' не существует у типа '$objectType'.$sugStr"
 			}
 		}
 	}

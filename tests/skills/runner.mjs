@@ -411,7 +411,7 @@ function checkFileContains(workDir, spec, expectPresent) {
 // который молча ничего не проверяет (так уже было с 9 кейсами meta-edit) —
 // поэтому он ошибка, а не игнор.
 const KNOWN_EXPECT_KEYS = new Set([
-  'files', 'stdoutContains', 'stdoutNotContains', 'stderrContains', 'preserves',
+  'files', 'filesAbsent', 'stdoutContains', 'stdoutNotContains', 'stderrContains', 'preserves',
   'fileContains', 'fileNotContains', 'filesEqual',
 ]);
 
@@ -841,6 +841,16 @@ async function runCaseAsync(testCase, opts) {
           if (!stderr.includes(needle)) errors.push(`stderr does not contain "${needle}"`);
         }
       }
+      // Отсутствие файла — тоже утверждение, и нужно оно чаще всего НЕГАТИВНОМУ кейсу:
+      // «отказ произошёл до записи». В позитивной ветке (где живёт expect.files) такой
+      // проверки не было бы ровно там, где она единственная содержательная.
+      if (caseData.expect?.filesAbsent) {
+        const paths = Array.isArray(caseData.expect.filesAbsent)
+          ? caseData.expect.filesAbsent : [caseData.expect.filesAbsent];
+        for (const p of paths) {
+          if (existsSync(join(workDir, p))) errors.push(`File must not exist: ${p}`);
+        }
+      }
     }
     if (!caseData.expectError) {
       if (caseData.expect?.preserves) {
@@ -1064,6 +1074,16 @@ function runCase(testCase, opts) {
           ? caseData.expect.stderrContains : [caseData.expect.stderrContains];
         for (const needle of needles) {
           if (!stderr.includes(needle)) errors.push(`stderr does not contain "${needle}"`);
+        }
+      }
+      // Отсутствие файла — тоже утверждение, и нужно оно чаще всего НЕГАТИВНОМУ кейсу:
+      // «отказ произошёл до записи». В позитивной ветке (где живёт expect.files) такой
+      // проверки не было бы ровно там, где она единственная содержательная.
+      if (caseData.expect?.filesAbsent) {
+        const paths = Array.isArray(caseData.expect.filesAbsent)
+          ? caseData.expect.filesAbsent : [caseData.expect.filesAbsent];
+        for (const p of paths) {
+          if (existsSync(join(workDir, p))) errors.push(`File must not exist: ${p}`);
         }
       }
     }

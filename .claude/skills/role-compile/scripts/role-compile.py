@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.24 — Compile 1C role from JSON (+русские алиасы типов: формы с ё и без)
+# role-compile v1.25 — Compile 1C role from JSON (+русские алиасы типов: формы с ё и без)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -354,7 +354,24 @@ TYPE_ALIASES = {
     "ПараметрСеанса": "SessionParameter",
     "ОбщийРеквизит": "CommonAttribute",
     "Конфигурация": "Configuration",
+    "ВнешнийИсточникДанных": "ExternalDataSource",
+    # Типы без прав в ролях: алиасы нужны не ради генерации, а ради отказа по делу —
+    # иначе на русскую запись навык ответит «неизвестный тип 'ОбщийМодуль'».
     "Перечисление": "Enum",
+    "ОбщийМодуль": "CommonModule",
+    "ОпределяемыйТип": "DefinedType",
+    "ОбщаяКартинка": "CommonPicture",
+    "ОбщийМакет": "CommonTemplate",
+    "Язык": "Language",
+    "ФункциональнаяОпция": "FunctionalOption",
+    "ПараметрФункциональныхОпций": "FunctionalOptionsParameter",
+    "ПодпискаНаСобытие": "EventSubscription",
+    "РегламентноеЗадание": "ScheduledJob",
+    "ЭлементСтиля": "StyleItem",
+    "ХранилищеНастроек": "SettingsStorage",
+    "ПакетXDTO": "XDTOPackage",
+    "WSСсылка": "WSReference",
+    "Нумератор": "DocumentNumerator",
     # Nested
     "Реквизит": "Attribute",
     "СтандартныйРеквизит": "StandardAttribute",
@@ -516,10 +533,72 @@ KNOWN_RIGHTS = {
     "IntegrationService": ["Use"],
     "SessionParameter": ["Get", "Set"],
     "CommonAttribute": ["View", "Edit"],
+    "ExternalDataSource": [
+        "Use", "Administration", "StandardAuthenticationChange",
+        "SessionStandardAuthenticationChange", "SessionOSAuthenticationChange",
+    ],
 }
 
-NESTED_RIGHTS = ["View", "Edit"]
-COMMAND_RIGHTS = ["View"]
+# Виды вложенности (предпоследний сегмент пути) → допустимые права. Списки сняты с корпуса
+# типовых конфигураций и с выгрузки роли, где права проставлены по всему дереву редактора:
+# догадкам тут не место — закрытый список превращает промах в ложный отказ.
+NESTED_KIND_RIGHTS = {
+    "Attribute": ["View", "Edit"],
+    "StandardAttribute": ["View", "Edit"],
+    "TabularSection": ["View", "Edit"],
+    "StandardTabularSection": ["View", "Edit"],
+    "Dimension": ["View", "Edit"],
+    "Resource": ["View", "Edit"],
+    "AccountingFlag": ["View", "Edit"],
+    "ExtDimensionAccountingFlag": ["View", "Edit"],
+    "AddressingAttribute": ["View", "Edit"],
+    "Field": ["View", "Edit"],
+    "Command": ["View"],
+    "Subsystem": ["View"],
+    "Operation": ["Use"],
+    "Method": ["Use"],
+    "IntegrationServiceChannel": ["Use"],
+    "Recalculation": ["Read", "Update"],
+    "Cube": ["Read", "View"],
+    "DimensionTable": ["Read", "View"],
+    "Function": ["Use", "View"],
+    "Table": [
+        "Read", "Insert", "Update", "Delete", "View", "Edit", "InputByString",
+        "InteractiveInsert", "InteractiveDelete",
+    ],
+}
+
+# Виды, существующие только у одного типа-родителя: без этой привязки
+# `Catalog.Товары.Field.Цена` прошёл бы как валидный вложенный объект.
+KIND_OWNERS = {
+    'Table': 'ExternalDataSource',
+    'Cube': 'ExternalDataSource',
+    'Function': 'ExternalDataSource',
+    'Field': 'ExternalDataSource',
+    'DimensionTable': 'ExternalDataSource',
+    'Recalculation': 'CalculationRegister',
+    'Operation': 'WebService',
+    'Method': 'HTTPService',
+    'IntegrationServiceChannel': 'IntegrationService',
+}
+
+# Один и тот же вид под разными родителями имеет разный набор: измерение регистра —
+# View + Edit, измерение куба внешнего источника — только View. Объединять нельзя,
+# объединение молча разрешило бы Edit там, где платформа его не даёт.
+NESTED_KIND_RIGHTS_BY_TYPE = {
+    "ExternalDataSource": {
+        "Dimension": ["View"],
+        "Resource": ["View"],
+    },
+}
+
+# Типы без прав в ролях (в дереве редактора ролей их нет). Список НЕ управляет поведением —
+# отказ даёт отсутствие типа в KNOWN_RIGHTS; здесь только выбор формулировки.
+NO_RIGHTS_TYPES = [
+    "Enum", "CommonModule", "DefinedType", "CommonPicture", "CommonTemplate", "Language",
+    "FunctionalOption", "FunctionalOptionsParameter", "EventSubscription", "ScheduledJob",
+    "StyleItem", "Style", "SettingsStorage", "XDTOPackage", "WSReference", "DocumentNumerator",
+]
 
 # --- Presets ---
 
@@ -594,6 +673,56 @@ def is_nested_object(object_name):
     return len(object_name.split('.')) >= 3
 
 
+def get_nested_kind(object_name):
+    """Вид вложенности — предпоследний сегмент: путь бывает и восьмисегментным
+    (ExternalDataSource.И.Cube.К.DimensionTable.Т.Field.П), считать от конца."""
+    parts = object_name.split('.')
+    if len(parts) < 3:
+        return None
+    return parts[-2]
+
+
+def get_nested_rights(object_type, kind):
+    by_type = NESTED_KIND_RIGHTS_BY_TYPE.get(object_type)
+    if by_type and kind in by_type:
+        return by_type[kind]
+    return NESTED_KIND_RIGHTS.get(kind)
+
+
+# Отказ копится, а не печатается сразу: роль пишется целиком, поэтому единственный
+# безопасный момент отказа — до первой записи, и показать надо все причины сразу.
+VALIDATION_ERRORS = []
+
+
+def add_validation_error(message):
+    VALIDATION_ERRORS.append(message)
+
+
+def validate_object_name(object_name):
+    """Тип по белому списку (всегда, включая вложенные пути) и вид вложенности.
+    Запрещённый и незнакомый тип — разные диагнозы."""
+    object_type = get_object_type(object_name)
+    if object_type not in KNOWN_RIGHTS:
+        if object_type in NO_RIGHTS_TYPES:
+            add_validation_error(f"{object_name}: тип '{object_type}' не имеет прав в роли — уберите объект из списка")
+        else:
+            similar = [t for t in KNOWN_RIGHTS if object_type in t or t in object_type][:3]
+            sug = f" Возможно: {', '.join(similar)}?" if similar else ''
+            add_validation_error(f"{object_name}: неизвестный тип объекта '{object_type}'.{sug}")
+        return False
+
+    if is_nested_object(object_name):
+        kind = get_nested_kind(object_name)
+        if kind in KIND_OWNERS and object_type != KIND_OWNERS[kind]:
+            add_validation_error(f"{object_name}: вид '{kind}' бывает только у {KIND_OWNERS[kind]}")
+            return False
+        if get_nested_rights(object_type, kind) is None:
+            add_validation_error(f"{object_name}: неизвестный вид вложенности '{kind}'")
+            return False
+
+    return True
+
+
 def resolve_preset(object_type, preset_name):
     preset = preset_name.lstrip('@')
     if preset not in PRESETS:
@@ -614,26 +743,26 @@ def resolve_preset(object_type, preset_name):
 def validate_right_name(object_name, right_name):
     object_type = get_object_type(object_name)
 
-    if is_nested_object(object_name):
-        if '.Command.' in object_name:
-            if right_name not in COMMAND_RIGHTS:
-                print(f"WARNING: {object_name}: '{right_name}' not valid for commands (only: View)", file=sys.stderr)
-                return False
-        else:
-            if right_name not in NESTED_RIGHTS:
-                print(f"WARNING: {object_name}: '{right_name}' not valid for nested objects (only: View, Edit)", file=sys.stderr)
-                return False
-        return True
-
+    # Тип уже проверен validate_object_name — здесь только права, иначе про один
+    # запрещённый тип напечатается столько строк, сколько у него перечислено прав.
     if object_type not in KNOWN_RIGHTS:
-        print(f"WARNING: {object_name}: unknown object type '{object_type}'", file=sys.stderr)
+        return False
+
+    if is_nested_object(object_name):
+        kind = get_nested_kind(object_name)
+        valid_nested = get_nested_rights(object_type, kind)
+        if valid_nested is None:
+            return False
+        if right_name not in valid_nested:
+            add_validation_error(f"{object_name}: право '{right_name}' недопустимо для вида '{kind}' (допустимо: {', '.join(valid_nested)})")
+            return False
         return True
 
     valid_rights = KNOWN_RIGHTS[object_type]
     if right_name not in valid_rights:
-        suggestions = [r for r in valid_rights if right_name in r or r in right_name]
-        sug_str = f" Did you mean: {', '.join(suggestions)}?" if suggestions else ""
-        print(f"WARNING: {object_name}: unknown right '{right_name}'.{sug_str}", file=sys.stderr)
+        suggestions = [r for r in valid_rights if right_name in r or r in right_name][:3]
+        sug_str = f" Возможно: {', '.join(suggestions)}?" if suggestions else ""
+        add_validation_error(f"{object_name}: право '{right_name}' не существует у типа '{object_type}'.{sug_str}")
         return False
 
     return True
@@ -648,6 +777,10 @@ def parse_object_entry(entry):
             return None
         obj_name = translate_object_name(entry[:colon_idx].strip())
         rights_str = entry[colon_idx + 1:].strip()
+        # Объект с непроходным именем дальше не разбираем: пресет для несуществующего типа
+        # добавил бы к отказу ещё и бессмысленное предупреждение.
+        if not validate_object_name(obj_name):
+            return None
         object_type = get_object_type(obj_name)
 
         if rights_str.startswith('@'):
@@ -666,6 +799,9 @@ def parse_object_entry(entry):
     obj_name = translate_object_name(str(entry.get('name', '')))
     if not obj_name:
         print("WARNING: Object entry missing 'name' field", file=sys.stderr)
+        return None
+
+    if not validate_object_name(obj_name):
         return None
 
     object_type = get_object_type(obj_name)
@@ -760,6 +896,15 @@ def main():
             parsed = parse_object_entry(entry)
             if parsed:
                 parsed_objects.append(parsed)
+
+    # Отказ ДО записи: роль пишется тремя файлами (метаданные, права, регистрация в
+    # Configuration.xml), и частично записанная роль хуже отсутствующей. Печатаем все
+    # причины разом — иначе пользователь чинит их по одной.
+    if VALIDATION_ERRORS:
+        print(f"[role-compile] Роль не создана: {len(VALIDATION_ERRORS)} ошибок в описании прав.", file=sys.stderr)
+        for e in VALIDATION_ERRORS:
+            print(f"  ERROR: {e}", file=sys.stderr)
+        sys.exit(1)
 
     # --- 3. Generate UUID ---
     uid = new_uuid()

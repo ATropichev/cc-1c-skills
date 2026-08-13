@@ -542,18 +542,44 @@ Subsystem.Администрирование.Subsystem.Пользователи
 | `SessionParameter` | Get, Set |
 | `CommonAttribute` | View, Edit |
 
+#### ExternalDataSource
+
+Источник ошибки в прежних редакциях спецификации: внешние источники данных права **имеют** —
+узел «Внешние источники данных» есть в дереве редактора ролей. Значения ниже сняты с выгрузки
+роли со всеми проставленными правами (8.3.25).
+
+| Объект | Права |
+|--------|-------|
+| `ExternalDataSource.И` | Use, Administration, StandardAuthenticationChange, SessionStandardAuthenticationChange, SessionOSAuthenticationChange |
+| `ExternalDataSource.И.Table.Т` | Read, Insert, Update, Delete, View, Edit, InputByString, InteractiveInsert, InteractiveDelete |
+| `ExternalDataSource.И.Table.Т.Field.П` | View, Edit |
+| `ExternalDataSource.И.Cube.К` | Read, View |
+| `ExternalDataSource.И.Cube.К.Dimension.И` | View |
+| `ExternalDataSource.И.Cube.К.Resource.Р` | View |
+| `ExternalDataSource.И.Cube.К.DimensionTable.Т` | Read, View |
+| `ExternalDataSource.И.Cube.К.DimensionTable.Т.Field.П` | View, Edit |
+| `ExternalDataSource.И.Function.Ф` | Use, View |
+| `…Table.Т.Command.К`, `…Cube.К.Command.К`, `…DimensionTable.Т.Command.К` | View |
+
 #### Типы объектов БЕЗ прав в ролях
 
-Следующие типы не фигурируют в Rights.xml (права не применимы или управляются иначе):
+Следующие типы не фигурируют в Rights.xml — в дереве редактора ролей их нет:
 
-- `Enum` (перечисления)
-- `FunctionalOption`
-- `DefinedType`
+- `Enum` (перечисления) — блок прав на перечисление приводит к зависанию загрузки
+  конфигурации в информационную базу: конфигуратор не завершается и не выдаёт сообщений
 - `CommonModule`
+- `DefinedType`
 - `CommonPicture`
 - `CommonTemplate`
+- `Language`
+- `FunctionalOption`, `FunctionalOptionsParameter`
+- `EventSubscription`
+- `ScheduledJob`
+- `StyleItem`, `Style`
 - `SettingsStorage`
-- `ExternalDataSource`
+- `XDTOPackage`
+- `WSReference`
+- `DocumentNumerator`
 
 ---
 
@@ -646,8 +672,21 @@ Subsystem.Администрирование.Subsystem.Пользователи
 | `TabularSection.*.Attribute` | (все с TabularSection) | View, Edit |
 | `Dimension` | InformationRegister, AccumulationRegister, AccountingRegister | View, Edit |
 | `Resource` | InformationRegister, AccumulationRegister, AccountingRegister | View, Edit |
-| `Command` | Catalog, Document, DataProcessor, Report, *Register, DocumentJournal, ExchangePlan, BusinessProcess, Task | View |
-| `AddressingAttribute` | Task | View, Edit |
+| `Command` | Catalog, Document, DataProcessor, Report, *Register, DocumentJournal, ExchangePlan, BusinessProcess, Task, ExternalDataSource (Table/Cube/DimensionTable) | View |
+| `AddressingAttribute` | Task, BusinessProcess | View, Edit |
+| `StandardTabularSection` | Catalog, Document, ChartOf* | View, Edit |
+| `AccountingFlag`, `ExtDimensionAccountingFlag` | ChartOfAccounts | View, Edit |
+| `Subsystem` | Subsystem (вложенная) | View |
+| `Operation` | WebService | Use |
+| `URLTemplate.*.Method` | HTTPService | Use |
+| `IntegrationServiceChannel` | IntegrationService | Use |
+| `Recalculation` | CalculationRegister | Read, Update |
+| `Column` (графа журнала) | — | прав не имеет |
+| `Table`, `Cube`, `Function`, `Field`, `DimensionTable` | только ExternalDataSource | см. раздел ExternalDataSource |
+
+Виды, встречающиеся в выгрузках типовых конфигураций, сверены с корпусом
+(`acc`, `erp`, `ut`, `unf` — ~2750 ролей); внешние источники данных — с выгрузкой роли,
+где права проставлены по всему дереву.
 
 ---
 

@@ -1,0 +1,10 @@
+{
+  "name": "Перерасчёт регистра расчёта проходит без замечаний",
+  "setup": "fixture:external-data-source",
+  "params": { "rightsPath": "Roles/ПраваНаПерерасчет/Ext/Rights.xml" },
+  "noSnapshot": "валидатор не пишет файлов, проверяется чистый вывод",
+  "expect": {
+    "stdoutContains": "Validation OK",
+    "stdoutNotContains": ["[WARN]", "[ERROR]"]
+  }
+}

@@ -16,13 +16,8 @@
       "script": "role-compile/scripts/role-compile",
       "input": {
         "name": "Тест",
-        "rights": [
-          {
-            "object": "Catalog.Товары",
-            "rights": [
-              "Read"
-            ]
-          }
+        "objects": [
+          "Catalog.Товары: Read"
         ]
       },
       "args": {

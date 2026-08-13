@@ -64,7 +64,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/role-compile.ps1" -
 
 ### Русские синонимы
 
-Поддерживаются русские типы (`Справочник`→Catalog, `Документ`→Document) и права (`Чтение`→Read, `Просмотр`→View). Смешивание допустимо: `"Справочник.Контрагенты: Чтение, View"`.
+Поддерживаются русские типы (`Справочник`→Catalog, `Документ`→Document) и права (`Чтение`→Read, `Просмотр`→View). Каноничная форма — английская.
 
 ### Шаблоны RLS
 
@@ -99,7 +99,13 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/role-compile.ps1" -
 }
 ```
 
-Подробные таблицы пресетов, русских синонимов и дополнительные примеры — в `dsl-reference.md`.
+## Что можно писать в `objects`
+
+Права имеют 27 типов объектов; тип или имя права вне списка — ошибка: роль не создаётся, файлы не пишутся, `Configuration.xml` не меняется. Права нельзя назначить на `Enum`, `CommonModule`, `DefinedType`, `CommonPicture`, `CommonTemplate`, `Language`, `FunctionalOption`, `EventSubscription`, `ScheduledJob`, `StyleItem`, `SettingsStorage` и подобные — в дереве редактора ролей их нет.
+
+Права на части объекта задаются точечным путём: `Catalog.Контрагенты.Attribute.ИНН: View, Edit`, `WebService.Обмен.Operation.Загрузить: Use`.
+
+Полные таблицы «тип → права», виды вложенности (включая внешние источники данных), список типов без прав, таблицы пресетов и дополнительные примеры — в `dsl-reference.md`.
 
 ## Верификация
 

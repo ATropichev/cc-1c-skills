@@ -238,11 +238,11 @@ export const steps = [
     input: {
       name: 'Кладовщик',
       objects: [
-        'Catalog.Контрагенты: Read View',
-        'Catalog.Номенклатура: Read View',
-        'Document.ПриходнаяНакладная: Read View Add Update',
+        'Catalog.Контрагенты: Read, View',
+        'Catalog.Номенклатура: Read, View',
+        'Document.ПриходнаяНакладная: Read, View, Insert, Update',
         'AccumulationRegister.ОстаткиТоваров: Read',
-        'Report.ОстаткиТоваров: Use View',
+        'Report.ОстаткиТоваров: Use, View',
       ],
     },
     args: { '-JsonPath': '{inputFile}', '-OutputDir': '{workDir}' },
