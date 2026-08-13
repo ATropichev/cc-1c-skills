@@ -13,6 +13,7 @@ const GUARDS = [
   ['check-uuid-invariant.mjs', 'сохранение uuid объекта и сущностей при правке'],
   ['check-inline-drift.mjs', 'общие inline-реализации: копии совпадают с эталонами'],
   ['check-type-maps.mjs', 'карты типов метаданных: согласованы со спецификацией'],
+  ['check-format-versions.mjs', 'проверенный диапазон версий формата: согласован со спецификацией'],
 ];
 
 let failed = 0;

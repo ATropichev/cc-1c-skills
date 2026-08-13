@@ -102,10 +102,10 @@ const FAMILIES = [
     name: 'format_rank', py: 'format_rank', ps1: 'Get-FormatRank',
     variants: [
       { id: 'base', authority: 'meta-compile',
-        consumers: ['cfe-borrow', 'cfe-init', 'form-add', 'form-compile', 'meta-validate',
-          'mxl-compile', 'role-compile', 'subsystem-compile', 'subsystem-edit', 'template-add',
-          'xdto-compile'],
-        consumersPy: ['epf-init', 'erf-init'] },
+        consumers: ['cf-init', 'cf-validate', 'cfe-borrow', 'cfe-init', 'cfe-validate', 'epf-build',
+          'epf-init', 'epf-validate', 'erf-init', 'form-add', 'form-compile', 'form-validate',
+          'meta-validate', 'mxl-compile', 'role-compile', 'subsystem-compile', 'subsystem-edit',
+          'template-add', 'xdto-compile'] },
     ],
   },
 
