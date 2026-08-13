@@ -1,4 +1,4 @@
-﻿# db-load-xml v1.20 — Load 1C configuration from XML files
+﻿# db-load-xml v1.21 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -416,6 +416,41 @@ function Write-PlatformOutput {
     Write-Host "--- End ---"
 }
 
+# Строки лога, о которых платформа сообщает, НЕ поднимая код возврата: метаданные отброшены или
+# конфигурация нерабочая, а операция при этом «успешна». Возвращает подошедшие строки.
+#
+# Копия этой функции есть в каждом навыке, который читает /Out-лог загрузки (навыки автономны).
+# Держать копии одинаковыми — сознательно: разошедшиеся копии сводят на нет весь смысл.
+function Find-SilentRejections {
+    param([string]$LogText)
+    $patterns = @(
+        'Неверное свойство объекта метаданных',
+        'не входит в состав объекта метаданных',
+        'Неизвестное имя типа',
+        'Неизвестный объект метаданных',
+        'Ни один из документов не является регистратором для регистра',
+        'Неверное значение перечисления',
+        'не может быть приведен к типу',
+        # Режим совместимости выше платформы: объекты в базу не попадают, отказ приходит в рантайме.
+        # Обрезано до инвариантной части — конкретная версия в сообщении меняется.
+        'Для работы с конфигурацией необходима версия платформы не меньше'
+    )
+    $found = @()
+    if ($LogText) {
+        foreach ($line in ($LogText -split "`r?`n")) {
+            foreach ($pat in $patterns) {
+                if ($line -match [regex]::Escape($pat)) {
+                    $found += $line.Trim()
+                    break
+                }
+            }
+        }
+    }
+    # Возвращаем массив БЕЗ запятой-обёртки: вызывающий берёт результат в @(), а `return ,$found`
+    # дал бы массив из одного пустого массива — фантомное срабатывание на чистом логе.
+    return $found
+}
+
 
 $engine = if ((Split-Path $V8Path -Leaf) -match '^ibcmd') { "ibcmd" } else { "1cv8" }
 
@@ -607,28 +642,7 @@ try {
     }
 
     # --- Scan log for silent rejections ---
-    # Platform often writes load-time rejections into /Out but exits with code 0.
-    # These patterns flag cases where metadata was dropped or rejected silently.
-    $fatalLogPatterns = @(
-        'Неверное свойство объекта метаданных',
-        'не входит в состав объекта метаданных',
-        'Неизвестное имя типа',
-        'Неизвестный объект метаданных',
-        'Ни один из документов не является регистратором для регистра',
-        'Неверное значение перечисления',
-        'не может быть приведен к типу'
-    )
-    $silentFailures = @()
-    if ($logContent) {
-        foreach ($line in ($logContent -split "`r?`n")) {
-            foreach ($pat in $fatalLogPatterns) {
-                if ($line -match [regex]::Escape($pat)) {
-                    $silentFailures += $line.Trim()
-                    break
-                }
-            }
-        }
-    }
+    $silentFailures = @(Find-SilentRejections $logContent)
 
     # --- Result ---
     # Default: mirror platform's verdict via exit code. Log content (including any
@@ -647,10 +661,11 @@ try {
     }
     Write-PlatformOutput $__v8.Output
 
+    # Причину не называем: строки лога печатаются следом и говорят за себя, а класс проблемы
+    # разный — от отброшенного свойства до нерабочей на этой платформе конфигурации. Подсказку
+    # про -StrictLog не даём: загрузка уже выполнена, повторять её ради того же текста незачем.
     if ($silentFailures.Count -gt 0) {
-        $msg = "[warning] log contains $($silentFailures.Count) rejection(s) — platform loaded config but dropped properties/refs"
-        if (-not $StrictLog) { $msg += " (pass -StrictLog to treat as error)" }
-        Write-Host $msg -ForegroundColor Yellow
+        Write-Host "[warning] platform reported success, but the log contains $($silentFailures.Count) problem(s):" -ForegroundColor Yellow
         foreach ($f in $silentFailures) { Write-Host "  $f" -ForegroundColor Yellow }
         if ($StrictLog -and $exitCode -eq 0) { $exitCode = 1 }
     }

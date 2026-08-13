@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-update v1.14 — Update 1C database configuration
+# db-update v1.15 — Update 1C database configuration
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -344,6 +344,38 @@ def print_platform_output(result):
     print("--- End ---")
 
 
+def find_silent_rejections(log_text):
+    """Строки лога, о которых платформа сообщает, НЕ поднимая код возврата.
+
+    Метаданные отброшены или конфигурация нерабочая, а операция при этом «успешна».
+    Возвращает подошедшие строки.
+
+    Копия этой функции есть в каждом навыке, который читает /Out-лог загрузки (навыки
+    автономны). Держать копии одинаковыми — сознательно: разошедшиеся копии сводят на нет
+    весь смысл.
+    """
+    patterns = [
+        "Неверное свойство объекта метаданных",
+        "не входит в состав объекта метаданных",
+        "Неизвестное имя типа",
+        "Неизвестный объект метаданных",
+        "Ни один из документов не является регистратором для регистра",
+        "Неверное значение перечисления",
+        "не может быть приведен к типу",
+        # Режим совместимости выше платформы: объекты в базу не попадают, отказ приходит в
+        # рантайме. Обрезано до инвариантной части — конкретная версия в сообщении меняется.
+        "Для работы с конфигурацией необходима версия платформы не меньше",
+    ]
+    found = []
+    if log_text:
+        for line in log_text.splitlines():
+            for pat in patterns:
+                if pat in line:
+                    found.append(line.strip())
+                    break
+    return found
+
+
 def run_ibcmd(cmd, has_username=False, warn_no_user=True):
     """Run an ibcmd command non-interactively.
 
@@ -411,6 +443,10 @@ def main():
     parser.add_argument("-Dynamic", default="", choices=["", "+", "-"])
     parser.add_argument("-Server", action="store_true")
     parser.add_argument("-WarningsAsErrors", action="store_true")
+    # Ключ для регрессов и верификации снапшотов, не для повседневного вызова: в SKILL.md
+    # намеренно не выносится. Поднимает код возврата, если платформа отчиталась об успехе,
+    # но в логе есть отбраковка.
+    parser.add_argument("-StrictLog", action="store_true")
     parser.add_argument("-AdditionalV8Arguments", nargs="*", default=[],
                         help="Extra 1cv8 arguments, e.g. /UseHwLicenses+")
     parser.add_argument("-AdditionalIbcmdArguments", nargs="*", default=[],
@@ -527,6 +563,7 @@ def main():
         else:
             print(f"Error updating database configuration (code: {exit_code}){describe_exit(exit_code)}", file=sys.stderr)
 
+        log_content = ""
         if os.path.isfile(out_file):
             try:
                 with open(out_file, "r", encoding="utf-8-sig") as f:
@@ -539,6 +576,21 @@ def main():
                 pass
 
         print_platform_output(result)
+
+        # Причину не называем: строки лога печатаются следом и говорят за себя, а класс проблемы
+        # разный — от отброшенного свойства до нерабочей на этой платформе конфигурации. Подсказку
+        # про -StrictLog не даём: операция уже выполнена, повторять её ради того же текста незачем.
+        silent_failures = find_silent_rejections(log_content)
+        if silent_failures:
+            print(
+                f"[warning] platform reported success, but the log contains "
+                f"{len(silent_failures)} problem(s):"
+            )
+            for line in silent_failures:
+                print(f"  {line}")
+            if args.StrictLog and exit_code == 0:
+                exit_code = 1
+
         sys.exit(exit_code)
 
     finally:

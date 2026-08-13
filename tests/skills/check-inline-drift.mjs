@@ -214,6 +214,15 @@ const FAMILIES = [
   },
 
   // ─── Обвязка вызова платформы 1С (db-* и потребители) ────────────────────
+  // Детектор строк, о которых платформа сообщает, НЕ поднимая код возврата. Живёт во всех
+  // навыках, читающих /Out-лог загрузки: разъехавшийся список паттернов означал бы, что один
+  // навык ловит тихий отказ, а соседний по той же операции — нет.
+  {
+    name: 'platform: silent_rejections', py: 'find_silent_rejections', ps1: 'Find-SilentRejections',
+    variants: [
+      { id: 'base', authority: 'db-load-xml', consumers: ['db-load-git', 'db-update'] },
+    ],
+  },
   {
     name: 'platform: resolve_extra_args', py: 'resolve_extra_args', ps1: 'Resolve-ExtraArgs',
     variants: [

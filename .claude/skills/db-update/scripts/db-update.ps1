@@ -1,4 +1,4 @@
-﻿# db-update v1.14 — Update 1C database configuration
+﻿# db-update v1.15 — Update 1C database configuration
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -90,6 +90,12 @@ param(
 
     [Parameter(Mandatory=$false)]
     [switch]$WarningsAsErrors,
+
+    [Parameter(Mandatory=$false)]
+    # Ключ для регрессов и верификации снапшотов, не для повседневного вызова: в SKILL.md
+    # намеренно не выносится. Поднимает код возврата, если платформа отчиталась об успехе,
+    # но в логе есть отбраковка.
+    [switch]$StrictLog,
 
     [Parameter(Mandatory=$false)]
     [string[]]$AdditionalV8Arguments = @(),
@@ -395,6 +401,41 @@ function Write-PlatformOutput {
     Write-Host "--- End ---"
 }
 
+# Строки лога, о которых платформа сообщает, НЕ поднимая код возврата: метаданные отброшены или
+# конфигурация нерабочая, а операция при этом «успешна». Возвращает подошедшие строки.
+#
+# Копия этой функции есть в каждом навыке, который читает /Out-лог загрузки (навыки автономны).
+# Держать копии одинаковыми — сознательно: разошедшиеся копии сводят на нет весь смысл.
+function Find-SilentRejections {
+    param([string]$LogText)
+    $patterns = @(
+        'Неверное свойство объекта метаданных',
+        'не входит в состав объекта метаданных',
+        'Неизвестное имя типа',
+        'Неизвестный объект метаданных',
+        'Ни один из документов не является регистратором для регистра',
+        'Неверное значение перечисления',
+        'не может быть приведен к типу',
+        # Режим совместимости выше платформы: объекты в базу не попадают, отказ приходит в рантайме.
+        # Обрезано до инвариантной части — конкретная версия в сообщении меняется.
+        'Для работы с конфигурацией необходима версия платформы не меньше'
+    )
+    $found = @()
+    if ($LogText) {
+        foreach ($line in ($LogText -split "`r?`n")) {
+            foreach ($pat in $patterns) {
+                if ($line -match [regex]::Escape($pat)) {
+                    $found += $line.Trim()
+                    break
+                }
+            }
+        }
+    }
+    # Возвращаем массив БЕЗ запятой-обёртки: вызывающий берёт результат в @(), а `return ,$found`
+    # дал бы массив из одного пустого массива — фантомное срабатывание на чистом логе.
+    return $found
+}
+
 
 $engine = if ((Split-Path $V8Path -Leaf) -match '^ibcmd') { "ibcmd" } else { "1cv8" }
 
@@ -496,6 +537,7 @@ try {
         Write-Host "Error updating database configuration (code: $exitCode)$(Get-ExitAnnotation $exitCode)" -ForegroundColor Red
     }
 
+    $logContent = $null
     if (Test-Path $outFile) {
         $logContent = Get-Content $outFile -Raw -ErrorAction SilentlyContinue
         if ($logContent) {
@@ -505,6 +547,16 @@ try {
         }
     }
     Write-PlatformOutput $__v8.Output
+
+    # Причину не называем: строки лога печатаются следом и говорят за себя, а класс проблемы
+    # разный — от отброшенного свойства до нерабочей на этой платформе конфигурации. Подсказку
+    # про -StrictLog не даём: операция уже выполнена, повторять её ради того же текста незачем.
+    $silentFailures = @(Find-SilentRejections $logContent)
+    if ($silentFailures.Count -gt 0) {
+        Write-Host "[warning] platform reported success, but the log contains $($silentFailures.Count) problem(s):" -ForegroundColor Yellow
+        foreach ($f in $silentFailures) { Write-Host "  $f" -ForegroundColor Yellow }
+        if ($StrictLog -and $exitCode -eq 0) { $exitCode = 1 }
+    }
 
     exit $exitCode
 

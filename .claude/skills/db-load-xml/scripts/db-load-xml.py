@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-xml v1.20 — Load 1C configuration from XML files
+# db-load-xml v1.21 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -344,6 +344,38 @@ def print_platform_output(result):
     print("--- End ---")
 
 
+def find_silent_rejections(log_text):
+    """Строки лога, о которых платформа сообщает, НЕ поднимая код возврата.
+
+    Метаданные отброшены или конфигурация нерабочая, а операция при этом «успешна».
+    Возвращает подошедшие строки.
+
+    Копия этой функции есть в каждом навыке, который читает /Out-лог загрузки (навыки
+    автономны). Держать копии одинаковыми — сознательно: разошедшиеся копии сводят на нет
+    весь смысл.
+    """
+    patterns = [
+        "Неверное свойство объекта метаданных",
+        "не входит в состав объекта метаданных",
+        "Неизвестное имя типа",
+        "Неизвестный объект метаданных",
+        "Ни один из документов не является регистратором для регистра",
+        "Неверное значение перечисления",
+        "не может быть приведен к типу",
+        # Режим совместимости выше платформы: объекты в базу не попадают, отказ приходит в
+        # рантайме. Обрезано до инвариантной части — конкретная версия в сообщении меняется.
+        "Для работы с конфигурацией необходима версия платформы не меньше",
+    ]
+    found = []
+    if log_text:
+        for line in log_text.splitlines():
+            for pat in patterns:
+                if pat in line:
+                    found.append(line.strip())
+                    break
+    return found
+
+
 def run_ibcmd(cmd, has_username=False, warn_no_user=True):
     """Run an ibcmd command non-interactively.
 
@@ -636,22 +668,7 @@ def main():
         # --- Scan log for silent rejections ---
         # Platform often writes load-time rejections into /Out but exits with code 0.
         # These patterns flag cases where metadata was dropped or rejected silently.
-        fatal_log_patterns = [
-            "Неверное свойство объекта метаданных",
-            "не входит в состав объекта метаданных",
-            "Неизвестное имя типа",
-            "Неизвестный объект метаданных",
-            "Ни один из документов не является регистратором для регистра",
-            "Неверное значение перечисления",
-            "не может быть приведен к типу",
-        ]
-        silent_failures = []
-        if log_content:
-            for line in log_content.splitlines():
-                for pat in fatal_log_patterns:
-                    if pat in line:
-                        silent_failures.append(line.strip())
-                        break
+        silent_failures = find_silent_rejections(log_content)
 
         # --- Result ---
         # Default: mirror platform's verdict via exit code. Log content (including any
@@ -668,15 +685,19 @@ def main():
             print("--- End ---")
 
         print_platform_output(result)
+        # Причину не называем: строки лога печатаются следом и говорят за себя, а класс проблемы
+        # разный — от отброшенного свойства до нерабочей на этой платформе конфигурации. Подсказку
+        # про -StrictLog не даём: загрузка уже выполнена, повторять её ради того же текста незачем.
+        # Поток — stdout, как у PS1-порта: предупреждение относится к содержимому загрузки, а не к
+        # отказу навыка, и при code 0 остаётся предупреждением. Раньше py писал его в stderr —
+        # наблюдаемое поведение портов расходилось, и один кейс не мог проверить оба.
         if silent_failures:
-            suffix = "" if args.StrictLog else " (pass -StrictLog to treat as error)"
             print(
-                f"[warning] log contains {len(silent_failures)} rejection(s) — "
-                f"platform loaded config but dropped properties/refs{suffix}",
-                file=sys.stderr,
+                f"[warning] platform reported success, but the log contains "
+                f"{len(silent_failures)} problem(s):"
             )
             for f in silent_failures:
-                print(f"  {f}", file=sys.stderr)
+                print(f"  {f}")
             if args.StrictLog and exit_code == 0:
                 exit_code = 1
 
