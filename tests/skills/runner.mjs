@@ -232,7 +232,9 @@ function execSkillAsync(runtime, scriptPath, args, cwd) {
         err.stderr = stderr || '';
         reject(err);
       } else {
-        resolve(stdout);
+        // Оба потока, а не только stdout: предупреждение навыка уходит в stderr при exit 0,
+        // и на успешном прогоне оно раньше терялось — expect.stderrContains не мог сработать.
+        resolve({ stdout, stderr: stderr || '' });
       }
     });
   });
@@ -409,7 +411,7 @@ function checkFileContains(workDir, spec, expectPresent) {
 // который молча ничего не проверяет (так уже было с 9 кейсами meta-edit) —
 // поэтому он ошибка, а не игнор.
 const KNOWN_EXPECT_KEYS = new Set([
-  'files', 'stdoutContains', 'stdoutNotContains', 'preserves',
+  'files', 'stdoutContains', 'stdoutNotContains', 'stderrContains', 'preserves',
   'fileContains', 'fileNotContains', 'filesEqual',
 ]);
 
@@ -781,7 +783,7 @@ async function runCaseAsync(testCase, opts) {
     let stdout = '', stderr = '', exitCode = 0;
     try {
       const execCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : undefined;
-      stdout = await execSkillAsync(opts.runtime, scriptPath, args, execCwd);
+      ({ stdout, stderr } = await execSkillAsync(opts.runtime, scriptPath, args, execCwd));
     } catch (e) {
       exitCode = e.status ?? 1;
       stdout = e.stdout || '';
@@ -823,6 +825,15 @@ async function runCaseAsync(testCase, opts) {
           ? caseData.expect.stdoutNotContains : [caseData.expect.stdoutNotContains];
         for (const needle of needles) {
           if (stdout.includes(needle)) errors.push(`stdout unexpectedly contains "${needle}"`);
+        }
+      }
+      // Предупреждение — не отказ: навык печатает его в stderr и продолжает работу. Без
+      // отдельного ключа такой кейс проверял бы только exit 0, то есть молчание вместо текста.
+      if (caseData.expect?.stderrContains) {
+        const needles = Array.isArray(caseData.expect.stderrContains)
+          ? caseData.expect.stderrContains : [caseData.expect.stderrContains];
+        for (const needle of needles) {
+          if (!stderr.includes(needle)) errors.push(`stderr does not contain "${needle}"`);
         }
       }
     }
@@ -1039,6 +1050,15 @@ function runCase(testCase, opts) {
           ? caseData.expect.stdoutNotContains : [caseData.expect.stdoutNotContains];
         for (const needle of needles) {
           if (stdout.includes(needle)) errors.push(`stdout unexpectedly contains "${needle}"`);
+        }
+      }
+      // Предупреждение — не отказ: навык печатает его в stderr и продолжает работу. Без
+      // отдельного ключа такой кейс проверял бы только exit 0, то есть молчание вместо текста.
+      if (caseData.expect?.stderrContains) {
+        const needles = Array.isArray(caseData.expect.stderrContains)
+          ? caseData.expect.stderrContains : [caseData.expect.stderrContains];
+        for (const needle of needles) {
+          if (!stderr.includes(needle)) errors.push(`stderr does not contain "${needle}"`);
         }
       }
     }
@@ -1408,7 +1428,7 @@ async function runIntegrationOnce(test, opts, engine, labelEngine) {
       // Execute
       let stdout = '', stderr = '';
       try {
-        stdout = await execSkillAsync(opts.runtime, script, args);
+        ({ stdout, stderr } = await execSkillAsync(opts.runtime, script, args));
       } catch (e) {
         const detail = e.stderr?.trim() || e.stdout?.trim() || e.message;
         stepResults.push({ name: step.name, passed: false, error: `Step ${i + 1} failed: ${detail.substring(0, 1000)}` });
