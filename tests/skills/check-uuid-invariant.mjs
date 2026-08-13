@@ -60,7 +60,8 @@ function attrUuid(xmlPath, name) {
   return m ? m[1] : null;
 }
 
-let failures = 0;
+let failures = 0;   // нарушения инварианта
+let runErrors = 0;  // прогон не состоялся: окружение, а не uuid
 
 for (const runtime of runtimes) {
   let work;
@@ -129,13 +130,15 @@ for (const runtime of runtimes) {
     if (runtime === 'python' && /ModuleNotFoundError|No module named|ENOENT/.test(detail)) {
       console.log(`[python] интерпретатор: ${PY}. Если модулей нет — указать venv: PYTHON=<путь> node ${'tests/skills/check-uuid-invariant.mjs'}`);
     }
-    failures++;
+    runErrors++;
   } finally {
     if (work) try { rmSync(work, { recursive: true, force: true }); } catch {}
   }
 }
 
-console.log(failures === 0
-  ? 'OK — инвариант сохранения uuid держится (объект/сущности/GeneratedType)'
-  : `\n${failures} НАРУШЕНИЙ инварианта uuid.`);
-process.exit(failures ? 1 : 0);
+// Ошибку прогона от нарушения инварианта отличаем в выводе: «N НАРУШЕНИЙ инварианта uuid»
+// на несобранном окружении отправляет искать баг там, где его нет.
+if (failures) console.log(`\n${failures} НАРУШЕНИЙ инварианта uuid.`);
+if (runErrors) console.log(`${runErrors} порт(ов) не удалось прогнать — инвариант НЕ проверен (окружение, не uuid).`);
+if (!failures && !runErrors) console.log('OK — инвариант сохранения uuid держится (объект/сущности/GeneratedType)');
+process.exit(failures || runErrors ? 1 : 0);
