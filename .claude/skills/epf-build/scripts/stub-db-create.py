@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# stub-db-create v1.7 — Create temp 1C infobase with metadata stubs for EPF/ERF build
+# stub-db-create v1.8 — Create temp 1C infobase with metadata stubs for EPF/ERF build
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -339,6 +339,66 @@ def scan_ref_types(source_dir):
     return type_map
 
 
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
+def detect_stub_format_version(source_dir):
+    """Версия формата заглушечной конфигурации.
+
+    Заглушке нужна САМАЯ НИЗКАЯ работающая версия, а не версия исходников: ограничение платформы
+    одностороннее — она читает формат не новее себя. Отсюда min(версия исходников, 2.17): на 2.17+
+    заглушка остаётся 2.17 (как было), а под исходники 2.13-2.16 опускается до их версии, иначе
+    конфигурация не загрузится платформой, которая эти исходники и выгрузила («Неизвестная версия
+    формата 2.17 загружаемого файла», замерено на 8.3.20).
+
+    Версию исходников берём из корня собираемого объекта (ExternalDataProcessor/ExternalReport);
+    вложенные файлы — запасной вариант, если корень почему-то не попался.
+    """
+    root_version = ""
+    any_version = ""
+    ver_pattern = re.compile(r'<MetaDataObject[^>]+version="(\d+\.\d+)"')
+    root_pattern = re.compile(r'<(ExternalDataProcessor|ExternalReport)[ >]')
+    for dirpath, _, filenames in os.walk(source_dir):
+        for fn in filenames:
+            if not fn.endswith('.xml'):
+                continue
+            try:
+                with open(os.path.join(dirpath, fn), 'r', encoding='utf-8-sig') as f:
+                    content = f.read()
+            except Exception:
+                continue
+            m = ver_pattern.search(content)
+            if not m:
+                continue
+            if not any_version:
+                any_version = m.group(1)
+            if not root_version and root_pattern.search(content):
+                root_version = m.group(1)
+    src_version = root_version or any_version or "2.17"
+    src_rank = format_rank(src_version)
+    return src_version if 0 < src_rank < format_rank("2.17") else "2.17"
+
+
+# Режим совместимости заглушки — по той же логике, что и версия формата. Платформа отказывается
+# работать с конфигурацией, чей режим выше её самой («Для работы с конфигурацией необходима версия
+# платформы не меньше, чем 8.3.24»), и тогда объекты заглушки в базу не попадают: загрузка
+# рапортует успех, а сборка падает на «Неизвестное имя типа». Ступени — лестница версий формата
+# из docs/1c-configuration-spec.md.
+COMPAT_BY_FORMAT = {
+    "2.13": "Version8_3_20",
+    "2.14": "Version8_3_21",
+    "2.15": "Version8_3_22",
+    "2.16": "Version8_3_23",
+}
+
+
+def stub_compatibility_mode(format_version):
+    return COMPAT_BY_FORMAT.get(format_version, "Version8_3_24")
+
+
 def scan_register_columns(source_dir):
     """Scan Form.xml for register record set columns referenced via DataPath.
     Returns {"RegisterType.RegisterName": {"col1": True, "col2": True}}."""
@@ -417,7 +477,7 @@ NS = (
     'xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" '
     'xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" '
     'xmlns:xs="http://www.w3.org/2001/XMLSchema" '
-    'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17"'
+    'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
 )
 
 CLASS_IDS = [
@@ -1046,6 +1106,9 @@ def main():
     type_map = scan_ref_types(args.SourceDir)
     register_columns = scan_register_columns(args.SourceDir)
     has_ref_types = len(type_map) > 0
+    stub_format_version = detect_stub_format_version(args.SourceDir)
+    stub_compat = stub_compatibility_mode(stub_format_version)
+    ns_decl = f'{NS} version="{stub_format_version}"'
 
     temp_base = args.TempBasePath or os.path.join(tempfile.gettempdir(), f'epf_stub_db_{random.randint(0,999999)}')
 
@@ -1077,7 +1140,7 @@ def main():
                 child_xml += f'\n\t\t\t<{tag}>{name}</{tag}>'
 
         cfg_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<MetaDataObject {NS}>
+<MetaDataObject {ns_decl}>
 \t<Configuration uuid="{uuid_cfg}">
 \t\t<InternalInfo>{co_xml}
 \t\t</InternalInfo>
@@ -1086,7 +1149,7 @@ def main():
 \t\t\t<Synonym/>
 \t\t\t<Comment/>
 \t\t\t<NamePrefix/>
-\t\t\t<ConfigurationExtensionCompatibilityMode>Version8_3_24</ConfigurationExtensionCompatibilityMode>
+\t\t\t<ConfigurationExtensionCompatibilityMode>{stub_compat}</ConfigurationExtensionCompatibilityMode>
 \t\t\t<DefaultRunMode>ManagedApplication</DefaultRunMode>
 \t\t\t<UsePurposes>
 \t\t\t\t<v8:Value xsi:type="app:ApplicationUsePurpose">PlatformApplication</v8:Value>
@@ -1137,7 +1200,7 @@ def main():
 \t\t\t<SynchronousPlatformExtensionAndAddInCallUseMode>DontUse</SynchronousPlatformExtensionAndAddInCallUseMode>
 \t\t\t<InterfaceCompatibilityMode>Taxi</InterfaceCompatibilityMode>
 \t\t\t<DatabaseTablespacesUseMode>DontUse</DatabaseTablespacesUseMode>
-\t\t\t<CompatibilityMode>Version8_3_24</CompatibilityMode>
+\t\t\t<CompatibilityMode>{stub_compat}</CompatibilityMode>
 \t\t\t<DefaultConstantsForm/>
 \t\t</Properties>
 \t\t<ChildObjects>{child_xml}
@@ -1151,7 +1214,7 @@ def main():
         lang_dir = os.path.join(cfg_dir, 'Languages')
         os.makedirs(lang_dir, exist_ok=True)
         lang_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<MetaDataObject {NS}>
+<MetaDataObject {ns_decl}>
 \t<Language uuid="{uuid_lang}">
 \t\t<Properties>
 \t\t\t<Name>\u0420\u0443\u0441\u0441\u043a\u0438\u0439</Name>
@@ -1280,7 +1343,7 @@ def main():
                     child_obj_xml = '\n\t\t<ChildObjects/>'
 
                 obj_xml = f"""<?xml version="1.0" encoding="UTF-8"?>
-<MetaDataObject {NS}>
+<MetaDataObject {ns_decl}>
 \t<{tag} uuid="{obj_uuid}">{internal_xml}
 \t\t<Properties>
 {props_xml}

@@ -1,4 +1,4 @@
-﻿# stub-db-create v1.7 — Create temp 1C infobase with metadata stubs for EPF/ERF build
+﻿# stub-db-create v1.8 — Create temp 1C infobase with metadata stubs for EPF/ERF build
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -163,13 +163,34 @@ function Format-ArgsForDisplay {
 }
 
 
+# Версия формата как число: "2.20" → 220. Строковое сравнение неверно ("2.9" > "2.17").
+function Get-FormatRank([string]$ver) {
+	if ($ver -match '^(\d+)\.(\d+)$') { return [int]$Matches[1] * 100 + [int]$Matches[2] }
+	return 0
+}
+
 # --- 1. Scan XML files for reference types ---
 
 $typeMap = @{}  # MetadataType -> @(Name1, Name2, ...)
 
+# Версия формата заглушечной конфигурации. Платформа грузит формат не новее себя, поэтому зашитая
+# версия ломала бы сборку исходников более старого формата на соответствующей ей платформе. Берём
+# версию из корня собираемого объекта (ExternalDataProcessor/ExternalReport); вложенные файлы —
+# запасной вариант, если корень почему-то не попался.
+$srcRootVersion = ""
+$srcAnyVersion = ""
+
 $xmlFiles = Get-ChildItem -Path $SourceDir -Filter "*.xml" -Recurse -File
 foreach ($f in $xmlFiles) {
 	$content = [System.IO.File]::ReadAllText($f.FullName, [System.Text.Encoding]::UTF8)
+
+	if ($content -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') {
+		$ver = $Matches[1]
+		if (-not $srcAnyVersion) { $srcAnyVersion = $ver }
+		if (-not $srcRootVersion -and $content -match '<(ExternalDataProcessor|ExternalReport)[ >]') {
+			$srcRootVersion = $ver
+		}
+	}
 
 	# Ref types: cfg:CatalogRef.XXX or d5p1:CatalogRef.XXX (and similar depth prefixes d4p1, d3p1, etc.)
 	$refPattern = '(?:cfg:|d\dp1:)(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|ExchangePlanRef|BusinessProcessRef|TaskRef)\.([A-Za-z\u0400-\u04FF\d_]+)'
@@ -337,7 +358,24 @@ if ($hasRefTypes) {
 	$cfgDir = Join-Path $TempBasePath "cfg"
 	New-Item -ItemType Directory -Path $cfgDir -Force | Out-Null
 
-	$ns = 'xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17"'
+	# Заглушке нужна САМАЯ НИЗКАЯ работающая версия, а не версия исходников: ограничение платформы
+	# одностороннее — она читает формат не новее себя. Отсюда min(версия исходников, 2.17): на 2.17+
+	# заглушка остаётся 2.17 (как было), а под исходники 2.13-2.16 опускается до их версии, иначе
+	# конфигурация не загрузится платформой, которая эти исходники и выгрузила («Неизвестная версия
+	# формата 2.17 загружаемого файла», замерено на 8.3.20).
+	#
+	$srcVersion = if ($srcRootVersion) { $srcRootVersion } elseif ($srcAnyVersion) { $srcAnyVersion } else { "2.17" }
+	$srcRank = Get-FormatRank $srcVersion
+	$stubFormatVersion = if ($srcRank -gt 0 -and $srcRank -lt (Get-FormatRank "2.17")) { $srcVersion } else { "2.17" }
+	# Режим совместимости заглушки — по той же логике. Платформа отказывается работать с
+	# конфигурацией, чей режим выше её самой («Для работы с конфигурацией необходима версия
+	# платформы не меньше, чем 8.3.24»), и тогда объекты заглушки в базу не попадают: загрузка
+	# рапортует успех, а сборка падает на «Неизвестное имя типа». Ступени — лестница версий
+	# формата из docs/1c-configuration-spec.md.
+	$compatByFormat = @{ "2.13" = "Version8_3_20"; "2.14" = "Version8_3_21"; "2.15" = "Version8_3_22"; "2.16" = "Version8_3_23" }
+	$stubCompatMode = if ($compatByFormat.ContainsKey($stubFormatVersion)) { $compatByFormat[$stubFormatVersion] } else { "Version8_3_24" }
+
+	$ns = 'xmlns="http://v8.1c.ru/8.3/MDClasses" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:cmi="http://v8.1c.ru/8.2/managed-application/cmi" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xpr="http://v8.1c.ru/8.3/xcf/predef" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="' + $stubFormatVersion + '"'
 
 	# GeneratedType definitions per metadata type
 	$gtDefs = @{
@@ -521,7 +559,7 @@ if ($hasRefTypes) {
 			<Synonym/>
 			<Comment/>
 			<NamePrefix/>
-			<ConfigurationExtensionCompatibilityMode>Version8_3_24</ConfigurationExtensionCompatibilityMode>
+			<ConfigurationExtensionCompatibilityMode>$stubCompatMode</ConfigurationExtensionCompatibilityMode>
 			<DefaultRunMode>ManagedApplication</DefaultRunMode>
 			<UsePurposes>
 				<v8:Value xsi:type="app:ApplicationUsePurpose">PlatformApplication</v8:Value>
@@ -572,7 +610,7 @@ if ($hasRefTypes) {
 			<SynchronousPlatformExtensionAndAddInCallUseMode>DontUse</SynchronousPlatformExtensionAndAddInCallUseMode>
 			<InterfaceCompatibilityMode>Taxi</InterfaceCompatibilityMode>
 			<DatabaseTablespacesUseMode>DontUse</DatabaseTablespacesUseMode>
-			<CompatibilityMode>Version8_3_24</CompatibilityMode>
+			<CompatibilityMode>$stubCompatMode</CompatibilityMode>
 			<DefaultConstantsForm/>
 		</Properties>
 		<ChildObjects>$childXml
