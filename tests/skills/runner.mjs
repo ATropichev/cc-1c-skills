@@ -4,7 +4,7 @@
 
 import { execFileSync, execFile } from 'child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync,
-         readdirSync, statSync, cpSync, copyFileSync } from 'fs';
+         readdirSync, statSync, cpSync, copyFileSync, chmodSync } from 'fs';
 import { createHash } from 'crypto';
 import { join, resolve, dirname, relative, basename, extname } from 'path';
 import { tmpdir, cpus } from 'os';
@@ -713,7 +713,9 @@ async function runCaseAsync(testCase, opts) {
 
   // osOnly: gate a case to one OS (e.g. a fake platform written as a .cmd cannot run on
   // macOS/Linux at all, whatever the port). Values are process.platform strings.
-  if (caseData.osOnly && caseData.osOnly !== process.platform) {
+  // Значение — строка или массив строк process.platform: фейк платформы бывает нужен и на
+  // darwin, и на linux, а дублировать кейс ради второй ОС смысла нет.
+  if (caseData.osOnly && ![].concat(caseData.osOnly).includes(process.platform)) {
     return { id: testCase.id, skill: testCase.skillDir, name: testCase.name, passed: true, skipped: true, errors: [], elapsed: '0.0s' };
   }
 
@@ -745,6 +747,9 @@ async function runCaseAsync(testCase, opts) {
             : JSON.stringify(step.writeFile.content, null, 2);
           mkdirSync(dirname(wfPath), { recursive: true });
           writeFileSync(wfPath, wfContent, 'utf8');
+          // Бит исполнения: на *nix навык запускает платформу через exec, и фейк без +x
+          // не стартует вовсе. На Windows chmod — no-op.
+          if (step.writeFile.executable) chmodSync(wfPath, 0o755);
           continue;
         }
         const preScript = resolveScript(step.script, opts.runtime);
@@ -1363,6 +1368,9 @@ async function runIntegrationOnce(test, opts, engine, labelEngine) {
           const abs = target.includes(':') || target.startsWith('/') ? target : join(workDir, target);
           mkdirSync(dirname(abs), { recursive: true });
           writeFileSync(abs, step.content ?? '', 'utf8');
+          // Бит исполнения: на *nix навык запускает платформу через exec, и фейк без +x
+          // не стартует вовсе. На Windows chmod — no-op.
+          if (step.executable) chmodSync(abs, 0o755);
           const stepElapsed = ((performance.now() - stepT0) / 1000).toFixed(1);
           stepResults.push({ name: step.name, passed: true, elapsed: `${stepElapsed}s` });
         } catch (e) {

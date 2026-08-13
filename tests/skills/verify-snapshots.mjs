@@ -13,7 +13,7 @@
 
 import { execFileSync } from 'child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync,
-         readdirSync, statSync, cpSync, copyFileSync } from 'fs';
+         readdirSync, statSync, cpSync, copyFileSync, chmodSync } from 'fs';
 import { join, resolve, dirname, basename } from 'path';
 import { tmpdir } from 'os';
 
@@ -627,6 +627,9 @@ function runPreSteps(preRun, workDir, runtime, log) {
         : JSON.stringify(step.writeFile.content, null, 2);
       mkdirSync(dirname(wfPath), { recursive: true });
       writeFileSync(wfPath, wfContent, 'utf8');
+      // Бит исполнения: на *nix навык запускает платформу через exec, и фейк без +x
+      // не стартует вовсе. На Windows chmod — no-op.
+      if (step.writeFile.executable) chmodSync(wfPath, 0o755);
       log(`preRun: writeFile ${step.writeFile.path}`, true);
       continue;
     }
