@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-validate v1.6 — Validate 1C configuration XML structure
+# cf-validate v1.7 — Validate 1C configuration XML structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates Configuration.xml: root structure, InternalInfo, properties, ChildObjects, languages."""
 import sys, os, argparse, re
@@ -132,6 +132,20 @@ VALID_ENUM_VALUES = {
 
 EXPECTED_NS = 'http://v8.1c.ru/8.3/MDClasses'
 
+# ── Format version ───────────────────────────────────────────
+# Проверенный диапазон версий формата выгрузки: 2.17 (8.3.24) … 2.21 (8.5). Полная лестница —
+# docs/1c-configuration-spec.md, «Лестница версий». Версию задаёт платформа ВЫГРУЗКИ, а не режим
+# совместимости конфигурации. Версии ниже 2.17 (платформы 8.3.23 и старше) существуют, но навыки
+# на них не проверялись — это предупреждение о непокрытии, а не о некорректности файла.
+FORMAT_VERIFIED_MIN = "2.17"
+FORMAT_VERIFIED_MAX = "2.21"
+
+
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
 
 class Reporter:
     def __init__(self, max_errors, detailed=False):
@@ -252,11 +266,17 @@ def main():
         check1_ok = False
 
     version = root.get('version', '')
+    version_rank = format_rank(version)
     if not version:
         r.warn('1. Missing version attribute on MetaDataObject')
-    elif version not in ('2.17', '2.18', '2.19', '2.20', '2.21'):
-        # Лестница версий формата: 2.17 (8.3.20-8.3.24), 2.18 (8.3.25), 2.19 (8.3.26), 2.20 (8.3.27).
-        r.warn(f"1. Unusual version '{version}' (expected 2.17-2.20 or 2.21)")
+    elif version_rank == 0:
+        r.error(f"1. Malformed version '{version}' (expected N.N)")
+    elif version_rank < format_rank(FORMAT_VERIFIED_MIN):
+        r.warn(f"1. Format version '{version}' is below the tested range "
+               f"{FORMAT_VERIFIED_MIN}-{FORMAT_VERIFIED_MAX} — skills were not verified on it")
+    elif version_rank > format_rank(FORMAT_VERIFIED_MAX):
+        r.warn(f"1. Format version '{version}' is above the tested range "
+               f"{FORMAT_VERIFIED_MIN}-{FORMAT_VERIFIED_MAX} — skills were not verified on it")
 
     # Must have Configuration child
     cfg_node = None

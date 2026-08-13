@@ -1,4 +1,4 @@
-﻿# cf-init v1.11 — Create empty 1C configuration scaffold (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# cf-init v1.13 — Create empty 1C configuration scaffold (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -9,13 +9,25 @@ param(
 	[string]$Vendor,
 	[string]$CompatibilityMode = "Version8_3_24",
 	# Версия формата выгрузки (MDClasses). Её задаёт ПЛАТФОРМА, которой выгружают, и от режима
-	# совместимости она не зависит: 8.3.20-8.3.24 пишут 2.17, 8.3.25 — 2.18, 8.3.26 — 2.19,
-	# 8.3.27 — 2.20. Дефолт консервативный: 2.17 читается всеми поддерживаемыми платформами.
-	[ValidateSet("2.17", "2.18", "2.19", "2.20", "2.21")]
+	# совместимости она не зависит. Дефолт 2.17 — нижняя граница проверенного диапазона.
 	[string]$FormatVersion = "2.17"
 )
 
 $ErrorActionPreference = "Stop"
+
+# --- Format version ---
+# Проверенный диапазон: 2.17 (8.3.24) … 2.21 (8.5). Полная лестница — docs/1c-configuration-spec.md,
+# «Лестница версий». Версии ниже 2.17 (платформы 8.3.23 и старше) реальны, поэтому запретом их не
+# закрываем: за пределами диапазона — ПРЕДУПРЕЖДЕНИЕ, скаффолд всё равно выпускается. Ошибка — только
+# на нечисловое значение: это опечатка, а не версия.
+$formatVerifiedMin = "2.17"
+$formatVerifiedMax = "2.21"
+# Версия формата как число: "2.20" → 220. Строковое сравнение неверно ("2.9" > "2.17").
+function Get-FormatRank([string]$ver) {
+	if ($ver -match '^(\d+)\.(\d+)$') { return [int]$Matches[1] * 100 + [int]$Matches[2] }
+	return 0
+}
+$formatRank = Get-FormatRank $FormatVersion
 
 function Esc-XmlText {
 	param([string]$s)
@@ -23,6 +35,17 @@ function Esc-XmlText {
 	return $s.Replace('&','&amp;').Replace('<','&lt;').Replace('>','&gt;')
 }
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# Проверка версии — ПОСЛЕ настройки кодировки консоли: иначе em-dash в сообщении уедет в вопросы.
+# Пишем прямо в stderr, а не Write-Warning: в PS 5.1 предупреждение уходит в stdout, получает
+# локализованный префикс и переносится по 80 символов — подстрока в тесте перестаёт находиться.
+if ($formatRank -eq 0) {
+	[Console]::Error.WriteLine("Malformed -FormatVersion '$FormatVersion' (expected N.N, e.g. 2.17)")
+	exit 1
+}
+if ($formatRank -lt (Get-FormatRank $formatVerifiedMin) -or $formatRank -gt (Get-FormatRank $formatVerifiedMax)) {
+	[Console]::Error.WriteLine("WARNING: Format version '$FormatVersion' is outside the tested range $formatVerifiedMin-$formatVerifiedMax — the scaffold is emitted as requested but was not verified on that platform")
+}
 
 # --- Resolve output dir ---
 if (-not [System.IO.Path]::IsPathRooted($OutputDir)) {
@@ -50,7 +73,9 @@ $co7 = [guid]::NewGuid().ToString()
 
 # --- Mobile functionalities ---
 # Версия формата как число — по ней ниже включаются вставки 2.21.
-$is221 = (($FormatVersion -match '^(\d+)\.(\d+)$') -and ([int]$Matches[1] * 100 + [int]$Matches[2]) -ge 221)
+$is221 = ($formatRank -ge 221)
+# TextToSpeech приехал раньше остальных вставок 8.5 — своей ступенью, поэтому гейт отдельный.
+$is218 = ($formatRank -ge 218)
 
 $mobileFuncs = @(
 	@("Biometrics","true"), @("Location","false"), @("BackgroundLocation","false"),
@@ -68,9 +93,12 @@ $mobileFuncs = @(
 	@("DocumentScanning","false"), @("SpeechToText","false"), @("Geofences","false"),
 	@("IncomingShareRequests","false"), @("AllIncomingShareRequestsTypesProcessing","false")
 )
-# TextToSpeech — возможность мобильного приложения, добавленная форматом 2.21 (8.5),
-# последней в списке. На младших форматах платформа её не пишет.
-if ($is221) { $mobileFuncs += ,@("TextToSpeech","false") }
+# TextToSpeech — возможность мобильного приложения, добавленная форматом 2.18 (8.3.25),
+# последней в списке; в 2.21 список не менялся. Замерено выгрузками пустой ИБ шести платформ:
+# 2.13/2.17 — 37 записей без неё, 2.18-2.21 — 38 с ней. Гейт обязателен и в обе стороны:
+# на 2.17 тег ломает загрузку XDTO-ошибкой (проверено на 8.3.24), без тега на 2.18+ платформа
+# подставит дефолт false и допишет его при выгрузке — то есть разойдётся роундтрип.
+if ($is218) { $mobileFuncs += ,@("TextToSpeech","false") }
 
 $mobileXml = ""
 foreach ($mf in $mobileFuncs) {

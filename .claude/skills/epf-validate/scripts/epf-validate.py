@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# epf-validate v1.4 — Validate 1C external data processor / report structure
+# epf-validate v1.5 — Validate 1C external data processor / report structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # Works for both EPF (ExternalDataProcessor) and ERF (ExternalReport) — auto-detects
 
@@ -58,6 +58,21 @@ CHILD_TYPE_ORDER = {
     "Template": 3,
     "Command": 4,
 }
+
+
+# ── Format version ───────────────────────────────────────────
+# Проверенный диапазон версий формата выгрузки: 2.17 (8.3.24) … 2.21 (8.5). Полная лестница —
+# docs/1c-configuration-spec.md, «Лестница версий». Версию задаёт платформа ВЫГРУЗКИ, а не режим
+# совместимости конфигурации. Версии ниже 2.17 (платформы 8.3.23 и старше) существуют, но навыки
+# на них не проверялись — это предупреждение о непокрытии, а не о некорректности файла.
+FORMAT_VERIFIED_MIN = "2.17"
+FORMAT_VERIFIED_MAX = "2.21"
+
+
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
 
 
 def localname(el):
@@ -185,11 +200,17 @@ def main():
         check1_ok = False
 
     version = root.get("version", "")
+    version_rank = format_rank(version)
     if not version:
         report_warn("1. Missing version attribute on MetaDataObject")
-    elif version not in ("2.17", "2.18", "2.19", "2.20", "2.21"):
-        # Лестница версий формата: 2.17 (8.3.20-8.3.24), 2.18 (8.3.25), 2.19 (8.3.26), 2.20 (8.3.27).
-        report_warn(f"1. Unusual version '{version}' (expected 2.17-2.20 or 2.21)")
+    elif version_rank == 0:
+        report_error(f"1. Malformed version '{version}' (expected N.N)")
+    elif version_rank < format_rank(FORMAT_VERIFIED_MIN):
+        report_warn(f"1. Format version '{version}' is below the tested range "
+                    f"{FORMAT_VERIFIED_MIN}-{FORMAT_VERIFIED_MAX} — skills were not verified on it")
+    elif version_rank > format_rank(FORMAT_VERIFIED_MAX):
+        report_warn(f"1. Format version '{version}' is above the tested range "
+                    f"{FORMAT_VERIFIED_MIN}-{FORMAT_VERIFIED_MAX} — skills were not verified on it")
 
     # Detect type
     child_elements = []

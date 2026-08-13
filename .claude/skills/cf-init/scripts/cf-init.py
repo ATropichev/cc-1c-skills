@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-init v1.11 — Create empty 1C configuration scaffold (+write_xml_file/write_utf8_bom: общий эталон записи)
+# cf-init v1.13 — Create empty 1C configuration scaffold (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration."""
 import sys, os, argparse, re, uuid
@@ -50,6 +50,16 @@ def write_xml_file(path, content):
     write_utf8_bom(path, text)
 
 
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
+FORMAT_VERIFIED_MIN = "2.17"
+FORMAT_VERIFIED_MAX = "2.21"
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -60,12 +70,23 @@ def main():
     parser.add_argument('-Version', dest='Version', default='')
     parser.add_argument('-Vendor', dest='Vendor', default='')
     parser.add_argument('-CompatibilityMode', dest='CompatibilityMode', default='Version8_3_24')
-    # Версия формата выгрузки (MDClasses) — её задаёт ПЛАТФОРМА, а не режим совместимости:
-    # 8.3.20-8.3.24 пишут 2.17, 8.3.25 — 2.18, 8.3.26 — 2.19, 8.3.27 — 2.20.
-    # Дефолт консервативный: 2.17 читается всеми платформами.
-    parser.add_argument('-FormatVersion', dest='FormatVersion', default='2.17',
-                        choices=['2.17', '2.18', '2.19', '2.20', '2.21'])
+    # Версия формата выгрузки (MDClasses) — её задаёт ПЛАТФОРМА, а не режим совместимости.
+    # Дефолт 2.17 — нижняя граница проверенного диапазона.
+    parser.add_argument('-FormatVersion', dest='FormatVersion', default='2.17')
     args = ci_parse_args(parser)
+
+    # Проверенный диапазон: 2.17 (8.3.24) … 2.21 (8.5). Полная лестница —
+    # docs/1c-configuration-spec.md, «Лестница версий». Версии ниже 2.17 (платформы 8.3.23 и
+    # старше) реальны, поэтому запретом их не закрываем: за пределами диапазона —
+    # ПРЕДУПРЕЖДЕНИЕ, скаффолд всё равно выпускается. Ошибка — только на нечисловое значение.
+    format_rank_value = format_rank(args.FormatVersion)
+    if format_rank_value == 0:
+        print(f"Malformed -FormatVersion '{args.FormatVersion}' (expected N.N, e.g. 2.17)", file=sys.stderr)
+        sys.exit(1)
+    if not (format_rank(FORMAT_VERIFIED_MIN) <= format_rank_value <= format_rank(FORMAT_VERIFIED_MAX)):
+        print(f"WARNING: Format version '{args.FormatVersion}' is outside the tested range "
+              f"{FORMAT_VERIFIED_MIN}-{FORMAT_VERIFIED_MAX} — the scaffold is emitted as requested "
+              f"but was not verified on that platform", file=sys.stderr)
 
     name = args.Name
     synonym = args.Synonym if args.Synonym else name
@@ -91,8 +112,9 @@ def main():
 
     # --- Mobile functionalities ---
     # Версия формата как число — по ней ниже включаются вставки 2.21.
-    _fm = re.match(r'^(\d+)\.(\d+)$', args.FormatVersion)
-    is_221 = bool(_fm) and int(_fm.group(1)) * 100 + int(_fm.group(2)) >= 221
+    is_221 = format_rank_value >= 221
+    # TextToSpeech приехал раньше остальных вставок 8.5 — своей ступенью, поэтому гейт отдельный.
+    is_218 = format_rank_value >= 218
 
     mobile_funcs = [
         ("Biometrics","true"), ("Location","false"), ("BackgroundLocation","false"),
@@ -110,9 +132,12 @@ def main():
         ("DocumentScanning","false"), ("SpeechToText","false"), ("Geofences","false"),
         ("IncomingShareRequests","false"), ("AllIncomingShareRequestsTypesProcessing","false"),
     ]
-    # TextToSpeech — возможность мобильного приложения, добавленная форматом 2.21 (8.5),
-    # последней в списке. На младших форматах платформа её не пишет.
-    if is_221:
+    # TextToSpeech — возможность мобильного приложения, добавленная форматом 2.18 (8.3.25),
+    # последней в списке; в 2.21 список не менялся. Замерено выгрузками пустой ИБ шести платформ:
+    # 2.13/2.17 — 37 записей без неё, 2.18-2.21 — 38 с ней. Гейт обязателен и в обе стороны:
+    # на 2.17 тег ломает загрузку XDTO-ошибкой (проверено на 8.3.24), без тега на 2.18+ платформа
+    # подставит дефолт false и допишет его при выгрузке — то есть разойдётся роундтрип.
+    if is_218:
         mobile_funcs.append(("TextToSpeech", "false"))
 
     mobile_xml = ""
