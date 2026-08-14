@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.26 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.27 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -1571,14 +1571,6 @@ function Merge-AttributesIntoObject {
 	$added = 0
 	foreach ($attr in $attrsToAdd) {
 		if ($existingNames.ContainsKey($attr.Name)) { continue }
-		$attrXml = Build-AdoptedAttributeXml $attr.Name $attr.Uuid $attr.TypeXml "`t`t`t"
-
-		# Expand self-closing ChildObjects if needed
-		if (-not $childObjs.HasChildNodes -or $childObjs.IsEmpty) {
-			$closeWs = $objDoc.CreateWhitespace("`r`n`t`t")
-			$childObjs.AppendChild($closeWs) | Out-Null
-		}
-
 		$added++
 	}
 
@@ -1605,8 +1597,14 @@ function Merge-AttributesIntoObject {
 		if ($text3.Length -gt 0 -and $text3[0] -eq [char]0xFEFF) { $text3 = $text3.Substring(1) }
 		$text3 = $text3.Replace('encoding="utf-8"', 'encoding="UTF-8"')
 
-		# Insert attributes before </ChildObjects>
-		$text3 = $text3 -replace '</ChildObjects>', "${allAttrXml}`r`n`t`t</ChildObjects>"
+		# Insert attributes — handle both <ChildObjects/> and <ChildObjects>...</ChildObjects>.
+		# Самозакрытый элемент раскрывается здесь же, а не пробельным узлом в DOM: тот давал
+		# лишнюю строку с табуляцией перед первым <Attribute> (у Конфигуратора пустых строк нет).
+		if ($text3 -match '<ChildObjects\s*/>') {
+			$text3 = [regex]::Replace($text3, '<ChildObjects\s*/>', "<ChildObjects>${allAttrXml}`r`n`t`t</ChildObjects>")
+		} else {
+			$text3 = $text3.Replace('</ChildObjects>', "${allAttrXml}`r`n`t`t</ChildObjects>")
+		}
 
 		# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
 		# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
