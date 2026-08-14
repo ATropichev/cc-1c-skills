@@ -1,0 +1,37 @@
+{
+  "name": "Пути Запись.* формы записи регистра не считаются висячими (измерение/ресурс — тоже дочерние объекты)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "InformationRegister", "name": "Настройка",
+        "dimensions": [ "Организация: String(50) | master" ],
+        "resources": [ "Лимит: Number(15,2)" ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/InformationRegisters/Настройка.xml", "-FormName": "ФормаЗаписи" }
+    },
+    {
+      "writeFile": {
+        "path": "InformationRegisters/Настройка/Forms/ФормаЗаписи/Ext/Form.xml",
+        "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Form xmlns=\"http://v8.1c.ru/8.3/xcf/logform\" xmlns:cfg=\"http://v8.1c.ru/8.1/data/enterprise/current-config\" xmlns:v8=\"http://v8.1c.ru/8.1/data/core\" xmlns:xr=\"http://v8.1c.ru/8.3/xcf/readable\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" version=\"2.17\">\n\t<AutoTitle>false</AutoTitle>\n\t<AutoCommandBar name=\"ФормаКоманднаяПанель\" id=\"-1\"/>\n\t<ChildItems>\n\t\t<InputField name=\"Организация\" id=\"1\">\n\t\t\t<DataPath>Запись.Организация</DataPath>\n\t\t\t<ExtendedTooltip name=\"ОрганизацияРасширеннаяПодсказка\" id=\"2\"/>\n\t\t</InputField>\n\t\t<InputField name=\"Лимит\" id=\"3\">\n\t\t\t<DataPath>Запись.Лимит</DataPath>\n\t\t\t<ExtendedTooltip name=\"ЛимитРасширеннаяПодсказка\" id=\"4\"/>\n\t\t</InputField>\n\t</ChildItems>\n\t<Attributes>\n\t\t<Attribute name=\"Запись\" id=\"1\">\n\t\t\t<Type>\n\t\t\t\t<v8:Type>cfg:InformationRegisterRecordManager.Настройка</v8:Type>\n\t\t\t</Type>\n\t\t\t<MainAttribute>true</MainAttribute>\n\t\t\t<SavedData>true</SavedData>\n\t\t</Attribute>\n\t</Attributes>\n</Form>"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": { "-ExtensionPath": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Object": "InformationRegister.Настройка.Form.ФормаЗаписи", "-BorrowMainAttribute": "Form" }
+    }
+  ],
+  "params": { "extensionPath": "ext" },
+  "args_extra": ["-ConfigPath", "{workDir}"],
+  "expect": {
+    "stdoutNotContains": ["Запись.Организация", "Запись.Лимит"]
+  }
+}

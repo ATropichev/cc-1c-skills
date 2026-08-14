@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.9 — Validate 1C configuration extension XML structure (CFE) (полнота GeneratedType, ТЧ из AdditionalColumns, сверка путей с -ConfigPath)
+# cfe-validate v1.10 — Validate 1C configuration extension XML structure (CFE) (полнота GeneratedType, ТЧ из AdditionalColumns, сверка путей с -ConfigPath)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -128,6 +128,10 @@ GENERATED_TYPE_CATEGORIES = {
 
 # Стандартные реквизиты объектов: в ChildObjects их нет, но пути Объект.<Стандартный> законны.
 # Имена зависят от варианта встроенного языка, поэтому держим оба написания.
+# Основной реквизит формы: <Attribute name="X"> с <MainAttribute>true</MainAttribute> внутри
+MAIN_ATTR_RE = re.compile(
+    r'<Attribute name=\"([^\"]+)\"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>', re.DOTALL)
+
 STANDARD_OBJECT_FIELDS = {
     'Code', 'Description', 'Ref', 'Parent', 'Owner', 'DeletionMark', 'Predefined', 'IsFolder', 'LineNumber',
     'Number', 'Date', 'Posted', 'PredefinedDataName', 'RegisterRecords', 'DataVersion', 'RowsCount',
@@ -969,14 +973,21 @@ def main():
         # Соседние проверки этого блока эвристичны (имя стиля добывается регуляркой), поэтому там
         # предупреждение. Здесь сигнал точный — имя ТЧ берётся из атрибута, — а последствие жёсткое,
         # поэтому ошибка.
-        ac_tables = set(re.findall(r'<AdditionalColumns table="Объект\.(\w+)"', raw))
+        # Корень путей формы — имя её основного реквизита: «Объект» только у формы объекта, у формы
+        # списка «Список», у формы записи регистра «Запись». С зашитым «Объект» обе проверки на
+        # таких формах молча не срабатывали. Ищем сначала в <Attributes> формы, потом в <BaseForm>.
+        root_match = MAIN_ATTR_RE.search(raw)
+        root_name = root_match.group(1) if root_match else ""
+        ac_tables = set()
+        if root_name:
+            ac_tables = set(re.findall(r'<AdditionalColumns table="' + re.escape(root_name) + r'\.(\w+)"', raw))
         if ac_tables:
             owner_key = ctx.split('.Form.')[0]
             owner_ts = borrowed_ts_index.get(owner_key, {})
             for tbl_name in sorted(ac_tables):
                 dep_check_count += 1
                 if tbl_name not in owner_ts:
-                    r.error(f'12. {ctx}: <AdditionalColumns table="Объект.{tbl_name}"> — TabularSection.{tbl_name} not borrowed in extension')
+                    r.error(f'12. {ctx}: <AdditionalColumns table="{root_name}.{tbl_name}"> — TabularSection.{tbl_name} not borrowed in extension')
                     check12_ok = False
 
         for mi in missing_items:
@@ -1034,6 +1045,12 @@ def main():
                 for bf in borrowed_forms_with_tree:
                     raw = bf['RawText']
                     ctx = bf['Context']
+                    # Корень путей — имя основного реквизита формы (см. проверку 12). Нет его ни в
+                    # <Attributes> формы, ни в <BaseForm> — путей с корнем не бывает, проверять нечего.
+                    root_match14 = MAIN_ATTR_RE.search(raw)
+                    if root_match14 is None:
+                        continue
+                    root_name14 = root_match14.group(1)
                     owner_key = ctx.split('.Form.')[0]
                     owner_parts = owner_key.split('.', 1)
                     if len(owner_parts) < 2:
@@ -1064,7 +1081,9 @@ def main():
                             if not isinstance(sub.tag, str):
                                 continue
                             sub_ln = etree.QName(sub.tag).localname
-                            if sub_ln not in ('Attribute', 'TabularSection'):
+                            # У регистра дочерние объекты — Dimension/Resource, а не Attribute: без них
+                            # замена корня превратила бы тихий пропуск в ложные ошибки на форме записи.
+                            if sub_ln not in ('Attribute', 'Dimension', 'Resource', 'TabularSection'):
                                 continue
                             name_el = sub.find(f'{{{MD}}}Properties/{{{MD}}}Name')
                             if name_el is None or not name_el.text:
@@ -1079,21 +1098,22 @@ def main():
                                     cols.add(col_name.text.strip())
                             src_ts_columns[sub_name] = cols
                     # Плюс колонки, объявленные в самой форме через <Columns>/<AdditionalColumns table="Объект.X">
-                    for acm in re.finditer(r'<AdditionalColumns table="Объект\.(\w+)">(.*?)</AdditionalColumns>', raw, re.DOTALL):
+                    root_pat14 = re.escape(root_name14)
+                    for acm in re.finditer(r'<AdditionalColumns table="' + root_pat14 + r'\.(\w+)">(.*?)</AdditionalColumns>', raw, re.DOTALL):
                         tbl = acm.group(1)
                         cols = src_ts_columns.setdefault(tbl, set())
                         for cm in re.finditer(r'<Column name="(\w+)"', acm.group(2)):
                             cols.add(cm.group(1))
 
                     bad_paths = {}
-                    for m in re.finditer(r'<(?:\w+:)?\w*DataPath[^>]*>Объект\.([^<]+)</(?:\w+:)?\w*DataPath>', raw):
+                    for m in re.finditer(r'<(?:\w+:)?\w*DataPath[^>]*>' + root_pat14 + r'\.([^<]+)</(?:\w+:)?\w*DataPath>', raw):
                         segments = m.group(1).split('.')
                         seg0 = segments[0]
                         path_check_count += 1
                         if seg0 in STANDARD_OBJECT_FIELDS:
                             continue
                         if seg0 not in src_names:
-                            bad_paths[f'Объект.{seg0}'] = f'у {owner_key} нет такого реквизита или табличной части'
+                            bad_paths[f'{root_name14}.{seg0}'] = f'у {owner_key} нет такого реквизита или табличной части'
                             continue
                         # Второй сегмент проверяем только для табличных частей: у ссылочного реквизита
                         # он ведёт в чужой объект, и это уже другая проверка.
@@ -1106,7 +1126,7 @@ def main():
                         if seg1.startswith('Total') and seg1[5:] in src_ts_columns[seg0]:
                             continue
                         if seg1 not in src_ts_columns[seg0]:
-                            bad_paths[f'Объект.{seg0}.{seg1}'] = f'у табличной части {seg0} нет колонки {seg1}, и <Columns> формы её не объявляет'
+                            bad_paths[f'{root_name14}.{seg0}.{seg1}'] = f'у табличной части {seg0} нет колонки {seg1}, и <Columns> формы её не объявляет'
 
                     for bad in sorted(bad_paths):
                         r.error(f"14. {ctx}: путь '{bad}' — {bad_paths[bad]}")

@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.9 — Validate 1C configuration extension structure (CFE) (полнота GeneratedType, ТЧ из AdditionalColumns, сверка путей с -ConfigPath)
+﻿# cfe-validate v1.10 — Validate 1C configuration extension structure (CFE) (полнота GeneratedType, ТЧ из AdditionalColumns, сверка путей с -ConfigPath)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -983,12 +983,22 @@ foreach ($bf in $script:borrowedFormsWithTree) {
 		}
 	}
 
+		# Корень путей формы — имя её основного реквизита: «Объект» только у формы объекта, у формы
+	# списка «Список», у формы записи регистра «Запись». С зашитым «Объект» обе проверки ниже на
+	# таких формах молча не срабатывали. Ищем сначала в <Attributes> самой формы, потом в <BaseForm>.
+	$rootName = ""
+	$rootMatch = [regex]::Match($raw, '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
+	if ($rootMatch.Success) { $rootName = $rootMatch.Groups[1].Value }
+
 	# <AdditionalColumns table="Объект.X"> — доп. колонки табличной части, объявленные в самой форме.
 	# Колонки есть, а самой ТЧ в расширении нет → платформа отвергает загрузку: «Неверный путь к
 	# данным» плюс «Колонки не могут быть добавлены к реквизиту».
 	$acTables = @{}
-	foreach ($m in [regex]::Matches($raw, '<AdditionalColumns table="Объект\.(\w+)"')) {
-		$acTables[$m.Groups[1].Value] = $true
+	if ($rootName) {
+		$rootPat = [regex]::Escape($rootName)
+		foreach ($m in [regex]::Matches($raw, "<AdditionalColumns table=`"${rootPat}\.(\w+)`"")) {
+			$acTables[$m.Groups[1].Value] = $true
+		}
 	}
 	# Соседние проверки этого блока эвристичны (имя стиля добывается регуляркой), поэтому там
 	# предупреждение. Здесь сигнал точный — имя ТЧ берётся из атрибута, — а последствие жёсткое,
@@ -999,7 +1009,7 @@ foreach ($bf in $script:borrowedFormsWithTree) {
 		foreach ($tblName in $acTables.Keys) {
 			$depCheckCount++
 			if (-not $ownerTS -or -not $ownerTS.ContainsKey($tblName)) {
-				Report-Error "12. ${ctx}: <AdditionalColumns table=`"Объект.${tblName}`"> — TabularSection.${tblName} not borrowed in extension"
+				Report-Error "12. ${ctx}: <AdditionalColumns table=`"${rootName}.${tblName}`"> — TabularSection.${tblName} not borrowed in extension"
 				$check12Ok = $false
 			}
 		}
@@ -1062,6 +1072,11 @@ if (-not $script:stopped -and $script:borrowedFormsWithTree.Count -gt 0) {
 			foreach ($bf in $script:borrowedFormsWithTree) {
 				$raw = $bf.RawText
 				$ctx = $bf.Context
+				# Корень путей — имя основного реквизита формы (см. проверку 12). Нет его ни в
+				# <Attributes> формы, ни в <BaseForm> — путей с корнем не бывает, проверять нечего.
+				$rootMatch14 = [regex]::Match($raw, '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
+				if (-not $rootMatch14.Success) { continue }
+				$rootName = $rootMatch14.Groups[1].Value
 				$ownerKey = ($ctx -split '\.Form\.')[0]
 				$ownerParts = $ownerKey -split '\.', 2
 				if ($ownerParts.Count -lt 2) { continue }
@@ -1090,7 +1105,9 @@ if (-not $script:stopped -and $script:borrowedFormsWithTree.Count -gt 0) {
 				if ($srcChildObjects) {
 					foreach ($sub in $srcChildObjects.ChildNodes) {
 						if ($sub.NodeType -ne 'Element') { continue }
-						if ($sub.LocalName -notin @('Attribute','TabularSection')) { continue }
+						# У регистра дочерние объекты — Dimension/Resource, а не Attribute: без них замена
+						# корня превратила бы тихий пропуск в ложные ошибки на форме записи.
+						if ($sub.LocalName -notin @('Attribute','Dimension','Resource','TabularSection')) { continue }
 						$nameNode = $sub.SelectSingleNode("*[local-name()='Properties']/*[local-name()='Name']")
 						if (-not $nameNode) { continue }
 						$subName = $nameNode.InnerText.Trim()
@@ -1104,7 +1121,8 @@ if (-not $script:stopped -and $script:borrowedFormsWithTree.Count -gt 0) {
 					}
 				}
 				# Плюс колонки, объявленные в самой форме через <Columns>/<AdditionalColumns table="Объект.X">
-				foreach ($acm in [regex]::Matches($raw, '(?s)<AdditionalColumns table="Объект\.(\w+)">(.*?)</AdditionalColumns>')) {
+				$rootPat14 = [regex]::Escape($rootName)
+				foreach ($acm in [regex]::Matches($raw, "(?s)<AdditionalColumns table=`"${rootPat14}\.(\w+)`">(.*?)</AdditionalColumns>")) {
 					$tbl = $acm.Groups[1].Value
 					if (-not $srcTSColumns.ContainsKey($tbl)) { $srcTSColumns[$tbl] = @{} }
 					foreach ($cm in [regex]::Matches($acm.Groups[2].Value, '<Column name="(\w+)"')) {
@@ -1113,13 +1131,13 @@ if (-not $script:stopped -and $script:borrowedFormsWithTree.Count -gt 0) {
 				}
 
 				$badPaths = @{}
-				foreach ($m in [regex]::Matches($raw, '<(?:\w+:)?\w*DataPath[^>]*>Объект\.([^<]+)</(?:\w+:)?\w*DataPath>')) {
+				foreach ($m in [regex]::Matches($raw, "<(?:\w+:)?\w*DataPath[^>]*>${rootPat14}\.([^<]+)</(?:\w+:)?\w*DataPath>")) {
 					$segments = $m.Groups[1].Value -split '\.'
 					$seg0 = $segments[0]
 					$pathCheckCount++
 					if ($script:standardObjectFields -contains $seg0) { continue }
 					if (-not $srcNames.ContainsKey($seg0)) {
-						$badPaths["Объект.${seg0}"] = "у ${ownerKey} нет такого реквизита или табличной части"
+						$badPaths["${rootName}.${seg0}"] = "у ${ownerKey} нет такого реквизита или табличной части"
 						continue
 					}
 					# Второй сегмент проверяем только для табличных частей: у ссылочного реквизита
@@ -1130,7 +1148,7 @@ if (-not $script:stopped -and $script:borrowedFormsWithTree.Count -gt 0) {
 					# Итог колонки — псевдополе платформы: Total<Колонка> при живой колонке законен
 					if ($seg1 -like "Total*" -and $srcTSColumns[$seg0].ContainsKey($seg1.Substring(5))) { continue }
 					if (-not $srcTSColumns[$seg0].ContainsKey($seg1)) {
-						$badPaths["Объект.${seg0}.${seg1}"] = "у табличной части ${seg0} нет колонки ${seg1}, и <Columns> формы её не объявляет"
+						$badPaths["${rootName}.${seg0}.${seg1}"] = "у табличной части ${seg0} нет колонки ${seg1}, и <Columns> формы её не объявляет"
 					}
 				}
 				foreach ($bad in ($badPaths.Keys | Sort-Object)) {
