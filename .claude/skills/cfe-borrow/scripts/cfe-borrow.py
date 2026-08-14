@@ -46,6 +46,12 @@ FORM_BINDING_DATA_TAGS = ["DataPath", "TitleDataPath", "FooterDataPath", "Header
 # Picture-path binding tags (value = picture index path, never a data attribute) — always stripped in the skeleton.
 FORM_BINDING_PICTURE_TAGS = ["MultipleValuePictureDataPath"]
 
+# id основного реквизита в заимствованной форме — как у Конфигуратора
+MAIN_ATTR_ID = "1000001"
+
+# Виды дочерних объектов, которые заимствуются в оболочку поимённо (табличные части — отдельно)
+CHILD_OBJECT_KINDS = ("Attribute", "Dimension", "Resource")
+
 # Прямые дети <Form>, которые в заимствованную форму не переносятся.
 # Структурные секции: AutoCommandBar и ChildItems забираются отдельно, остальные выбрасываются целиком.
 FORM_STRUCTURAL_SECTIONS = ("Events", "Attributes", "Commands", "Parameters", "CommandInterface")
@@ -53,13 +59,15 @@ FORM_STRUCTURAL_SECTIONS = ("Events", "Attributes", "Commands", "Parameters", "C
 FORM_ATTRIBUTE_REF_PROPS = ("ReportResult", "DetailsData", "VariantAppearance", "GroupList")
 
 
-def strip_form_bindings(xml, keep_objekt):
+def strip_form_bindings(xml, main_attr_name):
     """Strip data-binding tags whose root attribute isn't borrowed.
-    keep_objekt=True (BorrowMainAttribute): keep Объект.* data bindings, strip the rest.
-    keep_objekt=False (default skeleton): strip all bindings. Picture-path tags are always stripped."""
+    main_attr_name задан (BorrowMainAttribute): оставить привязки от его имени, остальные снять.
+    Пусто (скелет без основного реквизита): снять все. Картиночные пути снимаются всегда."""
     for tag in FORM_BINDING_DATA_TAGS:
-        if keep_objekt:
-            xml = re.sub(rf'\s*<{tag}>(?!Объект\.)[^<]*</{tag}>', '', xml)
+        if main_attr_name:
+            # Оставить и «Список.Поле», и путь ровно на сам реквизит («Список» у таблицы формы)
+            root = re.escape(main_attr_name)
+            xml = re.sub(rf'\s*<{tag}>(?!{root}(\.|<))[^<]*</{tag}>', '', xml)
         else:
             xml = re.sub(rf'\s*<{tag}>[^<]*</{tag}>', '', xml)
     for tag in FORM_BINDING_PICTURE_TAGS:
@@ -934,12 +942,13 @@ def main():
         save_xml_bom(obj_tree, obj_file)
         info(f"  Registered form in: {obj_file}")
 
-    # --- 11b1. Секции основного реквизита исходной формы, кроме Type/MainAttribute/SavedData ---
-    # Это <UseAlways> и <Columns> (доп. колонки табличных частей, объявленные прямо в форме). Их
-    # переносит Конфигуратор, и без них платформа отвергает форму: «Неверный путь к данным» на
-    # колонке, которой у объекта нет (Объект.Товары.Артикул). Возвращает список XML без xmlns.
-    def get_main_attribute_extra_xml(form_el, ns_strip_pattern):
-        result = []
+    # --- 11b1. Основной реквизит исходной формы ---
+    # Переносится ЦЕЛИКОМ, а не собирается из констант: имя, тип и состав детей зависят от вида формы.
+    # У формы объекта это «Объект»/<Тип>Object + SavedData/UseAlways/Columns, у формы списка —
+    # «Список»/DynamicList + Settings, у формы записи регистра — «Запись»/RecordManager + SavedData.
+    # Синтез фиксированного набора давал для необъектных форм «Исключение XDTO» при загрузке.
+    # Конфигуратор меняет у скопированного реквизита только id (эталоны Issue64UtB, Issue66Example2).
+    def get_main_attribute_info(form_el, ns_strip_pattern):
         main_attr = None
         for child in form_el:
             if not isinstance(child.tag, str) or localname(child) != "Attributes":
@@ -955,20 +964,21 @@ def main():
                     break
             break
         if main_attr is None:
-            return result
-        for sub in main_attr:
-            if not isinstance(sub.tag, str):
-                continue
-            if localname(sub) in ("Type", "MainAttribute", "SavedData"):
-                continue
-            # with_tail=False: хвостовой пробельный узел — часть родителя, а не секции; иначе в
-            # вывод попадают пустые строки, которых нет у PS (OuterXml хвост не включает).
-            xml = decode_numeric_entities(etree.tostring(sub, encoding="unicode", with_tail=False))
-            result.append(ns_strip_pattern.sub("", xml))
-        return result
+            return None
+        # with_tail=False: хвостовой пробельный узел — часть родителя, а не секции; иначе в
+        # вывод попадают пустые строки, которых нет у PS (OuterXml хвост не включает).
+        xml = decode_numeric_entities(etree.tostring(main_attr, encoding="unicode", with_tail=False))
+        xml = ns_strip_pattern.sub("", xml)
+        # id заменяется только в открывающем теге самого реквизита — у вложенных элементов свои
+        xml = re.sub(r'^(<Attribute\s[^>]*?)id="[^"]*"', lambda m: m.group(1) + f'id="{MAIN_ATTR_ID}"', xml)
+        return {"Name": main_attr.get("name"), "Xml": xml}
 
     # --- 11b. Collect DataPath references from source Form.xml ---
-    def collect_form_data_paths(form_xml_path):
+    def collect_form_data_paths(form_xml_path, main_attr_name):
+        # Корень путей — имя основного реквизита формы: «Объект» у формы объекта, «Список» у формы
+        # списка, «Запись» у формы записи регистра. Зашитый «Объект» не находил ничего у необъектных
+        # форм, и в оболочку не заимствовалось ни одного дочернего объекта.
+        root = re.escape(main_attr_name)
         with open(form_xml_path, "r", encoding="utf-8-sig") as fh:
             content = fh.read()
 
@@ -978,7 +988,7 @@ def main():
         # Scan every data-binding tag (DataPath/TitleDataPath/FooterDataPath/HeaderDataPath/MultipleValue*)
         # for Объект.* references — picture-path tags carry picture indices, not data attributes.
         for tag in FORM_BINDING_DATA_TAGS:
-            for m in re.finditer(r'<' + tag + r'>[^<]*\bОбъект\.(\w+(?:\.\w+)*)</' + tag + r'>', content):
+            for m in re.finditer(r'<' + tag + r'>[^<]*\b' + root + r'\.(\w+(?:\.\w+)*)</' + tag + r'>', content):
                 path = m.group(1)
                 segments = path.split(".")
                 seg0 = segments[0]
@@ -994,7 +1004,7 @@ def main():
 
         # Also scan <Field>Объект.X</Field> — object attributes referenced by filter/conditional-appearance
         # fields (and dynamic lists), not via a *DataPath binding (e.g. УдалитьЮрФизЛицо). Designer borrows these too.
-        for m in re.finditer(r'<Field>[^<]*\bОбъект\.(\w+(?:\.\w+)*)</Field>', content):
+        for m in re.finditer(r'<Field>[^<]*\b' + root + r'\.(\w+(?:\.\w+)*)</Field>', content):
             path = m.group(1)
             segments = path.split(".")
             seg0 = segments[0]
@@ -1011,7 +1021,7 @@ def main():
         # Also scan <AdditionalColumns table="Объект.X"> — доп. колонки табличной части, объявленные в
         # самой форме (напр. Объект.Товары.Артикул). Такая ТЧ может больше нигде на форме не встречаться,
         # и без её заимствования платформа отвергает форму: «Неверный путь к данным».
-        for m in re.finditer(r'<AdditionalColumns table="Объект\.(\w+)"', content):
+        for m in re.finditer(r'<AdditionalColumns table="' + root + r'\.(\w+)"', content):
             seg0 = m.group(1)
             if seg0 in STANDARD_FIELDS:
                 continue
@@ -1064,7 +1074,11 @@ def main():
                 continue
             ln = localname(child)
 
-            if ln == "Attribute":
+            # Реквизит объекта, измерение и ресурс регистра — один и тот же вид дочернего объекта с
+            # точки зрения заимствования, различается только имя элемента. Конфигуратор переносит их
+            # своим видом (эталон Issue66Example2: у регистра <Dimension> x3 и <Resource>), поэтому вид
+            # запоминается и выпускается как есть — иначе измерение уехало бы в файл как <Attribute>.
+            if ln in CHILD_OBJECT_KINDS:
                 name_node = child.find(f"{{{MD_NS}}}Properties/{{{MD_NS}}}Name")
                 if name_node is None:
                     continue
@@ -1079,7 +1093,7 @@ def main():
                     type_xml = etree.tostring(type_node, encoding="unicode")
                     type_xml = ns_strip.sub("", type_xml)
 
-                attrs.append({"Name": attr_name, "Uuid": attr_uuid, "TypeXml": type_xml})
+                attrs.append({"Name": attr_name, "Uuid": attr_uuid, "TypeXml": type_xml, "Kind": ln})
 
             elif ln == "TabularSection":
                 name_node = child.find(f"{{{MD_NS}}}Properties/{{{MD_NS}}}Name")
@@ -1160,10 +1174,10 @@ def main():
         return {"Attributes": attrs, "TabularSections": tab_sections, "ExtraProps": extra_props}
 
     # --- 11d. Build adopted attribute XML ---
-    def build_adopted_attribute_xml(name, source_uuid, type_xml, indent):
+    def build_adopted_attribute_xml(name, source_uuid, type_xml, indent, kind="Attribute"):
         new_uuid_val = new_guid()
         lines = [
-            f'{indent}<Attribute uuid="{new_uuid_val}">',
+            f'{indent}<{kind} uuid="{new_uuid_val}">',
             f'{indent}\t<InternalInfo/>',
             f'{indent}\t<Properties>',
             f'{indent}\t\t<ObjectBelonging>Adopted</ObjectBelonging>',
@@ -1172,7 +1186,7 @@ def main():
             f'{indent}\t\t<ExtendedConfigurationObject>{source_uuid}</ExtendedConfigurationObject>',
             f'{indent}\t\t{type_xml}',
             f'{indent}\t</Properties>',
-            f'{indent}</Attribute>',
+            f'{indent}</{kind}>',
         ]
         return "\n".join(lines)
 
@@ -1255,7 +1269,7 @@ def main():
         for attr in attrs_to_add:
             if attr["Name"] in existing_names:
                 continue
-            all_attr_xml += "\r\n" + build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t")
+            all_attr_xml += "\r\n" + build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t", attr.get("Kind", "Attribute"))
             added += 1
 
         if added > 0:
@@ -1276,7 +1290,13 @@ def main():
             if not os.path.isfile(src_form_xml_path):
                 print(f"Source Form.xml not found: {src_form_xml_path}", file=sys.stderr)
                 sys.exit(1)
-            dp = collect_form_data_paths(src_form_xml_path)
+            # Имя основного реквизита исходной формы — корень путей, которые надо собрать
+            dp_ns_strip = re.compile(r'\s+xmlns(?::\w+)?="[^"]*"')
+            dp_info = get_main_attribute_info(etree.parse(src_form_xml_path).getroot(), dp_ns_strip)
+            if dp_info is None:
+                warn("  У формы нет основного реквизита — заимствовать нечего")
+                return
+            dp = collect_form_data_paths(src_form_xml_path, dp_info["Name"])
             first_level_names = dp["FirstLevel"]
             deep_paths = dp["DeepPaths"]
             info(f"  Collected {len(first_level_names)} first-level DataPath references, {len(deep_paths)} deep paths")
@@ -1310,7 +1330,7 @@ def main():
         # Generate full object XML with attributes and TS
         content_parts = []
         for attr in insert_attrs:
-            content_parts.append(build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t"))
+            content_parts.append(build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t", attr.get("Kind", "Attribute")))
         for ts in insert_ts:
             content_parts.append(build_adopted_tabular_section_xml(ts["Name"], ts["Uuid"], ts["GeneratedTypes"], ts["Attributes"], "\t\t\t"))
         adopted_content = "\n".join(content_parts).rstrip()
@@ -1351,9 +1371,9 @@ def main():
         if os.path.isfile(src_form_for_cols):
             cols_tree = etree.parse(src_form_for_cols)
             cols_ns_strip = re.compile(r'\s+xmlns(?::\w+)?="[^"]*"')
-            for extra_xml in get_main_attribute_extra_xml(cols_tree.getroot(), cols_ns_strip):
-                if extra_xml.startswith("<Columns"):
-                    all_type_xmls.append(extra_xml)
+            cols_info = get_main_attribute_info(cols_tree.getroot(), cols_ns_strip)
+            if cols_info:
+                all_type_xmls.extend(re.findall(r'(?s)<Columns>.*?</Columns>', cols_info["Xml"]))
 
         ref_types = collect_reference_types(all_type_xmls)
         info(f"  Reference types to borrow: {len(ref_types)}")
@@ -1568,6 +1588,13 @@ def main():
         # там ссылки параметров выбора переводятся на непрозрачную форму пути
         src_attr_uuids = {} if borrow_main_attr else get_source_attribute_uuids(type_name, obj_name)
 
+        # Основной реквизит исходной формы: его имя — корень путей к данным, которые нужно сохранить
+        # («Объект.» у формы объекта, «Список.» у формы списка, «Запись.» у формы записи регистра)
+        main_attr_info = get_main_attribute_info(src_form_el, ns_strip_pattern) if borrow_main_attr else None
+        main_attr_name = main_attr_info["Name"] if main_attr_info else ""
+        if borrow_main_attr and main_attr_info is None:
+            warn("  У формы нет основного реквизита — -BorrowMainAttribute проигнорирован")
+
         # AutoCommandBar: keep ChildItems (buttons with CommandName->0), Autofill->false
         auto_cmd_xml = ""
         if src_auto_cmd is not None:
@@ -1580,7 +1607,7 @@ def main():
             auto_cmd_xml = re.sub(r'(?s)\s*<CommandSet>.*?</CommandSet>', '', auto_cmd_xml)
             auto_cmd_xml = re.sub(r'\s*<CommandSet/>', '', auto_cmd_xml)
             # Strip data-binding tags whose root attribute isn't borrowed
-            auto_cmd_xml = strip_form_bindings(auto_cmd_xml, borrow_main_attr)
+            auto_cmd_xml = strip_form_bindings(auto_cmd_xml, main_attr_name)
             if not borrow_main_attr:
                 auto_cmd_xml = rewrite_choice_parameter_links(auto_cmd_xml, src_attr_uuids)
 
@@ -1598,7 +1625,7 @@ def main():
             # Replace all CommandName values with 0
             child_items_xml = re.sub(r'<CommandName>[^<]*</CommandName>', '<CommandName>0</CommandName>', child_items_xml)
             # Strip data-binding tags whose root attribute isn't borrowed
-            child_items_xml = strip_form_bindings(child_items_xml, borrow_main_attr)
+            child_items_xml = strip_form_bindings(child_items_xml, main_attr_name)
             if not borrow_main_attr:
                 child_items_xml = rewrite_choice_parameter_links(child_items_xml, src_attr_uuids)
             # Вложенные CommandSet (у таблиц, полей табличного документа и т.п.) — целиком, см. выше
@@ -1785,28 +1812,10 @@ def main():
         if child_items_xml:
             parts.append(f"\t{child_items_xml}\r\n")
 
-        # Секции основного реквизита исходной формы (<UseAlways>, <Columns>) — их нельзя терять
-        main_attr_extra = []
-        if borrow_main_attr:
-            main_attr_extra = get_main_attribute_extra_xml(src_form_el, ns_strip_pattern)
-
         # Attributes: empty or with MainAttribute when borrow_main_attr
-        if borrow_main_attr:
-            obj_type_prefix = ""
-            gt_list = GENERATED_TYPES.get(type_name, [])
-            for g in gt_list:
-                if g["category"] == "Object":
-                    obj_type_prefix = g["prefix"]
-                    break
-            main_attr_type = f"cfg:{obj_type_prefix}.{obj_name}"
+        if borrow_main_attr and main_attr_info:
             parts.append("\t<Attributes>\r\n")
-            parts.append('\t\t<Attribute name="\u041e\u0431\u044a\u0435\u043a\u0442" id="1000001">\r\n')
-            parts.append(f"\t\t\t<Type><v8:Type>{main_attr_type}</v8:Type></Type>\r\n")
-            parts.append("\t\t\t<MainAttribute>true</MainAttribute>\r\n")
-            parts.append("\t\t\t<SavedData>true</SavedData>\r\n")
-            for extra_xml in main_attr_extra:
-                parts.append(f"\t\t\t{extra_xml}\r\n")
-            parts.append("\t\t</Attribute>\r\n")
+            parts.append(f"\t\t{main_attr_info['Xml']}\r\n")
             parts.append("\t</Attributes>")
         else:
             parts.append("\t<Attributes/>")
@@ -1836,18 +1845,12 @@ def main():
                 parts.append("\r\n")
 
         # BaseForm Attributes: same as main section
-        if borrow_main_attr:
+        if borrow_main_attr and main_attr_info:
             parts.append("\t\t<Attributes>\r\n")
-            parts.append('\t\t\t<Attribute name="\u041e\u0431\u044a\u0435\u043a\u0442" id="1000001">\r\n')
-            parts.append(f"\t\t\t\t<Type><v8:Type>{main_attr_type}</v8:Type></Type>\r\n")
-            parts.append("\t\t\t\t<MainAttribute>true</MainAttribute>\r\n")
-            parts.append("\t\t\t\t<SavedData>true</SavedData>\r\n")
-            for extra_xml in main_attr_extra:
-                # В BaseForm та же секция на уровень глубже — приём переиндентации тот же, что у ChildItems
-                for li, line in enumerate(extra_xml.split("\n")):
-                    parts.append(f"\t\t\t\t{line}" if li == 0 else f"\t{line}")
-                    parts.append("\r\n")
-            parts.append("\t\t\t</Attribute>\r\n")
+            # В BaseForm та же секция на уровень глубже — приём переиндентации тот же, что у ChildItems
+            for li, line in enumerate(main_attr_info['Xml'].split('\n')):
+                parts.append(f"\t\t\t{line}" if li == 0 else f"\t{line}")
+                parts.append("\r\n")
             parts.append("\t\t</Attributes>")
         else:
             parts.append("\t\t<Attributes/>")

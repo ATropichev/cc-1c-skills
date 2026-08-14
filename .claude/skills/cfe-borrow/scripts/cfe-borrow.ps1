@@ -23,6 +23,12 @@ $script:formBindingDataTags = @('DataPath','TitleDataPath','FooterDataPath','Hea
 # Picture-path binding tags (value = picture index path, never a data attribute) — always stripped in the skeleton.
 $script:formBindingPictureTags = @('MultipleValuePictureDataPath')
 
+# id основного реквизита в заимствованной форме — как у Конфигуратора
+$script:mainAttrId = "1000001"
+
+# Виды дочерних объектов, которые заимствуются в оболочку поимённо (табличные части — отдельно)
+$script:childObjectKinds = @('Attribute','Dimension','Resource')
+
 # Прямые дети <Form>, которые в заимствованную форму не переносятся.
 # Структурные секции: AutoCommandBar и ChildItems забираются отдельно, остальные выбрасываются целиком.
 $script:formStructuralSections = @('Events','Attributes','Commands','Parameters','CommandInterface')
@@ -30,13 +36,15 @@ $script:formStructuralSections = @('Events','Attributes','Commands','Parameters'
 $script:formAttributeRefProps = @('ReportResult','DetailsData','VariantAppearance','GroupList')
 
 # Strip data-binding tags whose root attribute isn't borrowed.
-# $keepObjekt=$true (BorrowMainAttribute): keep Объект.* data bindings, strip the rest.
-# $keepObjekt=$false (default skeleton): strip all bindings. Picture-path tags are always stripped.
+# $mainAttrName задан (BorrowMainAttribute): оставить привязки от его имени, остальные снять.
+# Пусто (скелет без основного реквизита): снять все. Картиночные пути снимаются всегда.
 function Strip-FormBindings {
-	param([string]$xml, [bool]$keepObjekt)
+	param([string]$xml, [string]$mainAttrName)
 	foreach ($tag in $script:formBindingDataTags) {
-		if ($keepObjekt) {
-			$xml = [regex]::Replace($xml, "\s*<$tag>(?!Объект\.)[^<]*</$tag>", '')
+		if ($mainAttrName) {
+			# Оставить и «Список.Поле», и путь ровно на сам реквизит («Список» у таблицы формы)
+			$root = [regex]::Escape($mainAttrName)
+			$xml = [regex]::Replace($xml, "\s*<$tag>(?!$root(\.|<))[^<]*</$tag>", '')
 		} else {
 			$xml = [regex]::Replace($xml, "\s*<$tag>[^<]*</$tag>", '')
 		}
@@ -769,6 +777,15 @@ function Borrow-Form {
 	# Get OuterXml and strip redundant namespace redeclarations (they're on root <Form>)
 	$nsStripPattern = '\s+xmlns(?::\w+)?="[^"]*"'
 
+	# Основной реквизит исходной формы: его имя — корень путей к данным, которые нужно сохранить
+	# («Объект.» у формы объекта, «Список.» у формы списка, «Запись.» у формы записи регистра)
+	$mainAttrInfo = $null
+	if ($BorrowMainAttr) { $mainAttrInfo = Get-MainAttributeInfo $srcFormEl $nsStripPattern }
+	$mainAttrName = if ($mainAttrInfo) { $mainAttrInfo.Name } else { "" }
+	if ($BorrowMainAttr -and -not $mainAttrInfo) {
+		Warn "  У формы нет основного реквизита — -BorrowMainAttribute проигнорирован"
+	}
+
 	# uuid реквизитов объекта — только для формы без заимствованного основного реквизита:
 	# там ссылки параметров выбора переводятся на непрозрачную форму пути
 	$srcAttrUuids = @{}
@@ -786,7 +803,7 @@ function Borrow-Form {
 		$autoCmdXml = [regex]::Replace($autoCmdXml, '(?s)\s*<CommandSet>.*?</CommandSet>', '')
 		$autoCmdXml = [regex]::Replace($autoCmdXml, '\s*<CommandSet/>', '')
 		# Strip data-binding tags whose root attribute isn't borrowed
-		$autoCmdXml = Strip-FormBindings $autoCmdXml ([bool]$BorrowMainAttr)
+		$autoCmdXml = Strip-FormBindings $autoCmdXml $mainAttrName
 		if (-not $BorrowMainAttr) { $autoCmdXml = Rewrite-ChoiceParameterLinks $autoCmdXml $srcAttrUuids }
 	}
 
@@ -799,7 +816,7 @@ function Borrow-Form {
 		$childItemsXml = [regex]::Replace($childItemsXml, '<CommandName>[^<]*</CommandName>', '<CommandName>0</CommandName>')
 		# Strip data-binding tags whose root attribute isn't borrowed
 		# (DataPath/TitleDataPath/FooterDataPath/HeaderDataPath/MultipleValue*/RowPicture*)
-		$childItemsXml = Strip-FormBindings $childItemsXml ([bool]$BorrowMainAttr)
+		$childItemsXml = Strip-FormBindings $childItemsXml $mainAttrName
 		if (-not $BorrowMainAttr) { $childItemsXml = Rewrite-ChoiceParameterLinks $childItemsXml $srcAttrUuids }
 		# Вложенные CommandSet (у таблиц, полей табличного документа и т.п.) — целиком, см. выше
 		$childItemsXml = [regex]::Replace($childItemsXml, '(?s)\s*<CommandSet>.*?</CommandSet>', '')
@@ -1019,27 +1036,10 @@ function Borrow-Form {
 		$formXmlSb.Append("`t$childItemsXml") | Out-Null
 		$formXmlSb.Append("`r`n") | Out-Null
 	}
-	# Секции основного реквизита исходной формы (<UseAlways>, <Columns>) — их нельзя терять
-	$mainAttrExtra = @()
-	if ($BorrowMainAttr) {
-		$mainAttrExtra = @(Get-MainAttributeExtraXml $srcFormEl $nsStripPattern)
-	}
-
 	# Attributes: empty or with MainAttribute when BorrowMainAttr
-	if ($BorrowMainAttr) {
-		$objTypePrefix = ""
-		$gtList = $script:generatedTypes[$typeName]
-		if ($gtList) { foreach ($g in $gtList) { if ($g.category -eq "Object") { $objTypePrefix = $g.prefix; break } } }
-		$mainAttrType = "cfg:${objTypePrefix}.${objName}"
+	if ($BorrowMainAttr -and $mainAttrInfo) {
 		$formXmlSb.Append("`t<Attributes>`r`n") | Out-Null
-		$formXmlSb.Append("`t`t<Attribute name=`"Объект`" id=`"1000001`">`r`n") | Out-Null
-		$formXmlSb.Append("`t`t`t<Type><v8:Type>${mainAttrType}</v8:Type></Type>`r`n") | Out-Null
-		$formXmlSb.Append("`t`t`t<MainAttribute>true</MainAttribute>`r`n") | Out-Null
-		$formXmlSb.Append("`t`t`t<SavedData>true</SavedData>`r`n") | Out-Null
-		foreach ($extraXml in $mainAttrExtra) {
-			$formXmlSb.Append("`t`t`t$extraXml`r`n") | Out-Null
-		}
-		$formXmlSb.Append("`t`t</Attribute>`r`n") | Out-Null
+		$formXmlSb.Append("`t`t$($mainAttrInfo.Xml)`r`n") | Out-Null
 		$formXmlSb.Append("`t</Attributes>") | Out-Null
 	} else {
 		$formXmlSb.Append("`t<Attributes/>") | Out-Null
@@ -1073,22 +1073,15 @@ function Borrow-Form {
 	}
 
 	# BaseForm Attributes: same as main section
-	if ($BorrowMainAttr) {
+	if ($BorrowMainAttr -and $mainAttrInfo) {
 		$formXmlSb.Append("`t`t<Attributes>`r`n") | Out-Null
-		$formXmlSb.Append("`t`t`t<Attribute name=`"Объект`" id=`"1000001`">`r`n") | Out-Null
-		$formXmlSb.Append("`t`t`t`t<Type><v8:Type>${mainAttrType}</v8:Type></Type>`r`n") | Out-Null
-		$formXmlSb.Append("`t`t`t`t<MainAttribute>true</MainAttribute>`r`n") | Out-Null
-		$formXmlSb.Append("`t`t`t`t<SavedData>true</SavedData>`r`n") | Out-Null
-		foreach ($extraXml in $mainAttrExtra) {
-			# В BaseForm та же секция на уровень глубже — приём переиндентации тот же, что у ChildItems
-			$exLines = $extraXml -split "`r?`n"
-			for ($li = 0; $li -lt $exLines.Count; $li++) {
-				if ($li -eq 0) { $formXmlSb.Append("`t`t`t`t$($exLines[$li])") | Out-Null }
-				else { $formXmlSb.Append("`t$($exLines[$li])") | Out-Null }
-				$formXmlSb.Append("`r`n") | Out-Null
-			}
+		# В BaseForm та же секция на уровень глубже — приём переиндентации тот же, что у ChildItems
+		$maLines = $mainAttrInfo.Xml -split "`r?`n"
+		for ($li = 0; $li -lt $maLines.Count; $li++) {
+			if ($li -eq 0) { $formXmlSb.Append("`t`t`t$($maLines[$li])") | Out-Null }
+			else { $formXmlSb.Append("`t$($maLines[$li])") | Out-Null }
+			$formXmlSb.Append("`r`n") | Out-Null
 		}
-		$formXmlSb.Append("`t`t`t</Attribute>`r`n") | Out-Null
 		$formXmlSb.Append("`t`t</Attributes>") | Out-Null
 	} else {
 		$formXmlSb.Append("`t`t<Attributes/>") | Out-Null
@@ -1274,26 +1267,30 @@ function Build-InternalInfoXml {
 }
 
 # --- 11b. Collect DataPath references from source Form.xml ---
-# --- 11b1. Секции основного реквизита исходной формы, кроме Type/MainAttribute/SavedData ---
-# Это <UseAlways> и <Columns> (доп. колонки табличных частей, объявленные прямо в форме). Их
-# переносит Конфигуратор, и без них платформа отвергает форму: «Неверный путь к данным» на
-# колонке, которой у объекта нет (Объект.Товары.Артикул). Возвращает список OuterXml без xmlns.
-function Get-MainAttributeExtraXml {
+# --- 11b1. Основной реквизит исходной формы ---
+# Переносится ЦЕЛИКОМ, а не собирается из констант: имя, тип и состав детей зависят от вида формы.
+# У формы объекта это «Объект»/<Тип>Object + SavedData/UseAlways/Columns, у формы списка —
+# «Список»/DynamicList + Settings, у формы записи регистра — «Запись»/RecordManager + SavedData.
+# Синтез фиксированного набора давал для необъектных форм «Исключение XDTO» при загрузке.
+# Конфигуратор меняет у скопированного реквизита только id (эталоны Issue64UtB, Issue66Example2).
+function Get-MainAttributeInfo {
 	param($formEl, [string]$nsStripPattern)
 
-	$result = @()
 	$mainAttr = $formEl.SelectSingleNode("*[local-name()='Attributes']/*[local-name()='Attribute'][*[local-name()='MainAttribute']='true']")
-	if (-not $mainAttr) { return $result }
-	foreach ($child in $mainAttr.ChildNodes) {
-		if ($child.NodeType -ne 'Element') { continue }
-		if ($child.LocalName -in @('Type','MainAttribute','SavedData')) { continue }
-		$result += [regex]::Replace($child.OuterXml, $nsStripPattern, '')
-	}
-	return $result
+	if (-not $mainAttr) { return $null }
+	$xml = [regex]::Replace($mainAttr.OuterXml, $nsStripPattern, '')
+	# id заменяется только в открывающем теге самого реквизита — у вложенных элементов свои
+	$xml = [regex]::Replace($xml, '^(<Attribute\s[^>]*?)id="[^"]*"', "`${1}id=`"$script:mainAttrId`"")
+	return @{ Name = $mainAttr.GetAttribute("name"); Xml = $xml }
 }
 
 function Collect-FormDataPaths {
-	param([string]$formXmlPath)
+	param([string]$formXmlPath, [string]$mainAttrName)
+
+	# Корень путей — имя основного реквизита формы: «Объект» у формы объекта, «Список» у формы
+	# списка, «Запись» у формы записи регистра. Зашитый «Объект» не находил ничего у необъектных
+	# форм, и в оболочку не заимствовалось ни одного дочернего объекта.
+	$root = [regex]::Escape($mainAttrName)
 
 	$enc = New-Object System.Text.UTF8Encoding($true)
 	$content = [System.IO.File]::ReadAllText($formXmlPath, $enc)
@@ -1304,7 +1301,7 @@ function Collect-FormDataPaths {
 	# Scan every data-binding tag (DataPath/TitleDataPath/FooterDataPath/HeaderDataPath/MultipleValue*)
 	# for Объект.* references — picture-path tags carry picture indices, not data attributes.
 	foreach ($tag in $script:formBindingDataTags) {
-		$bms = [regex]::Matches($content, "<$tag>[^<]*\bОбъект\.(\w+(?:\.\w+)*)</$tag>")
+		$bms = [regex]::Matches($content, "<$tag>[^<]*\b$root\.(\w+(?:\.\w+)*)</$tag>")
 		foreach ($m in $bms) {
 			$path = $m.Groups[1].Value
 			$segments = $path.Split(".")
@@ -1322,7 +1319,7 @@ function Collect-FormDataPaths {
 
 	# Also scan <Field>Объект.X</Field> — object attributes referenced by filter/conditional-appearance
 	# fields (and dynamic lists), not via a *DataPath binding (e.g. УдалитьЮрФизЛицо). Designer borrows these too.
-	$fieldMatches = [regex]::Matches($content, "<Field>[^<]*\bОбъект\.(\w+(?:\.\w+)*)</Field>")
+	$fieldMatches = [regex]::Matches($content, "<Field>[^<]*\b$root\.(\w+(?:\.\w+)*)</Field>")
 	foreach ($m in $fieldMatches) {
 		$path = $m.Groups[1].Value
 		$segments = $path.Split(".")
@@ -1339,7 +1336,7 @@ function Collect-FormDataPaths {
 	# Also scan <AdditionalColumns table="Объект.X"> — доп. колонки табличной части, объявленные в
 	# самой форме (напр. Объект.Товары.Артикул). Такая ТЧ может больше нигде на форме не встречаться,
 	# и без её заимствования платформа отвергает форму: «Неверный путь к данным».
-	$acMatches = [regex]::Matches($content, '<AdditionalColumns table="Объект\.(\w+)"')
+	$acMatches = [regex]::Matches($content, "<AdditionalColumns table=`"$root\.(\w+)`"")
 	foreach ($m in $acMatches) {
 		$seg0 = $m.Groups[1].Value
 		if ($script:standardFields -contains $seg0) { continue }
@@ -1396,7 +1393,11 @@ function Resolve-SourceAttributes {
 	foreach ($child in $childObjs.ChildNodes) {
 		if ($child.NodeType -ne 'Element') { continue }
 
-		if ($child.LocalName -eq 'Attribute') {
+		# Реквизит объекта, измерение и ресурс регистра — один и тот же вид дочернего объекта с
+		# точки зрения заимствования, различается только имя элемента. Конфигуратор переносит их
+		# своим видом (эталон Issue66Example2: у регистра <Dimension> x3 и <Resource>), поэтому вид
+		# запоминается и выпускается как есть — иначе измерение уехало бы в файл как <Attribute>.
+		if ($script:childObjectKinds -ccontains $child.LocalName) {
 			$nameNode = $child.SelectSingleNode("md:Properties/md:Name", $srcNs)
 			if (-not $nameNode) { continue }
 			$attrName = $nameNode.InnerText
@@ -1408,7 +1409,7 @@ function Resolve-SourceAttributes {
 			# Strip namespace declarations from Type
 			$typeXml = [regex]::Replace($typeXml, '\s+xmlns(?::\w+)?="[^"]*"', '')
 
-			$attrs += @{ Name = $attrName; Uuid = $uuid; TypeXml = $typeXml }
+			$attrs += @{ Name = $attrName; Uuid = $uuid; TypeXml = $typeXml; Kind = $child.LocalName }
 		}
 		elseif ($child.LocalName -eq 'TabularSection') {
 			$nameNode = $child.SelectSingleNode("md:Properties/md:Name", $srcNs)
@@ -1479,11 +1480,11 @@ function Resolve-SourceAttributes {
 
 # --- 11d. Build adopted attribute XML ---
 function Build-AdoptedAttributeXml {
-	param([string]$name, [string]$sourceUuid, [string]$typeXml, [string]$indent)
+	param([string]$name, [string]$sourceUuid, [string]$typeXml, [string]$indent, [string]$kind = "Attribute")
 
 	$newUuid = [guid]::NewGuid().ToString()
 	$sb = New-Object System.Text.StringBuilder
-	$sb.AppendLine("${indent}<Attribute uuid=`"${newUuid}`">") | Out-Null
+	$sb.AppendLine("${indent}<${kind} uuid=`"${newUuid}`">") | Out-Null
 	$sb.AppendLine("${indent}`t<InternalInfo/>") | Out-Null
 	$sb.AppendLine("${indent}`t<Properties>") | Out-Null
 	$sb.AppendLine("${indent}`t`t<ObjectBelonging>Adopted</ObjectBelonging>") | Out-Null
@@ -1492,7 +1493,7 @@ function Build-AdoptedAttributeXml {
 	$sb.AppendLine("${indent}`t`t<ExtendedConfigurationObject>${sourceUuid}</ExtendedConfigurationObject>") | Out-Null
 	$sb.AppendLine("${indent}`t`t${typeXml}") | Out-Null
 	$sb.AppendLine("${indent}`t</Properties>") | Out-Null
-	$sb.Append("${indent}</Attribute>") | Out-Null
+	$sb.Append("${indent}</${kind}>") | Out-Null
 	return $sb.ToString()
 }
 
@@ -1623,7 +1624,8 @@ function Merge-AttributesIntoObject {
 		$allAttrXml = ""
 		foreach ($attr in $attrsToAdd) {
 			if ($existingNames.ContainsKey($attr.Name)) { continue }
-			$allAttrXml += "`r`n" + (Build-AdoptedAttributeXml $attr.Name $attr.Uuid $attr.TypeXml "`t`t`t")
+			$kind = if ($attr.Kind) { $attr.Kind } else { "Attribute" }
+			$allAttrXml += "`r`n" + (Build-AdoptedAttributeXml $attr.Name $attr.Uuid $attr.TypeXml "`t`t`t" $kind)
 		}
 
 		# Save via text manipulation to avoid namespace issues with InnerXml
@@ -1677,7 +1679,16 @@ function Borrow-MainAttribute {
 			Write-Error "Source Form.xml not found: $srcFormXmlPath"
 			exit 1
 		}
-		$dp = Collect-FormDataPaths $srcFormXmlPath
+		# Имя основного реквизита исходной формы — корень путей, которые надо собрать
+		$dpDoc = New-Object System.Xml.XmlDocument
+		$dpDoc.PreserveWhitespace = $true
+		$dpDoc.Load($srcFormXmlPath)
+		$dpInfo = Get-MainAttributeInfo $dpDoc.DocumentElement '\s+xmlns(?::\w+)?="[^"]*"'
+		if (-not $dpInfo) {
+			Warn "  У формы нет основного реквизита — заимствовать нечего"
+			return
+		}
+		$dp = Collect-FormDataPaths $srcFormXmlPath $dpInfo.Name
 		$firstLevelNames = $dp.FirstLevel
 		$deepPaths = $dp.DeepPaths
 		Info "  Collected $($firstLevelNames.Count) first-level DataPath references, $($deepPaths.Count) deep paths"
@@ -1710,7 +1721,8 @@ function Borrow-MainAttribute {
 	# Generate full object XML with attributes and TS
 	$contentSb = New-Object System.Text.StringBuilder
 	foreach ($attr in $insertAttrs) {
-		$attrXml = Build-AdoptedAttributeXml $attr.Name $attr.Uuid $attr.TypeXml "`t`t`t"
+		$attrKind = if ($attr.Kind) { $attr.Kind } else { "Attribute" }
+		$attrXml = Build-AdoptedAttributeXml $attr.Name $attr.Uuid $attr.TypeXml "`t`t`t" $attrKind
 		$contentSb.AppendLine($attrXml) | Out-Null
 	}
 	foreach ($ts in $insertTS) {
@@ -1759,8 +1771,9 @@ function Borrow-MainAttribute {
 		$colsDoc = New-Object System.Xml.XmlDocument
 		$colsDoc.PreserveWhitespace = $true
 		$colsDoc.Load($srcFormForCols)
-		foreach ($extraXml in (Get-MainAttributeExtraXml $colsDoc.DocumentElement '\s+xmlns(?::\w+)?="[^"]*"')) {
-			if ($extraXml -like "<Columns*") { $allTypeXmls += $extraXml }
+		$colsInfo = Get-MainAttributeInfo $colsDoc.DocumentElement '\s+xmlns(?::\w+)?="[^"]*"'
+		if ($colsInfo) {
+			foreach ($m in [regex]::Matches($colsInfo.Xml, '(?s)<Columns>.*?</Columns>')) { $allTypeXmls += $m.Value }
 		}
 	}
 

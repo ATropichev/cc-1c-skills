@@ -35,7 +35,9 @@
 	</ChildItems>
 	<Attributes>
 		<Attribute name="Объект" id="1000001">
-			<Type><v8:Type>cfg:DocumentObject.Расход</v8:Type></Type>
+			<Type>
+				<v8:Type>cfg:DocumentObject.Расход</v8:Type>
+			</Type>
 			<MainAttribute>true</MainAttribute>
 			<SavedData>true</SavedData>
 		</Attribute>
@@ -76,7 +78,9 @@
 		</ChildItems>
 		<Attributes>
 			<Attribute name="Объект" id="1000001">
-				<Type><v8:Type>cfg:DocumentObject.Расход</v8:Type></Type>
+				<Type>
+					<v8:Type>cfg:DocumentObject.Расход</v8:Type>
+				</Type>
 				<MainAttribute>true</MainAttribute>
 				<SavedData>true</SavedData>
 			</Attribute>
