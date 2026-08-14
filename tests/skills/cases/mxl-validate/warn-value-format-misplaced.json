@@ -1,0 +1,7 @@
+{
+  "name": "Предупреждения: формат со значением у строки и неизвестный элемент управления",
+  "setup": "fixture:value-format-misplaced",
+  "params": { "templatePath": "Template.xml" },
+  "args_extra": ["-Detailed"],
+  "expect": { "stdoutContains": "unknown controlType" }
+}

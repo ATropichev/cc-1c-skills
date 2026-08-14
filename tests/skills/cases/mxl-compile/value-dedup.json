@@ -1,0 +1,24 @@
+{
+  "name": "Ячейки-поля ввода: разные написания одного типа дают ОДИН формат",
+  "input": {
+    "columns": 6,
+    "areas": [
+      {
+        "name": "Дедупликация",
+        "rows": [
+          [
+            { "valueType": "Число(15,3)" },
+            { "valueType": "Number(15,3)" },
+            { "valueType": "Number(15,3,any)" },
+            { "valueType": "Строка(10)" },
+            { "valueType": "String(10,variable)" },
+            { "valueType": "Булево", "control": "Поле Флажка" }
+          ]
+        ]
+      }
+    ]
+  },
+  "params": {
+    "outputPath": "Template.xml"
+  }
+}

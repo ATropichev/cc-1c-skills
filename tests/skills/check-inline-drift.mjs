@@ -170,7 +170,7 @@ const FAMILIES = [
     // TYPE_SYNONYMS / $script:typeSynonyms на свой локальный словарь.
     variants: [
       { id: 'base', authority: 'meta-compile',
-        consumers: ['form-compile', 'form-edit', 'meta-edit', 'skd-compile', 'skd-edit'] },
+        consumers: ['form-compile', 'form-edit', 'meta-edit', 'mxl-compile', 'skd-compile', 'skd-edit'] },
     ],
   },
 

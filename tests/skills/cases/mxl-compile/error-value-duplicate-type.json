@@ -1,0 +1,14 @@
+{
+  "name": "Ошибка: составной тип с двумя строками (блок квалификаторов один)",
+  "input": {
+    "columns": 1,
+    "areas": [
+      {
+        "name": "Ввод",
+        "rows": [{ "cells": [{ "col": 1, "valueType": "String(10) + String(20)" }] }]
+      }
+    ]
+  },
+  "params": { "outputPath": "Template.xml" },
+  "expectError": "Duplicate type \"String(20,variable)\" in composite value type (area \"Ввод\")"
+}

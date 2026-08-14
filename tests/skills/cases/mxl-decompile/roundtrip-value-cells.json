@@ -1,0 +1,40 @@
+{
+  "name": "Roundtrip — ячейки-поля ввода (тип значения и элемент управления)",
+  "preRun": [
+    {
+      "script": "mxl-compile/scripts/mxl-compile",
+      "input": {
+        "columns": 3,
+        "areas": [
+          {
+            "name": "Ввод",
+            "rows": [
+              { "cells": [
+                { "col": 1, "valueType": "Number(15,3,nonneg)" },
+                { "col": 2, "valueType": "String(10,fixed)" },
+                { "col": 3, "valueType": "Boolean", "control": "checkbox" }
+              ]},
+              { "cells": [
+                { "col": 1, "valueType": "" },
+                { "col": 2, "valueType": "Number(10,2)", "control": "none" },
+                { "col": 3, "valueType": "Boolean + CatalogRef.Валюты + String + DateTime" }
+              ]},
+              { "cells": [
+                { "col": 1, "valueType": "AnyRef" },
+                { "col": 2, "valueType": "Number(10,2)", "param": "Сумма", "detail": "Расшифровка" }
+              ]}
+            ]
+          }
+        ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "Template.xml" },
+      "cwd": "{workDir}"
+    }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "args_extra": ["-OutputPath", "{workDir}/back.json"],
+  "expect": {
+    "files": ["back.json"],
+    "stdoutContains": "[OK] Decompiled:"
+  }
+}

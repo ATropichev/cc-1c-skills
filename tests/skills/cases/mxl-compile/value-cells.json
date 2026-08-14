@@ -1,0 +1,35 @@
+{
+  "name": "Ячейки-поля ввода: примитивные типы значения",
+  "input": {
+    "columns": 3,
+    "areas": [
+      {
+        "name": "Ввод",
+        "rows": [
+          { "cells": [
+            { "col": 1, "valueType": "Number(15,3,nonneg)" },
+            { "col": 2, "valueType": "Number" },
+            { "col": 3, "valueType": "String" }
+          ]},
+          { "cells": [
+            { "col": 1, "valueType": "Boolean" },
+            { "col": 2, "valueType": "Boolean", "control": "checkbox" }
+          ]},
+          { "cells": [
+            { "col": 1, "valueType": "String(10)" },
+            { "col": 2, "valueType": "String(10,fixed)" },
+            { "col": 3, "valueType": "DateTime" }
+          ]},
+          { "cells": [
+            { "col": 1, "valueType": "Date" },
+            { "col": 2, "valueType": "Time" },
+            { "col": 3, "valueType": "Boolean + String + DateTime + Number" }
+          ]}
+        ]
+      }
+    ]
+  },
+  "params": {
+    "outputPath": "Template.xml"
+  }
+}

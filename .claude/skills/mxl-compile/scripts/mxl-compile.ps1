@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.40 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.41 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -621,6 +621,270 @@ function Resolve-Style {
 	return $props
 }
 
+# --- 5.9. Ячейка-поле ввода: тип значения и элемент управления ---
+# containsValue/valueType/controlType платформа держит в записи палитры формата, но принадлежат
+# они конкретной ЯЧЕЙКЕ: на корпусе ERP 370 197 ссылок на такие записи — все из <f>, ни одной
+# из строки, колонки или defaultFormatIndex. Поэтому в DSL это ключи ячейки, а не стиля.
+
+# Прощающий ввод типа — общая семья Resolve-TypeStr (эталон meta-compile). Словарь синонимов
+# у каждого навыка свой: здесь только то, что бывает значением ячейки макета.
+$script:typeSynonyms = @{}
+$script:typeSynonyms["число"]    = "Number"
+$script:typeSynonyms["строка"]   = "String"
+$script:typeSynonyms["булево"]   = "Boolean"
+$script:typeSynonyms["дата"]     = "Date"
+$script:typeSynonyms["датавремя"] = "DateTime"
+$script:typeSynonyms["время"]    = "Time"
+$script:typeSynonyms["number"]   = "Number"
+$script:typeSynonyms["string"]   = "String"
+$script:typeSynonyms["boolean"]  = "Boolean"
+$script:typeSynonyms["bool"]     = "Boolean"
+$script:typeSynonyms["date"]     = "Date"
+$script:typeSynonyms["datetime"] = "DateTime"
+$script:typeSynonyms["time"]     = "Time"
+$script:typeSynonyms["справочникссылка"]             = "CatalogRef"
+$script:typeSynonyms["документссылка"]               = "DocumentRef"
+$script:typeSynonyms["перечислениессылка"]           = "EnumRef"
+$script:typeSynonyms["плансчетовссылка"]             = "ChartOfAccountsRef"
+$script:typeSynonyms["планвидовхарактеристикссылка"] = "ChartOfCharacteristicTypesRef"
+$script:typeSynonyms["планвидоврасчётассылка"]       = "ChartOfCalculationTypesRef"
+$script:typeSynonyms["планвидоврасчетассылка"]       = "ChartOfCalculationTypesRef"
+$script:typeSynonyms["планобменассылка"]             = "ExchangePlanRef"
+$script:typeSynonyms["бизнеспроцессссылка"]          = "BusinessProcessRef"
+$script:typeSynonyms["задачассылка"]                 = "TaskRef"
+$script:typeSynonyms["любаяссылка"]                  = "AnyRef"
+$script:typeSynonyms["catalogref"]                   = "CatalogRef"
+$script:typeSynonyms["documentref"]                  = "DocumentRef"
+$script:typeSynonyms["enumref"]                      = "EnumRef"
+$script:typeSynonyms["anyref"]                       = "AnyRef"
+$script:typeSynonyms["определяемыйтип"]              = "DefinedType"
+$script:typeSynonyms["definedtype"]                  = "DefinedType"
+
+# Голые метатипы-категории («любой объект категории») — множество, а не тип: <v8:TypeSet>.
+$script:valueTypeSets = @('CatalogRef', 'DocumentRef', 'EnumRef', 'ChartOfAccountsRef',
+	'ChartOfCharacteristicTypesRef', 'ChartOfCalculationTypesRef', 'ExchangePlanRef',
+	'BusinessProcessRef', 'TaskRef', 'AnyRef', 'AnyIBRef')
+# Категории ссылочных типов с именем объекта — <v8:Type>.
+$script:valueRefKinds = @('CatalogRef', 'DocumentRef', 'EnumRef', 'ChartOfAccountsRef',
+	'ChartOfCharacteristicTypesRef', 'ChartOfCalculationTypesRef', 'ExchangePlanRef',
+	'BusinessProcessRef', 'BusinessProcessRoutePointRef', 'TaskRef')
+
+# Элемент управления. В выгрузке — GUID, имён у платформы в XML нет вовсе, поэтому канон DSL
+# придуман: input и checkbox. Умолчание платформы — поле ввода для ВСЕХ типов, включая Булево
+# (корпус: 63 629 форматов против 7 у флажка), поэтому input не пишем в XML как «по умолчанию»,
+# а эмитим всегда — так делает платформа.
+$script:valueControlGuids = @{
+	'input'    = '381ed624-9217-4e63-85db-c4c3cb87daae'
+	'checkbox' = '35af3d93-d7c7-4a2e-a8eb-bac87a1a3f26'
+}
+$script:valueControlSynonyms = @{
+	# Ключи нормализованы: без пробелов, в нижнем регистре («Поле ввода» → «полеввода»).
+	'полеввода' = 'input'; 'inputfield' = 'input'
+	'полефлажка' = 'checkbox'; 'флажок' = 'checkbox'; 'checkboxfield' = 'checkbox'
+}
+
+function Resolve-TypeStr {
+	param([string]$typeStr)
+	if (-not $typeStr) { return $typeStr }
+
+	# Прощающий ввод: ведущий префикс приходит копипастой из выгрузки. Без срезания он ломает
+	# поиск в словаре — русское имя типа остаётся непереведённым, и платформа отвечает
+	# «Неизвестное имя типа». cfg: снимаем всегда — он однозначно означает текущую конфигурацию.
+	# Сгенерированный dNpM: (в корпусе на этом URI встречаются d4p1, d5p1, d6p1 — имя префикса
+	# платформа выдаёт по порядку объявления) снимаем ТОЛЬКО у ссылочных типов, с точкой:
+	# сам по себе префикс многозначен — в формах d5p1:Chart, d5p1:TextDocument,
+	# d5p1:GeographicalSchema адресуют чужие пространства имён, и там он часть значения.
+	if ($typeStr.StartsWith('cfg:')) {
+		$typeStr = $typeStr.Substring(4)
+	} elseif ($typeStr.Contains('.') -and $typeStr -match '^d\d+p\d+:') {
+		$typeStr = $typeStr.Substring($typeStr.IndexOf(':') + 1)
+	}
+
+	# Параметризованные типы: Number(15,2), Строка(100)
+	if ($typeStr -match '^([^(]+)\((.+)\)$') {
+		$baseName = $Matches[1].Trim()
+		$params = $Matches[2]
+		$resolved = $script:typeSynonyms[$baseName.ToLower()]
+		if ($resolved) { return "$resolved($params)" }
+		return $typeStr
+	}
+
+	# Ссылочные типы: СправочникСсылка.Организации → CatalogRef.Организации
+	if ($typeStr.Contains('.')) {
+		$dotIdx = $typeStr.IndexOf('.')
+		$prefix = $typeStr.Substring(0, $dotIdx)
+		$suffix = $typeStr.Substring($dotIdx)  # includes the dot
+		$resolved = $script:typeSynonyms[$prefix.ToLower()]
+		if ($resolved) { return "$resolved$suffix" }
+		return $typeStr
+	}
+
+	# Простое имя
+	$resolved = $script:typeSynonyms[$typeStr.ToLower()]
+	if ($resolved) { return $resolved }
+	return $typeStr
+}
+
+# Канон типа: развёрнутая запись со всеми умолчаниями. Она же ложится в ключ дедупликации
+# палитры, поэтому «Число(15,3)» и «Number(15,3)» обязаны дать ОДНУ запись формата — иначе
+# палитра распухнет на дубли и все ссылки <f> уедут.
+# Умолчания здесь ПЛАТФОРМЕННЫЕ, а не как у реквизита метаданных: голая строка — безлимитная
+# (Length 0), голое число — 0,0 (проверено на макетах, собранных Конфигуратором).
+function Get-CanonValueType {
+	param([string]$typeStr, [string]$where)
+	$parts = @()
+	$seen = @{}
+	foreach ($raw in ($typeStr -split '[+|]')) {
+		$p = Resolve-TypeStr $raw.Trim()
+		if (-not $p) { continue }
+		$canon = $null
+		$kind = $null
+		if ($p -ceq 'Boolean') {
+			$canon = 'Boolean'; $kind = 'Boolean'
+		} elseif ($p -match '^String(\((\d+)(\s*,\s*(fixed|variable))?\))?$') {
+			$len = if ($Matches[2]) { $Matches[2] } else { '0' }
+			$al = if ($Matches[4] -and $Matches[4].ToLowerInvariant() -eq 'fixed') { 'fixed' } else { 'variable' }
+			$canon = "String($len,$al)"; $kind = 'String'
+		} elseif ($p -match '^Number(\((\d+)(\s*,\s*(\d+))?(\s*,\s*(nonneg|any))?\))?$') {
+			$digits = if ($Matches[2]) { $Matches[2] } else { '0' }
+			$fraction = if ($Matches[4]) { $Matches[4] } else { '0' }
+			$sign = if ($Matches[6] -and $Matches[6].ToLowerInvariant() -eq 'nonneg') { 'nonneg' } else { 'any' }
+			$canon = "Number($digits,$fraction,$sign)"; $kind = 'Number'
+		} elseif ($p -ceq 'Date' -or $p -ceq 'DateTime' -or $p -ceq 'Time') {
+			$canon = $p; $kind = 'Date'
+		} elseif ($p -match '^(DefinedType|Characteristic)\.(.+)$') {
+			$canon = $p; $kind = "set:$p"
+		} elseif ($p.Contains('.')) {
+			$kindName = $p.Substring(0, $p.IndexOf('.'))
+			if ($script:valueRefKinds -ccontains $kindName) {
+				$canon = $p; $kind = "ref:$p"
+			} else {
+				[Console]::Error.WriteLine("Unknown value type `"$($raw.Trim())`" ($where). Reference kinds: $($script:valueRefKinds -join ', ')")
+				exit 1
+			}
+		} elseif ($p.Contains(':')) {
+			# Чужое пространство имён — пишем как есть: калечить его мы не вправе.
+			$canon = $p; $kind = "raw:$p"
+		} elseif ($script:valueTypeSets -ccontains $p) {
+			$canon = $p; $kind = "set:$p"
+		} else {
+			[Console]::Error.WriteLine("Unknown value type `"$($raw.Trim())`" ($where). Expected: Boolean, String(N), Number(D,F), Date, <Kind>Ref.<Name> or a bare metatype")
+			exit 1
+		}
+		# Повтор одного вида в составном типе платформа выразить не может: блок квалификаторов
+		# внутри <valueType> один на вид.
+		if ($seen.ContainsKey($kind)) {
+			[Console]::Error.WriteLine("Duplicate type `"$canon`" in composite value type ($where)")
+			exit 1
+		}
+		$seen[$kind] = $true
+		$parts += $canon
+	}
+	if ($parts.Count -eq 0) {
+		[Console]::Error.WriteLine("Empty value type ($where)")
+		exit 1
+	}
+	return ($parts -join ' + ')
+}
+
+# Содержимое <valueType> по КАНОНУ — умолчаний здесь нет, они уже развёрнуты. Порядок снят
+# с платформы: сначала ВСЕ <v8:Type>/<v8:TypeSet> в порядке источника, затем блоки
+# квалификаторов Number → String → Date. Ссылочные типы несут ЛОКАЛЬНОЕ объявление xmlns
+# на каждом узле — в макете префикс current-config всегда d4p1.
+function Emit-ValueTypeContent {
+	param([string]$indent, [string]$canonType)
+	$cfgNs = 'http://v8.1c.ru/8.1/data/enterprise/current-config'
+	$typeLines = @()
+	$quals = @{}
+	foreach ($p in ($canonType -split ' \+ ')) {
+		if ($p -ceq 'Boolean') {
+			$typeLines += "$indent<v8:Type>xs:boolean</v8:Type>"
+		} elseif ($p -match '^String\((\d+),(fixed|variable)\)$') {
+			$len = $Matches[1]
+			$al = if ($Matches[2] -ceq 'fixed') { 'Fixed' } else { 'Variable' }
+			$typeLines += "$indent<v8:Type>xs:string</v8:Type>"
+			$quals['String'] = @(
+				"$indent<v8:StringQualifiers>",
+				"$indent`t<v8:Length>$len</v8:Length>",
+				"$indent`t<v8:AllowedLength>$al</v8:AllowedLength>",
+				"$indent</v8:StringQualifiers>")
+		} elseif ($p -match '^Number\((\d+),(\d+),(nonneg|any)\)$') {
+			$digits = $Matches[1]
+			$fraction = $Matches[2]
+			$sign = if ($Matches[3] -ceq 'nonneg') { 'Nonnegative' } else { 'Any' }
+			$typeLines += "$indent<v8:Type>xs:decimal</v8:Type>"
+			$quals['Number'] = @(
+				"$indent<v8:NumberQualifiers>",
+				"$indent`t<v8:Digits>$digits</v8:Digits>",
+				"$indent`t<v8:FractionDigits>$fraction</v8:FractionDigits>",
+				"$indent`t<v8:AllowedSign>$sign</v8:AllowedSign>",
+				"$indent</v8:NumberQualifiers>")
+		} elseif ($p -ceq 'Date' -or $p -ceq 'DateTime' -or $p -ceq 'Time') {
+			$typeLines += "$indent<v8:Type>xs:dateTime</v8:Type>"
+			$quals['Date'] = @(
+				"$indent<v8:DateQualifiers>",
+				"$indent`t<v8:DateFractions>$p</v8:DateFractions>",
+				"$indent</v8:DateQualifiers>")
+		} elseif ($p -match '^(DefinedType|Characteristic)\.') {
+			$typeLines += "$indent<v8:TypeSet xmlns:d4p1=`"$cfgNs`">d4p1:$p</v8:TypeSet>"
+		} elseif ($p.Contains('.')) {
+			$typeLines += "$indent<v8:Type xmlns:d4p1=`"$cfgNs`">d4p1:$p</v8:Type>"
+		} elseif ($p.Contains(':')) {
+			$typeLines += "$indent<v8:Type>$p</v8:Type>"
+		} else {
+			$typeLines += "$indent<v8:TypeSet xmlns:d4p1=`"$cfgNs`">d4p1:$p</v8:TypeSet>"
+		}
+	}
+	foreach ($l in $typeLines) { X $l }
+	foreach ($q in @('Number', 'String', 'Date')) {
+		if ($quals.ContainsKey($q)) { foreach ($l in $quals[$q]) { X $l } }
+	}
+}
+
+# Свойства значения ячейки — пустой набор, если ячейка обычная. Считаются ОДНОЙ функцией:
+# пре-проход регистрации палитры и генерация обязаны получить один и тот же набор, иначе
+# состав палитры разойдётся и все ссылки <f> сдвинутся.
+function Get-CellValueProps {
+	param($cell, [string]$where)
+	$props = @{}
+	$vt = $cell.valueType
+	$ctl = $cell.control
+	if ($null -eq $vt) {
+		if ($null -ne $ctl -and "$ctl" -ne '') {
+			[Console]::Error.WriteLine("Cell 'control' requires 'valueType' ($where)")
+			exit 1
+		}
+		return $props
+	}
+	# Ячейка, содержащая значение, текста не несёт: платформа этого не допускает, и в корпусе
+	# нет ни одной такой ячейки из 370 197.
+	if ($null -ne $cell.text -or $null -ne $cell.template) {
+		[Console]::Error.WriteLine("Cell with 'valueType' cannot have 'text' or 'template' ($where)")
+		exit 1
+	}
+	$props['containsValue'] = 'true'
+	# Пустая строка — третье состояние: <containsValue> есть, тип не задан (<valueType/>).
+	$props['valueType'] = if ("$vt" -eq '') { '' } else { Get-CanonValueType "$vt" $where }
+
+	$name = 'input'
+	if ($null -ne $ctl -and "$ctl" -ne '') {
+		$norm = ("$ctl" -replace '\s', '').ToLowerInvariant()
+		if ($script:valueControlSynonyms.ContainsKey($norm)) { $norm = $script:valueControlSynonyms[$norm] }
+		$name = $norm
+	}
+	if ($name -ceq 'none') { return $props }   # формат вовсе без <controlType>
+	if ($script:valueControlGuids.ContainsKey($name)) {
+		$props['controlType'] = $script:valueControlGuids[$name]
+	} elseif ($name -match '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') {
+		# Неизвестный элемент управления сохраняем как есть — терять его нельзя.
+		$props['controlType'] = $name
+	} else {
+		[Console]::Error.WriteLine("Unknown 'control' value `"$ctl`" ($where). Allowed: input, checkbox, none or a GUID")
+		exit 1
+	}
+	return $props
+}
+
 # --- 6. Format palette builder ---
 
 $formatRegistry = [ordered]@{}  # key -> hashtable with properties
@@ -843,8 +1107,13 @@ function Get-FillType {
 
 # Helper: register a cell format and return its index
 function Register-CellFormat {
-	param($styleName, [string]$fillType)
+	param($styleName, [string]$fillType, [hashtable]$valueProps)
 	$resolved = Resolve-Style -styleName $styleName -fillType $fillType
+	# Свойства значения кладём ПОВЕРХ стиля — до проверки на пустоту: у ячейки-поля ввода
+	# оформления может не быть вовсе, и без слияния она получила бы <f>0</f>, потеряв значение.
+	if ($valueProps) {
+		foreach ($k in $valueProps.Keys) { $resolved[$k] = $valueProps[$k] }
+	}
 	# У ячейки без собственного оформления формата НЕТ вовсе: <f>0</f>, где ноль — не индекс
 	# записи, а «формата нет». В корпусе так у 170 710 ячеек против 50 635, ссылающихся на
 	# формат по умолчанию; <f>0</f> встречается в 71% макетов.
@@ -870,7 +1139,8 @@ function Set-CellProp {
 # это ru, en, ru1, Русский.
 function Test-CellObject {
 	param($el)
-	$cellKeys = @('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template')
+	$cellKeys = @('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template',
+		'valueType', 'control')
 	foreach ($p in $el.PSObject.Properties) {
 		if ($cellKeys -contains $p.Name) { return $true }
 	}
@@ -1051,7 +1321,8 @@ foreach ($area in $def.areas) {
 			foreach ($cell in $row.cells) {
 				$cellStyle = if ($cell.style) { $cell.style } elseif ($cellsStyle) { $cellsStyle } else { "default" }
 				$ft = Get-FillType $cell
-				Register-CellFormat -styleName $cellStyle -fillType $ft | Out-Null
+				$vp = Get-CellValueProps $cell "area `"$($area.name)`""
+				Register-CellFormat -styleName $cellStyle -fillType $ft -valueProps $vp | Out-Null
 			}
 		}
 	}
@@ -1332,7 +1603,8 @@ foreach ($area in $def.areas) {
 				$rowspan = if ($cell.rowspan) { [int]$cell.rowspan } else { 1 }
 				$cellStyle = if ($cell.style) { $cell.style } elseif ($cellsStyle) { $cellsStyle } else { "default" }
 				$ft = Get-FillType $cell
-				$fmtIdx = Register-CellFormat -styleName $cellStyle -fillType $ft
+				$vp = Get-CellValueProps $cell "area `"$areaName`", row $($localRow + 1)"
+				$fmtIdx = Register-CellFormat -styleName $cellStyle -fillType $ft -valueProps $vp
 
 				$cellInfo = @{
 					Col       = $colStart - 1  # 0-based
@@ -1659,6 +1931,15 @@ foreach ($key in $formatRegistry.Keys) {
 			X "`t`t`t`t<v8:content>$(Esc-XmlText $val)</v8:content>"
 			X "`t`t`t</v8:item>"
 			X "`t`t</$tag>"
+		} elseif ($tag -ceq 'valueType') {
+			# Пустой тип — самостоятельное состояние: «содержит значение», тип не задан.
+			if ("$val" -eq '') {
+				X "`t`t<valueType/>"
+			} else {
+				X "`t`t<valueType>"
+				Emit-ValueTypeContent "`t`t`t" "$val"
+				X "`t`t</valueType>"
+			}
 		} elseif ($script:formatTagKind[$tag] -ceq 'color' -and (Get-ColorNamespace "$val")) {
 			# web/win-палитры в корне документа не объявлены — платформа дописывает объявление
 			# прямо на узел и пишет значение с этим префиксом.

@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.39 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.41 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -437,6 +437,251 @@ def get_format_key(props):
         if tag in props:
             parts.append(f'{tag}={props[tag]}')
     return '|'.join(parts)
+
+
+# --- Ячейка-поле ввода: тип значения и элемент управления ---
+# containsValue/valueType/controlType платформа держит в записи палитры формата, но принадлежат
+# они конкретной ЯЧЕЙКЕ: на корпусе ERP 370 197 ссылок на такие записи — все из <f>, ни одной
+# из строки, колонки или defaultFormatIndex. Поэтому в DSL это ключи ячейки, а не стиля.
+
+# Прощающий ввод типа — общая семья resolve_type_str (эталон meta-compile). Словарь синонимов
+# у каждого навыка свой: здесь только то, что бывает значением ячейки макета.
+TYPE_SYNONYMS = {
+    'число': 'Number', 'строка': 'String', 'булево': 'Boolean',
+    'дата': 'Date', 'датавремя': 'DateTime', 'время': 'Time',
+    'number': 'Number', 'string': 'String', 'boolean': 'Boolean', 'bool': 'Boolean',
+    'date': 'Date', 'datetime': 'DateTime', 'time': 'Time',
+    'справочникссылка': 'CatalogRef',
+    'документссылка': 'DocumentRef',
+    'перечислениессылка': 'EnumRef',
+    'плансчетовссылка': 'ChartOfAccountsRef',
+    'планвидовхарактеристикссылка': 'ChartOfCharacteristicTypesRef',
+    'планвидоврасчётассылка': 'ChartOfCalculationTypesRef',
+    'планвидоврасчетассылка': 'ChartOfCalculationTypesRef',
+    'планобменассылка': 'ExchangePlanRef',
+    'бизнеспроцессссылка': 'BusinessProcessRef',
+    'задачассылка': 'TaskRef',
+    'любаяссылка': 'AnyRef',
+    'catalogref': 'CatalogRef', 'documentref': 'DocumentRef', 'enumref': 'EnumRef',
+    'anyref': 'AnyRef',
+    'определяемыйтип': 'DefinedType', 'definedtype': 'DefinedType',
+}
+
+# Голые метатипы-категории («любой объект категории») — множество, а не тип: <v8:TypeSet>.
+VALUE_TYPE_SETS = ('CatalogRef', 'DocumentRef', 'EnumRef', 'ChartOfAccountsRef',
+                   'ChartOfCharacteristicTypesRef', 'ChartOfCalculationTypesRef', 'ExchangePlanRef',
+                   'BusinessProcessRef', 'TaskRef', 'AnyRef', 'AnyIBRef')
+# Категории ссылочных типов с именем объекта — <v8:Type>.
+VALUE_REF_KINDS = ('CatalogRef', 'DocumentRef', 'EnumRef', 'ChartOfAccountsRef',
+                   'ChartOfCharacteristicTypesRef', 'ChartOfCalculationTypesRef', 'ExchangePlanRef',
+                   'BusinessProcessRef', 'BusinessProcessRoutePointRef', 'TaskRef')
+
+# Элемент управления. В выгрузке — GUID, имён у платформы в XML нет вовсе, поэтому канон DSL
+# придуман: input и checkbox. Умолчание платформы — поле ввода для ВСЕХ типов, включая Булево
+# (корпус: 63 629 форматов против 7 у флажка), поэтому input не пишем в XML как «по умолчанию»,
+# а эмитим всегда — так делает платформа.
+VALUE_CONTROL_GUIDS = {
+    'input': '381ed624-9217-4e63-85db-c4c3cb87daae',
+    'checkbox': '35af3d93-d7c7-4a2e-a8eb-bac87a1a3f26',
+}
+VALUE_CONTROL_SYNONYMS = {
+    # Ключи нормализованы: без пробелов, в нижнем регистре («Поле ввода» → «полеввода»).
+    'полеввода': 'input', 'inputfield': 'input',
+    'полефлажка': 'checkbox', 'флажок': 'checkbox', 'checkboxfield': 'checkbox',
+}
+
+CFG_NS = 'http://v8.1c.ru/8.1/data/enterprise/current-config'
+
+
+def resolve_type_str(type_str):
+    if not type_str:
+        return type_str
+
+    # Прощающий ввод: ведущий префикс приходит копипастой из выгрузки. Без срезания он ломает
+    # поиск в словаре — русское имя типа остаётся непереведённым, и платформа отвечает
+    # «Неизвестное имя типа». cfg: снимаем всегда — он однозначно означает текущую конфигурацию.
+    # Сгенерированный dNpM: (в корпусе на этом URI встречаются d4p1, d5p1, d6p1 — имя префикса
+    # платформа выдаёт по порядку объявления) снимаем ТОЛЬКО у ссылочных типов, с точкой:
+    # сам по себе префикс многозначен — в формах d5p1:Chart, d5p1:TextDocument,
+    # d5p1:GeographicalSchema адресуют чужие пространства имён, и там он часть значения.
+    if type_str.startswith('cfg:'):
+        type_str = type_str[4:]
+    elif '.' in type_str and re.match(r'^d\d+p\d+:', type_str):
+        type_str = type_str[type_str.index(':') + 1:]
+
+    # Параметризованные типы: Number(15,2), Строка(100)
+    m = re.match(r'^([^(]+)\((.+)\)$', type_str)
+    if m:
+        base_name = m.group(1).strip()
+        params = m.group(2)
+        resolved = TYPE_SYNONYMS.get(base_name.lower())
+        if resolved:
+            return f'{resolved}({params})'
+        return type_str
+
+    # Ссылочные типы: СправочникСсылка.Организации → CatalogRef.Организации
+    if '.' in type_str:
+        dot_idx = type_str.index('.')
+        prefix = type_str[:dot_idx]
+        suffix = type_str[dot_idx:]   # includes the dot
+        resolved = TYPE_SYNONYMS.get(prefix.lower())
+        if resolved:
+            return f'{resolved}{suffix}'
+        return type_str
+
+    # Простое имя
+    resolved = TYPE_SYNONYMS.get(type_str.lower())
+    if resolved:
+        return resolved
+    return type_str
+
+
+def canon_value_type(type_str, where):
+    """Канон типа: развёрнутая запись со всеми умолчаниями. Она же ложится в ключ дедупликации
+    палитры, поэтому «Число(15,3)» и «Number(15,3)» обязаны дать ОДНУ запись формата — иначе
+    палитра распухнет на дубли и все ссылки <f> уедут.
+    Умолчания здесь ПЛАТФОРМЕННЫЕ, а не как у реквизита метаданных: голая строка — безлимитная
+    (Length 0), голое число — 0,0 (проверено на макетах, собранных Конфигуратором)."""
+    parts = []
+    seen = set()
+    for raw in re.split(r'[+|]', type_str):
+        p = resolve_type_str(raw.strip())
+        if not p:
+            continue
+        m_str = re.match(r'^String(\((\d+)(\s*,\s*(fixed|variable))?\))?$', p)
+        m_num = re.match(r'^Number(\((\d+)(\s*,\s*(\d+))?(\s*,\s*(nonneg|any))?\))?$', p)
+        if p == 'Boolean':
+            canon, kind = 'Boolean', 'Boolean'
+        elif m_str:
+            length = m_str.group(2) if m_str.group(2) else '0'
+            al = 'fixed' if (m_str.group(4) and m_str.group(4).lower() == 'fixed') else 'variable'
+            canon, kind = f'String({length},{al})', 'String'
+        elif m_num:
+            digits = m_num.group(2) if m_num.group(2) else '0'
+            fraction = m_num.group(4) if m_num.group(4) else '0'
+            sign = 'nonneg' if (m_num.group(6) and m_num.group(6).lower() == 'nonneg') else 'any'
+            canon, kind = f'Number({digits},{fraction},{sign})', 'Number'
+        elif p in ('Date', 'DateTime', 'Time'):
+            canon, kind = p, 'Date'
+        elif re.match(r'^(DefinedType|Characteristic)\.(.+)$', p):
+            canon, kind = p, f'set:{p}'
+        elif '.' in p:
+            kind_name = p[:p.index('.')]
+            if kind_name in VALUE_REF_KINDS:
+                canon, kind = p, f'ref:{p}'
+            else:
+                print(f'Unknown value type "{raw.strip()}" ({where}).'
+                      f' Reference kinds: {", ".join(VALUE_REF_KINDS)}', file=sys.stderr)
+                sys.exit(1)
+        elif ':' in p:
+            # Чужое пространство имён — пишем как есть: калечить его мы не вправе.
+            canon, kind = p, f'raw:{p}'
+        elif p in VALUE_TYPE_SETS:
+            canon, kind = p, f'set:{p}'
+        else:
+            print(f'Unknown value type "{raw.strip()}" ({where}). Expected: Boolean, String(N),'
+                  f' Number(D,F), Date, <Kind>Ref.<Name> or a bare metatype', file=sys.stderr)
+            sys.exit(1)
+        # Повтор одного вида в составном типе платформа выразить не может: блок квалификаторов
+        # внутри <valueType> один на вид.
+        if kind in seen:
+            print(f'Duplicate type "{canon}" in composite value type ({where})', file=sys.stderr)
+            sys.exit(1)
+        seen.add(kind)
+        parts.append(canon)
+    if not parts:
+        print(f'Empty value type ({where})', file=sys.stderr)
+        sys.exit(1)
+    return ' + '.join(parts)
+
+
+def emit_value_type_content(lines, indent, canon_type):
+    """Содержимое <valueType> по КАНОНУ — умолчаний здесь нет, они уже развёрнуты. Порядок снят
+    с платформы: сначала ВСЕ <v8:Type>/<v8:TypeSet> в порядке источника, затем блоки
+    квалификаторов Number → String → Date. Ссылочные типы несут ЛОКАЛЬНОЕ объявление xmlns
+    на каждом узле — в макете префикс current-config всегда d4p1."""
+    type_lines = []
+    quals = {}
+    for p in canon_type.split(' + '):
+        m_str = re.match(r'^String\((\d+),(fixed|variable)\)$', p)
+        m_num = re.match(r'^Number\((\d+),(\d+),(nonneg|any)\)$', p)
+        if p == 'Boolean':
+            type_lines.append(f'{indent}<v8:Type>xs:boolean</v8:Type>')
+        elif m_str:
+            al = 'Fixed' if m_str.group(2) == 'fixed' else 'Variable'
+            type_lines.append(f'{indent}<v8:Type>xs:string</v8:Type>')
+            quals['String'] = [
+                f'{indent}<v8:StringQualifiers>',
+                f'{indent}\t<v8:Length>{m_str.group(1)}</v8:Length>',
+                f'{indent}\t<v8:AllowedLength>{al}</v8:AllowedLength>',
+                f'{indent}</v8:StringQualifiers>']
+        elif m_num:
+            sign = 'Nonnegative' if m_num.group(3) == 'nonneg' else 'Any'
+            type_lines.append(f'{indent}<v8:Type>xs:decimal</v8:Type>')
+            quals['Number'] = [
+                f'{indent}<v8:NumberQualifiers>',
+                f'{indent}\t<v8:Digits>{m_num.group(1)}</v8:Digits>',
+                f'{indent}\t<v8:FractionDigits>{m_num.group(2)}</v8:FractionDigits>',
+                f'{indent}\t<v8:AllowedSign>{sign}</v8:AllowedSign>',
+                f'{indent}</v8:NumberQualifiers>']
+        elif p in ('Date', 'DateTime', 'Time'):
+            type_lines.append(f'{indent}<v8:Type>xs:dateTime</v8:Type>')
+            quals['Date'] = [
+                f'{indent}<v8:DateQualifiers>',
+                f'{indent}\t<v8:DateFractions>{p}</v8:DateFractions>',
+                f'{indent}</v8:DateQualifiers>']
+        elif re.match(r'^(DefinedType|Characteristic)\.', p):
+            type_lines.append(f'{indent}<v8:TypeSet xmlns:d4p1="{CFG_NS}">d4p1:{p}</v8:TypeSet>')
+        elif '.' in p:
+            type_lines.append(f'{indent}<v8:Type xmlns:d4p1="{CFG_NS}">d4p1:{p}</v8:Type>')
+        elif ':' in p:
+            type_lines.append(f'{indent}<v8:Type>{p}</v8:Type>')
+        else:
+            type_lines.append(f'{indent}<v8:TypeSet xmlns:d4p1="{CFG_NS}">d4p1:{p}</v8:TypeSet>')
+    lines.extend(type_lines)
+    for q in ('Number', 'String', 'Date'):
+        if q in quals:
+            lines.extend(quals[q])
+
+
+def cell_value_props(cell, where):
+    """Свойства значения ячейки — пустой набор, если ячейка обычная. Считаются ОДНОЙ функцией:
+    пре-проход регистрации палитры и генерация обязаны получить один и тот же набор, иначе
+    состав палитры разойдётся и все ссылки <f> сдвинутся."""
+    props = {}
+    vt = cell.get('valueType')
+    ctl = cell.get('control')
+    if vt is None:
+        if ctl is not None and str(ctl) != '':
+            print(f"Cell 'control' requires 'valueType' ({where})", file=sys.stderr)
+            sys.exit(1)
+        return props
+    # Ячейка, содержащая значение, текста не несёт: платформа этого не допускает, и в корпусе
+    # нет ни одной такой ячейки из 370 197.
+    if cell.get('text') is not None or cell.get('template') is not None:
+        print(f"Cell with 'valueType' cannot have 'text' or 'template' ({where})", file=sys.stderr)
+        sys.exit(1)
+    props['containsValue'] = 'true'
+    # Пустая строка — третье состояние: <containsValue> есть, тип не задан (<valueType/>).
+    props['valueType'] = '' if str(vt) == '' else canon_value_type(str(vt), where)
+
+    name = 'input'
+    if ctl is not None and str(ctl) != '':
+        norm = re.sub(r'\s', '', str(ctl)).lower()
+        norm = VALUE_CONTROL_SYNONYMS.get(norm, norm)
+        name = norm
+    if name == 'none':
+        return props        # формат вовсе без <controlType>
+    if name in VALUE_CONTROL_GUIDS:
+        props['controlType'] = VALUE_CONTROL_GUIDS[name]
+    elif re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', name):
+        # Неизвестный элемент управления сохраняем как есть — терять его нельзя.
+        props['controlType'] = name
+    else:
+        print(f'Unknown \'control\' value "{ctl}" ({where}).'
+              f' Allowed: input, checkbox, none or a GUID', file=sys.stderr)
+        sys.exit(1)
+    return props
 
 
 def main():
@@ -885,8 +1130,12 @@ def main():
         return ''
 
     # Helper: register a cell format and return its index
-    def register_cell_format(style_name, fill_type):
+    def register_cell_format(style_name, fill_type, value_props=None):
         resolved = resolve_style(style_name, fill_type)
+        # Свойства значения кладём ПОВЕРХ стиля — до проверки на пустоту: у ячейки-поля ввода
+        # оформления может не быть вовсе, и без слияния она получила бы <f>0</f>, потеряв значение.
+        if value_props:
+            resolved.update(value_props)
         # У ячейки без собственного оформления формата НЕТ вовсе: <f>0</f>, где ноль — не
         # индекс записи, а «формата нет». В корпусе так у 170 710 ячеек против 50 635,
         # ссылающихся на формат по умолчанию; <f>0</f> встречается в 71% макетов.
@@ -904,7 +1153,8 @@ def main():
         """Объект описывает СВОЙСТВА ячейки или является её ЗНАЧЕНИЕМ: в первом случае среди
         ключей есть ключ схемы ячейки, во втором ключи — идентификаторы языков. Пересечений
         нет: в корпусе это ru, en, ru1, Русский."""
-        cell_keys = ('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template')
+        cell_keys = ('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template',
+                     'valueType', 'control')
         return any(k in el for k in cell_keys)
 
     def expand_shorthand_row(row, area_name, row_idx, open_by_col, max_cols):
@@ -1069,7 +1319,8 @@ def main():
                 for cell in row['cells']:
                     cell_style = cell.get('style') or cells_style or 'default'
                     ft = get_fill_type(cell)
-                    register_cell_format(cell_style, ft)
+                    vp = cell_value_props(cell, f'area "{area.get("name") or ""}"')
+                    register_cell_format(cell_style, ft, vp)
 
     # Формат по умолчанию — последняя запись палитры (см. выше).
     default_format_index = register_format({'width': default_width})
@@ -1309,7 +1560,8 @@ def main():
                     rowspan = int(cell.get('rowspan', 1))
                     cell_style = cell.get('style') or cells_style or 'default'
                     ft = get_fill_type(cell)
-                    fmt_idx = register_cell_format(cell_style, ft)
+                    vp = cell_value_props(cell, f'area "{area_name}", row {local_row + 1}')
+                    fmt_idx = register_cell_format(cell_style, ft, vp)
 
                     cell_info = {
                         'Col': col_start - 1,  # 0-based
@@ -1603,6 +1855,14 @@ def main():
                 lines.append(f'\t\t\t\t<v8:content>{esc_xml_text(val)}</v8:content>')
                 lines.append('\t\t\t</v8:item>')
                 lines.append(f'\t\t</{tag}>')
+            elif tag == 'valueType':
+                # Пустой тип — самостоятельное состояние: «содержит значение», тип не задан.
+                if str(val) == '':
+                    lines.append('\t\t<valueType/>')
+                else:
+                    lines.append('\t\t<valueType>')
+                    emit_value_type_content(lines, '\t\t\t', str(val))
+                    lines.append('\t\t</valueType>')
             elif kinds.get(tag) == 'color' and color_namespace(str(val)):
                 # web/win-палитры в корне документа не объявлены — платформа дописывает
                 # объявление прямо на узел и пишет значение с этим префиксом.

@@ -1,0 +1,27 @@
+{
+  "name": "Ячейки-поля ввода: ссылочные типы и категории целиком",
+  "input": {
+    "columns": 3,
+    "areas": [
+      {
+        "name": "Ввод",
+        "rows": [
+          { "cells": [
+            { "col": 1, "valueType": "CatalogRef.Валюты" },
+            { "col": 2, "valueType": "DocumentRef.Реализация" },
+            { "col": 3, "valueType": "DefinedType.СуммаДокумента" }
+          ]},
+          { "cells": [
+            { "col": 1, "valueType": "DocumentRef + CatalogRef" },
+            { "col": 2, "valueType": "AnyRef" },
+            { "col": 3, "valueType": "Boolean + CatalogRef.ГорячиеКлавиши + String + DateTime + Number" }
+          ]}
+        ]
+      }
+    ]
+  },
+  "params": {
+    "outputPath": "Template.xml"
+  },
+  "skipPlatformVerify": "ссылочные типы разрешаются только в базе с матч-конфигурацией: временная база-заглушка таких объектов не содержит"
+}

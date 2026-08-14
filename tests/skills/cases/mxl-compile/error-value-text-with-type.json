@@ -1,0 +1,14 @@
+{
+  "name": "Ошибка: ячейка со значением несёт текст",
+  "input": {
+    "columns": 1,
+    "areas": [
+      {
+        "name": "Ввод",
+        "rows": [{ "cells": [{ "col": 1, "valueType": "Boolean", "text": "Да" }] }]
+      }
+    ]
+  },
+  "params": { "outputPath": "Template.xml" },
+  "expectError": "Cell with 'valueType' cannot have 'text' or 'template' (area \"Ввод\")"
+}

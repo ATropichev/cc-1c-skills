@@ -1,0 +1,14 @@
+{
+  "name": "Ошибка: неизвестный тип значения (голое имя не становится множеством типов)",
+  "input": {
+    "columns": 1,
+    "areas": [
+      {
+        "name": "Ввод",
+        "rows": [{ "cells": [{ "col": 1, "valueType": "Boolen" }] }]
+      }
+    ]
+  },
+  "params": { "outputPath": "Template.xml" },
+  "expectError": "Unknown value type \"Boolen\" (area \"Ввод\")"
+}

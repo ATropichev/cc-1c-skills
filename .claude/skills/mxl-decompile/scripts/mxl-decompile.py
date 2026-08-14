@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.20 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.21 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -115,6 +115,76 @@ def color_to_dsl(node, val):
     if uri == 'http://v8.1c.ru/8.1/data/ui/colors/windows':
         return 'win:' + name
     return val
+
+
+CFG_NS = 'http://v8.1c.ru/8.1/data/enterprise/current-config'
+
+# Элемент управления ячейки: в выгрузке это GUID, имён у платформы в XML нет.
+VALUE_CONTROL_NAMES = {
+    '381ed624-9217-4e63-85db-c4c3cb87daae': 'input',
+    '35af3d93-d7c7-4a2e-a8eb-bac87a1a3f26': 'checkbox',
+}
+
+
+def value_type_to_dsl(node):
+    """Обратная функция к эмиттеру типа компилятора: <valueType> → строка DSL в КРАТЧАЙШЕЙ
+    форме (Boolean, String, String(10,fixed), Number(15,3,nonneg), DateTime, CatalogRef.X,
+    AnyRef), из которой компилятор восстановит тот же XML. Пустой тег → пустая строка:
+    «содержит значение» без указания типа — самостоятельное состояние.
+    Префикс ссылочного типа разрешаем по URI, а не по имени: локальное объявление платформа
+    называет сгенерированным dNpM. Чужое пространство имён оставляем как есть."""
+    types = []
+    quals = {}
+    for child in node:
+        tag = etree.QName(child).localname
+        if tag in ('Type', 'TypeSet'):
+            types.append((tag, child, (child.text or '').strip()))
+        elif tag.endswith('Qualifiers'):
+            quals[tag[:-len('Qualifiers')]] = child
+
+    def qual(kind, name, default=''):
+        el = quals.get(kind)
+        if el is None:
+            return default
+        sub = find(el, 'v8:' + name)
+        val = text_of(sub)
+        return val.strip() if val else default
+
+    parts = []
+    for tag, child, val in types:
+        if ':' in val:
+            prefix, name = val.split(':', 1)
+            uri = child.nsmap.get(prefix)
+            if uri == CFG_NS:
+                val = name
+            elif uri == 'http://www.w3.org/2001/XMLSchema':
+                val = 'xs:' + name
+        if val == 'xs:boolean':
+            parts.append('Boolean')
+        elif val == 'xs:string':
+            length = qual('String', 'Length', '0')
+            fixed = qual('String', 'AllowedLength', 'Variable') == 'Fixed'
+            if fixed:
+                parts.append(f'String({length},fixed)')
+            elif length != '0':
+                parts.append(f'String({length})')
+            else:
+                parts.append('String')
+        elif val == 'xs:decimal':
+            digits = qual('Number', 'Digits', '0')
+            fraction = qual('Number', 'FractionDigits', '0')
+            nonneg = qual('Number', 'AllowedSign', 'Any') == 'Nonnegative'
+            if nonneg:
+                parts.append(f'Number({digits},{fraction},nonneg)')
+            elif digits != '0' or fraction != '0':
+                parts.append(f'Number({digits},{fraction})')
+            else:
+                parts.append('Number')
+        elif val == 'xs:dateTime':
+            parts.append(qual('Date', 'DateFractions', 'DateTime'))
+        else:
+            parts.append(val)
+    return ' + '.join(parts)
 
 
 def int_of(node, default=0):
@@ -310,6 +380,12 @@ def main():
                 val = text_of(item) if item is not None else None
                 if val:
                     fmt["Props"][tag] = val
+                continue
+            # Тип значения ячейки — единственный тег со СВОЕЙ структурой: разбираем его до
+            # обеих отсечек ниже. Пустой <valueType/> тоже значим — это «содержит значение»
+            # без указания типа.
+            if tag == "valueType":
+                fmt["Props"][tag] = value_type_to_dsl(child)
                 continue
             # Вложенный элемент скаляром не является: .text дал бы пустоту, а ps1-порт брал
             # InnerText и получал склейку поддерева — отсюда расхождение портов.
@@ -952,7 +1028,11 @@ def main():
             gap_cells = []
 
             for cell in rd["Cells"]:
-                has_content = cell["Param"] or cell["HasText"]
+                # Ячейка-поле ввода — содержательная, даже когда ни текста, ни параметра в ней
+                # нет: значение задаёт её формат. Без этого такая строка уходила бы в пустые.
+                cf = get_format(cell["FormatIdx"])
+                has_value = bool(cf and cf["Props"].get("containsValue") == "true")
+                has_content = cell["Param"] or cell["HasText"] or has_value
                 has_merge = f"{global_row},{cell['Col']}" in merge_map
 
                 if has_content or has_merge:
@@ -1029,6 +1109,23 @@ def main():
                     sn = get_style_name(cell["FormatIdx"])
                     if sn != "default" or cells_name:
                         dsl_cell["style"] = sn
+
+                # Значение (ячейка-поле ввода). Свойство живёт в формате, но принадлежит
+                # ячейке: на корпусе на такие записи ссылаются только <f>.
+                if cell_fmt and cell_fmt["Props"].get("containsValue") == "true":
+                    dsl_cell["valueType"] = cell_fmt["Props"].get("valueType", "")
+                    ctl = cell_fmt["Props"].get("controlType")
+                    if ctl is None:
+                        # Формат без <controlType> вовсе — так пишут машинно-сгенерированные
+                        # макеты регламентированной отчётности; компилятор такое повторит
+                        # только по явному указанию.
+                        dsl_cell["control"] = "none"
+                    else:
+                        name = VALUE_CONTROL_NAMES.get(ctl.lower(), ctl)
+                        # input — умолчание компилятора, писать его значит шуметь на 63 629
+                        # форматах корпуса.
+                        if name != "input":
+                            dsl_cell["control"] = name
 
                 # Content
                 fill_type = cell_fmt["FillType"] if cell_fmt else ""

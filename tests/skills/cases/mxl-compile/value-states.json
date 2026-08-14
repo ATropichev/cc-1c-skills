@@ -1,0 +1,26 @@
+{
+  "name": "Ячейки-поля ввода: три состояния типа и элемент управления",
+  "input": {
+    "columns": 4,
+    "styles": { "bordered": { "border": "Solid" } },
+    "areas": [
+      {
+        "name": "Состояния",
+        "rows": [
+          { "cells": [
+            { "col": 1, "valueType": "" },
+            { "col": 2, "valueType": "Number(15,3)", "control": "none" },
+            { "col": 3, "valueType": "Boolean", "control": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" },
+            { "col": 4, "valueType": "String(50)", "style": "bordered" }
+          ]},
+          { "rowStyle": "bordered", "cells": [
+            { "col": 2, "valueType": "Number(10,2)", "param": "Сумма", "detail": "Расшифровка" }
+          ]}
+        ]
+      }
+    ]
+  },
+  "params": {
+    "outputPath": "Template.xml"
+  }
+}

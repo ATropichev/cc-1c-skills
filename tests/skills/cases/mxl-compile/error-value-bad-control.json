@@ -1,0 +1,14 @@
+{
+  "name": "Ошибка: неизвестный элемент управления",
+  "input": {
+    "columns": 1,
+    "areas": [
+      {
+        "name": "Ввод",
+        "rows": [{ "cells": [{ "col": 1, "valueType": "Boolean", "control": "кнопка" }] }]
+      }
+    ]
+  },
+  "params": { "outputPath": "Template.xml" },
+  "expectError": "Unknown 'control' value \"кнопка\" (area \"Ввод\"). Allowed: input, checkbox, none or a GUID"
+}

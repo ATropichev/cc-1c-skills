@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.20 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.21 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -78,6 +78,78 @@ function ConvertTo-DslColor {
 	return $val
 }
 
+$CFG_NS = 'http://v8.1c.ru/8.1/data/enterprise/current-config'
+
+# Элемент управления ячейки: в выгрузке это GUID, имён у платформы в XML нет.
+$valueControlNames = @{
+	'381ed624-9217-4e63-85db-c4c3cb87daae' = 'input'
+	'35af3d93-d7c7-4a2e-a8eb-bac87a1a3f26' = 'checkbox'
+}
+
+# Обратная функция к эмиттеру типа компилятора: <valueType> → строка DSL в КРАТЧАЙШЕЙ форме
+# (Boolean, String, String(10,fixed), Number(15,3,nonneg), DateTime, CatalogRef.X, AnyRef),
+# из которой компилятор восстановит тот же XML. Пустой тег → пустая строка: «содержит
+# значение» без указания типа — самостоятельное состояние.
+# Префикс ссылочного типа разрешаем по URI, а не по имени: локальное объявление платформа
+# называет сгенерированным dNpM. Чужое пространство имён оставляем как есть.
+function Get-ValueQualifier {
+	param($quals, [string]$kind, [string]$name, [string]$default = '')
+	if (-not $quals.ContainsKey($kind)) { return $default }
+	$sub = $quals[$kind].SelectSingleNode("v8:$name", $ns)
+	if ($sub -and $sub.InnerText) { return $sub.InnerText.Trim() }
+	return $default
+}
+
+function ConvertFrom-ValueTypeNode {
+	param($node)
+	$types = @()
+	$quals = @{}
+	foreach ($child in $node.ChildNodes) {
+		if ($child.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
+		$tag = $child.get_LocalName()
+		if ($tag -ceq 'Type' -or $tag -ceq 'TypeSet') {
+			$types += ,@($child, $child.InnerText.Trim())
+		} elseif ($tag -like '*Qualifiers') {
+			$quals[$tag.Substring(0, $tag.Length - 'Qualifiers'.Length)] = $child
+		}
+	}
+
+	$parts = @()
+	foreach ($t in $types) {
+		$child = $t[0]
+		$val = $t[1]
+		if ($val -like '*:*') {
+			$prefix = $val.Substring(0, $val.IndexOf(':'))
+			$name = $val.Substring($val.IndexOf(':') + 1)
+			# get_*(): XML-адаптер PowerShell перекрывает .NET-члены одноимёнными атрибутами узла.
+			$uri = $child.GetNamespaceOfPrefix($prefix)
+			if ($uri -ceq $CFG_NS) { $val = $name }
+			elseif ($uri -ceq 'http://www.w3.org/2001/XMLSchema') { $val = "xs:$name" }
+		}
+		if ($val -ceq 'xs:boolean') {
+			$parts += 'Boolean'
+		} elseif ($val -ceq 'xs:string') {
+			$length = Get-ValueQualifier $quals 'String' 'Length' '0'
+			$fixed = (Get-ValueQualifier $quals 'String' 'AllowedLength' 'Variable') -ceq 'Fixed'
+			if ($fixed) { $parts += "String($length,fixed)" }
+			elseif ($length -ne '0') { $parts += "String($length)" }
+			else { $parts += 'String' }
+		} elseif ($val -ceq 'xs:decimal') {
+			$digits = Get-ValueQualifier $quals 'Number' 'Digits' '0'
+			$fraction = Get-ValueQualifier $quals 'Number' 'FractionDigits' '0'
+			$nonneg = (Get-ValueQualifier $quals 'Number' 'AllowedSign' 'Any') -ceq 'Nonnegative'
+			if ($nonneg) { $parts += "Number($digits,$fraction,nonneg)" }
+			elseif ($digits -ne '0' -or $fraction -ne '0') { $parts += "Number($digits,$fraction)" }
+			else { $parts += 'Number' }
+		} elseif ($val -ceq 'xs:dateTime') {
+			$parts += (Get-ValueQualifier $quals 'Date' 'DateFractions' 'DateTime')
+		} else {
+			$parts += $val
+		}
+	}
+	return ($parts -join ' + ')
+}
+
 # --- 2. Extract font palette ---
 
 # Размер шрифта бывает дробным (8.3, 11.3 — в корпусе ERP это треть макетов). [int] его
@@ -142,6 +214,13 @@ foreach ($fmtNode in $root.SelectNodes("d:format", $ns)) {
 		if ($formatMl.ContainsKey($tag)) {
 			$item = $child.SelectSingleNode("v8:item/v8:content", $ns)
 			if ($item -and $item.InnerText) { $fmt.Props[$tag] = $item.InnerText }
+			continue
+		}
+		# Тип значения ячейки — единственный тег со СВОЕЙ структурой: разбираем его до обеих
+		# отсечек ниже. Пустой <valueType/> тоже значим — это «содержит значение» без
+		# указания типа.
+		if ($tag -ceq 'valueType') {
+			$fmt.Props[$tag] = ConvertFrom-ValueTypeNode $child
 			continue
 		}
 		# Вложенный элемент скаляром не является: InnerText склеил бы всё поддерево вместе
@@ -952,7 +1031,11 @@ foreach ($area in $blocks) {
 		$gapCells = @()
 
 		foreach ($cell in $rd.Cells) {
-			$hasContent = $cell.Param -or $cell.HasText
+			# Ячейка-поле ввода — содержательная, даже когда ни текста, ни параметра в ней нет:
+			# значение задаёт её формат. Без этого такая строка уходила бы в пустые.
+			$cf = Get-Format $cell.FormatIdx
+			$hasValue = ($cf -and $cf.Props['containsValue'] -ceq 'true')
+			$hasContent = $cell.Param -or $cell.HasText -or $hasValue
 			$hasMerge = $mergeMap.ContainsKey("$globalRow,$($cell.Col)")
 
 			if ($hasContent -or $hasMerge) {
@@ -1031,6 +1114,24 @@ foreach ($area in $blocks) {
 				$sn = Get-StyleName $cell.FormatIdx
 				if ($sn -ne "default" -or $cellsName) {
 					$dslCell["style"] = $sn
+				}
+			}
+
+			# Значение (ячейка-поле ввода). Свойство живёт в формате, но принадлежит ячейке:
+			# на корпусе на такие записи ссылаются только <f>.
+			if ($cellFmt -and $cellFmt.Props['containsValue'] -ceq 'true') {
+				$dslCell["valueType"] = if ($cellFmt.Props.Contains('valueType')) { $cellFmt.Props['valueType'] } else { "" }
+				if (-not $cellFmt.Props.Contains('controlType')) {
+					# Формат без <controlType> вовсе — так пишут машинно-сгенерированные макеты
+					# регламентированной отчётности; компилятор такое повторит только по
+					# явному указанию.
+					$dslCell["control"] = "none"
+				} else {
+					$ctl = "$($cellFmt.Props['controlType'])"
+					$name = if ($valueControlNames.ContainsKey($ctl.ToLowerInvariant())) { $valueControlNames[$ctl.ToLowerInvariant()] } else { $ctl }
+					# input — умолчание компилятора, писать его значит шуметь на 63 629
+					# форматах корпуса.
+					if ($name -cne 'input') { $dslCell["control"] = $name }
 				}
 			}
 

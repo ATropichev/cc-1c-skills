@@ -1,0 +1,7 @@
+{
+  "name": "Ошибка: ячейка одновременно содержит значение и текст",
+  "setup": "fixture:value-cell-with-text",
+  "params": { "templatePath": "Template.xml" },
+  "expectError": true,
+  "expect": { "stdoutContains": "cell contains a value and text at the same time" }
+}

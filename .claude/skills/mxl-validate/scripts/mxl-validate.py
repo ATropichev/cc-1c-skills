@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mxl-validate v1.2 — Validate 1C spreadsheet document Template.xml
+# mxl-validate v1.3 — Validate 1C spreadsheet document Template.xml
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates spreadsheet Template.xml: height, palette refs, column/row indices, areas, merges."""
 import sys, os, argparse
@@ -223,7 +223,11 @@ def main():
             r.error(f'Font index {max_font_ref} exceeds palette size ({font_count})')
     elif max_font_ref > 0:
         r.error(f'Font index {max_font_ref} referenced but no fonts defined')
-    # No font references — no check needed
+    else:
+        # Макет без единого шрифта — норма (ячейки-поля ввода, макеты без оформления).
+        # Строку печатаем как ps1-порт: раньше py молчал, и на таком макете число проверок
+        # у портов расходилось.
+        r.ok('No font references')
 
     # --- Check 11: line/border indices in formats ---
     if line_count > 0:
@@ -233,7 +237,8 @@ def main():
             r.error(f'Line index {max_line_ref} exceeds palette size ({line_count})')
     elif max_line_ref > 0:
         r.error(f'Line index {max_line_ref} referenced but no lines defined')
-    # No line/border references — no check needed
+    else:
+        r.ok('No line/border references')
 
     # --- Check 3, 4, 5, 6: row/cell checks ---
     max_cell_format_ref = 0
@@ -392,6 +397,67 @@ def main():
                 draw_id_node = drawing.find(f'{{{NS_D}}}id')
                 draw_id = draw_id_node.text if draw_id_node is not None else '?'
                 r.error(f'Drawing id={draw_id}: pictureIndex={pic_idx} > picture count ({picture_count})')
+
+    # --- Check 13: value cells (input fields) ---
+    # Свойства containsValue/valueType/controlType принадлежат ЯЧЕЙКЕ: на корпусе ERP
+    # (370 197 ссылок) на такие записи палитры ссылаются только <f>, ни строка, ни колонка,
+    # ни defaultFormatIndex. Ячейка со значением текста не несёт — ни одна из 370 197.
+    value_format_idx = set()
+    control_guids = ('381ed624-9217-4e63-85db-c4c3cb87daae', '35af3d93-d7c7-4a2e-a8eb-bac87a1a3f26')
+    for i, fmt in enumerate(format_nodes, start=1):
+        contains = fmt.find(f'{{{NS_D}}}containsValue')
+        vt = fmt.find(f'{{{NS_D}}}valueType')
+        if contains is None and vt is None:
+            continue
+        value_format_idx.add(i)
+        if contains is None or (contains.text or '').strip() != 'true':
+            r.error(f'Format {i}: <valueType> without <containsValue>true</containsValue>')
+        elif vt is None:
+            r.error(f'Format {i}: <containsValue> without <valueType>')
+        if vt is not None:
+            for child in vt:
+                tag = child.tag.split('}')[-1]
+                if tag not in ('Type', 'TypeSet') and not tag.endswith('Qualifiers'):
+                    r.error(f'Format {i}: unexpected <{tag}> inside <valueType>')
+        ctl = fmt.find(f'{{{NS_D}}}controlType')
+        if ctl is not None and (ctl.text or '').strip().lower() not in control_guids:
+            r.warn(f'Format {i}: unknown controlType {(ctl.text or "").strip()}')
+
+    if value_format_idx:
+        for ri in root.findall(f'{{{NS_D}}}rowsItem'):
+            if r.stopped:
+                break
+            row = ri.find(f'{{{NS_D}}}row')
+            if row is None:
+                continue
+            idx_node = ri.find(f'{{{NS_D}}}index')
+            rn = idx_node.text if idx_node is not None else '?'
+            row_fmt = row.find(f'{{{NS_D}}}formatIndex')
+            if row_fmt is not None and row_fmt.text and int(row_fmt.text) in value_format_idx:
+                r.warn(f'Row {rn}: formatIndex points to a value format (cell-only property)')
+            for c_group in row.findall(f'{{{NS_D}}}c'):
+                cell = c_group.find(f'{{{NS_D}}}c')
+                if cell is None:
+                    continue
+                f_node = cell.find(f'{{{NS_D}}}f')
+                if f_node is None or not f_node.text or int(f_node.text) not in value_format_idx:
+                    continue
+                if cell.find(f'{{{NS_D}}}tl') is not None:
+                    r.error(f'Row {rn}: cell contains a value and text at the same time')
+        for cols in root.findall(f'{{{NS_D}}}columns'):
+            for ci in cols.findall(f'{{{NS_D}}}columnsItem'):
+                col = ci.find(f'{{{NS_D}}}column')
+                if col is None:
+                    continue
+                fmt_node = col.find(f'{{{NS_D}}}formatIndex')
+                if fmt_node is not None and fmt_node.text and int(fmt_node.text) in value_format_idx:
+                    col_idx_node = ci.find(f'{{{NS_D}}}index')
+                    col_idx_text = col_idx_node.text if col_idx_node is not None else '?'
+                    r.warn(f'Column {col_idx_text}: formatIndex points to a value format (cell-only property)')
+        dfi = root.find(f'{{{NS_D}}}defaultFormatIndex')
+        if dfi is not None and dfi.text and int(dfi.text) in value_format_idx:
+            r.warn('defaultFormatIndex points to a value format (cell-only property)')
+        r.ok(f'Value cells: {len(value_format_idx)} value formats')
 
     # --- Finalize ---
     checks = r.ok_count + r.errors + r.warnings
