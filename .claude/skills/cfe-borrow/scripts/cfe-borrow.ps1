@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.27 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.28 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -73,6 +73,50 @@ function Rewrite-ChoiceParameterLinks {
 	# Опустевший контейнер платформе не нужен
 	$xml = [regex]::Replace($xml, '(?s)\s*<ChoiceParameterLinks>\s*</ChoiceParameterLinks>', '')
 	return $xml
+}
+
+# Имена ПРЯМЫХ детей собственного <ChildObjects> объекта — для дедупа при повторном
+# заимствовании. Текстом это не снять: regex «первый <ChildObjects> до первого </ChildObjects>»
+# у объекта с табличными частями обрывается на закрытии первой ТЧ, забирает имена её колонок и
+# теряет то, что идёт после неё.
+function Get-OwnChildObjectNames {
+	param([string]$objFile)
+
+	$names = @{}
+	if (-not (Test-Path -LiteralPath $objFile)) { return $names }
+	$doc = New-Object System.Xml.XmlDocument
+	$doc.PreserveWhitespace = $false
+	try { $doc.Load($objFile) } catch { return $names }
+	$objEl = $null
+	foreach ($c in $doc.DocumentElement.ChildNodes) {
+		if ($c.NodeType -eq 'Element') { $objEl = $c; break }
+	}
+	if (-not $objEl) { return $names }
+	$childObjs = $objEl.SelectSingleNode("*[local-name()='ChildObjects']")
+	if (-not $childObjs) { return $names }
+	foreach ($child in $childObjs.ChildNodes) {
+		if ($child.NodeType -ne 'Element') { continue }
+		$nameNode = $child.SelectSingleNode("*[local-name()='Properties']/*[local-name()='Name']")
+		if ($nameNode) { $names[$nameNode.InnerText.Trim()] = $true }
+	}
+	return $names
+}
+
+# Вставка в СОБСТВЕННЫЙ <ChildObjects> объекта. Свой контейнер закрывается в файле последним:
+# объект в файле один, а вложенные <ChildObjects> табличных частей закрываются раньше. Замена по
+# всем вхождениям раскидывала реквизиты по каждой ТЧ — ps1 рвал XML, py прятал ТЧ внутрь ТЧ.
+function Insert-IntoOwnChildObjects {
+	param([string]$text, [string]$content)
+
+	$closeIdx = $text.LastIndexOf('</ChildObjects>')
+	if ($closeIdx -ge 0) {
+		return $text.Substring(0, $closeIdx) + "${content}`r`n`t`t" + $text.Substring($closeIdx)
+	}
+	# Своего закрывающего тега нет — значит контейнер самозакрытый (детей у него нет, вложенных тоже)
+	$selfMatches = [regex]::Matches($text, '<ChildObjects\s*/>')
+	if ($selfMatches.Count -eq 0) { return $text }
+	$m = $selfMatches[$selfMatches.Count - 1]
+	return $text.Substring(0, $m.Index) + "<ChildObjects>${content}`r`n`t`t</ChildObjects>" + $text.Substring($m.Index + $m.Length)
 }
 
 # --- 1. Resolve paths ---
@@ -1597,14 +1641,9 @@ function Merge-AttributesIntoObject {
 		if ($text3.Length -gt 0 -and $text3[0] -eq [char]0xFEFF) { $text3 = $text3.Substring(1) }
 		$text3 = $text3.Replace('encoding="utf-8"', 'encoding="UTF-8"')
 
-		# Insert attributes — handle both <ChildObjects/> and <ChildObjects>...</ChildObjects>.
-		# Самозакрытый элемент раскрывается здесь же, а не пробельным узлом в DOM: тот давал
+		# Самозакрытый элемент раскрывается текстом, а не пробельным узлом в DOM: тот давал
 		# лишнюю строку с табуляцией перед первым <Attribute> (у Конфигуратора пустых строк нет).
-		if ($text3 -match '<ChildObjects\s*/>') {
-			$text3 = [regex]::Replace($text3, '<ChildObjects\s*/>', "<ChildObjects>${allAttrXml}`r`n`t`t</ChildObjects>")
-		} else {
-			$text3 = $text3.Replace('</ChildObjects>', "${allAttrXml}`r`n`t`t</ChildObjects>")
-		}
+		$text3 = Insert-IntoOwnChildObjects $text3 $allAttrXml
 
 		# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
 		# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
@@ -1664,12 +1703,7 @@ function Borrow-MainAttribute {
 	$objContent = [System.IO.File]::ReadAllText($objFile, (New-Object System.Text.UTF8Encoding($true)))
 
 	# Dedup: skip attributes/TS already present in object's ChildObjects (idempotent re-borrow)
-	$existingChildNames = @{}
-	if ($objContent -match '(?s)<ChildObjects>(.*?)</ChildObjects>') {
-		foreach ($nm in [regex]::Matches($Matches[1], '<Name>(\w+)</Name>')) {
-			$existingChildNames[$nm.Groups[1].Value] = $true
-		}
-	}
+	$existingChildNames = Get-OwnChildObjectNames $objFile
 	$insertAttrs = @($srcAttrs | Where-Object { -not $existingChildNames.ContainsKey($_.Name) })
 	$insertTS = @($srcTS | Where-Object { -not $existingChildNames.ContainsKey($_.Name) })
 
@@ -1701,17 +1735,9 @@ function Borrow-MainAttribute {
 		}
 	}
 
-	# Replace empty ChildObjects with adopted content
+	# Добавить заимствованное содержимое в ChildObjects объекта (там уже может лежать <Form>)
 	if ($adoptedContent) {
-		# Handle <ChildObjects/> (self-closing)
-		if ($objContent -match '<ChildObjects\s*/>') {
-			$objContent = $objContent -replace '<ChildObjects\s*/>', "<ChildObjects>`r`n${adoptedContent}`r`n`t`t</ChildObjects>"
-		}
-		# Handle <ChildObjects>...</ChildObjects> (may already have Form entry)
-		elseif ($objContent -match '(?s)<ChildObjects>(.*?)</ChildObjects>') {
-			$existingInner = $Matches[1]
-			$objContent = $objContent -replace '(?s)<ChildObjects>(.*?)</ChildObjects>', "<ChildObjects>${existingInner}`r`n${adoptedContent}`r`n`t`t</ChildObjects>"
-		}
+		$objContent = Insert-IntoOwnChildObjects $objContent "`r`n${adoptedContent}"
 	}
 
 	$encBom = New-Object System.Text.UTF8Encoding($true)

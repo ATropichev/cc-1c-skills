@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.27 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.28 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -92,6 +92,50 @@ def rewrite_choice_parameter_links(xml, attr_uuids):
     # Опустевший контейнер платформе не нужен
     xml = re.sub(r'\s*<ChoiceParameterLinks>\s*</ChoiceParameterLinks>', '', xml, flags=re.DOTALL)
     return xml
+
+
+def get_own_child_object_names(obj_file):
+    """Имена ПРЯМЫХ детей собственного <ChildObjects> объекта — для дедупа при повторном
+    заимствовании. Текстом это не снять: regex «первый <ChildObjects> до первого </ChildObjects>»
+    у объекта с табличными частями обрывается на закрытии первой ТЧ, забирает имена её колонок и
+    теряет то, что идёт после неё."""
+    names = set()
+    try:
+        tree = etree.parse(obj_file)
+    except Exception:
+        return names
+    root = tree.getroot()
+    obj_el = next((c for c in root if isinstance(c.tag, str)), None)
+    if obj_el is None:
+        return names
+    child_objs = next((c for c in obj_el if isinstance(c.tag, str) and localname(c) == "ChildObjects"), None)
+    if child_objs is None:
+        return names
+    for child in child_objs:
+        if not isinstance(child.tag, str):
+            continue
+        props = next((p for p in child if isinstance(p.tag, str) and localname(p) == "Properties"), None)
+        if props is None:
+            continue
+        nm = next((n for n in props if isinstance(n.tag, str) and localname(n) == "Name"), None)
+        if nm is not None and nm.text:
+            names.add(nm.text.strip())
+    return names
+
+
+def insert_into_own_child_objects(text, content):
+    """Вставка в СОБСТВЕННЫЙ <ChildObjects> объекта. Свой контейнер закрывается в файле последним:
+    объект в файле один, а вложенные <ChildObjects> табличных частей закрываются раньше. Замена по
+    всем вхождениям раскидывала реквизиты по каждой ТЧ — ps1 рвал XML, py прятал ТЧ внутрь ТЧ."""
+    close_idx = text.rfind("</ChildObjects>")
+    if close_idx >= 0:
+        return text[:close_idx] + content + "\r\n\t\t" + text[close_idx:]
+    # Своего закрывающего тега нет — значит контейнер самозакрытый (детей у него нет, вложенных тоже)
+    self_matches = list(re.finditer(r'<ChildObjects\s*/>', text))
+    if not self_matches:
+        return text
+    m = self_matches[-1]
+    return text[:m.start()] + f"<ChildObjects>{content}\r\n\t\t</ChildObjects>" + text[m.end():]
 
 
 def decode_numeric_entities(s):
@@ -1203,10 +1247,8 @@ def main():
         with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
             obj_content = fh.read()
 
-        # Collect existing attribute names for dedup (text-based)
-        existing_names = set()
-        for m in re.finditer(r'<Name>(\w+)</Name>', obj_content):
-            existing_names.add(m.group(1))
+        # Collect existing names for dedup — только прямые дети своего ChildObjects
+        existing_names = get_own_child_object_names(obj_file)
 
         all_attr_xml = ""
         added = 0
@@ -1217,11 +1259,7 @@ def main():
             added += 1
 
         if added > 0:
-            # Insert attributes — handle both <ChildObjects/> and <ChildObjects>...</ChildObjects>
-            if re.search(r'<ChildObjects\s*/>', obj_content):
-                obj_content = re.sub(r'<ChildObjects\s*/>', f"<ChildObjects>{all_attr_xml}\r\n\t\t</ChildObjects>", obj_content)
-            else:
-                obj_content = obj_content.replace("</ChildObjects>", f"{all_attr_xml}\r\n\t\t</ChildObjects>")
+            obj_content = insert_into_own_child_objects(obj_content, all_attr_xml)
             write_utf8_bom(obj_file, obj_content)
             info(f"  Merged {added} attribute(s) into: {obj_file}")
 
@@ -1265,11 +1303,7 @@ def main():
             obj_content = fh.read()
 
         # Dedup: skip attributes/TS already present in object's ChildObjects (idempotent re-borrow)
-        existing_child_names = set()
-        m_co = re.search(r'(?s)<ChildObjects>(.*?)</ChildObjects>', obj_content)
-        if m_co:
-            for nm in re.findall(r'<Name>(\w+)</Name>', m_co.group(1)):
-                existing_child_names.add(nm)
+        existing_child_names = get_own_child_object_names(obj_file)
         insert_attrs = [a for a in src_attrs if a["Name"] not in existing_child_names]
         insert_ts = [t for t in src_ts if t["Name"] not in existing_child_names]
 
@@ -1295,19 +1329,9 @@ def main():
             if props_xml:
                 obj_content = obj_content.replace("</ExtendedConfigurationObject>", f"</ExtendedConfigurationObject>{props_xml}", 1)
 
-        # Replace empty ChildObjects with adopted content
+        # Добавить заимствованное содержимое в ChildObjects объекта (там уже может лежать <Form>)
         if adopted_content:
-            # Handle <ChildObjects/> (self-closing)
-            if re.search(r'<ChildObjects\s*/>', obj_content):
-                obj_content = re.sub(r'<ChildObjects\s*/>', f"<ChildObjects>\r\n{adopted_content}\r\n\t\t</ChildObjects>", obj_content)
-            # Handle <ChildObjects>...</ChildObjects> (may already have Form entry)
-            elif re.search(r'(?s)<ChildObjects>(.*?)</ChildObjects>', obj_content):
-                m = re.search(r'(?s)<ChildObjects>(.*?)</ChildObjects>', obj_content)
-                existing_inner = m.group(1)
-                obj_content = obj_content.replace(
-                    f"<ChildObjects>{existing_inner}</ChildObjects>",
-                    f"<ChildObjects>{existing_inner}\r\n{adopted_content}\r\n\t\t</ChildObjects>"
-                )
+            obj_content = insert_into_own_child_objects(obj_content, f"\r\n{adopted_content}")
 
         write_utf8_bom(obj_file, obj_content)
         info(f"  Enriched object: {obj_file}")
