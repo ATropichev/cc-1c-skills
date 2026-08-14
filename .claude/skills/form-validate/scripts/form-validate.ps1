@@ -1,4 +1,4 @@
-﻿# form-validate v1.16 — Validate 1C managed form
+﻿# form-validate v1.17 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -843,7 +843,10 @@ if (-not $stopped -and $isExtension) {
 	# Check 5 такое пропускает: у заимствованной формы он не проверяет базовые элементы (id < 1000000),
 	# а привязки в <xr:Link> вообще вне его списка тегов. Между тем это ровно тот случай, на котором
 	# платформа отвергает загрузку: «Неверный путь к полю - Объект.X». Правило: если основной реквизит
-	# не объявлен в <Attributes> формы, любой путь с корнем «Объект» не разрешится.
+	# не объявлен в <Attributes> формы, любой путь с его корнем не разрешится.
+	# Корень берётся из основного реквизита BaseForm: «Объект» он только у формы объекта, у формы
+	# списка это «Список», у формы записи регистра «Запись». С зашитым «Объект» проверка на таких
+	# формах молча не срабатывала — валидатор рапортовал «чисто» на форме, которую платформа не примет.
 	$mainAttrDeclared = $false
 	foreach ($attr in $attrNodes) {
 		$maNode = $attr.SelectSingleNode("f:MainAttribute", $nsMgr)
@@ -855,15 +858,17 @@ if (-not $stopped -and $isExtension) {
 		# <ChoiceParameterLinks>, а те живут в чужом пространстве имён.
 		$rawForm = [System.IO.File]::ReadAllText($FormPath, [System.Text.Encoding]::UTF8)
 		$mainBase = $baseFormNode.SelectSingleNode("f:Attributes/f:Attribute[f:MainAttribute='true']", $bfNs)
+		$rootName = if ($mainBase -and $mainBase.GetAttribute("name")) { $mainBase.GetAttribute("name") } else { "Объект" }
+		$rootPat = [regex]::Escape($rootName)
 		$danglingPaths = @{}
-		foreach ($m in [regex]::Matches($rawForm, '<(?:\w+:)?\w*DataPath[^>]*>(Объект\.[^<]+)</(?:\w+:)?\w*DataPath>')) {
+		foreach ($m in [regex]::Matches($rawForm, "<(?:\w+:)?\w*DataPath[^>]*>(${rootPat}\.[^<]+)</(?:\w+:)?\w*DataPath>")) {
 			$danglingPaths[$m.Groups[1].Value] = $true
 		}
 		if ($danglingPaths.Count -gt 0) {
 			$shown = @($danglingPaths.Keys | Sort-Object)
 			$sample = ($shown | Select-Object -First 3) -join ", "
 			$suffix = if ($shown.Count -gt 3) { " (и ещё $($shown.Count - 3))" } else { "" }
-			Report-Error "Path(s) rooted at 'Объект' but the form declares no MainAttribute: $sample$suffix"
+			Report-Error "Path(s) rooted at '${rootName}' but the form declares no MainAttribute: $sample$suffix"
 		} elseif ($mainBase) {
 			Report-OK "Object paths: none dangling (MainAttribute not declared)"
 		}

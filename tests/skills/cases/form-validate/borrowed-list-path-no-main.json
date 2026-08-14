@@ -1,0 +1,7 @@
+{
+  "name": "Ошибка: путь Список.* в заимствованной форме списка без объявленного основного реквизита",
+  "setup": "fixture:borrowed-list-path-no-main",
+  "params": { "formPath": "Documents/Заказ/Forms/ФормаСписка" },
+  "expectError": true,
+  "expect": { "stdoutContains": ["Список.Партнер", "rooted at 'Список'"] }
+}
