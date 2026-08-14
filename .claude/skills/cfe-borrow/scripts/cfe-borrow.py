@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.25 — Borrow objects from configuration into extension (CFE) (не переносить FoldersOnTop — платформа его не хранит)
+# cfe-borrow v1.26 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -39,9 +39,18 @@ V8_NS = "http://v8.1c.ru/8.1/data/core"
 # Form data-binding tags (value = attribute path). A binding survives only if its root
 # attribute is borrowed into the form's <Attributes>; otherwise it must be stripped or the
 # platform rejects the form with "Неверный путь к данным" on load.
-FORM_BINDING_DATA_TAGS = ["DataPath", "TitleDataPath", "FooterDataPath", "HeaderDataPath", "MultipleValueDataPath", "MultipleValuePresentDataPath"]
+# RowPictureDataPath тоже путь к данным («Объект.Товары.РасхождениеЗаказ», «Список.DefaultPicture»),
+# а не индекс картинки: эталон Конфигуратора сохраняет его с заимствованным основным реквизитом
+# и выбрасывает без него — то же правило, что у остальных путей.
+FORM_BINDING_DATA_TAGS = ["DataPath", "TitleDataPath", "FooterDataPath", "HeaderDataPath", "MultipleValueDataPath", "MultipleValuePresentDataPath", "RowPictureDataPath"]
 # Picture-path binding tags (value = picture index path, never a data attribute) — always stripped in the skeleton.
-FORM_BINDING_PICTURE_TAGS = ["RowPictureDataPath", "MultipleValuePictureDataPath"]
+FORM_BINDING_PICTURE_TAGS = ["MultipleValuePictureDataPath"]
+
+# Прямые дети <Form>, которые в заимствованную форму не переносятся.
+# Структурные секции: AutoCommandBar и ChildItems забираются отдельно, остальные выбрасываются целиком.
+FORM_STRUCTURAL_SECTIONS = ("Events", "Attributes", "Commands", "Parameters", "CommandInterface")
+# Свойства формы, значение которых — имя реквизита формы (реквизиты не заимствуются, ссылка повиснет).
+FORM_ATTRIBUTE_REF_PROPS = ("ReportResult", "DetailsData", "VariantAppearance", "GroupList")
 
 
 def strip_form_bindings(xml, keep_objekt):
@@ -1500,25 +1509,34 @@ def main():
         # (e.g. a 2.13 form inside a 2.17 extension). The platform upgrades the form to the root version.
         form_version = format_version
 
+        # Секции формы отбираются по имени, а не по позиции: свойства лежат и до, и после
+        # <CommandSet> (корпусная проверка: у всех 794 форм документов ERP с CommandSet он стоит
+        # раньше AutoCommandBar, а AutoTime/UsePostingMode/RepostOnWrite — после него). Позиционная
+        # отсечка теряла весь хвост, и платформа молча подставляла дефолты вместо потерянных свойств.
         src_auto_cmd = None
         form_props = []
-        reached_visual = False
         for fc in src_form_el:
             if not isinstance(fc.tag, str):
                 continue
             ln = localname(fc)
             if ln == "AutoCommandBar" and src_auto_cmd is None:
-                reached_visual = True
                 src_auto_cmd = fc
                 continue
-            if ln in ("ChildItems", "Events", "Attributes", "Commands", "Parameters", "CommandSet"):
-                reached_visual = True
+            # ChildItems забирается отдельным поиском ниже
+            if ln == "ChildItems":
                 continue
-            if not reached_visual:
-                # Form-level properties before AutoCommandBar (WindowOpeningMode, AutoFillCheck, etc.)
-                # with_tail=False — хвостовой пробел принадлежит родителю; с ним в вывод попадали
-                # пустые строки, которых нет у PS-порта (OuterXml хвост не включает).
-                form_props.append(decode_numeric_entities(etree.tostring(fc, encoding="unicode", with_tail=False)))
+            # Структурные секции: в расширении их содержимое недействительно (обработчики, команды и
+            # параметры базовой формы, ссылки командного интерфейса на команды базовой конфигурации).
+            if ln in FORM_STRUCTURAL_SECTIONS:
+                continue
+            # Свойства, значение которых — имя реквизита формы. Реквизиты в заимствованную форму не
+            # переносятся, поэтому Конфигуратор такие свойства выбрасывает (проверено на форме отчёта:
+            # ReportResult и DetailsData выброшены, CustomSettingsFolder — имя элемента — сохранён).
+            if ln in FORM_ATTRIBUTE_REF_PROPS:
+                continue
+            # with_tail=False — хвостовой пробел принадлежит родителю; с ним в вывод попадали
+            # пустые строки, которых нет у PS-порта (OuterXml хвост не включает).
+            form_props.append(decode_numeric_entities(etree.tostring(fc, encoding="unicode", with_tail=False)))
 
         ns_strip_pattern = re.compile(r'\s+xmlns(?::\w+)?="[^"]*"')
 
@@ -1533,8 +1551,10 @@ def main():
             auto_cmd_xml = ns_strip_pattern.sub("", auto_cmd_xml)
             auto_cmd_xml = re.sub(r'<CommandName>[^<]*</CommandName>', '<CommandName>0</CommandName>', auto_cmd_xml)
             auto_cmd_xml = auto_cmd_xml.replace('<Autofill>true</Autofill>', '<Autofill>false</Autofill>')
-            # Strip ExcludedCommand (references to standard commands invalid in extension)
-            auto_cmd_xml = re.sub(r'\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '', auto_cmd_xml)
+            # Вложенный CommandSet выбрасывается целиком, а не опустошается: Конфигуратор в заимствованной
+            # форме оставляет только корневой (тот идёт свойством формы, здесь его нет).
+            auto_cmd_xml = re.sub(r'(?s)\s*<CommandSet>.*?</CommandSet>', '', auto_cmd_xml)
+            auto_cmd_xml = re.sub(r'\s*<CommandSet/>', '', auto_cmd_xml)
             # Strip data-binding tags whose root attribute isn't borrowed
             auto_cmd_xml = strip_form_bindings(auto_cmd_xml, borrow_main_attr)
             if not borrow_main_attr:
@@ -1557,8 +1577,9 @@ def main():
             child_items_xml = strip_form_bindings(child_items_xml, borrow_main_attr)
             if not borrow_main_attr:
                 child_items_xml = rewrite_choice_parameter_links(child_items_xml, src_attr_uuids)
-            # Strip ExcludedCommand in nested AutoCommandBars (references to standard commands invalid in extension)
-            child_items_xml = re.sub(r'\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '', child_items_xml)
+            # Вложенные CommandSet (у таблиц, полей табличного документа и т.п.) — целиком, см. выше
+            child_items_xml = re.sub(r'(?s)\s*<CommandSet>.*?</CommandSet>', '', child_items_xml)
+            child_items_xml = re.sub(r'\s*<CommandSet/>', '', child_items_xml)
             # Strip TypeLink blocks with human-readable DataPath (Items.XXX)
             child_items_xml = re.sub(r'\s*<TypeLink>\s*<xr:DataPath>Items\.[^<]*</xr:DataPath>.*?</TypeLink>', '', child_items_xml, flags=re.DOTALL)
             # Strip element-level Events

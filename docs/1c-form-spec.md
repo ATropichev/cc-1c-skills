@@ -212,22 +212,51 @@ CommonForms регистрируются в `Configuration.xml`:
 
 ```
 <Form>
-  ┌─ Свойства формы (необязательные, в произвольном порядке)
+  ┌─ Свойства формы (необязательные) — часть до <CommandSet>, часть после
   ├─ <CommandSet>           — исключённые стандартные команды
+  ├─ …продолжение свойств формы (AutoTime, UsePostingMode, RepostOnWrite, ReportResult…)
   ├─ <AutoCommandBar>       — главная командная панель (обязательный, id="-1")
   ├─ <Events>               — обработчики событий формы
   ├─ <ChildItems>           — дерево UI-элементов
   ├─ <Attributes>           — реквизиты формы
+  ├─ <Commands>             — пользовательские команды
   ├─ <Parameters>           — параметры открытия формы
-  └─ <Commands>             — пользовательские команды
+  └─ <CommandInterface>     — командный интерфейс формы
 </Form>
+```
+
+Порядок **строгий**, а не произвольный: на 30223 формах корпуса (ERP, УТ, УНФ 8.5, БП, общие
+формы) не встретилось ни одной пары элементов, идущей в разном порядке в разных формах.
+
+Важно: `<CommandSet>` стоит **в середине блока свойств**, а не перед ним — свойства есть и до, и
+после него. У всех 794 форм документов ERP с `CommandSet` он предшествует `AutoCommandBar`, а
+`AutoTime`/`UsePostingMode`/`RepostOnWrite` идут **после** `CommandSet`.
+
+Надёжная граница между свойствами и структурными секциями — **`<AutoCommandBar>`**: он присутствует
+в 100% форм корпуса, и ни одно свойство никогда не стоит после него. Код, отделяющий свойства от
+структуры, должен опираться на него, а не на «первую встреченную секцию».
+
+Полный наблюдаемый порядок:
+
+```
+Title · Width · Height · WindowOpeningMode · EnterKeyBehavior · AutoSaveDataInSettings ·
+SaveDataInSettings · SaveWindowSettings · SettingsStorage · AutoTitle · AutoURL · Group ·
+ChildItemsWidth · ChildrenAlign · HorizontalSpacing · Scale · VerticalSpacing · HorizontalAlign ·
+VerticalAlign · AutoFillCheck · Customizable · Enabled · CommandBarLocation · VerticalScroll ·
+ScalingMode · ConversationsRepresentation · MobileDeviceCommandBarContent · ScaleVariant ·
+CommandSet · GroupList · ShowTitle · CreateButtonsGroupPicture · CreateButtonsGroupTitle ·
+ShowCloseButton · CollapseItemsByImportanceVariant · WindowViewMode · ShowCommandBar · AutoTime ·
+ReportResult · DetailsData · ReportFormType · UseForFoldersAndItems · UsePostingMode ·
+RepostOnWrite · VariantAppearance · AutoShowState · CustomSettingsFolder · ReportResultViewMode ·
+ViewModeApplicationOnSetReportResult · AutoCommandBar · Events · ChildItems · Attributes ·
+Commands · Parameters · CommandInterface
 ```
 
 ---
 
 ## 3. Свойства формы
 
-Прямые дочерние элементы `<Form>` (все необязательные, указываются до `<CommandSet>`/`<AutoCommandBar>`):
+Прямые дочерние элементы `<Form>` — все необязательные, порядок между ними фиксирован (см. §2):
 
 ### Общие свойства (все типы форм)
 
@@ -258,8 +287,8 @@ CommonForms регистрируются в `Configuration.xml`:
 
 | Элемент | Значения | Описание |
 |---------|----------|----------|
-| `<AutoTime>` | `CurrentOrLast`, `Current`, `Last` | Управление временем документа |
-| `<UsePostingMode>` | `Auto`, `Postings`, `Movements` | Режим проведения |
+| `<AutoTime>` | `CurrentOrLast`, `DontUse`, `Current`, `Last` | Управление временем документа. В корпусе встречаются только `CurrentOrLast` и `DontUse` |
+| `<UsePostingMode>` | `Auto`, `Regular` | Режим проведения |
 | `<RepostOnWrite>` | `true`/`false` | Перепроведение при записи |
 
 ### Свойства справочников (Catalogs, ChartsOfAccounts)
@@ -274,7 +303,7 @@ CommonForms регистрируются в `Configuration.xml`:
 |---------|----------|----------|
 | `<ReportResult>` | string | Имя реквизита результата (`Результат`) |
 | `<DetailsData>` | string | Имя реквизита расшифровки (`ДанныеРасшифровки`) |
-| `<ReportFormType>` | `Main`, `Settings`, `Choice` | Тип формы отчёта |
+| `<ReportFormType>` | `Main`, `Settings`, `Variant` | Тип формы отчёта |
 | `<AutoShowState>` | `Auto`, `Show`, `Hide` | Автоотображение состояния |
 | `<ReportResultViewMode>` | `Auto`, `Table`, `Spreadsheet` | Режим отображения результата |
 | `<ViewModeApplicationOnSetReportResult>` | `Auto`, `Always`, `Never` | Применение режима |

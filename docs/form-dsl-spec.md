@@ -55,8 +55,8 @@
 | `commandBarLocation` | `<CommandBarLocation>` | `Top`, `Bottom`, `None` |
 | `saveDataInSettings` | `<SaveDataInSettings>` | `UseList`, `Use`, `DontUse` |
 | `autoSaveDataInSettings` | `<AutoSaveDataInSettings>` | `Use`, `DontUse` |
-| `autoTime` | `<AutoTime>` | `CurrentOrLast`, `Current`, `Last` |
-| `usePostingMode` | `<UsePostingMode>` | `Auto`, `Postings`, `Movements` |
+| `autoTime` | `<AutoTime>` | `CurrentOrLast`, `DontUse`, `Current`, `Last` |
+| `usePostingMode` | `<UsePostingMode>` | `Auto`, `Regular` |
 | `repostOnWrite` | `<RepostOnWrite>` | `true` / `false` |
 | `autoURL` | `<AutoURL>` | `true` / `false` |
 | `enabled` | `<Enabled>` | `true` / `false` — доступность всей формы (редкое; форма-уровень) |

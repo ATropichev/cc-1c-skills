@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.25 — Borrow objects from configuration into extension (CFE) (не переносить FoldersOnTop — платформа его не хранит)
+﻿# cfe-borrow v1.26 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -16,9 +16,18 @@ function Warn([string]$msg) { Write-Host "[WARN] $msg" }
 # Form data-binding tags (value = attribute path). A binding survives only if its root
 # attribute is borrowed into the form's <Attributes>; otherwise it must be stripped or the
 # platform rejects the form with "Неверный путь к данным" on load.
-$script:formBindingDataTags = @('DataPath','TitleDataPath','FooterDataPath','HeaderDataPath','MultipleValueDataPath','MultipleValuePresentDataPath')
+# RowPictureDataPath тоже путь к данным («Объект.Товары.РасхождениеЗаказ», «Список.DefaultPicture»),
+# а не индекс картинки: эталон Конфигуратора сохраняет его с заимствованным основным реквизитом
+# и выбрасывает без него — то же правило, что у остальных путей.
+$script:formBindingDataTags = @('DataPath','TitleDataPath','FooterDataPath','HeaderDataPath','MultipleValueDataPath','MultipleValuePresentDataPath','RowPictureDataPath')
 # Picture-path binding tags (value = picture index path, never a data attribute) — always stripped in the skeleton.
-$script:formBindingPictureTags = @('RowPictureDataPath','MultipleValuePictureDataPath')
+$script:formBindingPictureTags = @('MultipleValuePictureDataPath')
+
+# Прямые дети <Form>, которые в заимствованную форму не переносятся.
+# Структурные секции: AutoCommandBar и ChildItems забираются отдельно, остальные выбрасываются целиком.
+$script:formStructuralSections = @('Events','Attributes','Commands','Parameters','CommandInterface')
+# Свойства формы, значение которых — имя реквизита формы (реквизиты не заимствуются, ссылка повиснет).
+$script:formAttributeRefProps = @('ReportResult','DetailsData','VariantAppearance','GroupList')
 
 # Strip data-binding tags whose root attribute isn't borrowed.
 # $keepObjekt=$true (BorrowMainAttribute): keep Объект.* data bindings, strip the rest.
@@ -687,25 +696,30 @@ function Borrow-Form {
 	# (e.g. a 2.13 form inside a 2.17 extension). The platform itself upgrades the form to the root version.
 	$formVersion = $script:formatVersion
 
-	# Find direct children: form properties, AutoCommandBar, ChildItems
+	# Find direct children: form properties, AutoCommandBar, ChildItems.
+	# Секции формы отбираются по имени, а не по позиции: свойства лежат и до, и после <CommandSet>
+	# (корпусная проверка: у всех 794 форм документов ERP с CommandSet он стоит раньше AutoCommandBar,
+	# а AutoTime/UsePostingMode/RepostOnWrite — после него). Позиционная отсечка теряла весь хвост,
+	# и платформа молча подставляла дефолты вместо потерянных свойств.
 	$srcAutoCmd = $null
 	$srcChildItems = $null
 	$formProps = @()
-	$reachedVisual = $false
 	foreach ($fc in $srcFormEl.ChildNodes) {
 		if ($fc.NodeType -ne 'Element') { continue }
 		if ($fc.LocalName -eq 'AutoCommandBar' -and -not $srcAutoCmd) {
-			$reachedVisual = $true; $srcAutoCmd = $fc; continue
+			$srcAutoCmd = $fc; continue
 		}
 		if ($fc.LocalName -eq 'ChildItems' -and -not $srcChildItems) {
-			$reachedVisual = $true; $srcChildItems = $fc; continue
+			$srcChildItems = $fc; continue
 		}
-		if ($fc.LocalName -eq 'Events' -or $fc.LocalName -eq 'Attributes' -or $fc.LocalName -eq 'Commands' -or $fc.LocalName -eq 'Parameters' -or $fc.LocalName -eq 'CommandSet') {
-			$reachedVisual = $true; continue
-		}
-		if (-not $reachedVisual) {
-			$formProps += $fc.OuterXml
-		}
+		# Структурные секции: в расширении их содержимое недействительно (обработчики, команды и
+		# параметры базовой формы, ссылки командного интерфейса на команды базовой конфигурации).
+		if ($script:formStructuralSections -ccontains $fc.LocalName) { continue }
+		# Свойства, значение которых — имя реквизита формы. Реквизиты в заимствованную форму не
+		# переносятся, поэтому Конфигуратор такие свойства выбрасывает (проверено на форме отчёта:
+		# ReportResult и DetailsData выброшены, CustomSettingsFolder — имя элемента — сохранён).
+		if ($script:formAttributeRefProps -ccontains $fc.LocalName) { continue }
+		$formProps += $fc.OuterXml
 	}
 
 	# Get OuterXml and strip redundant namespace redeclarations (they're on root <Form>)
@@ -723,8 +737,10 @@ function Borrow-Form {
 		$autoCmdXml = [regex]::Replace($autoCmdXml, $nsStripPattern, '')
 		$autoCmdXml = [regex]::Replace($autoCmdXml, '<CommandName>[^<]*</CommandName>', '<CommandName>0</CommandName>')
 		$autoCmdXml = $autoCmdXml -replace '<Autofill>true</Autofill>', '<Autofill>false</Autofill>'
-		# Strip ExcludedCommand (references to standard commands invalid in extension)
-		$autoCmdXml = [regex]::Replace($autoCmdXml, '\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '')
+		# Вложенный CommandSet выбрасывается целиком, а не опустошается: Конфигуратор в заимствованной
+		# форме оставляет только корневой (тот идёт свойством формы, здесь его нет).
+		$autoCmdXml = [regex]::Replace($autoCmdXml, '(?s)\s*<CommandSet>.*?</CommandSet>', '')
+		$autoCmdXml = [regex]::Replace($autoCmdXml, '\s*<CommandSet/>', '')
 		# Strip data-binding tags whose root attribute isn't borrowed
 		$autoCmdXml = Strip-FormBindings $autoCmdXml ([bool]$BorrowMainAttr)
 		if (-not $BorrowMainAttr) { $autoCmdXml = Rewrite-ChoiceParameterLinks $autoCmdXml $srcAttrUuids }
@@ -741,8 +757,9 @@ function Borrow-Form {
 		# (DataPath/TitleDataPath/FooterDataPath/HeaderDataPath/MultipleValue*/RowPicture*)
 		$childItemsXml = Strip-FormBindings $childItemsXml ([bool]$BorrowMainAttr)
 		if (-not $BorrowMainAttr) { $childItemsXml = Rewrite-ChoiceParameterLinks $childItemsXml $srcAttrUuids }
-		# Strip ExcludedCommand in nested AutoCommandBars (references to standard commands invalid in extension)
-		$childItemsXml = [regex]::Replace($childItemsXml, '\s*<ExcludedCommand>[^<]*</ExcludedCommand>', '')
+		# Вложенные CommandSet (у таблиц, полей табличного документа и т.п.) — целиком, см. выше
+		$childItemsXml = [regex]::Replace($childItemsXml, '(?s)\s*<CommandSet>.*?</CommandSet>', '')
+		$childItemsXml = [regex]::Replace($childItemsXml, '\s*<CommandSet/>', '')
 		# Strip TypeLink blocks with human-readable DataPath (Items.XXX — can't convert to UUID)
 		$childItemsXml = [regex]::Replace($childItemsXml, '(?s)\s*<TypeLink>\s*<xr:DataPath>Items\.[^<]*</xr:DataPath>.*?</TypeLink>', '')
 		# Strip element-level Events (base form handlers not in extension)
