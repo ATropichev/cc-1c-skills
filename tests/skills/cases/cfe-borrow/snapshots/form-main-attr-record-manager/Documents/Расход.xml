@@ -166,6 +166,7 @@
 			</Attribute>
 			<Form>ФормаСписка</Form>
 			<Form>ФормаДокумента</Form>
+			<Form>ФормаСпискаЗапрос</Form>
 			<TabularSection uuid="UUID-014">
 				<InternalInfo>
 					<xr:GeneratedType name="DocumentTabularSection.Расход.Товары" category="TabularSection">

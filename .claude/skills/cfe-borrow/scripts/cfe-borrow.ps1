@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.28 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.29 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -1341,6 +1341,20 @@ function Collect-FormDataPaths {
 		$seg0 = $m.Groups[1].Value
 		if ($script:standardFields -contains $seg0) { continue }
 		$firstLevel[$seg0] = $true
+	}
+
+	# Текст запроса динамического списка — такое же место ссылки на реквизиты объекта, как DataPath.
+	# Конфигуратор заимствует всё, что упомянуто в запросе: на эталоне Issue66Example2 это 21 из 27
+	# дочерних объектов, совпадение с ним точное в обе стороны. У списка без ручного запроса
+	# (<QueryText> нет) заимствуется только видимое на форме — эталон Issue66Example3.
+	# Разбирать язык запросов не нужно: имена-кандидаты отфильтрует Resolve-SourceAttributes по
+	# реальному составу объекта, поэтому лишние слова из запроса безвредны.
+	foreach ($qm in [regex]::Matches($content, '(?s)<QueryText>(.*?)</QueryText>')) {
+		foreach ($w in [regex]::Matches($qm.Groups[1].Value, '[\w]+')) {
+			$word = $w.Value
+			if ($script:standardFields -contains $word) { continue }
+			$firstLevel[$word] = $true
+		}
 	}
 
 	# Deduplicate deep paths

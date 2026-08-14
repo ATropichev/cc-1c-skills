@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.28 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.29 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1026,6 +1026,18 @@ def main():
             if seg0 in STANDARD_FIELDS:
                 continue
             first_level[seg0] = True
+
+        # Текст запроса динамического списка — такое же место ссылки на реквизиты объекта, как DataPath.
+        # Конфигуратор заимствует всё, что упомянуто в запросе: на эталоне Issue66Example2 это 21 из 27
+        # дочерних объектов, совпадение с ним точное в обе стороны. У списка без ручного запроса
+        # (<QueryText> нет) заимствуется только видимое на форме — эталон Issue66Example3.
+        # Разбирать язык запросов не нужно: имена-кандидаты отфильтрует resolve_source_attributes по
+        # реальному составу объекта, поэтому лишние слова из запроса безвредны.
+        for qm in re.finditer(r'(?s)<QueryText>(.*?)</QueryText>', content):
+            for w in re.finditer(r'\w+', qm.group(1)):
+                if w.group(0) in STANDARD_FIELDS:
+                    continue
+                first_level[w.group(0)] = True
 
         # Deduplicate deep paths
         seen = set()
