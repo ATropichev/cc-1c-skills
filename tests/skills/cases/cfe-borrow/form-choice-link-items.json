@@ -1,0 +1,101 @@
+{
+  "name": "Связь параметров выбора на Items.*.CurrentData вырезается: её кодировка невоспроизводима",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Catalog",
+        "name": "Склады"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Catalog",
+        "name": "Ячейки"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Document",
+        "name": "Размещение",
+        "attributes": [
+          {
+            "name": "Ячейка",
+            "type": "CatalogRef.Ячейки"
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/Размещение.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Размещение",
+        "elements": [
+          {
+            "input": "Ячейка",
+            "path": "Объект.Ячейка",
+            "choiceParameterLinks": [
+              {
+                "name": "Отбор.Владелец",
+                "dataPath": "Items.Ячейка.CurrentData.Склад"
+              }
+            ]
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.Размещение",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/Размещение/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/ext",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "ext",
+    "object": "Document.Размещение.Form.ФормаДокумента"
+  },
+  "expect": {
+    "fileNotContains": {
+      "file": "ext/Documents/Размещение/Forms/ФормаДокумента/Ext/Form.xml",
+      "text": [
+        "<xr:Link>",
+        "Items.Ячейка.CurrentData.Склад"
+      ]
+    }
+  }
+}

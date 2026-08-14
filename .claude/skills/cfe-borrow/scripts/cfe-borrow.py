@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.29 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.30 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -75,25 +75,60 @@ def strip_form_bindings(xml, main_attr_name):
     return xml
 
 
-def rewrite_choice_parameter_links(xml, attr_uuids):
+DROPPED_LINKS = []
+
+
+def rewrite_choice_parameter_links(xml, attr_uuids, form_attr_ids, main_attr_name, main_attr_borrowed):
     """Ссылки параметров выбора (<ChoiceParameterLinks>/<xr:Link>) — привязка особого рода: путь лежит
-    в <xr:DataPath> и обычным стриппингом не снимается. Когда основной реквизит не заимствован,
-    текстовый «Объект.X» в расширении не разрешается («Неверный путь к полю»), поэтому Конфигуратор
-    переписывает его в непрозрачную форму «1/0:<uuid реквизита объекта>» — ссылка остаётся рабочей.
-    Реквизит, которого в источнике нет, недоступен и по uuid: такую связь вырезаем целиком.
-    Путь всегда односегментный (корпусная проверка: 285 из 285 у УТ), глубже — тоже вырезаем."""
+    в <xr:DataPath> и обычным стриппингом не снимается. Текстовое имя в расширении разрешается только
+    если его корень объявлен в <Attributes> самой заимствованной формы; иначе платформа отвергает
+    загрузку — «Неверный путь к полю - X». Реквизиты формы не заимствуются никогда, поэтому ссылка на
+    них разрешима только через id: Конфигуратор подставляет id реквизита ИСХОДНОЙ формы (эталоны
+    Issue66Example4/5/6, JR2433, JR2976, JR49904 — совпадение на шести расширениях). Именно id
+    исходной, а не заимствованной: при заимствовании реквизиты перенумеровываются в 1000000+, а
+    ссылка продолжает указывать в нумерацию базовой формы.
+    Путь на основной реквизит («Объект.X») при заимствованном основном реквизите разрешается текстом
+    и остаётся читаемым; без заимствования переводится в «<id>/0:<uuid реквизита объекта>».
+    Реквизит, которого в источнике нет, недоступен и по uuid: такую связь вырезаем целиком."""
     if '<ChoiceParameterLinks>' not in xml:
         return xml
 
+    main_pat = re.escape(main_attr_name) if main_attr_name else None
+    main_id = form_attr_ids.get(main_attr_name, "1") if main_attr_name else "1"
+
     def repl(m):
         link = m.group(0)
-        dp = re.search(r'<xr:DataPath[^>]*>Объект\.([^<]+)</xr:DataPath>', link)
+        dp = re.search(r'<xr:DataPath[^>]*>([^<]+)</xr:DataPath>', link)
         if not dp:
             return link
-        attr_name = dp.group(1)
-        if attr_name in attr_uuids:
-            return re.sub(r'(<xr:DataPath[^>]*>)Объект\.[^<]+(</xr:DataPath>)',
-                          lambda mm: f"{mm.group(1)}1/0:{attr_uuids[attr_name]}{mm.group(2)}", link)
+        path = dp.group(1)
+
+        # Путь на основной реквизит формы
+        if main_pat:
+            mm = re.match('^' + main_pat + r'\.(.+)$', path)
+            if mm:
+                if main_attr_borrowed:
+                    return link
+                attr_name = mm.group(1)
+                if attr_name in attr_uuids:
+                    return re.sub(r'(<xr:DataPath[^>]*>)[^<]+(</xr:DataPath>)',
+                                  lambda x: f"{x.group(1)}{main_id}/0:{attr_uuids[attr_name]}{x.group(2)}", link)
+                return ''
+
+        # Односегментный путь на реквизит формы — только по id исходной формы
+        if '.' not in path and path in form_attr_ids:
+            return re.sub(r'(<xr:DataPath[^>]*>)[^<]+(</xr:DataPath>)',
+                          lambda x: f"{x.group(1)}{form_attr_ids[path]}{x.group(2)}", link)
+
+        # Уже непрозрачный путь (форма-источник сама из расширения) — не трогаем
+        if re.match(r'^\d', path):
+            return link
+
+        # Прочее текстом не разрешается: платформа отвергает загрузку «Неверный путь к полю».
+        # Сюда попадают «Items.<Элемент>.CurrentData.<Поле>» — их кодировка непрозрачна и по
+        # имеющимся эталонам не воспроизводима. Связь параметров выбора — удобство подбора, а не
+        # данные: без неё форма заимствуется и работает, с ней — не грузится вовсе.
+        DROPPED_LINKS.append(path)
         return ''
 
     xml = re.sub(r'\s*<xr:Link>.*?</xr:Link>', repl, xml, flags=re.DOTALL)
@@ -948,6 +983,22 @@ def main():
     # «Список»/DynamicList + Settings, у формы записи регистра — «Запись»/RecordManager + SavedData.
     # Синтез фиксированного набора давал для необъектных форм «Исключение XDTO» при загрузке.
     # Конфигуратор меняет у скопированного реквизита только id (эталоны Issue64UtB, Issue66Example2).
+    def get_form_attribute_ids(form_el):
+        """Имена реквизитов ИСХОДНОЙ формы → их id. Ссылки параметров выбора адресуют реквизит формы
+        именно по id базовой формы (см. rewrite_choice_parameter_links)."""
+        result = {}
+        for child in form_el:
+            if not isinstance(child.tag, str) or localname(child) != "Attributes":
+                continue
+            for a in child:
+                if not isinstance(a.tag, str) or localname(a) != "Attribute":
+                    continue
+                nm, aid = a.get("name"), a.get("id")
+                if nm and aid:
+                    result[nm] = aid
+            break
+        return result
+
     def get_main_attribute_info(form_el, ns_strip_pattern):
         main_attr = None
         for child in form_el:
@@ -1598,11 +1649,19 @@ def main():
 
         # uuid реквизитов объекта — только для формы без заимствованного основного реквизита:
         # там ссылки параметров выбора переводятся на непрозрачную форму пути
-        src_attr_uuids = {} if borrow_main_attr else get_source_attribute_uuids(type_name, obj_name)
+        # Имя основного реквизита источника нужно в обоих режимах: по нему опознаётся корень путей
+        # в ссылках параметров выбора. А main_attr_name управляет вырезанием привязок и потому
+        # остаётся пустым в скелетном режиме — там привязки снимаются все.
+        src_main_info = get_main_attribute_info(src_form_el, ns_strip_pattern)
+        src_main_attr_name = src_main_info["Name"] if src_main_info else ""
+        form_attr_ids = get_form_attribute_ids(src_form_el)
 
         # Основной реквизит исходной формы: его имя — корень путей к данным, которые нужно сохранить
         # («Объект.» у формы объекта, «Список.» у формы списка, «Запись.» у формы записи регистра)
-        main_attr_info = get_main_attribute_info(src_form_el, ns_strip_pattern) if borrow_main_attr else None
+        main_attr_info = src_main_info if borrow_main_attr else None
+        # uuid реквизитов объекта нужны ровно там, где основной реквизит НЕ попал в форму:
+        # только тогда путь «<основной>.X» переводится в непрозрачный вид
+        src_attr_uuids = {} if main_attr_info else get_source_attribute_uuids(type_name, obj_name)
         main_attr_name = main_attr_info["Name"] if main_attr_info else ""
         if borrow_main_attr and main_attr_info is None:
             warn("  У формы нет основного реквизита — -BorrowMainAttribute проигнорирован")
@@ -1620,8 +1679,8 @@ def main():
             auto_cmd_xml = re.sub(r'\s*<CommandSet/>', '', auto_cmd_xml)
             # Strip data-binding tags whose root attribute isn't borrowed
             auto_cmd_xml = strip_form_bindings(auto_cmd_xml, main_attr_name)
-            if not borrow_main_attr:
-                auto_cmd_xml = rewrite_choice_parameter_links(auto_cmd_xml, src_attr_uuids)
+            auto_cmd_xml = rewrite_choice_parameter_links(
+                auto_cmd_xml, src_attr_uuids, form_attr_ids, src_main_attr_name, main_attr_info is not None)
 
         # ChildItems: copy full tree, clean up base-config references
         child_items_xml = ""
@@ -1638,8 +1697,8 @@ def main():
             child_items_xml = re.sub(r'<CommandName>[^<]*</CommandName>', '<CommandName>0</CommandName>', child_items_xml)
             # Strip data-binding tags whose root attribute isn't borrowed
             child_items_xml = strip_form_bindings(child_items_xml, main_attr_name)
-            if not borrow_main_attr:
-                child_items_xml = rewrite_choice_parameter_links(child_items_xml, src_attr_uuids)
+            child_items_xml = rewrite_choice_parameter_links(
+                child_items_xml, src_attr_uuids, form_attr_ids, src_main_attr_name, main_attr_info is not None)
             # Вложенные CommandSet (у таблиц, полей табличного документа и т.п.) — целиком, см. выше
             child_items_xml = re.sub(r'(?s)\s*<CommandSet>.*?</CommandSet>', '', child_items_xml)
             child_items_xml = re.sub(r'\s*<CommandSet/>', '', child_items_xml)
@@ -1875,6 +1934,10 @@ def main():
         form_xml_file = os.path.join(form_xml_dir, "Form.xml")
         write_xml_file(form_xml_file, "".join(parts))
         info(f"  Created: {form_xml_file}")
+        if DROPPED_LINKS:
+            uniq = sorted(set(DROPPED_LINKS))
+            warn(f"  Вырезано связей параметров выбора: {len(uniq)} — путь не разрешается в расширении: {', '.join(uniq)}")
+            DROPPED_LINKS.clear()
 
         # 6. Create empty Module.bsl — but NEVER overwrite an existing one (re-borrow must
         # not clobber user code added to the form module).

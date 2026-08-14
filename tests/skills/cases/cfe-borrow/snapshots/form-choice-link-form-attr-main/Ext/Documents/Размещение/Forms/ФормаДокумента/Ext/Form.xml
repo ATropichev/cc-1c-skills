@@ -3,55 +3,65 @@
 	<Title>
 		<v8:item>
 			<v8:lang>ru</v8:lang>
-			<v8:content>Заказ поставщику</v8:content>
+			<v8:content>Размещение</v8:content>
 		</v8:item>
 	</Title>
 	<AutoTitle>false</AutoTitle>
 	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
 	<ChildItems>
-		<InputField name="Партнер" id="1">
-			<ContextMenu name="ПартнерКонтекстноеМеню" id="2"/>
-			<ExtendedTooltip name="ПартнерРасширеннаяПодсказка" id="3"/>
-		</InputField>
-		<InputField name="КонтактноеЛицо" id="4">
+		<InputField name="Ячейка" id="1">
+			<DataPath>Объект.Ячейка</DataPath>
 			<ChoiceParameterLinks>
 				<xr:Link>
 					<xr:Name>Отбор.Владелец</xr:Name>
-					<xr:DataPath xsi:type="xs:string">7/0:UUID-001</xr:DataPath>
+					<xr:DataPath xsi:type="xs:string">5</xr:DataPath>
 					<xr:ValueChange>Clear</xr:ValueChange>
 				</xr:Link>
 			</ChoiceParameterLinks>
-			<ContextMenu name="КонтактноеЛицоКонтекстноеМеню" id="5"/>
-			<ExtendedTooltip name="КонтактноеЛицоРасширеннаяПодсказка" id="6"/>
+			<ContextMenu name="ЯчейкаКонтекстноеМеню" id="2"/>
+			<ExtendedTooltip name="ЯчейкаРасширеннаяПодсказка" id="3"/>
 		</InputField>
 	</ChildItems>
-	<Attributes/>
+	<Attributes>
+		<Attribute name="Объект" id="1000001">
+			<Type>
+				<v8:Type>cfg:DocumentObject.Размещение</v8:Type>
+			</Type>
+			<MainAttribute>true</MainAttribute>
+			<SavedData>true</SavedData>
+		</Attribute>
+	</Attributes>
 	<BaseForm version="2.17">
 		<Title>
 		<v8:item>
 			<v8:lang>ru</v8:lang>
-			<v8:content>Заказ поставщику</v8:content>
+			<v8:content>Размещение</v8:content>
 		</v8:item>
 	</Title>
 		<AutoTitle>false</AutoTitle>
 		<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
 		<ChildItems>
-			<InputField name="Партнер" id="1">
-				<ContextMenu name="ПартнерКонтекстноеМеню" id="2"/>
-				<ExtendedTooltip name="ПартнерРасширеннаяПодсказка" id="3"/>
-			</InputField>
-			<InputField name="КонтактноеЛицо" id="4">
+			<InputField name="Ячейка" id="1">
+				<DataPath>Объект.Ячейка</DataPath>
 				<ChoiceParameterLinks>
 					<xr:Link>
 						<xr:Name>Отбор.Владелец</xr:Name>
-						<xr:DataPath xsi:type="xs:string">7/0:UUID-001</xr:DataPath>
+						<xr:DataPath xsi:type="xs:string">5</xr:DataPath>
 						<xr:ValueChange>Clear</xr:ValueChange>
 					</xr:Link>
 				</ChoiceParameterLinks>
-				<ContextMenu name="КонтактноеЛицоКонтекстноеМеню" id="5"/>
-				<ExtendedTooltip name="КонтактноеЛицоРасширеннаяПодсказка" id="6"/>
+				<ContextMenu name="ЯчейкаКонтекстноеМеню" id="2"/>
+				<ExtendedTooltip name="ЯчейкаРасширеннаяПодсказка" id="3"/>
 			</InputField>
 		</ChildItems>
-		<Attributes/>
+		<Attributes>
+			<Attribute name="Объект" id="1000001">
+				<Type>
+					<v8:Type>cfg:DocumentObject.Размещение</v8:Type>
+				</Type>
+				<MainAttribute>true</MainAttribute>
+				<SavedData>true</SavedData>
+			</Attribute>
+		</Attributes>
 	</BaseForm>
 </Form>

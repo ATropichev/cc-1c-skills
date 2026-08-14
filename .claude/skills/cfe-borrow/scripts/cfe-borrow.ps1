@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.29 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.30 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -22,6 +22,9 @@ function Warn([string]$msg) { Write-Host "[WARN] $msg" }
 $script:formBindingDataTags = @('DataPath','TitleDataPath','FooterDataPath','HeaderDataPath','MultipleValueDataPath','MultipleValuePresentDataPath','RowPictureDataPath')
 # Picture-path binding tags (value = picture index path, never a data attribute) — always stripped in the skeleton.
 $script:formBindingPictureTags = @('MultipleValuePictureDataPath')
+
+# Пути ссылок параметров выбора, которые пришлось вырезать (для предупреждения в конце)
+$script:droppedLinks = @()
 
 # id основного реквизита в заимствованной форме — как у Конфигуратора
 $script:mainAttrId = "1000001"
@@ -56,25 +59,55 @@ function Strip-FormBindings {
 }
 
 # Ссылки параметров выбора (<ChoiceParameterLinks>/<xr:Link>) — привязка особого рода: путь лежит
-# в <xr:DataPath> и обычным стриппингом не снимается. Когда основной реквизит не заимствован,
-# текстовый «Объект.X» в расширении не разрешается («Неверный путь к полю»), поэтому Конфигуратор
-# переписывает его в непрозрачную форму «1/0:<uuid реквизита объекта>» — ссылка остаётся рабочей.
+# в <xr:DataPath> и обычным стриппингом не снимается. Текстовое имя в расширении разрешается только
+# если его корень объявлен в <Attributes> самой заимствованной формы; иначе платформа отвергает
+# загрузку — «Неверный путь к полю - X». Реквизиты формы не заимствуются никогда, поэтому ссылка на
+# них разрешима только через id: Конфигуратор подставляет id реквизита ИСХОДНОЙ формы (эталоны
+# Issue66Example4/5/6, JR2433, JR2976, JR49904 — совпадение на шести расширениях). Именно id
+# исходной, а не заимствованной: при заимствовании реквизиты перенумеровываются в 1000000+, а
+# ссылка продолжает указывать в нумерацию базовой формы.
+# Путь на основной реквизит («Объект.X») при заимствованном основном реквизите разрешается текстом
+# и остаётся читаемым; без заимствования переводится в «<id>/0:<uuid реквизита объекта>».
 # Реквизит, которого в источнике нет, недоступен и по uuid: такую связь вырезаем целиком.
-# Путь всегда односегментный (корпусная проверка: 285 из 285 у УТ), глубже — тоже вырезаем.
+# Пути вида «Items.<Элемент>.CurrentData.<Поле>» не трогаем — их кодировка отдельная.
 function Rewrite-ChoiceParameterLinks {
-	param([string]$xml, $attrUuids)
+	param([string]$xml, $attrUuids, $formAttrIds, [string]$mainAttrName, [bool]$mainAttrBorrowed)
 
 	if ($xml -notmatch '<ChoiceParameterLinks>') { return $xml }
+
+	$mainPat = if ($mainAttrName) { [regex]::Escape($mainAttrName) } else { $null }
+	$mainId = if ($mainAttrName -and $formAttrIds.ContainsKey($mainAttrName)) { $formAttrIds[$mainAttrName] } else { "1" }
 
 	$xml = [regex]::Replace($xml, '(?s)\s*<xr:Link>.*?</xr:Link>', {
 		param($m)
 		$link = $m.Value
-		$dp = [regex]::Match($link, '<xr:DataPath[^>]*>Объект\.([^<]+)</xr:DataPath>')
+		$dp = [regex]::Match($link, '<xr:DataPath[^>]*>([^<]+)</xr:DataPath>')
 		if (-not $dp.Success) { return $link }
-		$attrName = $dp.Groups[1].Value
-		if ($attrUuids.ContainsKey($attrName)) {
-			return [regex]::Replace($link, '(<xr:DataPath[^>]*>)Объект\.[^<]+(</xr:DataPath>)', "`${1}1/0:$($attrUuids[$attrName])`${2}")
+		$path = $dp.Groups[1].Value
+
+		# Путь на основной реквизит формы
+		if ($mainPat -and $path -match "^${mainPat}\.(.+)$") {
+			if ($mainAttrBorrowed) { return $link }
+			$attrName = $Matches[1]
+			if ($attrUuids.ContainsKey($attrName)) {
+				return [regex]::Replace($link, '(<xr:DataPath[^>]*>)[^<]+(</xr:DataPath>)', "`${1}${mainId}/0:$($attrUuids[$attrName])`${2}")
+			}
+			return ''
 		}
+
+		# Односегментный путь на реквизит формы — только по id исходной формы
+		if ($path -notmatch '\.' -and $formAttrIds.ContainsKey($path)) {
+			return [regex]::Replace($link, '(<xr:DataPath[^>]*>)[^<]+(</xr:DataPath>)', "`${1}$($formAttrIds[$path])`${2}")
+		}
+
+		# Уже непрозрачный путь (форма-источник сама из расширения) — не трогаем
+		if ($path -match '^\d') { return $link }
+
+		# Прочее текстом не разрешается: платформа отвергает загрузку «Неверный путь к полю».
+		# Сюда попадают «Items.<Элемент>.CurrentData.<Поле>» — их кодировка непрозрачна и по
+		# имеющимся эталонам не воспроизводима. Связь параметров выбора — удобство подбора, а не
+		# данные: без неё форма заимствуется и работает, с ней — не грузится вовсе.
+		$script:droppedLinks += $path
 		return ''
 	})
 
@@ -779,17 +812,22 @@ function Borrow-Form {
 
 	# Основной реквизит исходной формы: его имя — корень путей к данным, которые нужно сохранить
 	# («Объект.» у формы объекта, «Список.» у формы списка, «Запись.» у формы записи регистра)
-	$mainAttrInfo = $null
-	if ($BorrowMainAttr) { $mainAttrInfo = Get-MainAttributeInfo $srcFormEl $nsStripPattern }
+	# Имя основного реквизита источника нужно в обоих режимах: по нему опознаётся корень путей
+	# в ссылках параметров выбора. А $mainAttrName управляет вырезанием привязок и потому остаётся
+	# пустым в скелетном режиме — там привязки снимаются все.
+	$srcMainInfo = Get-MainAttributeInfo $srcFormEl $nsStripPattern
+	$srcMainAttrName = if ($srcMainInfo) { $srcMainInfo.Name } else { "" }
+	$formAttrIds = Get-FormAttributeIds $srcFormEl
+	$mainAttrInfo = if ($BorrowMainAttr) { $srcMainInfo } else { $null }
 	$mainAttrName = if ($mainAttrInfo) { $mainAttrInfo.Name } else { "" }
 	if ($BorrowMainAttr -and -not $mainAttrInfo) {
 		Warn "  У формы нет основного реквизита — -BorrowMainAttribute проигнорирован"
 	}
 
-	# uuid реквизитов объекта — только для формы без заимствованного основного реквизита:
-	# там ссылки параметров выбора переводятся на непрозрачную форму пути
+	# uuid реквизитов объекта нужны ровно там, где основной реквизит НЕ попал в форму:
+	# только тогда путь «<основной>.X» переводится в непрозрачный вид
 	$srcAttrUuids = @{}
-	if (-not $BorrowMainAttr) { $srcAttrUuids = Get-SourceAttributeUuids $typeName $objName }
+	if (-not $mainAttrInfo) { $srcAttrUuids = Get-SourceAttributeUuids $typeName $objName }
 
 	# AutoCommandBar: keep ChildItems (buttons with CommandName→0), Autofill→false
 	$autoCmdXml = ""
@@ -804,7 +842,7 @@ function Borrow-Form {
 		$autoCmdXml = [regex]::Replace($autoCmdXml, '\s*<CommandSet/>', '')
 		# Strip data-binding tags whose root attribute isn't borrowed
 		$autoCmdXml = Strip-FormBindings $autoCmdXml $mainAttrName
-		if (-not $BorrowMainAttr) { $autoCmdXml = Rewrite-ChoiceParameterLinks $autoCmdXml $srcAttrUuids }
+		$autoCmdXml = Rewrite-ChoiceParameterLinks $autoCmdXml $srcAttrUuids $formAttrIds $srcMainAttrName ([bool]$mainAttrInfo)
 	}
 
 	# ChildItems: copy full tree, clean up base-config references
@@ -817,7 +855,7 @@ function Borrow-Form {
 		# Strip data-binding tags whose root attribute isn't borrowed
 		# (DataPath/TitleDataPath/FooterDataPath/HeaderDataPath/MultipleValue*/RowPicture*)
 		$childItemsXml = Strip-FormBindings $childItemsXml $mainAttrName
-		if (-not $BorrowMainAttr) { $childItemsXml = Rewrite-ChoiceParameterLinks $childItemsXml $srcAttrUuids }
+		$childItemsXml = Rewrite-ChoiceParameterLinks $childItemsXml $srcAttrUuids $formAttrIds $srcMainAttrName ([bool]$mainAttrInfo)
 		# Вложенные CommandSet (у таблиц, полей табличного документа и т.п.) — целиком, см. выше
 		$childItemsXml = [regex]::Replace($childItemsXml, '(?s)\s*<CommandSet>.*?</CommandSet>', '')
 		$childItemsXml = [regex]::Replace($childItemsXml, '\s*<CommandSet/>', '')
@@ -1107,6 +1145,11 @@ function Borrow-Form {
 	$formXmlText = ($formXmlText -replace "`r`n", "`n") -replace "`n", "`r`n"
 	[System.IO.File]::WriteAllText($formXmlFile, $formXmlText, $enc)
 	Info "  Created: $formXmlFile"
+	if ($script:droppedLinks.Count -gt 0) {
+		$uniq = @($script:droppedLinks | Sort-Object -Unique)
+		Warn "  Вырезано связей параметров выбора: $($uniq.Count) — путь не разрешается в расширении: $($uniq -join ', ')"
+		$script:droppedLinks = @()
+	}
 
 	# 6. Create empty Module.bsl — but NEVER overwrite an existing one (re-borrow must
 	# not clobber user code added to the form module).
@@ -1273,6 +1316,22 @@ function Build-InternalInfoXml {
 # «Список»/DynamicList + Settings, у формы записи регистра — «Запись»/RecordManager + SavedData.
 # Синтез фиксированного набора давал для необъектных форм «Исключение XDTO» при загрузке.
 # Конфигуратор меняет у скопированного реквизита только id (эталоны Issue64UtB, Issue66Example2).
+# Имена реквизитов ИСХОДНОЙ формы → их id. Ссылки параметров выбора адресуют реквизит формы
+# именно по id базовой формы (см. Rewrite-ChoiceParameterLinks).
+function Get-FormAttributeIds {
+	param($formEl)
+
+	$result = @{}
+	$attrs = $formEl.SelectSingleNode("*[local-name()='Attributes']")
+	if (-not $attrs) { return $result }
+	foreach ($a in $attrs.ChildNodes) {
+		if ($a.NodeType -ne 'Element' -or $a.LocalName -ne 'Attribute') { continue }
+		$nm = $a.GetAttribute("name"); $id = $a.GetAttribute("id")
+		if ($nm -and $id) { $result[$nm] = $id }
+	}
+	return $result
+}
+
 function Get-MainAttributeInfo {
 	param($formEl, [string]$nsStripPattern)
 
