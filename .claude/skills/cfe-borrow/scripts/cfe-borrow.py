@@ -107,9 +107,15 @@ def rewrite_choice_parameter_links(xml, attr_uuids, form_attr_ids, main_attr_nam
         if main_pat:
             mm = re.match('^' + main_pat + r'\.(.+)$', path)
             if mm:
-                if main_attr_borrowed:
-                    return link
                 attr_name = mm.group(1)
+                if main_attr_borrowed:
+                    # Реквизит объекта разрешается текстом и остаётся читаемым. Стандартное поле
+                    # («Объект.Owner», «Объект.Date») — нет: платформа отвергает «Неверный путь к данным».
+                    # Конфигуратор в этом случае оставляет ссылку на сам реквизит (эталон Issue66Example7_1).
+                    if attr_name in attr_uuids:
+                        return link
+                    return re.sub(r'(<xr:DataPath[^>]*>)[^<]+(</xr:DataPath>)',
+                                  lambda x: f"{x.group(1)}{main_id}{x.group(2)}", link)
                 if attr_name in attr_uuids:
                     return re.sub(r'(<xr:DataPath[^>]*>)[^<]+(</xr:DataPath>)',
                                   lambda x: f"{x.group(1)}{main_id}/0:{attr_uuids[attr_name]}{x.group(2)}", link)
@@ -122,6 +128,12 @@ def rewrite_choice_parameter_links(xml, attr_uuids, form_attr_ids, main_attr_nam
 
         # Уже непрозрачный путь (форма-источник сама из расширения) — не трогаем
         if re.match(r'^\d', path):
+            return link
+
+        # С заимствованным основным реквизитом текстовый путь разрешается: элементы формы на месте,
+        # а их данные доступны через основной реквизит. Конфигуратор такие пути и оставляет текстом
+        # (эталон Issue66Example7_1: «Items.Товары.CurrentData.Характеристика» перенесён как есть).
+        if main_attr_borrowed:
             return link
 
         # Прочее текстом не разрешается: платформа отвергает загрузку «Неверный путь к полю».
@@ -1659,9 +1671,10 @@ def main():
         # Основной реквизит исходной формы: его имя — корень путей к данным, которые нужно сохранить
         # («Объект.» у формы объекта, «Список.» у формы списка, «Запись.» у формы записи регистра)
         main_attr_info = src_main_info if borrow_main_attr else None
-        # uuid реквизитов объекта нужны ровно там, где основной реквизит НЕ попал в форму:
-        # только тогда путь «<основной>.X» переводится в непрозрачный вид
-        src_attr_uuids = {} if main_attr_info else get_source_attribute_uuids(type_name, obj_name)
+        # Имена реквизитов объекта нужны в обоих режимах: без заимствования — чтобы построить
+        # непрозрачный путь, с заимствованием — чтобы отличить реквизит (разрешается текстом) от
+        # стандартного поля (не разрешается)
+        src_attr_uuids = get_source_attribute_uuids(type_name, obj_name)
         main_attr_name = main_attr_info["Name"] if main_attr_info else ""
         if borrow_main_attr and main_attr_info is None:
             warn("  У формы нет основного реквизита — -BorrowMainAttribute проигнорирован")

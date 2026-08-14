@@ -87,8 +87,14 @@ function Rewrite-ChoiceParameterLinks {
 
 		# Путь на основной реквизит формы
 		if ($mainPat -and $path -match "^${mainPat}\.(.+)$") {
-			if ($mainAttrBorrowed) { return $link }
 			$attrName = $Matches[1]
+			if ($mainAttrBorrowed) {
+				# Реквизит объекта разрешается текстом и остаётся читаемым. Стандартное поле
+				# («Объект.Owner», «Объект.Date») — нет: платформа отвергает «Неверный путь к данным».
+				# Конфигуратор в этом случае оставляет ссылку на сам реквизит (эталон Issue66Example7_1).
+				if ($attrUuids.ContainsKey($attrName)) { return $link }
+				return [regex]::Replace($link, '(<xr:DataPath[^>]*>)[^<]+(</xr:DataPath>)', "`${1}${mainId}`${2}")
+			}
 			if ($attrUuids.ContainsKey($attrName)) {
 				return [regex]::Replace($link, '(<xr:DataPath[^>]*>)[^<]+(</xr:DataPath>)', "`${1}${mainId}/0:$($attrUuids[$attrName])`${2}")
 			}
@@ -102,6 +108,11 @@ function Rewrite-ChoiceParameterLinks {
 
 		# Уже непрозрачный путь (форма-источник сама из расширения) — не трогаем
 		if ($path -match '^\d') { return $link }
+
+		# С заимствованным основным реквизитом текстовый путь разрешается: элементы формы на месте,
+		# а их данные доступны через основной реквизит. Конфигуратор такие пути и оставляет текстом
+		# (эталон Issue66Example7_1: «Items.Товары.CurrentData.Характеристика» перенесён как есть).
+		if ($mainAttrBorrowed) { return $link }
 
 		# Прочее текстом не разрешается: платформа отвергает загрузку «Неверный путь к полю».
 		# Сюда попадают «Items.<Элемент>.CurrentData.<Поле>» — их кодировка непрозрачна и по
@@ -826,8 +837,10 @@ function Borrow-Form {
 
 	# uuid реквизитов объекта нужны ровно там, где основной реквизит НЕ попал в форму:
 	# только тогда путь «<основной>.X» переводится в непрозрачный вид
-	$srcAttrUuids = @{}
-	if (-not $mainAttrInfo) { $srcAttrUuids = Get-SourceAttributeUuids $typeName $objName }
+	# Имена реквизитов объекта нужны в обоих режимах: без заимствования — чтобы построить
+	# непрозрачный путь, с заимствованием — чтобы отличить реквизит (разрешается текстом) от
+	# стандартного поля (не разрешается)
+	$srcAttrUuids = Get-SourceAttributeUuids $typeName $objName
 
 	# AutoCommandBar: keep ChildItems (buttons with CommandName→0), Autofill→false
 	$autoCmdXml = ""
