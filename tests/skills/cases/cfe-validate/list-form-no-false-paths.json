@@ -1,0 +1,33 @@
+{
+  "name": "Пути формы списка не проверяются по составу объекта: поля запроса и стандартные поля списка — не висячие",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Document", "name": "Расход", "attributes": [ "Склад: String(50)" ] },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/Documents/Расход.xml", "-FormName": "ФормаСписка" }
+    },
+    {
+      "writeFile": {
+        "path": "Documents/Расход/Forms/ФормаСписка/Ext/Form.xml",
+        "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Form xmlns=\"http://v8.1c.ru/8.3/xcf/logform\" xmlns:cfg=\"http://v8.1c.ru/8.1/data/enterprise/current-config\" xmlns:v8=\"http://v8.1c.ru/8.1/data/core\" xmlns:xr=\"http://v8.1c.ru/8.3/xcf/readable\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" version=\"2.17\">\n\t<AutoTitle>false</AutoTitle>\n\t<AutoCommandBar name=\"ФормаКоманднаяПанель\" id=\"-1\"/>\n\t<ChildItems>\n\t\t<Table name=\"Список\" id=\"1\">\n\t\t\t<DataPath>Список</DataPath>\n\t\t\t<RowPictureDataPath>Список.DefaultPicture</RowPictureDataPath>\n\t\t\t<ChildItems>\n\t\t\t\t<InputField name=\"СписокСклад\" id=\"2\">\n\t\t\t\t\t<DataPath>Список.Склад</DataPath>\n\t\t\t\t\t<ExtendedTooltip name=\"СписокСкладРасширеннаяПодсказка\" id=\"3\"/>\n\t\t\t\t</InputField>\n\t\t\t\t<InputField name=\"СписокПредставление\" id=\"4\">\n\t\t\t\t\t<DataPath>Список.ПредставлениеСостояния</DataPath>\n\t\t\t\t\t<ExtendedTooltip name=\"СписокПредставлениеРасширеннаяПодсказка\" id=\"5\"/>\n\t\t\t\t</InputField>\n\t\t\t</ChildItems>\n\t\t\t<ExtendedTooltip name=\"СписокРасширеннаяПодсказка\" id=\"6\"/>\n\t\t</Table>\n\t</ChildItems>\n\t<Attributes>\n\t\t<Attribute name=\"Список\" id=\"1\">\n\t\t\t<Type>\n\t\t\t\t<v8:Type>cfg:DynamicList</v8:Type>\n\t\t\t</Type>\n\t\t\t<MainAttribute>true</MainAttribute>\n\t\t\t<Settings xsi:type=\"DynamicList\">\n\t\t\t\t<ManualQuery>true</ManualQuery>\n\t\t\t\t<MainTable>Document.Расход</MainTable>\n\t\t\t\t<QueryText>ВЫБРАТЬ&#10;\tДокументРасход.Склад,&#10;\t\"\" КАК ПредставлениеСостояния&#10;ИЗ&#10;\tДокумент.Расход КАК ДокументРасход</QueryText>\n\t\t\t</Settings>\n\t\t</Attribute>\n\t</Attributes>\n</Form>"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": { "-ExtensionPath": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Object": "Document.Расход.Form.ФормаСписка", "-BorrowMainAttribute": "Form" }
+    }
+  ],
+  "params": { "extensionPath": "ext" },
+  "args_extra": ["-ConfigPath", "{workDir}"],
+  "expect": {
+    "stdoutNotContains": ["Список.DefaultPicture", "Список.ПредставлениеСостояния"]
+  }
+}

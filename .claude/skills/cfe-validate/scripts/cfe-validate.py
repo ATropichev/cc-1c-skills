@@ -1051,6 +1051,12 @@ def main():
                     if root_match14 is None:
                         continue
                     root_name14 = root_match14.group(1)
+                    # У динамического списка набор полей — результат его запроса, а не состав объекта:
+                    # туда входят и стандартные поля списка (Ref, Date, DefaultPicture), и псевдонимы
+                    # запроса. Сверять такие пути с ChildObjects объекта нельзя — будут ложные ошибки
+                    # (корпусная проверка: 3383 таких сегмента на 1094 формах списка УТ).
+                    if '>cfg:DynamicList<' in root_match14.group(0):
+                        continue
                     owner_key = ctx.split('.Form.')[0]
                     owner_parts = owner_key.split('.', 1)
                     if len(owner_parts) < 2:

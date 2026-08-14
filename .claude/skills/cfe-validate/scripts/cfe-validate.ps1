@@ -1077,6 +1077,11 @@ if (-not $script:stopped -and $script:borrowedFormsWithTree.Count -gt 0) {
 				$rootMatch14 = [regex]::Match($raw, '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
 				if (-not $rootMatch14.Success) { continue }
 				$rootName = $rootMatch14.Groups[1].Value
+				# У динамического списка набор полей — результат его запроса, а не состав объекта:
+				# туда входят и стандартные поля списка (Ref, Date, DefaultPicture), и псевдонимы
+				# запроса. Сверять такие пути с ChildObjects объекта нельзя — будут ложные ошибки
+				# (корпусная проверка: 3383 таких сегмента на 1094 формах списка УТ).
+				if ($rootMatch14.Value -match '>cfg:DynamicList<') { continue }
 				$ownerKey = ($ctx -split '\.Form\.')[0]
 				$ownerParts = $ownerKey -split '\.', 2
 				if ($ownerParts.Count -lt 2) { continue }
