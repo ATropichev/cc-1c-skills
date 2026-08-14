@@ -1,0 +1,32 @@
+{
+  "name": "Заимствование формы записи регистра: измерение и ресурс переносятся своим видом",
+  "setup": "fixture:main-attr-kinds",
+  "preRun": [
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+    }
+  ],
+  "params": { "extensionPath": "ext", "object": "InformationRegister.Настройка.Form.ФормаЗаписи" },
+  "args_extra": ["-BorrowMainAttribute", "Form"],
+  "expect": {
+    "fileContains": [
+      {
+        "file": "ext/InformationRegisters/Настройка/Forms/ФормаЗаписи/Ext/Form.xml",
+        "text": [
+          "<Attribute name=\"Запись\" id=\"1000001\">",
+          "<v8:Type>cfg:InformationRegisterRecordManager.Настройка</v8:Type>",
+          "<DataPath>Запись.Организация</DataPath>"
+        ]
+      },
+      {
+        "file": "ext/InformationRegisters/Настройка.xml",
+        "text": ["<Dimension uuid=", "<Resource uuid=", "<Name>Организация</Name>", "<Name>Лимит</Name>"]
+      }
+    ],
+    "fileNotContains": {
+      "file": "ext/InformationRegisters/Настройка.xml",
+      "text": "<Attribute uuid="
+    }
+  }
+}
