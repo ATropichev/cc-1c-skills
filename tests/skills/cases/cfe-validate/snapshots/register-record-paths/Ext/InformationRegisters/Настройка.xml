@@ -36,6 +36,8 @@
 			<Name>Настройка</Name>
 			<Comment/>
 			<ExtendedConfigurationObject>UUID-016</ExtendedConfigurationObject>
+			<InformationRegisterPeriodicity>Nonperiodical</InformationRegisterPeriodicity>
+			<WriteMode>Independent</WriteMode>
 		</Properties>
 		<ChildObjects>
 			<Form>ФормаЗаписи</Form>

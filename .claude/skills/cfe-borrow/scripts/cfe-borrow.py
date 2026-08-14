@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.30 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.31 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -50,7 +50,7 @@ FORM_BINDING_PICTURE_TAGS = ["MultipleValuePictureDataPath"]
 MAIN_ATTR_ID = "1000001"
 
 # Виды дочерних объектов, которые заимствуются в оболочку поимённо (табличные части — отдельно)
-CHILD_OBJECT_KINDS = ("Attribute", "Dimension", "Resource")
+CHILD_OBJECT_KINDS = ("Attribute", "Dimension", "Resource", "AddressingAttribute")
 
 # Прямые дети <Form>, которые в заимствованную форму не переносятся.
 # Структурные секции: AutoCommandBar и ChildItems забираются отдельно, остальные выбрасываются целиком.
@@ -455,6 +455,16 @@ TYPES_WITH_CHILD_OBJECTS = [
 
 COMMON_MODULE_PROPS = ["Global", "ClientManagedApplication", "Server", "ExternalConnection", "ClientOrdinaryApplication", "ServerCall"]
 
+# Свойства объекта, от которых зависит существование стандартного поля: без них платформа
+# отвергает загрузку — «Неверный путь к данным». Конфигуратор переносит ровно их (эталоны
+# Issue66Example7_1 и Issue66Example2). Проверено сплошным прогоном по типам: у регистра
+# сведений без InformationRegisterPeriodicity не разрешается «Запись.Period».
+TYPE_GATE_PROPS = {
+    "InformationRegister": ["InformationRegisterPeriodicity", "WriteMode"],
+}
+# Владельцы справочника — список <xr:Item>, а не скаляр: переносится фрагментом, как __TypeXml
+TYPES_WITH_OWNERS = ("Catalog", "ChartOfCharacteristicTypes")
+
 # Standard system fields to skip when collecting DataPath references
 STANDARD_FIELDS = [
     "Code", "Description", "Ref", "Parent", "DeletionMark",
@@ -808,6 +818,17 @@ def main():
                 if type_node is not None:
                     type_xml = etree.tostring(type_node, encoding="unicode")
                     src_props["__TypeXml"] = re.sub(r'\s+xmlns(?::\w+)?="[^"]*"', '', type_xml)
+            # Владельцы: стандартное поле «Owner» появляется у справочника, только если задан Owners
+            if type_name in TYPES_WITH_OWNERS:
+                owners_node = props_node.find(f"{{{MD_NS}}}Owners")
+                if owners_node is not None and len(owners_node):
+                    owners_xml = etree.tostring(owners_node, encoding="unicode")
+                    src_props["__OwnersXml"] = re.sub(r'\s+xmlns(?::\w+)?="[^"]*"', '', owners_xml)
+            # Скалярные свойства, включающие стандартные поля своего типа
+            for gp in TYPE_GATE_PROPS.get(type_name, []):
+                gp_node = props_node.find(f"{{{MD_NS}}}{gp}")
+                if gp_node is not None:
+                    src_props[gp] = (gp_node.text or "").strip()
 
         # Whether the platform emits <ChildObjects> for this type — the source object is the ground truth
         src_props["__HasChildObjects"] = src_el.find(f"{{{MD_NS}}}ChildObjects") is not None
@@ -885,6 +906,13 @@ def main():
         # DefinedType: emit the carried <Type> definition (needed for the alias to resolve, e.g. totals)
         if type_name == "DefinedType" and "__TypeXml" in source_props:
             lines.append(f"\t\t\t{source_props['__TypeXml']}")
+
+        # Свойства, от которых зависят стандартные поля (см. TYPE_GATE_PROPS / TYPES_WITH_OWNERS)
+        for gp in TYPE_GATE_PROPS.get(type_name, []):
+            if gp in source_props:
+                lines.append(f"\t\t\t<{gp}>{source_props[gp]}</{gp}>")
+        if "__OwnersXml" in source_props:
+            lines.append(f"\t\t\t{source_props['__OwnersXml']}")
 
         lines.append("\t\t</Properties>")
 
@@ -2067,6 +2095,47 @@ def main():
 
             borrowed_files.append(target_file)
             borrowed_count += 1
+
+    # --- Владельцы заимствованных справочников ---
+    # Ссылка в <Owners> должна вести на объект, который в расширении есть: иначе платформа падает
+    # при загрузке (проверено — access violation, не сообщение об ошибке). Конфигуратор владельца
+    # заимствует (эталон Issue66Example7_1: вместе со справочником перенесён и его ПВХ-владелец).
+    # Проход общий и повторяется, пока находятся новые: у владельца может быть свой владелец.
+    for _owner_pass in range(10):
+        new_owners = []
+        for root_dir, _dirs, files in os.walk(ext_dir):
+            for fn in files:
+                if not fn.endswith(".xml"):
+                    continue
+                with open(os.path.join(root_dir, fn), "r", encoding="utf-8-sig") as fh:
+                    shell_text = fh.read()
+                if "<Owners>" not in shell_text:
+                    continue
+                for om in re.finditer(r'<xr:Item[^>]*>(\w+)\.(\w+)</xr:Item>', shell_text):
+                    o_type, o_name = om.group(1), om.group(2)
+                    if o_type not in CHILD_TYPE_DIR_MAP:
+                        continue
+                    if test_object_borrowed(o_type, o_name):
+                        continue
+                    if (o_type, o_name) in new_owners:
+                        continue
+                    new_owners.append((o_type, o_name))
+        if not new_owners:
+            break
+        for o_type, o_name in new_owners:
+            ow_src_file = os.path.join(cfg_dir, CHILD_TYPE_DIR_MAP[o_type], f"{o_name}.xml")
+            if not os.path.isfile(ow_src_file):
+                warn(f"  Владелец {o_type}.{o_name} не найден в источнике — ссылка останется висячей")
+                continue
+            ow_src = read_source_object(o_type, o_name)
+            ow_xml = build_borrowed_object_xml(o_type, o_name, ow_src["Uuid"], ow_src["Properties"])
+            ow_dir = os.path.join(ext_dir, CHILD_TYPE_DIR_MAP[o_type])
+            os.makedirs(ow_dir, exist_ok=True)
+            ow_file = os.path.join(ow_dir, f"{o_name}.xml")
+            write_utf8_bom(ow_file, ow_xml)
+            add_to_child_objects(o_type, o_name)
+            borrowed_files.append(ow_file)
+            info(f"  Auto-borrowed owner: {o_type}.{o_name}")
 
     # --- Save modified Configuration.xml ---
     save_xml_bom(tree, ext_resolved)

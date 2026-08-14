@@ -1,0 +1,27 @@
+{
+  "name": "Заимствование справочника с владельцем: Owners переносится, сам владелец заимствуется",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Договоры" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Терминалы", "owners": ["Catalog.Договоры"] },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+    }
+  ],
+  "params": { "extensionPath": "ext", "object": "Catalog.Терминалы" },
+  "expect": {
+    "fileContains": {
+      "file": "ext/Catalogs/Терминалы.xml",
+      "text": "<Owners><xr:Item xsi:type=\"xr:MDObjectRef\">Catalog.Договоры</xr:Item></Owners>"
+    },
+    "files": ["ext/Catalogs/Договоры.xml"]
+  }
+}

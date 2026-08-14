@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.30 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.31 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
@@ -30,7 +30,7 @@ $script:droppedLinks = @()
 $script:mainAttrId = "1000001"
 
 # Виды дочерних объектов, которые заимствуются в оболочку поимённо (табличные части — отдельно)
-$script:childObjectKinds = @('Attribute','Dimension','Resource')
+$script:childObjectKinds = @('Attribute','Dimension','Resource','AddressingAttribute')
 
 # Прямые дети <Form>, которые в заимствованную форму не переносятся.
 # Структурные секции: AutoCommandBar и ChildItems забираются отдельно, остальные выбрасываются целиком.
@@ -462,6 +462,16 @@ $typesWithChildObjects = @(
 # CommonModule properties to copy from source
 $commonModuleProps = @("Global","ClientManagedApplication","Server","ExternalConnection","ClientOrdinaryApplication","ServerCall")
 
+# Свойства объекта, от которых зависит существование стандартного поля: без них платформа
+# отвергает загрузку — «Неверный путь к данным». Конфигуратор переносит ровно их (эталоны
+# Issue66Example7_1 и Issue66Example2). Проверено сплошным прогоном по типам: у регистра сведений
+# без InformationRegisterPeriodicity не разрешается «Запись.Period».
+$script:typeGateProps = @{
+	"InformationRegister" = @("InformationRegisterPeriodicity","WriteMode")
+}
+# Владельцы справочника — список <xr:Item>, а не скаляр: переносится фрагментом, как __TypeXml
+$script:typesWithOwners = @("Catalog","ChartOfCharacteristicTypes")
+
 # Standard system fields to skip when collecting DataPath references
 $script:standardFields = @("Code","Description","Ref","Parent","DeletionMark","Predefined","IsFolder","LineNumber","RowsCount","PredefinedDataName")
 
@@ -671,6 +681,19 @@ function Read-SourceObject {
 			if ($typeNode) {
 				$srcProps["__TypeXml"] = [regex]::Replace($typeNode.OuterXml, '\s+xmlns(?::\w+)?="[^"]*"', '')
 			}
+		}
+		# Владельцы: стандартное поле «Owner» появляется у справочника, только если задан Owners
+		if ($script:typesWithOwners -ccontains $typeName) {
+			$ownersNode = $propsNode.SelectSingleNode("md:Owners", $srcNs)
+			if ($ownersNode -and $ownersNode.HasChildNodes) {
+				$srcProps["__OwnersXml"] = [regex]::Replace($ownersNode.OuterXml, '\s+xmlns(?::\w+)?="[^"]*"', '')
+			}
+		}
+		# Скалярные свойства, включающие стандартные поля своего типа
+		foreach ($gp in @($script:typeGateProps[$typeName])) {
+			if (-not $gp) { continue }
+			$gpNode = $propsNode.SelectSingleNode("md:${gp}", $srcNs)
+			if ($gpNode) { $srcProps[$gp] = $gpNode.InnerText.Trim() }
 		}
 	}
 
@@ -2036,6 +2059,16 @@ function Build-BorrowedObjectXml {
 		$sb.AppendLine("`t`t`t$($sourceProps['__TypeXml'])") | Out-Null
 	}
 
+	# Свойства, от которых зависят стандартные поля (см. $script:typeGateProps / $script:typesWithOwners)
+	foreach ($gp in @($script:typeGateProps[$typeName])) {
+		if ($gp -and $sourceProps.ContainsKey($gp)) {
+			$sb.AppendLine("`t`t`t<${gp}>$($sourceProps[$gp])</${gp}>") | Out-Null
+		}
+	}
+	if ($sourceProps.ContainsKey("__OwnersXml")) {
+		$sb.AppendLine("`t`t`t$($sourceProps['__OwnersXml'])") | Out-Null
+	}
+
 	$sb.AppendLine("`t`t</Properties>") | Out-Null
 
 	# ChildObjects (for types that need it)
@@ -2200,6 +2233,47 @@ foreach ($item in $items) {
 
 		$script:borrowedFiles += $targetFile
 		$borrowedCount++
+	}
+}
+
+# --- 14b. Владельцы заимствованных справочников ---
+# Ссылка в <Owners> должна вести на объект, который в расширении есть: иначе платформа падает при
+# загрузке (проверено — access violation, не сообщение об ошибке). Конфигуратор владельца
+# заимствует (эталон Issue66Example7_1: вместе со справочником перенесён и его ПВХ-владелец).
+# Проход общий и повторяется, пока находятся новые: у владельца может быть свой владелец.
+$ownerPass = 0
+while ($true) {
+	$ownerPass++
+	if ($ownerPass -gt 10) { break }
+	$newOwners = @()
+	foreach ($shell in (Get-ChildItem -Path $extDir -Filter "*.xml" -Recurse -File)) {
+		$shellText = [System.IO.File]::ReadAllText($shell.FullName)
+		if ($shellText -notmatch '<Owners>') { continue }
+		foreach ($om in [regex]::Matches($shellText, '<xr:Item[^>]*>(\w+)\.(\w+)</xr:Item>')) {
+			$oType = $om.Groups[1].Value; $oName = $om.Groups[2].Value
+			if (-not $childTypeDirMap.ContainsKey($oType)) { continue }
+			if (Test-ObjectBorrowed $oType $oName) { continue }
+			if ($newOwners | Where-Object { $_.T -eq $oType -and $_.N -eq $oName }) { continue }
+			$newOwners += @{ T = $oType; N = $oName }
+		}
+	}
+	if ($newOwners.Count -eq 0) { break }
+	foreach ($ow in $newOwners) {
+		$owSrcFile = Join-Path (Join-Path $cfgDir $childTypeDirMap[$ow.T]) "$($ow.N).xml"
+		if (-not (Test-Path $owSrcFile)) {
+			Warn "  Владелец $($ow.T).$($ow.N) не найден в источнике — ссылка останется висячей"
+			continue
+		}
+		$owSrc = Read-SourceObject $ow.T $ow.N
+		$owXml = Build-BorrowedObjectXml $ow.T $ow.N $owSrc.Uuid $owSrc.Properties
+		$owDir = Join-Path $extDir $childTypeDirMap[$ow.T]
+		if (-not (Test-Path $owDir)) { New-Item -ItemType Directory -Path $owDir -Force | Out-Null }
+		$owFile = Join-Path $owDir "$($ow.N).xml"
+		$owEnc = New-Object System.Text.UTF8Encoding($true)
+		[System.IO.File]::WriteAllText($owFile, $owXml, $owEnc)
+		Add-ToChildObjects $ow.T $ow.N
+		$script:borrowedFiles += $owFile
+		Info "  Auto-borrowed owner: $($ow.T).$($ow.N)"
 	}
 }
 
