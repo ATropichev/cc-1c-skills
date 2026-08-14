@@ -3,49 +3,30 @@
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": {
-        "type": "Catalog",
-        "name": "Склады"
-      },
-      "args": {
-        "-JsonPath": "{inputFile}",
-        "-OutputDir": "{workDir}"
-      }
+      "input": { "type": "Catalog", "name": "Склады" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Ячейки" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
     },
     {
       "script": "meta-compile/scripts/meta-compile",
       "input": {
-        "type": "Catalog",
-        "name": "Ячейки"
+        "type": "Document", "name": "Размещение",
+        "tabularSections": {
+          "Строки": [
+            "Склад: CatalogRef.Склады",
+            "Ячейка: CatalogRef.Ячейки"
+          ]
+        }
       },
-      "args": {
-        "-JsonPath": "{inputFile}",
-        "-OutputDir": "{workDir}"
-      }
-    },
-    {
-      "script": "meta-compile/scripts/meta-compile",
-      "input": {
-        "type": "Document",
-        "name": "Размещение",
-        "attributes": [
-          {
-            "name": "Ячейка",
-            "type": "CatalogRef.Ячейки"
-          }
-        ]
-      },
-      "args": {
-        "-JsonPath": "{inputFile}",
-        "-OutputDir": "{workDir}"
-      }
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
     },
     {
       "script": "form-add/scripts/form-add",
-      "args": {
-        "-ObjectPath": "{workDir}/Documents/Размещение.xml",
-        "-FormName": "ФормаДокумента"
-      }
+      "args": { "-ObjectPath": "{workDir}/Documents/Размещение.xml", "-FormName": "ФормаДокумента" }
     },
     {
       "script": "form-compile/scripts/form-compile",
@@ -53,49 +34,32 @@
         "title": "Размещение",
         "elements": [
           {
-            "input": "Ячейка",
-            "path": "Объект.Ячейка",
-            "choiceParameterLinks": [
+            "table": "Строки", "path": "Объект.Строки",
+            "columns": [
+              { "input": "Склад", "path": "Объект.Строки.Склад" },
               {
-                "name": "Отбор.Владелец",
-                "dataPath": "Items.Ячейка.CurrentData.Склад"
+                "input": "Ячейка", "path": "Объект.Строки.Ячейка",
+                "choiceParameterLinks": [
+                  { "name": "Отбор.Владелец", "dataPath": "Items.Строки.CurrentData.Склад" }
+                ]
               }
             ]
           }
         ],
-        "attributes": [
-          {
-            "name": "Объект",
-            "type": "DocumentObject.Размещение",
-            "main": true
-          }
-        ]
+        "attributes": [ { "name": "Объект", "type": "DocumentObject.Размещение", "main": true } ]
       },
-      "args": {
-        "-JsonPath": "{inputFile}",
-        "-OutputPath": "{workDir}/Documents/Размещение/Forms/ФормаДокумента/Ext/Form.xml"
-      }
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "{workDir}/Documents/Размещение/Forms/ФормаДокумента/Ext/Form.xml" }
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": {
-        "-Name": "Тест",
-        "-OutputDir": "{workDir}/ext",
-        "-ConfigPath": "{workDir}"
-      }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
     }
   ],
-  "params": {
-    "extensionPath": "ext",
-    "object": "Document.Размещение.Form.ФормаДокумента"
-  },
+  "params": { "extensionPath": "ext", "object": "Document.Размещение.Form.ФормаДокумента" },
   "expect": {
     "fileNotContains": {
       "file": "ext/Documents/Размещение/Forms/ФормаДокумента/Ext/Form.xml",
-      "text": [
-        "<xr:Link>",
-        "Items.Ячейка.CurrentData.Склад"
-      ]
+      "text": ["<xr:Link>", "Items.Строки.CurrentData.Склад"]
     }
   }
 }
