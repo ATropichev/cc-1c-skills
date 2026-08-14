@@ -1,0 +1,30 @@
+{
+  "name": "Заимствование формы: свойства ПОСЛЕ CommandSet не теряются, сам CommandSet переносится, вложенный — нет",
+  "setup": "fixture:doc-form-commandset",
+  "preRun": [
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+    }
+  ],
+  "params": { "extensionPath": "ext", "object": "Document.Расход.Form.ФормаДокумента" },
+  "expect": {
+    "fileContains": {
+      "file": "ext/Documents/Расход/Forms/ФормаДокумента/Ext/Form.xml",
+      "text": [
+        "<ExcludedCommand>Post</ExcludedCommand>",
+        "<AutoTime>DontUse</AutoTime>",
+        "<UsePostingMode>Regular</UsePostingMode>",
+        "<RepostOnWrite>false</RepostOnWrite>"
+      ]
+    },
+    "fileNotContains": {
+      "file": "ext/Documents/Расход/Forms/ФормаДокумента/Ext/Form.xml",
+      "text": [
+        "<ExcludedCommand>MoveUp</ExcludedCommand>",
+        "<CommandInterface>",
+        "<RowPictureDataPath>"
+      ]
+    }
+  }
+}
