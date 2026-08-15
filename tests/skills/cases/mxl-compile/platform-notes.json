@@ -1,0 +1,25 @@
+{
+  "name": "Раундтрип макета ПЛАТФОРМЫ байт в байт: СПримечанием",
+  "setup": "fixture:platform-roundtrip",
+  "preRun": [
+    {
+      "script": "mxl-decompile/scripts/mxl-decompile",
+      "args": {
+        "-TemplatePath": "СПримечанием.xml",
+        "-OutputPath": "back.json"
+      },
+      "cwd": "{workDir}"
+    }
+  ],
+  "params": {
+    "outputPath": "out.xml"
+  },
+  "noSnapshot": "эталон — файл платформы, сверяется expect.filesEqual",
+  "expect": {
+    "filesEqual": {
+      "actual": "out.xml",
+      "expected": "СПримечанием.xml"
+    }
+  },
+  "inputFrom": "back.json"
+}

@@ -601,6 +601,43 @@ current-config не объявляет, поэтому вынести объяв
 обратные, ячейки продолжают ссылаться на записи со старыми ширинами. Из итогового XML это
 значение не выводится — воспроизводить его не нужно.
 
+## Примечание к ячейке
+
+```xml
+<note>
+    <drawingType>Comment</drawingType>
+    <id>0</id>
+    <formatIndex>1</formatIndex>
+    <text><v8:item><v8:lang>ru</v8:lang><v8:content>тест</v8:content></v8:item></text>
+    <beginRow>1</beginRow>          <beginRowOffset>-21</beginRowOffset>
+    <endRow>0</endRow>              <endRowOffset>51</endRowOffset>
+    <beginColumn>1</beginColumn>    <beginColumnOffset>21</beginColumnOffset>
+    <endColumn>0</endColumn>        <endColumnOffset>408</endColumnOffset>
+    <autoSize>true</autoSize>
+    <pictureSize>Stretch</pictureSize>
+</note>
+```
+
+Конструкция редкая (188 макетов, 1 087 примечаний), но структура жёсткая: все четырнадцать тегов
+присутствуют у всех 1 087, порядок один и тот же, опциональных нет. Информации при этом меньше,
+чем тегов:
+
+| Тег | Наблюдение |
+|---|---|
+| `drawingType`, `pictureSize`, `id` | константы: `Comment`, `Stretch`, `0` |
+| `beginRow`, `beginColumn` | всегда `1`/`1` — 1085 и 1086 из 1087; три исключения в одном макете |
+| `endRow`, `endColumn` | **координаты самой ячейки** — 1087 из 1087 |
+| четыре смещения | авторские: сдвиг окошка меняет `begin*Offset`, растяжение — `end*Offset` |
+| `autoSize` | `true` у 1036 из 1087 |
+
+`autoSize` описывает не наличие геометрии, а пересчёт размера: при `true` окошко всё равно несёт
+координаты, и они осмысленны — 306 различных пар `(endRowOffset, endColumnOffset)` против
+12 различных пар положения.
+
+Формат примечания — обычная запись палитры, на корпусе их всего 7 различных: 926 — стиль
+подсказки (`verticalAlignment: Top` + `style:ToolTipTextColor` + `style:ToolTipBackColor`),
+105 — он же с заливкой `#FFFAD9`.
+
 ## Ресурсы картинок
 
 ```xml

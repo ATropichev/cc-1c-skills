@@ -1,0 +1,23 @@
+{
+  "name": "Примечания к ячейкам: короткая и полная формы",
+  "input": {
+    "columns": 4,
+    "textLanguages": ["ru"],
+    "styles": { "жёлтая-подсказка": { "verticalAlignment": "Top", "backColor": "#FFFAD9" } },
+    "areas": [
+      {
+        "name": "Примечания",
+        "rows": [
+          { "cells": [
+            { "col": 1, "text": "Итого", "note": "Сумма без НДС" },
+            { "col": 2, "text": "Курс", "note": { "ru": "на дату документа", "en": "as of the document date" } },
+            { "col": 3, "param": "Скидка", "note": { "text": "не более 20%", "style": "жёлтая-подсказка" } },
+            { "col": 4, "note": { "text": "сдвинуто и растянуто", "autoSize": false,
+                                  "box": { "top": 58, "left": -175, "bottom": 362, "right": 478 } } }
+          ]}
+        ]
+      }
+    ]
+  },
+  "params": { "outputPath": "Template.xml" }
+}

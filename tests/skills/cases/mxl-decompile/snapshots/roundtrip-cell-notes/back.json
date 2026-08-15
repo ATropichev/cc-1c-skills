@@ -1,0 +1,19 @@
+{
+  "columns": 4,
+  "defaultWidth": 10,
+  "fonts": {},
+  "styles": { "vtop-bg": { "verticalAlignment": "Top", "backColor": "#FFFAD9" } },
+  "areas": [
+    {
+      "name": "Примечания",
+      "rows": [
+        [
+          { "text": "Итого", "note": { "text": "Сумма без НДС", "box": { "top": -21, "left": 21, "bottom": 51, "right": 408 } } },
+          { "text": "Курс", "note": { "text": { "ru": "на дату", "en": "as of date" }, "box": { "top": -21, "left": 21, "bottom": 51, "right": 408 } } },
+          { "param": "Скидка", "note": { "text": "не более 20%", "style": "vtop-bg", "box": { "top": -21, "left": 21, "bottom": 51, "right": 408 } } },
+          { "note": { "text": "сдвинуто", "autoSize": false, "box": { "top": 58, "left": -175, "bottom": 362, "right": 478 }, "anchor": { "row": 4, "col": 1 } } }
+        ]
+      ]
+    }
+  ]
+}

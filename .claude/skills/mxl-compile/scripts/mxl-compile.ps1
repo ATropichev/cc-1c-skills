@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.42 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.43 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -933,6 +933,60 @@ function Get-CellValue {
 	return @{ Type = 'xs:string'; Text = '' }
 }
 
+# Примечание к ячейке. Из четырнадцати тегов, которые пишет платформа, настоящей информации
+# несут пять: текст, стиль, признак авторазмера и четыре смещения окошка. Остальное — константы
+# (drawingType, pictureSize, id) либо выводится: якорь конца это координаты самой ячейки
+# (1087 примечаний корпуса, без исключений), якорь начала — 1/1 (1085 из 1087).
+$script:noteKeys = @('text', 'style', 'box', 'autoSize', 'anchor')
+# Стиль подсказки, который даёт Конфигуратор: 926 примечаний корпуса из 1087.
+$script:noteDefaultStyle = [ordered]@{
+	verticalAlignment = 'Top'
+	textColor = 'style:ToolTipTextColor'
+	backColor = 'style:ToolTipBackColor'
+}
+# Размер окошка платформа подбирает по тексту, и вычислить его мы не можем. Пишем самый
+# частый набор корпуса; при autoSize он всё равно пересчитывается при показе.
+$script:noteDefaultBox = @{ Top = -21; Left = 21; Bottom = 51; Right = 408 }
+
+function Test-NoteObject {
+	param($el)
+	foreach ($p in $el.PSObject.Properties) {
+		if ($script:noteKeys -contains $p.Name) { return $true }
+	}
+	return $false
+}
+
+function Get-CellNote {
+	param($cell, [string]$where)
+	$raw = $cell.note
+	if ($null -eq $raw) { return $null }
+
+	# Как у текста ячейки: строка — текст, объект трактуется по ключам. Ключи примечания
+	# и идентификаторы языков не пересекаются.
+	$text = $raw
+	$style = $null
+	$autoSize = $true
+	$box = @{} + $script:noteDefaultBox
+	$anchor = @{ Row = 1; Col = 1 }
+
+	if ($raw -is [System.Management.Automation.PSCustomObject] -and (Test-NoteObject $raw)) {
+		$text = $raw.text
+		if ($null -eq $text) { $text = '' }
+		if ($raw.style) { $style = "$($raw.style)" }
+		if ($null -ne $raw.autoSize) { $autoSize = ($raw.autoSize -eq $true -or "$($raw.autoSize)" -eq 'true') }
+		foreach ($side in @('Top', 'Left', 'Bottom', 'Right')) {
+			$v = $raw.box.$side
+			if ($null -ne $v) { $box[$side] = [int]$v }
+		}
+		if ($raw.anchor) {
+			if ($null -ne $raw.anchor.row) { $anchor.Row = [int]$raw.anchor.row }
+			if ($null -ne $raw.anchor.col) { $anchor.Col = [int]$raw.anchor.col }
+		}
+	}
+
+	return @{ Text = $text; Style = $style; AutoSize = $autoSize; Box = $box; Anchor = $anchor }
+}
+
 # --- 6. Format palette builder ---
 
 $formatRegistry = [ordered]@{}  # key -> hashtable with properties
@@ -1153,6 +1207,59 @@ function Get-FillType {
 	return ""
 }
 
+# Формат примечания — обычная запись палитры: без своего стиля берём канонический стиль подсказки.
+function Register-NoteFormat {
+	param($note)
+	if ($note.Style) {
+		$props = Resolve-Style -styleName $note.Style -fillType ""
+	} else {
+		$props = @{}
+		foreach ($k in $script:noteDefaultStyle.Keys) { $props[$k] = $script:noteDefaultStyle[$k] }
+	}
+	return Register-Format $props
+}
+
+# Порядок тегов внутри <note> снят с корпуса: у всех 1087 примечаний он один и тот же,
+# и все четырнадцать тегов присутствуют всегда.
+function Emit-CellNote {
+	param($note, [int]$fmtIdx, [int]$row, [int]$col)
+	X "`t`t`t`t`t<note>"
+	X "`t`t`t`t`t`t<drawingType>Comment</drawingType>"
+	X "`t`t`t`t`t`t<id>0</id>"
+	X "`t`t`t`t`t`t<formatIndex>$fmtIdx</formatIndex>"
+	$pairs = @()
+	if ($note.Text -is [System.Collections.IDictionary]) {
+		foreach ($k in $note.Text.Keys) { $pairs += @{ Lang = "$k"; Text = "$($note.Text[$k])" } }
+	} elseif ($note.Text -is [System.Management.Automation.PSCustomObject]) {
+		foreach ($p in $note.Text.PSObject.Properties) { $pairs += @{ Lang = $p.Name; Text = "$($p.Value)" } }
+	} else {
+		foreach ($l in $textLanguages) { $pairs += @{ Lang = $l; Text = "$($note.Text)" } }
+	}
+	if ($pairs.Count -eq 0) {
+		X "`t`t`t`t`t`t<text/>"
+	} else {
+		X "`t`t`t`t`t`t<text>"
+		foreach ($p in $pairs) {
+			X "`t`t`t`t`t`t`t<v8:item>"
+			X "`t`t`t`t`t`t`t`t<v8:lang>$($p.Lang)</v8:lang>"
+			X "`t`t`t`t`t`t`t`t<v8:content>$(Esc-XmlText $p.Text)</v8:content>"
+			X "`t`t`t`t`t`t`t</v8:item>"
+		}
+		X "`t`t`t`t`t`t</text>"
+	}
+	X "`t`t`t`t`t`t<beginRow>$($note.Anchor.Row)</beginRow>"
+	X "`t`t`t`t`t`t<beginRowOffset>$($note.Box.Top)</beginRowOffset>"
+	X "`t`t`t`t`t`t<endRow>$row</endRow>"
+	X "`t`t`t`t`t`t<endRowOffset>$($note.Box.Bottom)</endRowOffset>"
+	X "`t`t`t`t`t`t<beginColumn>$($note.Anchor.Col)</beginColumn>"
+	X "`t`t`t`t`t`t<beginColumnOffset>$($note.Box.Left)</beginColumnOffset>"
+	X "`t`t`t`t`t`t<endColumn>$col</endColumn>"
+	X "`t`t`t`t`t`t<endColumnOffset>$($note.Box.Right)</endColumnOffset>"
+	X "`t`t`t`t`t`t<autoSize>$(if ($note.AutoSize) { 'true' } else { 'false' })</autoSize>"
+	X "`t`t`t`t`t`t<pictureSize>Stretch</pictureSize>"
+	X "`t`t`t`t`t</note>"
+}
+
 # Helper: register a cell format and return its index
 function Register-CellFormat {
 	param($styleName, [string]$fillType, [hashtable]$valueProps)
@@ -1188,7 +1295,7 @@ function Set-CellProp {
 function Test-CellObject {
 	param($el)
 	$cellKeys = @('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template',
-		'valueType', 'controlType', 'value', 'control')
+		'valueType', 'controlType', 'value', 'control', 'note')
 	foreach ($p in $el.PSObject.Properties) {
 		if ($cellKeys -contains $p.Name) { return $true }
 	}
@@ -1371,6 +1478,8 @@ foreach ($area in $def.areas) {
 				$ft = Get-FillType $cell
 				$vp = Get-CellValueProps $cell "area `"$($area.name)`""
 				Register-CellFormat -styleName $cellStyle -fillType $ft -valueProps $vp | Out-Null
+				$note = Get-CellNote $cell "area `"$($area.name)`""
+				if ($note) { Register-NoteFormat $note | Out-Null }
 			}
 		}
 	}
@@ -1653,6 +1762,8 @@ foreach ($area in $def.areas) {
 				$ft = Get-FillType $cell
 				$vp = Get-CellValueProps $cell "area `"$areaName`", row $($localRow + 1)"
 				$fmtIdx = Register-CellFormat -styleName $cellStyle -fillType $ft -valueProps $vp
+				$cellNote = Get-CellNote $cell "area `"$areaName`", row $($localRow + 1)"
+				$cellNoteFmt = if ($cellNote) { Register-NoteFormat $cellNote } else { 0 }
 
 				$cellInfo = @{
 					Col       = $colStart - 1  # 0-based
@@ -1663,6 +1774,8 @@ foreach ($area in $def.areas) {
 					Template  = $cell.template
 					Value     = $(if ($vp.Count -gt 0) { Get-CellValue $cell "$($vp['valueType'])" "area `"$areaName`", row $($localRow + 1)" } else { $null })
 					Control   = $(if ($vp.Count -gt 0) { $cell.control } else { $null })
+					Note      = $cellNote
+					NoteFmt   = $cellNoteFmt
 				}
 				$rowCells += $cellInfo
 
@@ -1791,6 +1904,12 @@ foreach ($area in $def.areas) {
 			# Порядок тегов ячейки снят с корпуса: parameter · текст · detailParameter.
 			if ($cellInfo.Detail) {
 				X "`t`t`t`t`t<detailParameter>$($cellInfo.Detail)</detailParameter>"
+			}
+
+			# Якорь конца примечания — координаты самой ячейки, поэтому его не задают:
+			# он выводится здесь, при эмиссии.
+			if ($null -ne $cellInfo.Note) {
+				Emit-CellNote $cellInfo.Note $cellInfo.NoteFmt $globalRow $cellInfo.Col
 			}
 
 			X "`t`t`t`t</c>"

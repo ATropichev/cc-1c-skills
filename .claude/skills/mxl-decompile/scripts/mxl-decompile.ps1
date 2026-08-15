@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.22 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.23 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -417,6 +417,39 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 				$value = @{ Type = $vNode.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance"); Text = $vNode.InnerText }
 			}
 
+			# Примечание к ячейке. Якоря не читаем как данные: конец — координаты самой
+			# ячейки, начало — 1/1 у 1085 примечаний корпуса из 1087; остальное авторское.
+			$note = $null
+			$noteNode = $cContent.SelectSingleNode("d:note", $ns)
+			if ($noteNode) {
+				$noteText = [ordered]@{}
+				$tEl = $noteNode.SelectSingleNode("d:text", $ns)
+				if ($tEl) {
+					foreach ($it in $tEl.SelectNodes("v8:item", $ns)) {
+						$l = $it.SelectSingleNode("v8:lang", $ns)
+						$cnt = $it.SelectSingleNode("v8:content", $ns)
+						$noteText[$(if ($l) { $l.InnerText } else { '' })] = $(if ($cnt) { $cnt.InnerText } else { '' })
+					}
+				}
+				$ng = @{}
+				foreach ($ch in $noteNode.ChildNodes) {
+					if ($ch.NodeType -eq [System.Xml.XmlNodeType]::Element) { $ng[$ch.get_LocalName()] = $ch.InnerText.Trim() }
+				}
+				$note = @{
+					FormatIdx = [int]($(if ($ng['formatIndex']) { $ng['formatIndex'] } else { 0 }))
+					Text      = $noteText
+					AutoSize  = ($(if ($ng.ContainsKey('autoSize')) { $ng['autoSize'] } else { 'true' }) -ceq 'true')
+					Box       = [ordered]@{
+						top    = [int]($(if ($ng['beginRowOffset']) { $ng['beginRowOffset'] } else { 0 }))
+						left   = [int]($(if ($ng['beginColumnOffset']) { $ng['beginColumnOffset'] } else { 0 }))
+						bottom = [int]($(if ($ng['endRowOffset']) { $ng['endRowOffset'] } else { 0 }))
+						right  = [int]($(if ($ng['endColumnOffset']) { $ng['endColumnOffset'] } else { 0 }))
+					}
+					AnchorRow = [int]($(if ($ng['beginRow']) { $ng['beginRow'] } else { 1 }))
+					AnchorCol = [int]($(if ($ng['beginColumn']) { $ng['beginColumn'] } else { 1 }))
+				}
+			}
+
 			# Настройки элемента управления — сериализованный base64 у самой ячейки.
 			# Структуру не разбираем, возим дословно.
 			$control = $null
@@ -460,6 +493,7 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 				Detail    = $detail
 				Value     = $value
 				Control   = $control
+				Note      = $note
 				Text      = $text
 				HasText   = $hasText
 			}
@@ -646,6 +680,16 @@ foreach ($r in ($rowData.Keys | Sort-Object { [int]$_ } | ForEach-Object { $rowD
 		$key = Get-StyleKey $fmt
 		if (-not $styleKeys.Contains($key)) { $styleKeys[$key] = $fmt }
 		$formatToStyleKey[$cell.FormatIdx] = $key
+		# Формат примечания живёт в той же палитре и тоже заслуживает имени: иначе
+		# оформление подсказки терялось бы при обратной сборке.
+		if ($cell.Note) {
+			$nfmt = Get-Format $cell.Note.FormatIdx
+			if ($nfmt) {
+				$nkey = Get-StyleKey $nfmt
+				if (-not $styleKeys.Contains($nkey)) { $styleKeys[$nkey] = $nfmt }
+				$formatToStyleKey[$cell.Note.FormatIdx] = $nkey
+			}
+		}
 	}
 }
 
@@ -1074,7 +1118,7 @@ foreach ($area in $blocks) {
 			$hasValue = ($cf -and $cf.Props['containsValue'] -ceq 'true')
 			# Расшифровка сама по себе делает ячейку содержательной: в корпусе 12 653 ячейки
 			# несут только её. Без этого такая ячейка уходила в заполнители и терялась.
-			$hasContent = $cell.Param -or $cell.HasText -or $hasValue -or $cell.Detail
+			$hasContent = $cell.Param -or $cell.HasText -or $hasValue -or $cell.Detail -or $cell.Note
 			$hasMerge = $mergeMap.ContainsKey("$globalRow,$($cell.Col)")
 
 			if ($hasContent -or $hasMerge) {
@@ -1192,6 +1236,20 @@ foreach ($area in $blocks) {
 			# несут её без параметра против 8 582 с ним. Пока она читалась только вместе
 			# с параметром, две трети расшифровок терялись молча.
 			if ($cell.Detail) { $dslCell["detail"] = $cell.Detail }
+
+			if ($cell.Note) {
+				$n = $cell.Note
+				$dslNote = [ordered]@{}
+				$dslNote["text"] = Get-DslText $n.Text
+				$styleName = Get-StyleName $n.FormatIdx
+				if ($styleName -ne "default") { $dslNote["style"] = $styleName }
+				if (-not $n.AutoSize) { $dslNote["autoSize"] = $false }
+				$dslNote["box"] = $n.Box
+				if ($n.AnchorRow -ne 1 -or $n.AnchorCol -ne 1) {
+					$dslNote["anchor"] = [ordered]@{ row = $n.AnchorRow; col = $n.AnchorCol }
+				}
+				$dslCell["note"] = $dslNote
+			}
 
 			$dslCells += $dslCell
 		}
@@ -1335,7 +1393,14 @@ foreach ($a in $dslAreas) {
 			$rs = $r.rowStyle
 			$usedStyles[$(if ($rs -is [System.Collections.IDictionary]) { $rs['style'] } else { $rs })] = $true
 		}
-		if ($cellList) { foreach ($c in $cellList) { if ($c -isnot [string] -and $c.style) { $usedStyles[$c.style] = $true } } }
+		if ($cellList) {
+			foreach ($c in $cellList) {
+				if ($c -isnot [string] -and $c.style) { $usedStyles[$c.style] = $true }
+				# Четвёртый владелец формата — примечание: его стиль тоже держит ссылку,
+				# иначе он вырезается как неиспользуемый и ссылка остаётся висячей.
+				if ($c -isnot [string] -and $c.note -and $c.note['style']) { $usedStyles[$c.note['style']] = $true }
+			}
+		}
 	}
 }
 # Стиль бывает не только у ячейки и строки: колонка — третий владелец формата. Берём стили

@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.22 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.23 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -580,6 +580,35 @@ def main():
                 if v_node is not None:
                     value = (v_node.get(f'{{{XSI_NS}}}type') or '', (v_node.text or ''))
 
+                # Примечание к ячейке. Якоря не читаем как данные: конец — координаты самой
+                # ячейки, начало — 1/1 у 1085 примечаний корпуса из 1087; остальное авторское.
+                note = None
+                note_node = find(c_content, "d:note")
+                if note_node is not None:
+                    g = {etree.QName(ch).localname: ch for ch in note_node}
+                    def _txt(name, default=''):
+                        el = g.get(name)
+                        return (el.text or default).strip() if el is not None else default
+                    note_text = OrderedDict()
+                    t_el = g.get('text')
+                    if t_el is not None:
+                        for it in findall(t_el, "v8:item"):
+                            lang = text_of(find(it, "v8:lang")) or ''
+                            note_text[lang] = text_of(find(it, "v8:content")) or ''
+                    note = {
+                        "FormatIdx": int(_txt('formatIndex', '0') or 0),
+                        "Text": note_text,
+                        "AutoSize": _txt('autoSize', 'true') == 'true',
+                        "Box": OrderedDict([
+                            ("top", int(_txt('beginRowOffset', '0') or 0)),
+                            ("left", int(_txt('beginColumnOffset', '0') or 0)),
+                            ("bottom", int(_txt('endRowOffset', '0') or 0)),
+                            ("right", int(_txt('endColumnOffset', '0') or 0)),
+                        ]),
+                        "AnchorRow": int(_txt('beginRow', '1') or 1),
+                        "AnchorCol": int(_txt('beginColumn', '1') or 1),
+                    }
+
                 # Настройки элемента управления — сериализованный base64 у самой ячейки.
                 # Структуру не разбираем, возим дословно.
                 control = None
@@ -622,6 +651,7 @@ def main():
                     "Detail": detail,
                     "Value": value,
                     "Control": control,
+                    "Note": note,
                     "Text": text,
                     "HasText": has_text,
                 })
@@ -800,6 +830,15 @@ def main():
             if key not in style_keys:
                 style_keys[key] = fmt
             format_to_style_key[cell["FormatIdx"]] = key
+            # Формат примечания живёт в той же палитре и тоже заслуживает имени: иначе
+            # оформление подсказки терялось бы при обратной сборке.
+            if cell.get("Note"):
+                nfmt = get_format(cell["Note"]["FormatIdx"])
+                if nfmt:
+                    nkey = get_style_key(nfmt)
+                    if nkey not in style_keys:
+                        style_keys[nkey] = nfmt
+                    format_to_style_key[cell["Note"]["FormatIdx"]] = nkey
 
     def row_style_fmt(fmt):
         """Оформление строки без её собственных свойств: скрытие уезжает инлайном к height,
@@ -1069,7 +1108,8 @@ def main():
                 has_value = bool(cf and cf["Props"].get("containsValue") == "true")
                 # Расшифровка сама по себе делает ячейку содержательной: в корпусе 12 653 ячейки
                 # несут только её. Без этого такая ячейка уходила в заполнители и терялась.
-                has_content = cell["Param"] or cell["HasText"] or has_value or cell["Detail"]
+                has_content = (cell["Param"] or cell["HasText"] or has_value
+                               or cell["Detail"] or cell["Note"])
                 has_merge = f"{global_row},{cell['Col']}" in merge_map
 
                 if has_content or has_merge:
@@ -1182,6 +1222,20 @@ def main():
                 # с параметром, две трети расшифровок терялись молча.
                 if cell["Detail"]:
                     dsl_cell["detail"] = cell["Detail"]
+
+                if cell["Note"]:
+                    n = cell["Note"]
+                    dsl_note = OrderedDict()
+                    dsl_note["text"] = get_dsl_text(n["Text"])
+                    style_name = get_style_name(n["FormatIdx"])
+                    if style_name != "default":
+                        dsl_note["style"] = style_name
+                    if not n["AutoSize"]:
+                        dsl_note["autoSize"] = False
+                    dsl_note["box"] = n["Box"]
+                    if n["AnchorRow"] != 1 or n["AnchorCol"] != 1:
+                        dsl_note["anchor"] = OrderedDict([("row", n["AnchorRow"]), ("col", n["AnchorCol"])])
+                    dsl_cell["note"] = dsl_note
 
                 dsl_cells.append(dsl_cell)
 
@@ -1344,6 +1398,10 @@ def main():
             for c in cell_list:
                 if isinstance(c, dict) and "style" in c:
                     used_styles.add(c["style"])
+                # Четвёртый владелец формата — примечание: его стиль тоже держит ссылку,
+                # иначе он вырезается как неиспользуемый и ссылка остаётся висячей.
+                if isinstance(c, dict) and isinstance(c.get("note"), dict) and "style" in c["note"]:
+                    used_styles.add(c["note"]["style"])
     # Стиль бывает не только у ячейки и строки: колонка — третий владелец формата. Берём
     # стили ИЗ САМИХ РАСКЛАДОК, а не из result: columnSets попадает в результат ПОЗЖЕ этой
     # проверки, поэтому стиль, на который ссылается только дополнительная раскладка,

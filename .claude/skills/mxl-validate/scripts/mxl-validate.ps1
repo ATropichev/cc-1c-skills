@@ -1,4 +1,4 @@
-﻿# mxl-validate v1.4 — Validate 1C spreadsheet
+﻿# mxl-validate v1.5 — Validate 1C spreadsheet
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Alias('Path')]
@@ -284,6 +284,14 @@ foreach ($ri in $rowNodes) {
 				if ($val -gt $maxCellFormatRef) { $maxCellFormatRef = $val }
 				if ($val -gt $formatCount) {
 					Report-Error "Row ${rowIndex}: cell format index $val > format palette size ($formatCount)"
+				}
+			}
+			# Примечание — четвёртый владелец формата, и его ссылка тоже бывает битой.
+			$noteNode = $cell.SelectSingleNode("d:note", $nsMgr)
+			if ($noteNode) {
+				$nf = $noteNode.SelectSingleNode("d:formatIndex", $nsMgr)
+				if ($nf -and [int]$nf.InnerText -gt $formatCount) {
+					Report-Error "Row ${rowIndex}: note format index $($nf.InnerText) > format palette size ($formatCount)"
 				}
 			}
 		}

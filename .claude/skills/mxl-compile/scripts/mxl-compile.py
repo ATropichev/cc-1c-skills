@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.42 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.43 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -644,6 +644,58 @@ def emit_value_type_content(lines, indent, canon_type):
             lines.extend(quals[q])
 
 
+# Примечание к ячейке. Из четырнадцати тегов, которые пишет платформа, настоящей информации
+# несут пять: текст, стиль, признак авторазмера и четыре смещения окошка. Остальное — константы
+# (drawingType, pictureSize, id) либо выводится: якорь конца это координаты самой ячейки
+# (1087 примечаний корпуса, без исключений), якорь начала — 1/1 (1085 из 1087).
+NOTE_KEYS = ('text', 'style', 'box', 'autoSize', 'anchor')
+# Стиль подсказки, который даёт Конфигуратор: 926 примечаний корпуса из 1087.
+NOTE_DEFAULT_STYLE = {
+    'verticalAlignment': 'Top',
+    'textColor': 'style:ToolTipTextColor',
+    'backColor': 'style:ToolTipBackColor',
+}
+# Размер окошка платформа подбирает по тексту, и вычислить его мы не можем. Пишем самый
+# частый набор корпуса; при autoSize он всё равно пересчитывается при показе.
+NOTE_DEFAULT_BOX = {'top': -21, 'left': 21, 'bottom': 51, 'right': 408}
+
+
+def is_note_object(el):
+    return any(k in el for k in NOTE_KEYS)
+
+
+def cell_note(cell, where):
+    """Как у текста ячейки: строка — текст, объект трактуется по ключам. Ключи примечания
+    и идентификаторы языков не пересекаются."""
+    raw = cell.get('note')
+    if raw is None:
+        return None
+    text = raw
+    style = None
+    auto_size = True
+    box = dict(NOTE_DEFAULT_BOX)
+    anchor = {'row': 1, 'col': 1}
+
+    if isinstance(raw, dict) and is_note_object(raw):
+        text = raw.get('text')
+        if text is None:
+            text = ''
+        if raw.get('style'):
+            style = str(raw.get('style'))
+        if raw.get('autoSize') is not None:
+            auto_size = raw.get('autoSize') is True or str(raw.get('autoSize')).lower() == 'true'
+        raw_box = raw.get('box') or {}
+        for side in ('top', 'left', 'bottom', 'right'):
+            if raw_box.get(side) is not None:
+                box[side] = int(raw_box.get(side))
+        raw_anchor = raw.get('anchor') or {}
+        for k in ('row', 'col'):
+            if raw_anchor.get(k) is not None:
+                anchor[k] = int(raw_anchor.get(k))
+
+    return {'Text': text, 'Style': style, 'AutoSize': auto_size, 'Box': box, 'Anchor': anchor}
+
+
 def cell_value(cell, canon_type, where):
     """Значение ячейки-поля ввода — тег САМОЙ ячейки (<v>), а не запись палитры: у двух ячеек
     с одинаковым оформлением значения разные, и в дедупликацию формата оно не входит.
@@ -1174,6 +1226,46 @@ def main():
             return 'Template'
         return ''
 
+    # Формат примечания — обычная запись палитры: без своего стиля берём канонический стиль подсказки.
+    def register_note_format(note):
+        props = resolve_style(note['Style'], '') if note['Style'] else dict(NOTE_DEFAULT_STYLE)
+        return register_format(props)
+
+    def emit_cell_note(lines, note, fmt_idx, row, col):
+        """Порядок тегов внутри <note> снят с корпуса: у всех 1087 примечаний он один и тот же,
+        и все четырнадцать тегов присутствуют всегда."""
+        lines.append('\t\t\t\t\t<note>')
+        lines.append('\t\t\t\t\t\t<drawingType>Comment</drawingType>')
+        lines.append('\t\t\t\t\t\t<id>0</id>')
+        lines.append(f'\t\t\t\t\t\t<formatIndex>{fmt_idx}</formatIndex>')
+        value = note['Text']
+        if isinstance(value, dict):
+            pairs = [(str(k), str(v)) for k, v in value.items()]
+        else:
+            pairs = [(lang, str(value)) for lang in text_languages]
+        if not pairs:
+            lines.append('\t\t\t\t\t\t<text/>')
+        else:
+            lines.append('\t\t\t\t\t\t<text>')
+            for lang, content in pairs:
+                lines.append('\t\t\t\t\t\t\t<v8:item>')
+                lines.append(f'\t\t\t\t\t\t\t\t<v8:lang>{lang}</v8:lang>')
+                lines.append(f'\t\t\t\t\t\t\t\t<v8:content>{esc_xml_text(content)}</v8:content>')
+                lines.append('\t\t\t\t\t\t\t</v8:item>')
+            lines.append('\t\t\t\t\t\t</text>')
+        box = note['Box']
+        lines.append(f'\t\t\t\t\t\t<beginRow>{note["Anchor"]["row"]}</beginRow>')
+        lines.append(f'\t\t\t\t\t\t<beginRowOffset>{box["top"]}</beginRowOffset>')
+        lines.append(f'\t\t\t\t\t\t<endRow>{row}</endRow>')
+        lines.append(f'\t\t\t\t\t\t<endRowOffset>{box["bottom"]}</endRowOffset>')
+        lines.append(f'\t\t\t\t\t\t<beginColumn>{note["Anchor"]["col"]}</beginColumn>')
+        lines.append(f'\t\t\t\t\t\t<beginColumnOffset>{box["left"]}</beginColumnOffset>')
+        lines.append(f'\t\t\t\t\t\t<endColumn>{col}</endColumn>')
+        lines.append(f'\t\t\t\t\t\t<endColumnOffset>{box["right"]}</endColumnOffset>')
+        lines.append('\t\t\t\t\t\t<autoSize>%s</autoSize>' % ('true' if note['AutoSize'] else 'false'))
+        lines.append('\t\t\t\t\t\t<pictureSize>Stretch</pictureSize>')
+        lines.append('\t\t\t\t\t</note>')
+
     # Helper: register a cell format and return its index
     def register_cell_format(style_name, fill_type, value_props=None):
         resolved = resolve_style(style_name, fill_type)
@@ -1366,6 +1458,9 @@ def main():
                     ft = get_fill_type(cell)
                     vp = cell_value_props(cell, f'area "{area.get("name") or ""}"')
                     register_cell_format(cell_style, ft, vp)
+                    note = cell_note(cell, f'area "{area.get("name") or ""}"')
+                    if note:
+                        register_note_format(note)
 
     # Формат по умолчанию — последняя запись палитры (см. выше).
     default_format_index = register_format({'width': default_width})
@@ -1607,6 +1702,8 @@ def main():
                     ft = get_fill_type(cell)
                     vp = cell_value_props(cell, f'area "{area_name}", row {local_row + 1}')
                     fmt_idx = register_cell_format(cell_style, ft, vp)
+                    note = cell_note(cell, f'area "{area_name}", row {local_row + 1}')
+                    note_fmt = register_note_format(note) if note else 0
 
                     cell_info = {
                         'Col': col_start - 1,  # 0-based
@@ -1618,6 +1715,8 @@ def main():
                         'Value': (cell_value(cell, vp.get('valueType', ''),
                                              f'area "{area_name}", row {local_row + 1}') if vp else None),
                         'Control': (cell.get('control') if vp else None),
+                        'Note': note,
+                        'NoteFmt': note_fmt,
                     }
                     row_cells.append(cell_info)
 
@@ -1736,6 +1835,12 @@ def main():
                 # Порядок тегов ячейки снят с корпуса: parameter · текст · detailParameter.
                 if cell_info['Detail']:
                     lines.append(f'\t\t\t\t\t<detailParameter>{cell_info["Detail"]}</detailParameter>')
+
+                # Якорь конца примечания — координаты самой ячейки, поэтому его не задают:
+                # он выводится здесь, при эмиссии.
+                if cell_info.get('Note') is not None:
+                    emit_cell_note(lines, cell_info['Note'], cell_info['NoteFmt'],
+                                   global_row, cell_info['Col'])
 
                 lines.append('\t\t\t\t</c>')
                 lines.append('\t\t\t</c>')

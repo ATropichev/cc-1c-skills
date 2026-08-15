@@ -1,0 +1,36 @@
+{
+  "name": "Roundtrip — примечания к ячейкам",
+  "preRun": [
+    {
+      "script": "mxl-compile/scripts/mxl-compile",
+      "input": {
+        "columns": 4,
+        "textLanguages": ["ru"],
+        "styles": { "жёлтая-подсказка": { "verticalAlignment": "Top", "backColor": "#FFFAD9" } },
+        "areas": [
+          {
+            "name": "Примечания",
+            "rows": [
+              { "cells": [
+                { "col": 1, "text": "Итого", "note": "Сумма без НДС" },
+                { "col": 2, "text": "Курс", "note": { "ru": "на дату", "en": "as of date" } },
+                { "col": 3, "param": "Скидка", "note": { "text": "не более 20%", "style": "жёлтая-подсказка" } },
+                { "col": 4, "note": { "text": "сдвинуто", "autoSize": false,
+                                      "box": { "top": 58, "left": -175, "bottom": 362, "right": 478 },
+                                      "anchor": { "row": 4, "col": 1 } } }
+              ]}
+            ]
+          }
+        ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "Template.xml" },
+      "cwd": "{workDir}"
+    }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "args_extra": ["-OutputPath", "{workDir}/back.json"],
+  "expect": {
+    "files": ["back.json"],
+    "stdoutContains": "[OK] Decompiled:"
+  }
+}

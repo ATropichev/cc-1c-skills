@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-validate v1.4 — Validate 1C spreadsheet document Template.xml
+# mxl-validate v1.5 — Validate 1C spreadsheet document Template.xml
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates spreadsheet Template.xml: height, palette refs, column/row indices, areas, merges."""
 import sys, os, argparse
@@ -303,6 +303,13 @@ def main():
                         max_cell_format_ref = val
                     if val > format_count:
                         r.error(f'Row {row_index}: cell format index {val} > format palette size ({format_count})')
+                # Примечание — четвёртый владелец формата, и его ссылка тоже бывает битой.
+                note = cell.find(f'{{{NS_D}}}note')
+                if note is not None:
+                    nf = note.find(f'{{{NS_D}}}formatIndex')
+                    if nf is not None and nf.text and int(nf.text) > format_count:
+                        r.error(f'Row {row_index}: note format index {nf.text}'
+                                f' > format palette size ({format_count})')
 
         row_index += 1
 
