@@ -1,0 +1,17 @@
+{
+  "name": "Именованная область с привязкой к колоночной раскладке",
+  "input": {
+    "columns": 3,
+    "columnSets": { "узкая": { "columns": 2, "columnWidths": { "1-2": 20 } } },
+    "areas": [
+      { "name": "Шапка", "rows": [["Заголовок"]] },
+      { "name": "Таблица", "columnSet": "узкая", "rows": [["Товар", "Цена"]] }
+    ],
+    "namedAreas": [
+      { "name": "ПоУзкой", "rows": 2, "cols": "1-2" },
+      { "name": "БезПривязки", "rows": 2, "cols": 1, "columnSet": "" },
+      { "name": "ЯвнаяПривязка", "rows": 1, "cols": 1, "columnSet": "узкая" }
+    ]
+  },
+  "params": { "outputPath": "Template.xml" }
+}

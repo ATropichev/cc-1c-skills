@@ -11,44 +11,20 @@
 	</languageSettings>
 	<columns>
 		<size>3</size>
-		<columnsItem>
-			<index>0</index>
-			<column>
-				<formatIndex>1</formatIndex>
-			</column>
-		</columnsItem>
-		<columnsItem>
-			<index>1</index>
-			<column>
-				<formatIndex>1</formatIndex>
-			</column>
-		</columnsItem>
-		<columnsItem>
-			<index>2</index>
-			<column>
-				<formatIndex>1</formatIndex>
-			</column>
-		</columnsItem>
 	</columns>
 	<columns>
 		<id>12320174-2b07-3806-9f7f-ec3834007fdb</id>
-		<size>3</size>
+		<size>2</size>
 		<columnsItem>
 			<index>0</index>
 			<column>
-				<formatIndex>2</formatIndex>
+				<formatIndex>1</formatIndex>
 			</column>
 		</columnsItem>
 		<columnsItem>
 			<index>1</index>
 			<column>
-				<formatIndex>2</formatIndex>
-			</column>
-		</columnsItem>
-		<columnsItem>
-			<index>2</index>
-			<column>
-				<formatIndex>2</formatIndex>
+				<formatIndex>1</formatIndex>
 			</column>
 		</columnsItem>
 	</columns>
@@ -61,29 +37,7 @@
 					<tl>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
-							<v8:content>Наименование</v8:content>
-						</v8:item>
-					</tl>
-				</c>
-			</c>
-			<c>
-				<c>
-					<f>0</f>
-					<tl>
-						<v8:item>
-							<v8:lang>ru</v8:lang>
-							<v8:content>Количество</v8:content>
-						</v8:item>
-					</tl>
-				</c>
-			</c>
-			<c>
-				<c>
-					<f>0</f>
-					<tl>
-						<v8:item>
-							<v8:lang>ru</v8:lang>
-							<v8:content>Сумма</v8:content>
+							<v8:content>Заголовок</v8:content>
 						</v8:item>
 					</tl>
 				</c>
@@ -96,30 +50,55 @@
 			<columnsID>12320174-2b07-3806-9f7f-ec3834007fdb</columnsID>
 			<c>
 				<c>
-					<f>3</f>
-					<parameter>Товар</parameter>
+					<f>0</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Товар</v8:content>
+						</v8:item>
+					</tl>
 				</c>
 			</c>
 			<c>
 				<c>
-					<f>3</f>
-					<parameter>Кол</parameter>
-				</c>
-			</c>
-			<c>
-				<c>
-					<f>3</f>
-					<parameter>Сумма</parameter>
+					<f>0</f>
+					<tl>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Цена</v8:content>
+						</v8:item>
+					</tl>
 				</c>
 			</c>
 		</row>
 	</rowsItem>
 	<templateMode>true</templateMode>
-	<defaultFormatIndex>4</defaultFormatIndex>
+	<defaultFormatIndex>2</defaultFormatIndex>
 	<height>2</height>
 	<vgRows>2</vgRows>
 	<namedItem xsi:type="NamedItemCells">
-		<name>ТабличнаяЧасть</name>
+		<name>БезПривязки</name>
+		<area>
+			<type>Rectangle</type>
+			<beginRow>1</beginRow>
+			<endRow>1</endRow>
+			<beginColumn>0</beginColumn>
+			<endColumn>0</endColumn>
+		</area>
+	</namedItem>
+	<namedItem xsi:type="NamedItemCells">
+		<name>ПоУзкой</name>
+		<area>
+			<type>Rectangle</type>
+			<beginRow>1</beginRow>
+			<endRow>1</endRow>
+			<beginColumn>0</beginColumn>
+			<endColumn>1</endColumn>
+			<columnsID>12320174-2b07-3806-9f7f-ec3834007fdb</columnsID>
+		</area>
+	</namedItem>
+	<namedItem xsi:type="NamedItemCells">
+		<name>Таблица</name>
 		<area>
 			<type>Rows</type>
 			<beginRow>1</beginRow>
@@ -139,14 +118,19 @@
 			<endColumn>-1</endColumn>
 		</area>
 	</namedItem>
+	<namedItem xsi:type="NamedItemCells">
+		<name>ЯвнаяПривязка</name>
+		<area>
+			<type>Rectangle</type>
+			<beginRow>0</beginRow>
+			<endRow>0</endRow>
+			<beginColumn>0</beginColumn>
+			<endColumn>0</endColumn>
+			<columnsID>12320174-2b07-3806-9f7f-ec3834007fdb</columnsID>
+		</area>
+	</namedItem>
 	<format>
 		<width>20</width>
-	</format>
-	<format>
-		<width>8</width>
-	</format>
-	<format>
-		<fillType>Parameter</fillType>
 	</format>
 	<format>
 		<width>10</width>

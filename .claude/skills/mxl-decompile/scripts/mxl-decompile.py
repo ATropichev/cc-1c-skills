@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.25 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.26 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -609,6 +609,9 @@ def main():
             "EndRow": coord("endRow"),
             "BeginCol": coord("beginColumn"),
             "EndCol": coord("endColumn"),
+            # Привязка области к колоночной раскладке: у 913 483 прямоугольных областей корпуса
+            # она есть, и из накрытых строк выводится не всегда.
+            "ColumnsId": text_of(find(area_node, "d:columnsID")) or "",
         })
 
     # --- 8. Extract rows ---
@@ -1131,6 +1134,11 @@ def main():
         if fits:
             fits = uniform_column_set(a["BeginRow"], a["EndRow"])
         if fits:
+            # Блок задаёт раскладку строкам, и область наследует её же. Когда область несёт
+            # ДРУГУЮ привязку, блоком её не выразить — уводим в namedAreas, где привязка пишется
+            # явным ключом.
+            fits = a["ColumnsId"] == (row_columns_id(a["BeginRow"]) or "")
+        if fits:
             claimed.update(range(a["BeginRow"], a["EndRow"] + 1))
             block_areas.append(a)
         else:
@@ -1558,6 +1566,14 @@ def main():
             if a["BeginCol"] >= 0:
                 entry["cols"] = (f'{a["BeginCol"] + 1}-{a["EndCol"] + 1}'
                                  if a["EndCol"] > a["BeginCol"] else a["BeginCol"] + 1)
+            # Привязку пишем, только когда она не выводится из накрытых строк.
+            derived = ""
+            if a["BeginRow"] >= 0:
+                covered = {row_columns_id(r) or "" for r in range(a["BeginRow"], a["EndRow"] + 1)}
+                if len(covered) == 1:
+                    derived = covered.pop()
+            if a["ColumnsId"] != derived:
+                entry["columnSet"] = a["ColumnsId"]
             na_out.append(entry)
         result["namedAreas"] = na_out
 

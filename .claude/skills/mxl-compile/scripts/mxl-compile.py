@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.45 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.46 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -1644,6 +1644,9 @@ def main():
     global_row = 0
     merges = []
     named_items = []
+    # Строка документа → колоночная раскладка. Нужна для вывода привязки именованной области:
+    # на корпусе она совпадает с раскладкой накрытых строк у 1 021 570 областей из 1 044 339.
+    row_column_set = {}
     active_rowspans = []  # list of {ColStart, ColEnd, StartLocalRow, EndLocalRow}
 
     # Копилка подряд идущих одинаковых пустых строк — пишется одним rowsItem с indexTo.
@@ -1857,6 +1860,9 @@ def main():
             # непустые не схлопывает, даже когда они совпадают. Поэтому пустую строку не пишем
             # сразу, а копим в пробеле и сбрасываем, когда он оборвался.
             if not row_has_content:
+                # Пустая строка тоже принадлежит раскладке: без этой записи привязка
+                # именованной области, накрывающей пустые строки, не выводилась.
+                row_column_set[global_row] = area_column_set
                 add_gap_row(f'{area_column_set}|{row_format_idx}', global_row,
                             area_column_set, row_format_idx)
                 local_row += 1
@@ -1868,6 +1874,7 @@ def main():
             lines.append(f'\t\t<index>{global_row}</index>')
             lines.append('\t\t<row>')
 
+            row_column_set[global_row] = area_column_set
             if area_column_set:
                 lines.append(f'\t\t\t<columnsID>{area_column_set}</columnsID>')
 
@@ -1945,6 +1952,7 @@ def main():
                 'EndRow': area_end_row,
                 'BeginCol': -1,
                 'EndCol': -1,
+                'ColumnSet': area_column_set,
             })
 
     flush_gap()
@@ -2027,6 +2035,23 @@ def main():
         if not rows and not cols:
             print(f'namedAreas: at least one of \'rows\'/\'cols\' is required: {where}', file=sys.stderr)
             sys.exit(1)
+        # Привязка к колоночной раскладке. Три состояния: ключа нет → выводим из накрытых
+        # строк; "" → привязки нет вовсе; имя → явная. На корпусе область типа Rows в 13 623
+        # случаях повторяет раскладку строк и в 8 179 её не несёт, поэтому вывод обязан
+        # переопределяться.
+        na_set = ''
+        if 'columnSet' in na:
+            na_set_name = str(na.get('columnSet') or '')
+            if na_set_name:
+                na_layout = next((x for x in column_layouts if x['Name'] == na_set_name), None)
+                if na_layout is None:
+                    print(f"namedAreas: unknown 'columnSet' \"{na_set_name}\": {where}", file=sys.stderr)
+                    sys.exit(1)
+                na_set = na_layout['Id']
+        elif rows:
+            covered = {row_column_set[r] for r in range(rows[0] - 1, rows[1]) if r in row_column_set}
+            if len(covered) == 1:
+                na_set = covered.pop()
         # DSL 1-based, XML 0-based; отсутствующая ось помечается -1.
         named_items.append({
             'Name': na_name,
@@ -2034,6 +2059,7 @@ def main():
             'EndRow': rows[1] - 1 if rows else -1,
             'BeginCol': cols[0] - 1 if cols else -1,
             'EndCol': cols[1] - 1 if cols else -1,
+            'ColumnSet': na_set,
         })
 
     # 7d-ter. Колонтитулы: шесть слотов идут после строк и перед скалярными свойствами документа.
@@ -2185,6 +2211,8 @@ def main():
         lines.append(f'\t\t\t<endRow>{ni["EndRow"]}</endRow>')
         lines.append(f'\t\t\t<beginColumn>{ni.get("BeginCol", -1)}</beginColumn>')
         lines.append(f'\t\t\t<endColumn>{ni.get("EndCol", -1)}</endColumn>')
+        if ni.get('ColumnSet'):
+            lines.append(f'\t\t\t<columnsID>{ni["ColumnSet"]}</columnsID>')
         lines.append('\t\t</area>')
         lines.append('\t</namedItem>')
 

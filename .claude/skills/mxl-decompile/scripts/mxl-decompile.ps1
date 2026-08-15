@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.25 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.26 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -459,6 +459,9 @@ foreach ($niNode in $root.SelectNodes("d:namedItem", $ns)) {
 		EndRow   = & $getCoord 'endRow'
 		BeginCol = & $getCoord 'beginColumn'
 		EndCol   = & $getCoord 'endColumn'
+		# Привязка области к колоночной раскладке: у 913 483 прямоугольных областей корпуса
+		# она есть, и из накрытых строк выводится не всегда.
+		ColumnsId = $(if ($areaNode.SelectSingleNode("d:columnsID", $ns)) { $areaNode.SelectSingleNode("d:columnsID", $ns).InnerText } else { '' })
 	}
 }
 
@@ -1141,6 +1144,13 @@ foreach ($a in @($namedAreas | Sort-Object @{ Expression = { $_.BeginRow } }, @{
 	}
 	if ($fitsBlock) { $fitsBlock = Test-UniformColumnSet $a.BeginRow $a.EndRow }
 	if ($fitsBlock) {
+		# Блок задаёт раскладку строкам, и область наследует её же. Когда область несёт ДРУГУЮ
+		# привязку, блоком её не выразить — уводим в namedAreas, где привязка пишется явным ключом.
+		$rowSet = Get-RowColumnsId $a.BeginRow
+		if ($null -eq $rowSet) { $rowSet = '' }
+		$fitsBlock = ($a.ColumnsId -ceq $rowSet)
+	}
+	if ($fitsBlock) {
 		for ($r = $a.BeginRow; $r -le $a.EndRow; $r++) { $claimed[$r] = $true }
 		$blockAreas += $a
 	} else {
@@ -1561,6 +1571,18 @@ if ($overlayAreas.Count -gt 0) {
 		if ($a.BeginCol -ge 0) {
 			$entry["cols"] = if ($a.EndCol -gt $a.BeginCol) { "$($a.BeginCol + 1)-$($a.EndCol + 1)" } else { $a.BeginCol + 1 }
 		}
+		# Привязку пишем, только когда она не выводится из накрытых строк.
+		$derived = ''
+		if ($a.BeginRow -ge 0) {
+			$covered = @()
+			for ($r = $a.BeginRow; $r -le $a.EndRow; $r++) {
+				$cid = Get-RowColumnsId $r
+				$covered += $(if ($null -eq $cid) { '' } else { $cid })
+			}
+			$uniq = @($covered | Select-Object -Unique)
+			if ($uniq.Count -eq 1) { $derived = $uniq[0] }
+		}
+		if ($a.ColumnsId -cne $derived) { $entry["columnSet"] = $a.ColumnsId }
 		$naOut += $entry
 	}
 	$result["namedAreas"] = [array]$naOut

@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.45 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.46 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1703,6 +1703,9 @@ foreach ($layout in $columnLayouts) {
 $globalRow = 0
 $merges = @()
 $namedItems = @()
+# Строка документа → колоночная раскладка. Нужна для вывода привязки именованной области:
+# на корпусе она совпадает с раскладкой накрытых строк у 1 021 570 областей из 1 044 339.
+$rowColumnSet = @{}
 $totalRowCount = 0
 
 # Копилка подряд идущих одинаковых пустых строк — пишется одним rowsItem с indexTo.
@@ -1938,6 +1941,9 @@ foreach ($area in $def.areas) {
 		# непустые не схлопывает, даже когда они совпадают. Поэтому пустую строку не пишем
 		# сразу, а копим в пробеле и сбрасываем, когда он оборвался.
 		if (-not $rowHasContent) {
+			# Пустая строка тоже принадлежит раскладке: без этой записи привязка именованной
+			# области, накрывающей пустые строки, не выводилась.
+			$rowColumnSet[$globalRow] = $areaColumnSet
 			Add-GapRow -key "$areaColumnSet|$rowFormatIdx" -row $globalRow `
 				-columnSet $areaColumnSet -formatIdx $rowFormatIdx
 			$localRow++
@@ -1950,6 +1956,7 @@ foreach ($area in $def.areas) {
 		X "`t`t<index>$globalRow</index>"
 		X "`t`t<row>"
 
+		$rowColumnSet[$globalRow] = $areaColumnSet
 		if ($areaColumnSet) {
 			X "`t`t`t<columnsID>$areaColumnSet</columnsID>"
 		}
@@ -2028,11 +2035,12 @@ foreach ($area in $def.areas) {
 	# Имя на блоке — сахар: разворачиваем его в обычную именованную область типа Rows.
 	if (-not [string]::IsNullOrEmpty($areaName)) {
 		$namedItems += @{
-			Name     = $areaName
-			BeginRow = $areaStartRow
-			EndRow   = $areaEndRow
-			BeginCol = -1
-			EndCol   = -1
+			Name      = $areaName
+			BeginRow  = $areaStartRow
+			EndRow    = $areaEndRow
+			BeginCol  = -1
+			EndCol    = -1
+			ColumnSet = $areaColumnSet
 		}
 	}
 }
@@ -2125,13 +2133,38 @@ if ($def.namedAreas) {
 			[Console]::Error.WriteLine("namedAreas: at least one of 'rows'/'cols' is required: $where")
 			exit 1
 		}
+		# Привязка к колоночной раскладке: своим ключом либо выводится из накрытых строк.
+		# Три состояния: ключа нет → выводим из накрытых строк; "" → привязки нет вовсе;
+		# имя → явная привязка. На корпусе область типа Rows в 13 623 случаях повторяет
+		# раскладку строк и в 8 179 её не несёт, поэтому вывод обязан переопределяться.
+		$naSet = ''
+		$naHasKey = [bool]$na.PSObject.Properties['columnSet']
+		if ($naHasKey -and -not "$($na.columnSet)") {
+			$naSet = ''
+		} elseif ($naHasKey) {
+			$naSetName = "$($na.columnSet)"
+			$naLayout = @($columnLayouts | Where-Object { $_.Name -eq $naSetName })[0]
+			if (-not $naLayout) {
+				[Console]::Error.WriteLine("namedAreas: unknown 'columnSet' `"$naSetName`": $where")
+				exit 1
+			}
+			$naSet = $naLayout.Id
+		} elseif ($rows) {
+			$sets = @()
+			for ($r = $rows.From - 1; $r -le $rows.To - 1; $r++) {
+				if ($rowColumnSet.ContainsKey($r)) { $sets += $rowColumnSet[$r] }
+			}
+			$uniq = @($sets | Select-Object -Unique)
+			if ($uniq.Count -eq 1) { $naSet = $uniq[0] }
+		}
 		# DSL 1-based, XML 0-based; отсутствующая ось помечается -1.
 		$namedItems += @{
-			Name     = $naName
-			BeginRow = if ($rows) { $rows.From - 1 } else { -1 }
-			EndRow   = if ($rows) { $rows.To - 1 } else { -1 }
-			BeginCol = if ($cols) { $cols.From - 1 } else { -1 }
-			EndCol   = if ($cols) { $cols.To - 1 } else { -1 }
+			Name      = $naName
+			BeginRow  = if ($rows) { $rows.From - 1 } else { -1 }
+			EndRow    = if ($rows) { $rows.To - 1 } else { -1 }
+			BeginCol  = if ($cols) { $cols.From - 1 } else { -1 }
+			EndCol    = if ($cols) { $cols.To - 1 } else { -1 }
+			ColumnSet = $naSet
 		}
 	}
 }
@@ -2302,6 +2335,7 @@ foreach ($ni in $sortedNamedItems) {
 	X "`t`t`t<endRow>$($ni.EndRow)</endRow>"
 	X "`t`t`t<beginColumn>$($ni.BeginCol)</beginColumn>"
 	X "`t`t`t<endColumn>$($ni.EndCol)</endColumn>"
+	if ($ni.ColumnSet) { X "`t`t`t<columnsID>$($ni.ColumnSet)</columnsID>" }
 	X "`t`t</area>"
 	X "`t</namedItem>"
 }
