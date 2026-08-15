@@ -9,8 +9,8 @@
         "rows": [
           { "cells": [
             { "col": 1, "valueType": "" },
-            { "col": 2, "valueType": "Number(15,3)", "control": "none" },
-            { "col": 3, "valueType": "Boolean", "control": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" },
+            { "col": 2, "valueType": "Number(15,3)", "controlType": "none" },
+            { "col": 3, "valueType": "Boolean", "controlType": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" },
             { "col": 4, "valueType": "String(50)", "style": "bordered" }
           ]},
           { "rowStyle": "bordered", "cells": [

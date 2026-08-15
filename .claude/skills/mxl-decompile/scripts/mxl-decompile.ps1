@@ -1125,13 +1125,13 @@ foreach ($area in $blocks) {
 					# Формат без <controlType> вовсе — так пишут машинно-сгенерированные макеты
 					# регламентированной отчётности; компилятор такое повторит только по
 					# явному указанию.
-					$dslCell["control"] = "none"
+					$dslCell["controlType"] = "none"
 				} else {
 					$ctl = "$($cellFmt.Props['controlType'])"
 					$name = if ($valueControlNames.ContainsKey($ctl.ToLowerInvariant())) { $valueControlNames[$ctl.ToLowerInvariant()] } else { $ctl }
 					# input — умолчание компилятора, писать его значит шуметь на 63 629
 					# форматах корпуса.
-					if ($name -cne 'input') { $dslCell["control"] = $name }
+					if ($name -cne 'input') { $dslCell["controlType"] = $name }
 				}
 			}
 

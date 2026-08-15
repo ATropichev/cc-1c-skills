@@ -5,10 +5,10 @@
     "areas": [
       {
         "name": "Ввод",
-        "rows": [{ "cells": [{ "col": 1, "valueType": "Boolean", "control": "кнопка" }] }]
+        "rows": [{ "cells": [{ "col": 1, "valueType": "Boolean", "controlType": "кнопка" }] }]
       }
     ]
   },
   "params": { "outputPath": "Template.xml" },
-  "expectError": "Unknown 'control' value \"кнопка\" (area \"Ввод\"). Allowed: input, checkbox, none or a GUID"
+  "expectError": "Unknown 'controlType' value \"кнопка\" (area \"Ввод\"). Allowed: input, checkbox, none or a GUID"
 }

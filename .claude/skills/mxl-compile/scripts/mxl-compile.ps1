@@ -848,10 +848,10 @@ function Get-CellValueProps {
 	param($cell, [string]$where)
 	$props = @{}
 	$vt = $cell.valueType
-	$ctl = $cell.control
+	$ctl = $cell.controlType
 	if ($null -eq $vt) {
 		if ($null -ne $ctl -and "$ctl" -ne '') {
-			[Console]::Error.WriteLine("Cell 'control' requires 'valueType' ($where)")
+			[Console]::Error.WriteLine("Cell 'controlType' requires 'valueType' ($where)")
 			exit 1
 		}
 		return $props
@@ -879,7 +879,7 @@ function Get-CellValueProps {
 		# Неизвестный элемент управления сохраняем как есть — терять его нельзя.
 		$props['controlType'] = $name
 	} else {
-		[Console]::Error.WriteLine("Unknown 'control' value `"$ctl`" ($where). Allowed: input, checkbox, none or a GUID")
+		[Console]::Error.WriteLine("Unknown 'controlType' value `"$ctl`" ($where). Allowed: input, checkbox, none or a GUID")
 		exit 1
 	}
 	return $props
@@ -1140,7 +1140,7 @@ function Set-CellProp {
 function Test-CellObject {
 	param($el)
 	$cellKeys = @('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template',
-		'valueType', 'control')
+		'valueType', 'controlType')
 	foreach ($p in $el.PSObject.Properties) {
 		if ($cellKeys -contains $p.Name) { return $true }
 	}

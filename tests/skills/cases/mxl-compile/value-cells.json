@@ -13,7 +13,7 @@
           ]},
           { "cells": [
             { "col": 1, "valueType": "Boolean" },
-            { "col": 2, "valueType": "Boolean", "control": "checkbox" }
+            { "col": 2, "valueType": "Boolean", "controlType": "checkbox" }
           ]},
           { "cells": [
             { "col": 1, "valueType": "String(10)" },

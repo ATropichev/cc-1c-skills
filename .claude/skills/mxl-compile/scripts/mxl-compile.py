@@ -650,10 +650,10 @@ def cell_value_props(cell, where):
     состав палитры разойдётся и все ссылки <f> сдвинутся."""
     props = {}
     vt = cell.get('valueType')
-    ctl = cell.get('control')
+    ctl = cell.get('controlType')
     if vt is None:
         if ctl is not None and str(ctl) != '':
-            print(f"Cell 'control' requires 'valueType' ({where})", file=sys.stderr)
+            print(f"Cell 'controlType' requires 'valueType' ({where})", file=sys.stderr)
             sys.exit(1)
         return props
     # Ячейка, содержащая значение, текста не несёт: платформа этого не допускает, и в корпусе
@@ -678,7 +678,7 @@ def cell_value_props(cell, where):
         # Неизвестный элемент управления сохраняем как есть — терять его нельзя.
         props['controlType'] = name
     else:
-        print(f'Unknown \'control\' value "{ctl}" ({where}).'
+        print(f'Unknown \'controlType\' value "{ctl}" ({where}).'
               f' Allowed: input, checkbox, none or a GUID', file=sys.stderr)
         sys.exit(1)
     return props
@@ -1154,7 +1154,7 @@ def main():
         ключей есть ключ схемы ячейки, во втором ключи — идентификаторы языков. Пересечений
         нет: в корпусе это ru, en, ru1, Русский."""
         cell_keys = ('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template',
-                     'valueType', 'control')
+                     'valueType', 'controlType')
         return any(k in el for k in cell_keys)
 
     def expand_shorthand_row(row, area_name, row_idx, open_by_col, max_cols):

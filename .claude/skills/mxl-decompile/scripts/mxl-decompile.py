@@ -1119,13 +1119,13 @@ def main():
                         # Формат без <controlType> вовсе — так пишут машинно-сгенерированные
                         # макеты регламентированной отчётности; компилятор такое повторит
                         # только по явному указанию.
-                        dsl_cell["control"] = "none"
+                        dsl_cell["controlType"] = "none"
                     else:
                         name = VALUE_CONTROL_NAMES.get(ctl.lower(), ctl)
                         # input — умолчание компилятора, писать его значит шуметь на 63 629
                         # форматах корпуса.
                         if name != "input":
-                            dsl_cell["control"] = name
+                            dsl_cell["controlType"] = name
 
                 # Content
                 fill_type = cell_fmt["FillType"] if cell_fmt else ""

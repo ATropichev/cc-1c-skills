@@ -1,14 +1,14 @@
 {
-  "name": "Ошибка: control без valueType",
+  "name": "Ошибка: controlType без valueType",
   "input": {
     "columns": 1,
     "areas": [
       {
         "name": "Ввод",
-        "rows": [{ "cells": [{ "col": 1, "control": "checkbox" }] }]
+        "rows": [{ "cells": [{ "col": 1, "controlType": "checkbox" }] }]
       }
     ]
   },
   "params": { "outputPath": "Template.xml" },
-  "expectError": "Cell 'control' requires 'valueType' (area \"Ввод\")"
+  "expectError": "Cell 'controlType' requires 'valueType' (area \"Ввод\")"
 }

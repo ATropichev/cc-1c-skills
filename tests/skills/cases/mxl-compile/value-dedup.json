@@ -12,7 +12,7 @@
             { "valueType": "Number(15,3,any)" },
             { "valueType": "Строка(10)" },
             { "valueType": "String(10,variable)" },
-            { "valueType": "Булево", "control": "Поле Флажка" }
+            { "valueType": "Булево", "controlType": "Поле Флажка" }
           ]
         ]
       }

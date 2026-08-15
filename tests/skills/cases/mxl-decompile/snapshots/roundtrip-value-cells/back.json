@@ -6,7 +6,7 @@
   "areas": [
     {
       "name": "Ввод",
-      "rows": [[{ "valueType": "Number(15,3,nonneg)" }, { "valueType": "String(10,fixed)" }, { "valueType": "Boolean", "control": "checkbox" }], [{ "valueType": "" }, { "valueType": "Number(10,2)", "control": "none" }, { "valueType": "Boolean + CatalogRef.Валюты + String + DateTime" }], [{ "valueType": "AnyRef" }, { "valueType": "Number(10,2)", "param": "Сумма", "detail": "Расшифровка" }]]
+      "rows": [[{ "valueType": "Number(15,3,nonneg)" }, { "valueType": "String(10,fixed)" }, { "valueType": "Boolean", "controlType": "checkbox" }], [{ "valueType": "" }, { "valueType": "Number(10,2)", "controlType": "none" }, { "valueType": "Boolean + CatalogRef.Валюты + String + DateTime" }], [{ "valueType": "AnyRef" }, { "valueType": "Number(10,2)", "param": "Сумма", "detail": "Расшифровка" }]]
     }
   ]
 }
