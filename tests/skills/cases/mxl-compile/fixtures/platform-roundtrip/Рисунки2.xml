@@ -230,6 +230,23 @@
 		<zOrder>12</zOrder>
 		<pictureIndex>3</pictureIndex>
 	</drawing>
+	<drawing>
+		<drawingType>Picture</drawingType>
+		<id>13</id>
+		<formatIndex>0</formatIndex>
+		<beginRow>29</beginRow>
+		<beginRowOffset>0</beginRowOffset>
+		<endRow>29</endRow>
+		<endRowOffset>38</endRowOffset>
+		<beginColumn>2</beginColumn>
+		<beginColumnOffset>0</beginColumnOffset>
+		<endColumn>2</endColumn>
+		<endColumnOffset>38</endColumnOffset>
+		<autoSize>false</autoSize>
+		<pictureSize>Stretch</pictureSize>
+		<zOrder>13</zOrder>
+		<pictureIndex>4</pictureIndex>
+	</drawing>
 	<templateMode>true</templateMode>
 	<defaultFormatIndex>8</defaultFormatIndex>
 	<height>31</height>
@@ -310,5 +327,9 @@ mOfYifnywI1+i+iN8G4nyadVeO3QIUzYDw8XWUotE19QZf/4kLjNWBw7qWglqr0R
 XvkDAGiVKbfel/HTPEnZy6hXpXRVsS9iOcXg0bpv9me2msW0lS42Z/b6zXvrcWBf
 QnLqhED0yxE0niZMaADTqW9sxdmwLSAWufFtTBMwTdpzfa8u8AsvEH/3qV8i/x95
 A0x239DYKjuDAAAAAElFTkSuQmCC</picture>
+	</picture>
+	<picture>
+		<index>3</index>
+		<picture tx="24" ty="29" ref="v8ui:CalculationType"/>
 	</picture>
 </document>
