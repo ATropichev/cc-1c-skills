@@ -1,0 +1,14 @@
+{
+  "name": "Ошибка: value без valueType",
+  "input": {
+    "columns": 1,
+    "areas": [
+      {
+        "name": "Ввод",
+        "rows": [{ "cells": [{ "col": 1, "value": "5" }] }]
+      }
+    ]
+  },
+  "params": { "outputPath": "Template.xml" },
+  "expectError": "Cell 'value' requires 'valueType' (area \"Ввод\")"
+}

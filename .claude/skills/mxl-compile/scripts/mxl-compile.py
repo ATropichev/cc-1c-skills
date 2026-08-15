@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.41 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.42 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -644,6 +644,45 @@ def emit_value_type_content(lines, indent, canon_type):
             lines.extend(quals[q])
 
 
+def cell_value(cell, canon_type, where):
+    """Значение ячейки-поля ввода — тег САМОЙ ячейки (<v>), а не запись палитры: у двух ячеек
+    с одинаковым оформлением значения разные, и в дедупликацию формата оно не входит.
+    Тип значения берём из литерала JSON и приведения НЕ делаем: платформа хранит значение с его
+    собственным типом, и совпадать с объявленным он не обязан (ссылочный и составной тип она
+    держит строкой, а при смене типа ячейки прежнее значение не переписывает)."""
+    if 'value' not in cell:
+        return None
+    v = cell.get('value')
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return {'Type': 'xs:boolean', 'Text': 'true' if v else 'false'}
+    if isinstance(v, (int, float)):
+        # 8.0 обязано дать "8", как в PS-порту: там Convert.ToString инвариантной культурой
+        # хвостовой .0 не пишет, а str() в py — пишет.
+        text = str(int(v)) if (isinstance(v, float) and v.is_integer()) else str(v)
+        return {'Type': 'xs:decimal', 'Text': text}
+
+    s = str(v)
+    if s != '':
+        # Дата литералом JSON не выражается, поэтому едет строкой. Читаем её как дату только
+        # у ячейки, объявленной датой: там платформа других значений не держит.
+        if canon_type in ('Date', 'DateTime', 'Time') and re.match(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$', s):
+            return {'Type': 'xs:dateTime', 'Text': s}
+        return {'Type': 'xs:string', 'Text': s}
+
+    # Пустая строка — пустое значение ОБЪЯВЛЕННОГО типа: платформа так и пишет, когда текст
+    # ячейки к типу не привёлся. Ссылочный и составной тип пустого значения своего вида не
+    # имеют — там остаётся пустая строка.
+    if canon_type == 'Boolean':
+        return {'Type': 'xs:boolean', 'Text': 'false'}
+    if canon_type.startswith('Number('):
+        return {'Type': 'xs:decimal', 'Text': '0'}
+    if canon_type in ('Date', 'DateTime', 'Time'):
+        return {'Type': 'xs:dateTime', 'Text': '0001-01-01T00:00:00'}
+    return {'Type': 'xs:string', 'Text': ''}
+
+
 def cell_value_props(cell, where):
     """Свойства значения ячейки — пустой набор, если ячейка обычная. Считаются ОДНОЙ функцией:
     пре-проход регистрации палитры и генерация обязаны получить один и тот же набор, иначе
@@ -654,6 +693,12 @@ def cell_value_props(cell, where):
     if vt is None:
         if ctl is not None and str(ctl) != '':
             print(f"Cell 'controlType' requires 'valueType' ({where})", file=sys.stderr)
+            sys.exit(1)
+        if cell.get('value') is not None:
+            print(f"Cell 'value' requires 'valueType' ({where})", file=sys.stderr)
+            sys.exit(1)
+        if cell.get('control'):
+            print(f"Cell 'control' requires 'valueType' ({where})", file=sys.stderr)
             sys.exit(1)
         return props
     # Ячейка, содержащая значение, текста не несёт: платформа этого не допускает, и в корпусе
@@ -1154,7 +1199,7 @@ def main():
         ключей есть ключ схемы ячейки, во втором ключи — идентификаторы языков. Пересечений
         нет: в корпусе это ru, en, ru1, Русский."""
         cell_keys = ('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template',
-                     'valueType', 'controlType')
+                     'valueType', 'controlType', 'value', 'control')
         return any(k in el for k in cell_keys)
 
     def expand_shorthand_row(row, area_name, row_idx, open_by_col, max_cols):
@@ -1570,6 +1615,9 @@ def main():
                         'Detail': cell.get('detail'),
                         'Text': cell.get('text'),
                         'Template': cell.get('template'),
+                        'Value': (cell_value(cell, vp.get('valueType', ''),
+                                             f'area "{area_name}", row {local_row + 1}') if vp else None),
+                        'Control': (cell.get('control') if vp else None),
                     }
                     row_cells.append(cell_info)
 
@@ -1666,6 +1714,21 @@ def main():
 
                 if cell_info['Template'] is not None:
                     emit_cell_text(lines, cell_info['Template'])
+
+                if cell_info.get('Value') is not None:
+                    val = cell_info['Value']
+                    lines.append(f'\t\t\t\t\t<v xsi:type="{val["Type"]}">{esc_xml_text(val["Text"])}</v>')
+
+                # Настройки элемента управления платформа сериализует в base64 и держит у самой
+                # ячейки. Структуру не разбираем — возим дословно, иначе она теряется.
+                if cell_info.get('Control'):
+                    # Блоб платформа переносит по строкам, а строки документа склеиваются
+                    # позже — поэтому каждую строку блоба кладём отдельным элементом списка,
+                    # иначе перевод строки внутри значения разошёлся бы с остальным файлом.
+                    parts = str(cell_info['Control']).replace('\r\n', '\n').split('\n')
+                    parts[0] = f'\t\t\t\t\t<control xsi:type="xs:base64Binary">{parts[0]}'
+                    parts[-1] = f'{parts[-1]}</control>'
+                    lines.extend(parts)
 
                 # Расшифровка от параметра заполнения не зависит: на корпусе 20 404 ячейки несут
                 # её БЕЗ параметра (у текста, у пустой ячейки, у поля ввода) против 8 582 с ним.

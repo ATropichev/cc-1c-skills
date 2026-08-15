@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.21 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.22 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -92,6 +92,25 @@ $valueControlNames = @{
 # значение» без указания типа — самостоятельное состояние.
 # Префикс ссылочного типа разрешаем по URI, а не по имени: локальное объявление платформа
 # называет сгенерированным dNpM. Чужое пространство имён оставляем как есть.
+# Значение ячейки-поля ввода → литерал DSL. Тип значения выражается самим литералом:
+# число → числом, булево → true/false, строка и дата → строкой. Пустое значение пишем
+# как есть (0, false, пустая дата), а не схлопываем: так оно собирается обратно тем же
+# типом независимо от того, какой тип объявлен у ячейки.
+function ConvertTo-DslValue {
+	param([string]$xsiType, [string]$text)
+	if ($null -eq $text) { $text = '' }
+	if ($xsiType -ceq 'xs:boolean') { return ($text.Trim() -ceq 'true') }
+	if ($xsiType -ceq 'xs:decimal') {
+		$s = $text.Trim()
+		$i = 0; $d = 0.0
+		if ($s -notlike '*.*' -and [int]::TryParse($s, [ref]$i)) { return $i }
+		if ([double]::TryParse($s, [System.Globalization.NumberStyles]::Float,
+				[System.Globalization.CultureInfo]::InvariantCulture, [ref]$d)) { return $d }
+		return $s
+	}
+	return $text
+}
+
 function Get-ValueQualifier {
 	param($quals, [string]$kind, [string]$name, [string]$default = '')
 	if (-not $quals.ContainsKey($kind)) { return $default }
@@ -390,6 +409,22 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 			$dNode = $cContent.SelectSingleNode("d:detailParameter", $ns)
 			if ($dNode) { $detail = $dNode.InnerText }
 
+			# Значение ячейки-поля ввода. Тип значения свой, из объявленного не выводится,
+			# поэтому читаем и его.
+			$value = $null
+			$vNode = $cContent.SelectSingleNode("d:v", $ns)
+			if ($vNode) {
+				$value = @{ Type = $vNode.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance"); Text = $vNode.InnerText }
+			}
+
+			# Настройки элемента управления — сериализованный base64 у самой ячейки.
+			# Структуру не разбираем, возим дословно.
+			$control = $null
+			$ctlNode = $cContent.SelectSingleNode("d:control", $ns)
+			# Переводы строк внутри блоба приводим к LF: XML-парсеры нормализуют их
+			# по-разному, и без этого порты давали разный JSON на одном файле.
+			if ($ctlNode -and $ctlNode.InnerText) { $control = $ctlNode.InnerText -replace "`r`n", "`n" }
+
 			# Текст ячейки платформа хранит по элементу на язык. Раньше брался ПЕРВЫЙ, и всё
 			# остальное терялось — в корпусе ERP 98% макетов держат текст и под ru, и под en.
 			# Здесь собираем «язык → текст» как есть; свернётся в строку позже, когда станет
@@ -423,6 +458,8 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 				FormatIdx = $cellFmtIdx
 				Param     = $param
 				Detail    = $detail
+				Value     = $value
+				Control   = $control
 				Text      = $text
 				HasText   = $hasText
 			}
@@ -1135,6 +1172,10 @@ foreach ($area in $blocks) {
 					# форматах корпуса.
 					if ($name -cne 'input') { $dslCell["controlType"] = $name }
 				}
+				if ($null -ne $cell.Value) {
+					$dslCell["value"] = ConvertTo-DslValue $cell.Value.Type $cell.Value.Text
+				}
+				if ($cell.Control) { $dslCell["control"] = $cell.Control }
 			}
 
 			# Content

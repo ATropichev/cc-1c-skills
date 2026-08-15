@@ -1,0 +1,41 @@
+{
+  "name": "Roundtrip — сохранённые значения ячеек-полей ввода",
+  "preRun": [
+    {
+      "script": "mxl-compile/scripts/mxl-compile",
+      "input": {
+        "columns": 3,
+        "areas": [
+          {
+            "name": "Значения",
+            "rows": [
+              { "cells": [
+                { "col": 1, "valueType": "String(10)", "value": "5" },
+                { "col": 2, "valueType": "Number(15,3)", "value": 12.5 },
+                { "col": 3, "valueType": "Number(10,2)", "value": -3 }
+              ]},
+              { "cells": [
+                { "col": 1, "valueType": "Boolean", "value": true },
+                { "col": 2, "valueType": "DateTime", "value": "2026-08-09T13:45:00" },
+                { "col": 3, "valueType": "DateTime", "value": "" }
+              ]},
+              { "cells": [
+                { "col": 1, "valueType": "String", "value": "" },
+                { "col": 2, "valueType": "Number", "value": "" },
+                { "col": 3, "valueType": "Boolean + String + Number", "value": "Составной" }
+              ]}
+            ]
+          }
+        ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "Template.xml" },
+      "cwd": "{workDir}"
+    }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "args_extra": ["-OutputPath", "{workDir}/back.json"],
+  "expect": {
+    "files": ["back.json"],
+    "stdoutContains": "[OK] Decompiled:"
+  }
+}

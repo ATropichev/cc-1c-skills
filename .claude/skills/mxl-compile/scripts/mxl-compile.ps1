@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.41 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.42 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -854,6 +854,14 @@ function Get-CellValueProps {
 			[Console]::Error.WriteLine("Cell 'controlType' requires 'valueType' ($where)")
 			exit 1
 		}
+		if ($null -ne $cell.PSObject.Properties['value'] -and $null -ne $cell.value) {
+			[Console]::Error.WriteLine("Cell 'value' requires 'valueType' ($where)")
+			exit 1
+		}
+		if ($null -ne $cell.control -and "$($cell.control)" -ne '') {
+			[Console]::Error.WriteLine("Cell 'control' requires 'valueType' ($where)")
+			exit 1
+		}
 		return $props
 	}
 	# Ячейка, содержащая значение, текста не несёт: платформа этого не допускает, и в корпусе
@@ -883,6 +891,46 @@ function Get-CellValueProps {
 		exit 1
 	}
 	return $props
+}
+
+# Значение ячейки-поля ввода — тег САМОЙ ячейки (<v>), а не запись палитры: у двух ячеек
+# с одинаковым оформлением значения разные, и в дедупликацию формата оно не входит.
+# Тип значения берём из литерала JSON и приведения НЕ делаем: платформа хранит значение с его
+# собственным типом, и совпадать с объявленным он не обязан (ссылочный и составной тип она
+# держит строкой, а при смене типа ячейки прежнее значение не переписывает).
+function Get-CellValue {
+	param($cell, [string]$canonType, [string]$where)
+	$prop = $cell.PSObject.Properties['value']
+	if ($null -eq $prop -or $null -eq $prop.Value) { return $null }
+	$v = $prop.Value
+
+	if ($v -is [bool]) {
+		return @{ Type = 'xs:boolean'; Text = $(if ($v) { 'true' } else { 'false' }) }
+	}
+	if ($v -is [int] -or $v -is [long] -or $v -is [double] -or $v -is [decimal]) {
+		return @{ Type = 'xs:decimal'; Text = (Format-Num $v) }
+	}
+
+	$s = "$v"
+	if ($s -ne '') {
+		# Дата литералом JSON не выражается, поэтому едет строкой. Читаем её как дату только
+		# у ячейки, объявленной датой: там платформа других значений не держит.
+		if (($canonType -ceq 'Date' -or $canonType -ceq 'DateTime' -or $canonType -ceq 'Time') -and
+			$s -match '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$') {
+			return @{ Type = 'xs:dateTime'; Text = $s }
+		}
+		return @{ Type = 'xs:string'; Text = $s }
+	}
+
+	# Пустая строка — пустое значение ОБЪЯВЛЕННОГО типа: платформа так и пишет, когда текст
+	# ячейки к типу не привёлся. Ссылочный и составной тип пустого значения своего вида не
+	# имеют — там остаётся пустая строка.
+	if ($canonType -ceq 'Boolean') { return @{ Type = 'xs:boolean'; Text = 'false' } }
+	if ($canonType -like 'Number(*') { return @{ Type = 'xs:decimal'; Text = '0' } }
+	if ($canonType -ceq 'Date' -or $canonType -ceq 'DateTime' -or $canonType -ceq 'Time') {
+		return @{ Type = 'xs:dateTime'; Text = '0001-01-01T00:00:00' }
+	}
+	return @{ Type = 'xs:string'; Text = '' }
 }
 
 # --- 6. Format palette builder ---
@@ -1140,7 +1188,7 @@ function Set-CellProp {
 function Test-CellObject {
 	param($el)
 	$cellKeys = @('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template',
-		'valueType', 'controlType')
+		'valueType', 'controlType', 'value', 'control')
 	foreach ($p in $el.PSObject.Properties) {
 		if ($cellKeys -contains $p.Name) { return $true }
 	}
@@ -1613,6 +1661,8 @@ foreach ($area in $def.areas) {
 					Detail    = $cell.detail
 					Text      = $cell.text
 					Template  = $cell.template
+					Value     = $(if ($vp.Count -gt 0) { Get-CellValue $cell "$($vp['valueType'])" "area `"$areaName`", row $($localRow + 1)" } else { $null })
+					Control   = $(if ($vp.Count -gt 0) { $cell.control } else { $null })
 				}
 				$rowCells += $cellInfo
 
@@ -1718,6 +1768,22 @@ foreach ($area in $def.areas) {
 			if ($null -ne $cellInfo.Text) { Emit-CellText $cellInfo.Text }
 
 			if ($null -ne $cellInfo.Template) { Emit-CellText $cellInfo.Template }
+
+			if ($null -ne $cellInfo.Value) {
+				X "`t`t`t`t`t<v xsi:type=`"$($cellInfo.Value.Type)`">$(Esc-XmlText $cellInfo.Value.Text)</v>"
+			}
+
+			# Настройки элемента управления платформа сериализует в base64 и держит у самой
+			# ячейки. Структуру не разбираем — возим дословно, иначе она теряется.
+			if ($null -ne $cellInfo.Control -and "$($cellInfo.Control)" -ne '') {
+				# Блоб платформа переносит по строкам, а X дописывает перевод строки сам —
+				# поэтому каждую строку блоба пишем отдельным вызовом, иначе перевод строки
+				# внутри значения разошёлся бы с остальным файлом.
+				$parts = @("$($cellInfo.Control)" -split "`r?`n")
+				$parts[0] = "`t`t`t`t`t<control xsi:type=`"xs:base64Binary`">$($parts[0])"
+				$parts[-1] = "$($parts[-1])</control>"
+				foreach ($p in $parts) { X $p }
+			}
 
 			# Расшифровка от параметра заполнения не зависит: на корпусе 20 404 ячейки несут
 			# её БЕЗ параметра (у текста, у пустой ячейки, у поля ввода) против 8 582 с ним.

@@ -112,10 +112,129 @@
 			</c>
 		</row>
 	</rowsItem>
+	<rowsItem>
+		<index>7</index>
+		<row>
+			<c>
+				<c>
+					<f>3</f>
+					<v xsi:type="xs:string">5</v>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>2</f>
+					<v xsi:type="xs:decimal">8</v>
+				</c>
+			</c>
+		</row>
+	</rowsItem>
+	<rowsItem>
+		<index>8</index>
+		<row>
+			<c>
+				<c>
+					<f>3</f>
+					<v xsi:type="xs:string">4 5</v>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>2</f>
+					<v xsi:type="xs:decimal">0</v>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>12</f>
+					<v xsi:type="xs:dateTime">0001-01-01T00:00:00</v>
+				</c>
+			</c>
+		</row>
+	</rowsItem>
+	<rowsItem>
+		<index>9</index>
+		<row>
+			<c>
+				<c>
+					<f>13</f>
+					<v xsi:type="xs:string">4 5</v>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>12</f>
+					<v xsi:type="xs:dateTime">0001-01-01T00:00:00</v>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>4</f>
+					<v xsi:type="xs:boolean">true</v>
+				</c>
+			</c>
+		</row>
+	</rowsItem>
+	<rowsItem>
+		<index>10</index>
+		<row>
+			<c>
+				<c>
+					<f>14</f>
+					<v xsi:type="xs:string">Составной</v>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>2</f>
+					<v xsi:type="xs:decimal">12.5</v>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>2</f>
+					<v xsi:type="xs:decimal">-3</v>
+				</c>
+			</c>
+		</row>
+	</rowsItem>
+	<rowsItem>
+		<index>11</index>
+		<row>
+			<c>
+				<c>
+					<f>15</f>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>12</f>
+					<v xsi:type="xs:dateTime">0001-01-01T00:00:00</v>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>3</f>
+					<control xsi:type="xs:base64Binary">77u/MiwxLDM4MWVkNjI0LTkyMTctNGU2My04NWRiLWM0YzNjYjg3ZGFhZSwNCnsN
+Cns5LA0KeyJQYXR0ZXJuIiwNCnsiUyJ9DQp9LA0Kew0Kew0KezE2LDEsDQp7Myw0
+LA0KezB9DQp9LA0KezMsNCwNCnswfQ0KfSwNCns3LDMsMCwxLDEwMH0sMCwNCnsz
+LDQsDQp7MH0NCn0sDQp7Myw0LA0KezB9DQp9LA0KezMsNCwNCnswfQ0KfSwNCnsz
+LDMsDQp7LTd9DQp9LA0KezMsMywNCnstMjF9DQp9LA0KezMsMSwNCnstMTh9LDAs
+MCwwfSwNCnsxLDB9LDAsMCwxMDAsMCwwfSwzMCwwLDAsMSwwLDAsMSwxLDEsMCwx
+LDAsMCwwLDAsMCw0LDAsDQp7IlUifSwNCnsiVSJ9LCIiLDAsMSwwLDAsMCwwLA0K
+ezQsMCwNCnswfSwiIiwtMSwtMSwxLDAsIiJ9LA0KezQsMCwNCnswfSwiIiwtMSwt
+MSwxLDAsIiJ9LDAsMCwwLA0KezAsMCwwfSwNCnsxLDB9LDAsMCwwLDAsMCwwLDAs
+MTY3NzcyMTUsMn0NCn0sDQp7MSwNCns5YTc2NDNkMi0xOWU5LTQ1ZTItODg5My0y
+ODBiYzkxOTVhOTcsDQp7NCwNCnsiVSJ9LA0KeyJVIn0sMCwiIiwwLDB9DQp9DQp9
+LA0KezB9LDAsMSwwLA0KezEsMH0sMH0NCn0sMA==</control>
+				</c>
+			</c>
+		</row>
+	</rowsItem>
 	<templateMode>true</templateMode>
-	<defaultFormatIndex>12</defaultFormatIndex>
-	<height>7</height>
-	<vgRows>7</vgRows>
+	<defaultFormatIndex>16</defaultFormatIndex>
+	<height>12</height>
+	<vgRows>12</vgRows>
 	<format>
 		<containsValue>true</containsValue>
 		<valueType>
@@ -231,6 +350,57 @@
 			<v8:TypeSet xmlns:d4p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d4p1:AnyRef</v8:TypeSet>
 		</valueType>
 		<controlType>381ed624-9217-4e63-85db-c4c3cb87daae</controlType>
+	</format>
+	<format>
+		<containsValue>true</containsValue>
+		<valueType>
+			<v8:Type>xs:dateTime</v8:Type>
+			<v8:DateQualifiers>
+				<v8:DateFractions>DateTime</v8:DateFractions>
+			</v8:DateQualifiers>
+		</valueType>
+		<controlType>381ed624-9217-4e63-85db-c4c3cb87daae</controlType>
+	</format>
+	<format>
+		<containsValue>true</containsValue>
+		<valueType>
+			<v8:Type xmlns:d4p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d4p1:CatalogRef.Бригады</v8:Type>
+		</valueType>
+		<controlType>381ed624-9217-4e63-85db-c4c3cb87daae</controlType>
+	</format>
+	<format>
+		<containsValue>true</containsValue>
+		<valueType>
+			<v8:Type>xs:boolean</v8:Type>
+			<v8:Type>xs:string</v8:Type>
+			<v8:Type>xs:dateTime</v8:Type>
+			<v8:Type>xs:decimal</v8:Type>
+			<v8:NumberQualifiers>
+				<v8:Digits>0</v8:Digits>
+				<v8:FractionDigits>0</v8:FractionDigits>
+				<v8:AllowedSign>Any</v8:AllowedSign>
+			</v8:NumberQualifiers>
+			<v8:StringQualifiers>
+				<v8:Length>0</v8:Length>
+				<v8:AllowedLength>Variable</v8:AllowedLength>
+			</v8:StringQualifiers>
+			<v8:DateQualifiers>
+				<v8:DateFractions>DateTime</v8:DateFractions>
+			</v8:DateQualifiers>
+		</valueType>
+		<controlType>381ed624-9217-4e63-85db-c4c3cb87daae</controlType>
+	</format>
+	<format>
+		<containsValue>true</containsValue>
+		<valueType>
+			<v8:Type>xs:decimal</v8:Type>
+			<v8:NumberQualifiers>
+				<v8:Digits>0</v8:Digits>
+				<v8:FractionDigits>0</v8:FractionDigits>
+				<v8:AllowedSign>Any</v8:AllowedSign>
+			</v8:NumberQualifiers>
+		</valueType>
+		<controlType>35af3d93-d7c7-4a2e-a8eb-bac87a1a3f26</controlType>
 	</format>
 	<format>
 		<width>72</width>

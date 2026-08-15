@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.21 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.22 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -185,6 +185,23 @@ def value_type_to_dsl(node):
         else:
             parts.append(val)
     return ' + '.join(parts)
+
+
+def value_to_dsl(xsi_type, text):
+    """Значение ячейки-поля ввода → литерал DSL. Тип значения выражается самим литералом:
+    число → числом, булево → true/false, строка и дата → строкой. Пустое значение пишем
+    как есть (0, false, пустая дата), а не схлопываем: так оно собирается обратно тем же
+    типом независимо от того, какой тип объявлен у ячейки."""
+    text = text or ''
+    if xsi_type == 'xs:boolean':
+        return text.strip() == 'true'
+    if xsi_type == 'xs:decimal':
+        s = text.strip()
+        try:
+            return int(s) if '.' not in s else float(s)
+        except ValueError:
+            return s
+    return text
 
 
 def int_of(node, default=0):
@@ -556,6 +573,22 @@ def main():
                 if d_node is not None and d_node.text:
                     detail = d_node.text
 
+                # Значение ячейки-поля ввода. Тип значения свой, из объявленного не выводится,
+                # поэтому читаем и его: пустое значение сворачивается в "", остальные едут как есть.
+                value = None
+                v_node = find(c_content, "d:v")
+                if v_node is not None:
+                    value = (v_node.get(f'{{{XSI_NS}}}type') or '', (v_node.text or ''))
+
+                # Настройки элемента управления — сериализованный base64 у самой ячейки.
+                # Структуру не разбираем, возим дословно.
+                control = None
+                ctl_node = find(c_content, "d:control")
+                if ctl_node is not None and ctl_node.text:
+                    # Переводы строк внутри блоба приводим к LF: XML-парсеры нормализуют их
+                    # по-разному, и без этого порты давали разный JSON на одном файле.
+                    control = ctl_node.text.replace('\r\n', '\n')
+
                 # Текст ячейки платформа хранит по элементу на язык. Раньше брался ПЕРВЫЙ, и всё
                 # остальное терялось — в корпусе ERP 98% макетов держат текст и под ru, и под en.
                 # Здесь собираем «язык → текст» как есть; свернётся в строку позже, когда станет
@@ -587,6 +620,8 @@ def main():
                     "FormatIdx": cell_fmt_idx,
                     "Param": param,
                     "Detail": detail,
+                    "Value": value,
+                    "Control": control,
                     "Text": text,
                     "HasText": has_text,
                 })
@@ -1128,6 +1163,10 @@ def main():
                         # форматах корпуса.
                         if name != "input":
                             dsl_cell["controlType"] = name
+                    if cell["Value"] is not None:
+                        dsl_cell["value"] = value_to_dsl(*cell["Value"])
+                    if cell["Control"]:
+                        dsl_cell["control"] = cell["Control"]
 
                 # Content
                 fill_type = cell_fmt["FillType"] if cell_fmt else ""

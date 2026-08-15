@@ -1,0 +1,37 @@
+{
+  "name": "Ячейки-поля ввода: сохранённое значение",
+  "input": {
+    "columns": 3,
+    "areas": [
+      {
+        "name": "Значения",
+        "rows": [
+          { "cells": [
+            { "col": 1, "valueType": "String(10)", "value": "5" },
+            { "col": 2, "valueType": "Number(15,3)", "value": 12.5 },
+            { "col": 3, "valueType": "Number(10,2)", "value": -3 }
+          ]},
+          { "cells": [
+            { "col": 1, "valueType": "Boolean", "value": true },
+            { "col": 2, "valueType": "Boolean", "value": false },
+            { "col": 3, "valueType": "DateTime", "value": "2026-08-09T13:45:00" }
+          ]},
+          { "cells": [
+            { "col": 1, "valueType": "String", "value": "" },
+            { "col": 2, "valueType": "Number", "value": "" },
+            { "col": 3, "valueType": "DateTime", "value": "" }
+          ]},
+          { "cells": [
+            { "col": 1, "valueType": "CatalogRef.Валюты", "value": "4 5" },
+            { "col": 2, "valueType": "Boolean + String + Number", "value": "Составной" },
+            { "col": 3, "valueType": "Number(10,2)", "value": 8, "detail": "Расшифровка" }
+          ]}
+        ]
+      }
+    ]
+  },
+  "params": {
+    "outputPath": "Template.xml"
+  },
+  "skipPlatformVerify": "ссылочный тип разрешается только в базе с матч-конфигурацией: временная база-заглушка таких объектов не содержит"
+}

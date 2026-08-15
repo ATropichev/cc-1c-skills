@@ -1,0 +1,16 @@
+{
+  "columns": 3,
+  "defaultWidth": 10,
+  "fonts": {},
+  "styles": {},
+  "areas": [
+    {
+      "name": "Значения",
+      "rows": [
+        [{ "valueType": "String(10)", "value": "5" }, { "valueType": "Number(15,3)", "value": 12.5 }, { "valueType": "Number(10,2)", "value": -3 }],
+        [{ "valueType": "Boolean", "value": true }, { "valueType": "DateTime", "value": "2026-08-09T13:45:00" }, { "valueType": "DateTime", "value": "0001-01-01T00:00:00" }],
+        [{ "valueType": "String", "value": "" }, { "valueType": "Number", "value": 0 }, { "valueType": "Boolean + String + Number", "value": "Составной" }]
+      ]
+    }
+  ]
+}
