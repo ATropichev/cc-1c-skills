@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.47 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.48 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -355,14 +355,14 @@ def format_tag_kind():
     line — ссылка в палитру <line>; color — #RRGGBB / style: / web: / win:
     ml — многоязычная строка; enum — замкнутый список (см. format_enum_values).
     containsValue / valueType / controlType сюда НЕ входят: это свойства конкретной ячейки,
-    а стиль — сущность общая, один на многие ячейки."""
+    а стиль — сущность общая, один на многие ячейки. По той же причине здесь нет линии рисунка
+    (drawingBorder, drawingHave*Border): на корпусе все 2 135 записей с ними принадлежат только
+    рисункам, у ячейки такого свойства не бывает — они задаются ключами самого рисунка."""
     return {
         'autoIndent': 'int', 'autoMarkIncomplete': 'bool', 'autoWidthCalculation': 'bool',
         'backColor': 'color', 'border': 'line', 'borderColor': 'color',
         'bottomBorder': 'line', 'bySelectedColumns': 'bool', 'columnSizeChange': 'enum',
-        'detailsUse': 'enum', 'drawingBorder': 'int',
-        'drawingHaveBottomBorder': 'bool', 'drawingHaveLeftBorder': 'bool',
-        'drawingHaveRightBorder': 'bool', 'drawingHaveTopBorder': 'bool',
+        'detailsUse': 'enum',
         'editFormat': 'ml', 'fillType': 'enum', 'font': 'int', 'format': 'ml',
         'height': 'int', 'hidden': 'bool', 'horizontalAlignment': 'enum',
         'hyperLink': 'bool', 'indent': 'int', 'leftBorder': 'line',
@@ -382,8 +382,8 @@ def format_enum_values():
         'detailsUse': ['Cell', 'Row', 'WithoutProcessing'],
         'fillType': ['Parameter', 'Template', 'Text'],
         'horizontalAlignment': ['Auto', 'Center', 'Justify', 'Left', 'Right'],
-        'pattern': ['Pattern7', 'Pattern10', 'Pattern12', 'Pattern13', 'Pattern14',
-                    'Pattern16', 'Solid', 'WithoutPattern'],
+        # Узоры платформа нумерует подряд, без семантических имён: «Узор 1» … «Узор 17».
+        'pattern': ['WithoutPattern', 'Solid', 'Pattern1', 'Pattern2', 'Pattern3', 'Pattern4', 'Pattern5', 'Pattern6', 'Pattern7', 'Pattern8', 'Pattern9', 'Pattern10', 'Pattern11', 'Pattern12', 'Pattern13', 'Pattern14', 'Pattern15', 'Pattern16', 'Pattern17'],
         'picHorizontalAlignment': ['Auto', 'Center', 'Left', 'Right'],
         'picVerticalAlignment': ['Bottom', 'Center', 'Top'],
         'pictureSizeMode': ['AutoSize', 'Proportionally', 'RealSize'],
@@ -872,9 +872,12 @@ def main():
     line_registry = []
 
     def register_line(ln):
-        key = (ln['Style'], str(ln['Width']), ln['Gap'])
+        # Запись палитры линий типизирована: у рамки ячейки xsi:type Cell, у линии рисунка
+        # Drawing. Вид входит в ключ, иначе одинаковые по стилю линии двух видов слились бы.
+        key = (ln['Style'], str(ln['Width']), ln['Gap'], ln.get('Kind', 'Cell'))
         for i, existing in enumerate(line_registry):
-            if (existing['Style'], str(existing['Width']), existing['Gap']) == key:
+            if (existing['Style'], str(existing['Width']), existing['Gap'],
+                    existing.get('Kind', 'Cell')) == key:
                 return i
         line_registry.append(ln)
         return len(line_registry) - 1
@@ -1122,7 +1125,9 @@ def main():
                         continue
                     kind = kinds[tag]
                     if kind == 'line':
-                        props[tag] = register_line(to_line_value(val, where))
+                        ln_val = to_line_value(val, where)
+                        ln_val['Kind'] = 'Drawing' if tag == 'drawingBorder' else 'Cell'
+                        props[tag] = register_line(ln_val)
                     elif kind == 'bool':
                         props[tag] = 'true' if (val is True or str(val) == 'true') else 'false'
                     elif kind == 'int':
@@ -1541,6 +1546,87 @@ def main():
         lines.append('\t<printSettings>')
         lines.extend(emitted)
         lines.append('\t</printSettings>')
+
+    # Палитра картинок. Ресурс хранится двумя способами: ссылкой на библиотеку платформы
+    # (ref="v8ui:Имя") либо данными base64 прямо в макете (9 905 из 9 988 картинок корпуса).
+    # На неё ссылаются и рисунки (pictureIndex), и ячейки (picIndex в стиле) — индекс 1-based.
+    picture_names = {}
+    picture_entries = []
+    for pic_name, pic_def in (defn.get('pictures') or {}).items():
+        # Пустая запись — законная картинка «не задана»: в корпусе таких 151, ровно по одной
+        # на макет. Ошибкой считаем только запись с непонятным содержимым.
+        entry = {'Ref': '', 'Data': '', 'Transparent': '', 'PixelX': '', 'PixelY': ''}
+        if pic_def.get('ref'):
+            entry['Ref'] = str(pic_def['ref'])
+        if pic_def.get('data') is not None:
+            entry['Data'] = str(pic_def['data'])
+        if pic_def.get('transparent') is not None:
+            entry['Transparent'] = 'true' if (pic_def['transparent'] is True
+                                              or str(pic_def['transparent']).lower() == 'true') else 'false'
+        if pic_def.get('transparentPixel') is not None:
+            entry['PixelX'] = str(int(pic_def['transparentPixel'].get('x', 0)))
+            entry['PixelY'] = str(int(pic_def['transparentPixel'].get('y', 0)))
+        if not entry['Ref'] and not entry['Data'] and (entry['Transparent'] or entry['PixelX']):
+            print(f"pictures[{pic_name}]: 'transparent' and 'transparentPixel' require 'data'", file=sys.stderr)
+            sys.exit(1)
+        picture_entries.append(entry)
+        picture_names[pic_name] = len(picture_entries)
+
+    # Рисунки: своя геометрия из двух якорей, тип, ссылка на картинку, текст, расшифровка.
+    # id и zOrder — данные, а не позиция: на корпусе они расходятся у 8 253 рисунков из 11 268.
+    DRAWING_TYPES = ('Picture', 'Rectangle', 'Ellipse', 'Line', 'Text', 'Chart', 'GanttChart')
+
+    def drawing_anchor(node):
+        node = node or {}
+        return {
+            'Row': int(node['row']) - 1 if node.get('row') is not None else 0,
+            'Col': int(node['col']) - 1 if node.get('col') is not None else 0,
+            'Dy': int(node['dy']) if node.get('dy') is not None else 0,
+            'Dx': int(node['dx']) if node.get('dx') is not None else 0,
+        }
+
+    drawings = []
+    for idx, dr in enumerate(defn.get('drawings') or [], start=1):
+        where = f'drawings[{idx}]'
+        dtype = str(dr.get('type') or 'Picture')
+        canon_type = next((t for t in DRAWING_TYPES if t.lower() == dtype.lower()), None)
+        if canon_type is None:
+            print(f'{where}: unknown drawing \'type\' "{dtype}". Allowed: {", ".join(DRAWING_TYPES)}',
+                  file=sys.stderr)
+            sys.exit(1)
+        pic_idx = 0
+        if dr.get('picture'):
+            if str(dr['picture']) not in picture_names:
+                print(f'{where}: unknown \'picture\' "{dr["picture"]}" — not declared in pictures',
+                      file=sys.stderr)
+                sys.exit(1)
+            pic_idx = picture_names[str(dr['picture'])]
+        # Оформление рисунка: общее — из именованного стиля, чисто рисуночное (линия и её
+        # стороны) — своими ключами, поверх стиля. Тот же приём, что у ячейки с fillType.
+        props = resolve_style(str(dr['style']), '') if dr.get('style') else {}
+        if dr.get('line') is not None:
+            ln_val = to_line_value(dr['line'], where)
+            ln_val['Kind'] = 'Drawing'
+            props['drawingBorder'] = register_line(ln_val)
+        for side in ('left', 'top', 'right', 'bottom'):
+            v = (dr.get('sides') or {}).get(side)
+            if v is not None:
+                tag = 'drawingHave' + side.capitalize() + 'Border'
+                props[tag] = 'true' if (v is True or str(v).lower() == 'true') else 'false'
+        fmt_idx = register_format(props) if props else 0
+        drawings.append({
+            'Type': canon_type,
+            'Id': int(dr['id']) if dr.get('id') is not None else idx,
+            'ZOrder': int(dr['zOrder']) if dr.get('zOrder') is not None else idx,
+            'FormatIdx': fmt_idx,
+            'Detail': dr.get('detail'),
+            'Text': dr.get('text'),
+            'Begin': drawing_anchor(dr.get('begin')),
+            'End': drawing_anchor(dr.get('end')),
+            'PictureSize': str(dr.get('pictureSize') or 'Stretch'),
+            'PictureIdx': pic_idx,
+            'Name': dr.get('name'),
+        })
 
     # Формат по умолчанию — последняя запись палитры (см. выше).
     default_format_index = register_format({'width': default_width})
@@ -2065,6 +2151,45 @@ def main():
             'ColumnSet': na_set,
         })
 
+    # 7d-bis2. Рисунки идут сразу после строк, до колонтитулов. Порядок тегов снят с корпуса:
+    # у всех 11 268 рисунков он один и тот же.
+    for dr in drawings:
+        lines.append('\t<drawing>')
+        lines.append(f'\t\t<drawingType>{dr["Type"]}</drawingType>')
+        lines.append(f'\t\t<id>{dr["Id"]}</id>')
+        lines.append(f'\t\t<formatIndex>{dr["FormatIdx"]}</formatIndex>')
+        if dr['Detail']:
+            lines.append(f'\t\t<detailParameter>{dr["Detail"]}</detailParameter>')
+        if dr['Text'] is not None:
+            value = dr['Text']
+            if isinstance(value, dict):
+                pairs = [(str(k), str(v)) for k, v in value.items()]
+            else:
+                pairs = [(lang, str(value)) for lang in text_languages]
+            lines.append('\t\t<text>')
+            for lang, content in pairs:
+                lines.append('\t\t\t<v8:item>')
+                lines.append(f'\t\t\t\t<v8:lang>{lang}</v8:lang>')
+                lines.append(f'\t\t\t\t<v8:content>{esc_xml_text(content)}</v8:content>')
+                lines.append('\t\t\t</v8:item>')
+            lines.append('\t\t</text>')
+        lines.append(f'\t\t<beginRow>{dr["Begin"]["Row"]}</beginRow>')
+        lines.append(f'\t\t<beginRowOffset>{dr["Begin"]["Dy"]}</beginRowOffset>')
+        lines.append(f'\t\t<endRow>{dr["End"]["Row"]}</endRow>')
+        lines.append(f'\t\t<endRowOffset>{dr["End"]["Dy"]}</endRowOffset>')
+        lines.append(f'\t\t<beginColumn>{dr["Begin"]["Col"]}</beginColumn>')
+        lines.append(f'\t\t<beginColumnOffset>{dr["Begin"]["Dx"]}</beginColumnOffset>')
+        lines.append(f'\t\t<endColumn>{dr["End"]["Col"]}</endColumn>')
+        lines.append(f'\t\t<endColumnOffset>{dr["End"]["Dx"]}</endColumnOffset>')
+        # autoSize у рисунка на корпусе всегда false (11 268 из 11 268), «АвтоРазмер» из
+        # диалога уходит в pictureSize.
+        lines.append('\t\t<autoSize>false</autoSize>')
+        lines.append(f'\t\t<pictureSize>{dr["PictureSize"]}</pictureSize>')
+        lines.append(f'\t\t<zOrder>{dr["ZOrder"]}</zOrder>')
+        if dr['PictureIdx'] > 0:
+            lines.append(f'\t\t<pictureIndex>{dr["PictureIdx"]}</pictureIndex>')
+        lines.append('\t</drawing>')
+
     # 7d-ter. Колонтитулы: шесть слотов идут после строк и перед скалярными свойствами документа.
     for slot in ('left', 'center', 'right'):
         if defn.get('header'):
@@ -2176,10 +2301,15 @@ def main():
     # 7e. Scalar metadata
     lines.append(f'\t<templateMode>true</templateMode>')
     lines.append(f'\t<defaultFormatIndex>{default_format_index}</defaultFormatIndex>')
-    lines.append(f'\t<height>{total_row_count}</height>')
+    # Рисунок расширяет документ, не создавая строк: на стендах высота равна нижней границе
+    # самого нижнего рисунка, при том что строк записана всего одна.
+    doc_height = total_row_count
+    for dr in drawings:
+        doc_height = max(doc_height, dr['End']['Row'] + 1)
+    lines.append(f'\t<height>{doc_height}</height>')
     if row_groups:
         lines.append(f'\t<vgLevels>{group_levels(row_groups)}</vgLevels>')
-    lines.append(f'\t<vgRows>{total_row_count}</vgRows>')
+    lines.append(f'\t<vgRows>{doc_height}</vgRows>')
     emit_groups(lines, 'vg', row_groups)
     emit_groups(lines, 'hg', col_groups)
 
@@ -2200,7 +2330,19 @@ def main():
     # с несколькими элементами иного порядка нет ни разу. Сортировка регистронезависимая и
     # ординальная (в ps1 поэтому нельзя Sort-Object — он сортирует по текущей культуре).
     # NB: имён с «ё» в выборке не встретилось, этот случай не проверен.
+    # Имя рисунка — namedItem другого типа, но список общий: на корпусе оба вида отсортированы
+    # вместе по имени во всех 266 макетах с именованными рисунками.
+    for dr in drawings:
+        if dr['Name']:
+            named_items.append({'Name': str(dr['Name']), 'DrawingId': dr['Id']})
+
     for ni in sorted(named_items, key=lambda x: str(x['Name']).lower()):
+        if ni.get('DrawingId'):
+            lines.append('\t<namedItem xsi:type="NamedItemDrawing">')
+            lines.append(f'\t\t<name>{ni["Name"]}</name>')
+            lines.append(f'\t\t<drawingID>{ni["DrawingId"]}</drawingID>')
+            lines.append('\t</namedItem>')
+            continue
         # Тип области выводится из указанных осей, как в ТабличныйДокумент.Область():
         # нет колонок → полоса строк, нет строк → полоса колонок, обе → прямоугольник.
         has_rows = int(ni['BeginRow']) >= 0
@@ -2222,7 +2364,9 @@ def main():
     # 7h. Line palette
     for ln in line_registry:
         lines.append(f'\t<line width="{ln["Width"]}" gap="{ln["Gap"]}">')
-        lines.append(f'\t\t<v8ui:style xsi:type="v8ui:SpreadsheetDocumentCellLineType">{ln["Style"]}</v8ui:style>')
+        line_kind = ('SpreadsheetDocumentDrawingLineType' if ln.get('Kind') == 'Drawing'
+                     else 'SpreadsheetDocumentCellLineType')
+        lines.append(f'\t\t<v8ui:style xsi:type="v8ui:{line_kind}">{ln["Style"]}</v8ui:style>')
         lines.append('\t</line>')
 
     # 7i. Font palette
@@ -2275,7 +2419,28 @@ def main():
 
         lines.append('\t</format>')
 
-    # 7k. Close document
+    # 7k. Палитра картинок — последний блок документа. Индекс здесь 0-based, а ссылки
+    # на него (pictureIndex рисунка, picIndex стиля) 1-based.
+    for pic_i, pic in enumerate(picture_entries):
+        lines.append('\t<picture>')
+        lines.append(f'\t\t<index>{pic_i}</index>')
+        if pic['Ref']:
+            lines.append(f'\t\t<picture ref="{esc_xml(pic["Ref"])}"/>')
+        elif not pic['Data']:
+            lines.append('\t\t<picture/>')
+        else:
+            attr = f' t="{pic["Transparent"]}"' if pic['Transparent'] else ''
+            if pic['PixelX']:
+                attr += f' tx="{pic["PixelX"]}" ty="{pic["PixelY"]}"'
+            # Данные платформа переносит по строкам тем же переводом, что и весь файл, —
+            # в отличие от блоба настроек элемента управления, где перенос голый LF.
+            parts = str(pic['Data']).replace('\r\n', '\n').split('\n')
+            parts[0] = f'\t\t<picture{attr}>{parts[0]}'
+            parts[-1] = f'{parts[-1]}</picture>'
+            lines.extend(parts)
+        lines.append('\t</picture>')
+
+    # 7l. Close document
     lines.append('</document>')
 
     # --- 8. Write output ---

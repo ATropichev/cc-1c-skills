@@ -1,0 +1,13 @@
+{
+  "name": "Ошибка: рисунок ссылается на необъявленную картинку",
+  "input": {
+    "columns": 2,
+    "areas": [{ "rows": [["Бланк"]] }],
+    "drawings": [
+      { "type": "Picture", "picture": "нет-такой",
+        "begin": { "row": 1, "col": 1 }, "end": { "row": 2, "col": 2 } }
+    ]
+  },
+  "params": { "outputPath": "Template.xml" },
+  "expectError": "drawings[1]: unknown 'picture' \"нет-такой\" — not declared in pictures"
+}

@@ -64,8 +64,6 @@
 | `picHorizontalAlignment` | перечисление | `Auto`, `Center`, `Left`, `Right` |
 | `picVerticalAlignment` | перечисление | `Top`, `Center`, `Bottom` |
 | `textPosition` | перечисление | Положение текста относительно картинки: `Auto`, `Top`, `Right`, `Bottom` |
-| `drawingBorder` | число | Рамка рисунка |
-| `drawingHaveLeftBorder`, `drawingHaveTopBorder`, `drawingHaveRightBorder`, `drawingHaveBottomBorder` | да/нет | Наличие стороны рамки рисунка |
 
 ## Чего в стиле нет
 
@@ -74,4 +72,6 @@
 - `fillType` — выводится из того, каким ключом задано содержимое ячейки
   (`text` / `param` / `template`);
 - `containsValue`, `valueType`, `controlType` — свойства конкретной ячейки, а не общего
-  оформления: задаются ключами ячейки `valueType` и `controlType`.
+  оформления: задаются ключами ячейки `valueType` и `controlType`;
+- линия рисунка и её стороны — свойства рисунка: задаются его ключами `line` и `sides`
+  (у ячейки такого свойства нет вовсе).

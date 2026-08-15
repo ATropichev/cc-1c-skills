@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.47 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.48 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -287,11 +287,15 @@ if (-not $hasDefault) {
 $script:lineRegistry = @()
 
 function Get-LineKey {
+	# Вид линии входит в ключ: одинаковые по стилю линии рамки ячейки и рисунка — РАЗНЫЕ записи,
+	# у них разный xsi:type.
 	param($ln)
-	return "$($ln.Style)|$($ln.Width)|$($ln.Gap)"
+	return "$($ln.Style)|$($ln.Width)|$($ln.Gap)|$($ln.Kind)"
 }
 
 function Register-Line {
+	# Запись палитры линий типизирована: у рамки ячейки xsi:type Cell, у линии рисунка Drawing.
+	# Вид выводится из свойства, которое на линию ссылается, — отдельного ключа в DSL не нужно.
 	param($ln)
 	$key = Get-LineKey $ln
 	for ($i = 0; $i -lt $script:lineRegistry.Count; $i++) {
@@ -589,7 +593,11 @@ function Resolve-Style {
 					continue
 				}
 				switch ($kinds[$tag]) {
-					'line' { $props[$tag] = Register-Line (ConvertTo-LineValue $val $where) }
+					'line' {
+						$lnVal = ConvertTo-LineValue $val $where
+						$lnVal['Kind'] = if ($tag -ceq 'drawingBorder') { 'Drawing' } else { 'Cell' }
+						$props[$tag] = Register-Line $lnVal
+					}
 					'bool' { $props[$tag] = if ($val -eq $true -or "$val" -eq 'true') { 'true' } else { 'false' } }
 					'int'  { $props[$tag] = [int]$val }
 					'enum' {
@@ -1023,15 +1031,15 @@ function Get-FormatMlTags {
 # line  — ссылка в палитру <line>;  color — #RRGGBB / style: / web: / win:
 # ml    — многоязычная строка;      enum  — замкнутый список (см. Get-FormatEnumValues)
 # containsValue / valueType / controlType сюда НЕ входят: это свойства конкретной ячейки,
-# а стиль — сущность общая, один на многие ячейки.
+# а стиль — сущность общая, один на многие ячейки. По той же причине здесь нет линии рисунка
+# (drawingBorder, drawingHave*Border): на корпусе все 2 135 записей с ними принадлежат только
+# рисункам, у ячейки такого свойства не бывает — они задаются ключами самого рисунка.
 function Get-FormatTagKind {
 	return @{
 		'autoIndent' = 'int'; 'autoMarkIncomplete' = 'bool'; 'autoWidthCalculation' = 'bool'
 		'backColor' = 'color'; 'border' = 'line'; 'borderColor' = 'color'
 		'bottomBorder' = 'line'; 'bySelectedColumns' = 'bool'; 'columnSizeChange' = 'enum'
-		'detailsUse' = 'enum'; 'drawingBorder' = 'int'
-		'drawingHaveBottomBorder' = 'bool'; 'drawingHaveLeftBorder' = 'bool'
-		'drawingHaveRightBorder' = 'bool'; 'drawingHaveTopBorder' = 'bool'
+		'detailsUse' = 'enum'
 		'editFormat' = 'ml'; 'fillType' = 'enum'; 'font' = 'int'; 'format' = 'ml'
 		'height' = 'int'; 'hidden' = 'bool'; 'horizontalAlignment' = 'enum'
 		'hyperLink' = 'bool'; 'indent' = 'int'; 'leftBorder' = 'line'
@@ -1580,6 +1588,100 @@ function Emit-PrintSettings {
 	X "`t<printSettings>"
 	foreach ($line in $emitted) { X $line }
 	X "`t</printSettings>"
+}
+
+# Палитра картинок. Ресурс хранится двумя способами: ссылкой на библиотеку платформы
+# (ref="v8ui:Имя") либо данными base64 прямо в макете (9 905 из 9 988 картинок корпуса).
+# На неё ссылаются и рисунки (pictureIndex), и ячейки (picIndex в стиле) — индекс 1-based.
+$pictureNames = @{}   # имя из DSL → 1-based индекс
+$pictureEntries = @()
+
+if ($def.pictures) {
+	foreach ($pr in $def.pictures.PSObject.Properties) {
+		# Пустая запись — законная картинка «не задана»: в корпусе таких 151, ровно по одной
+		# на макет. Ошибкой считаем только запись с непонятным содержимым.
+		$entry = @{ Ref = ''; Data = ''; Transparent = ''; PixelX = ''; PixelY = '' }
+		if ($pr.Value.ref) { $entry.Ref = "$($pr.Value.ref)" }
+		if ($null -ne $pr.Value.data) { $entry.Data = "$($pr.Value.data)" }
+		if ($null -ne $pr.Value.transparent) {
+			$entry.Transparent = if ($pr.Value.transparent -eq $true -or "$($pr.Value.transparent)" -eq 'true') { 'true' } else { 'false' }
+		}
+		if ($null -ne $pr.Value.transparentPixel) {
+			$entry.PixelX = "$([int]$pr.Value.transparentPixel.x)"
+			$entry.PixelY = "$([int]$pr.Value.transparentPixel.y)"
+		}
+		if (-not $entry.Ref -and -not $entry.Data -and
+			($entry.Transparent -or $entry.PixelX)) {
+			[Console]::Error.WriteLine("pictures[$($pr.Name)]: 'transparent' and 'transparentPixel' require 'data'")
+			exit 1
+		}
+		$pictureEntries += $entry
+		$pictureNames[$pr.Name] = $pictureEntries.Count
+	}
+}
+
+# Рисунки: своя геометрия из двух якорей, тип, ссылка на картинку, текст, расшифровка.
+# id и zOrder — данные, а не позиция: на корпусе они расходятся у 8 253 рисунков из 11 268.
+$drawingTypes = @('Picture', 'Rectangle', 'Ellipse', 'Line', 'Text', 'Chart', 'GanttChart')
+$drawings = @()
+$drawingIdx = 0
+foreach ($dr in $def.drawings) {
+	$drawingIdx++
+	$where = "drawings[$drawingIdx]"
+	$type = if ($dr.type) { "$($dr.type)" } else { 'Picture' }
+	$canonType = @($drawingTypes | Where-Object { $_ -eq $type })[0]
+	if (-not $canonType) {
+		[Console]::Error.WriteLine("${where}: unknown drawing 'type' `"$type`". Allowed: $($drawingTypes -join ', ')")
+		exit 1
+	}
+	$picIdx = 0
+	if ($dr.picture) {
+		if (-not $pictureNames.ContainsKey("$($dr.picture)")) {
+			[Console]::Error.WriteLine("${where}: unknown 'picture' `"$($dr.picture)`" — not declared in pictures")
+			exit 1
+		}
+		$picIdx = $pictureNames["$($dr.picture)"]
+	}
+	# Оформление рисунка: общее — из именованного стиля, чисто рисуночное (линия и её стороны)
+	# — своими ключами, поверх стиля. Тот же приём, что у ячейки с fillType и значением.
+	$props = @{}
+	if ($dr.style) { $props = Resolve-Style -styleName "$($dr.style)" -fillType "" }
+	if ($null -ne $dr.line) {
+		$lnVal = ConvertTo-LineValue $dr.line $where
+		$lnVal['Kind'] = 'Drawing'
+		$props['drawingBorder'] = Register-Line $lnVal
+	}
+	foreach ($side in @('left', 'top', 'right', 'bottom')) {
+		$v = $dr.sides.$side
+		if ($null -ne $v) {
+			$tag = 'drawingHave' + $side.Substring(0,1).ToUpperInvariant() + $side.Substring(1) + 'Border'
+			$props[$tag] = if ($v -eq $true -or "$v" -eq 'true') { 'true' } else { 'false' }
+		}
+	}
+	$fmtIdx = 0
+	if ($props.Count -gt 0) { $fmtIdx = Register-Format $props }
+	function Get-Anchor {
+		param($node, [string]$rowKey, [string]$colKey)
+		return @{
+			Row = if ($node -and $null -ne $node.row) { [int]$node.row - 1 } else { 0 }
+			Col = if ($node -and $null -ne $node.col) { [int]$node.col - 1 } else { 0 }
+			Dy  = if ($node -and $null -ne $node.dy) { [int]$node.dy } else { 0 }
+			Dx  = if ($node -and $null -ne $node.dx) { [int]$node.dx } else { 0 }
+		}
+	}
+	$drawings += @{
+		Type        = $canonType
+		Id          = if ($null -ne $dr.id) { [int]$dr.id } else { $drawingIdx }
+		ZOrder      = if ($null -ne $dr.zOrder) { [int]$dr.zOrder } else { $drawingIdx }
+		FormatIdx   = $fmtIdx
+		Detail      = $dr.detail
+		Text        = $dr.text
+		Begin       = Get-Anchor $dr.begin
+		End         = Get-Anchor $dr.end
+		PictureSize = if ($dr.pictureSize) { "$($dr.pictureSize)" } else { 'Stretch' }
+		PictureIdx  = $picIdx
+		Name        = $dr.name
+	}
 }
 
 # Формат по умолчанию — последняя запись палитры (см. выше).
@@ -2173,6 +2275,47 @@ if ($def.namedAreas) {
 	}
 }
 
+# 7d-bis2. Рисунки идут сразу после строк, до колонтитулов. Порядок тегов снят с корпуса:
+# у всех 11 268 рисунков он один и тот же.
+foreach ($dr in $drawings) {
+	X "`t<drawing>"
+	X "`t`t<drawingType>$($dr.Type)</drawingType>"
+	X "`t`t<id>$($dr.Id)</id>"
+	X "`t`t<formatIndex>$($dr.FormatIdx)</formatIndex>"
+	if ($dr.Detail) { X "`t`t<detailParameter>$($dr.Detail)</detailParameter>" }
+	if ($null -ne $dr.Text) {
+		$pairs = @()
+		if ($dr.Text -is [System.Management.Automation.PSCustomObject]) {
+			foreach ($pr in $dr.Text.PSObject.Properties) { $pairs += @{ Lang = $pr.Name; Text = "$($pr.Value)" } }
+		} else {
+			foreach ($l in $textLanguages) { $pairs += @{ Lang = $l; Text = "$($dr.Text)" } }
+		}
+		X "`t`t<text>"
+		foreach ($pr in $pairs) {
+			X "`t`t`t<v8:item>"
+			X "`t`t`t`t<v8:lang>$($pr.Lang)</v8:lang>"
+			X "`t`t`t`t<v8:content>$(Esc-XmlText $pr.Text)</v8:content>"
+			X "`t`t`t</v8:item>"
+		}
+		X "`t`t</text>"
+	}
+	X "`t`t<beginRow>$($dr.Begin.Row)</beginRow>"
+	X "`t`t<beginRowOffset>$($dr.Begin.Dy)</beginRowOffset>"
+	X "`t`t<endRow>$($dr.End.Row)</endRow>"
+	X "`t`t<endRowOffset>$($dr.End.Dy)</endRowOffset>"
+	X "`t`t<beginColumn>$($dr.Begin.Col)</beginColumn>"
+	X "`t`t<beginColumnOffset>$($dr.Begin.Dx)</beginColumnOffset>"
+	X "`t`t<endColumn>$($dr.End.Col)</endColumn>"
+	X "`t`t<endColumnOffset>$($dr.End.Dx)</endColumnOffset>"
+	# autoSize у рисунка на корпусе всегда false (11 268 из 11 268), «АвтоРазмер» из
+	# диалога уходит в pictureSize.
+	X "`t`t<autoSize>false</autoSize>"
+	X "`t`t<pictureSize>$($dr.PictureSize)</pictureSize>"
+	X "`t`t<zOrder>$($dr.ZOrder)</zOrder>"
+	if ($dr.PictureIdx -gt 0) { X "`t`t<pictureIndex>$($dr.PictureIdx)</pictureIndex>" }
+	X "`t</drawing>"
+}
+
 # 7d-ter. Колонтитулы: шесть слотов идут после строк и перед скалярными свойствами документа.
 foreach ($slot in $script:headerSlots) {
 	if ($def.header) { Emit-HeaderSlot "$($slot)Header" $def.header.$slot $headerFmt }
@@ -2294,9 +2437,15 @@ $colGroups = Get-Groups 'columnGroups' 'cols'
 # 7e. Scalar metadata
 X "`t<templateMode>true</templateMode>"
 X "`t<defaultFormatIndex>$defaultFormatIndex</defaultFormatIndex>"
-X "`t<height>$totalRowCount</height>"
+# Рисунок расширяет документ, не создавая строк: на стендах высота равна нижней границе
+# самого нижнего рисунка, при том что строк записана всего одна.
+$docHeight = $totalRowCount
+foreach ($dr in $drawings) {
+	if (($dr.End.Row + 1) -gt $docHeight) { $docHeight = $dr.End.Row + 1 }
+}
+X "`t<height>$docHeight</height>"
 if ($rowGroups.Count -gt 0) { X "`t<vgLevels>$(Get-GroupLevels $rowGroups)</vgLevels>" }
-X "`t<vgRows>$totalRowCount</vgRows>"
+X "`t<vgRows>$docHeight</vgRows>"
 Emit-Groups 'vg' $rowGroups
 Emit-Groups 'hg' $colGroups
 
@@ -2324,8 +2473,20 @@ function Get-OrdinalKey {
 	param([string]$name)
 	return (($name.ToLowerInvariant().ToCharArray() | ForEach-Object { '{0:X4}' -f [int]$_ }) -join '')
 }
+# Имя рисунка — namedItem другого типа, но список общий: на корпусе оба вида отсортированы
+# вместе по имени во всех 266 макетах с именованными рисунками.
+foreach ($dr in $drawings) {
+	if ($dr.Name) { $namedItems += @{ Name = "$($dr.Name)"; DrawingId = $dr.Id } }
+}
 $sortedNamedItems = @($namedItems | Sort-Object -Property @{ Expression = { Get-OrdinalKey $_.Name } })
 foreach ($ni in $sortedNamedItems) {
+	if ($ni.DrawingId) {
+		X "`t<namedItem xsi:type=`"NamedItemDrawing`">"
+		X "`t`t<name>$($ni.Name)</name>"
+		X "`t`t<drawingID>$($ni.DrawingId)</drawingID>"
+		X "`t</namedItem>"
+		continue
+	}
 	# Тип области выводится из указанных осей, как в ТабличныйДокумент.Область():
 	# нет колонок → полоса строк, нет строк → полоса колонок, обе → прямоугольник.
 	$hasRows = $ni.BeginRow -ge 0
@@ -2347,7 +2508,8 @@ foreach ($ni in $sortedNamedItems) {
 # 7h. Line palette
 foreach ($ln in $script:lineRegistry) {
 	X "`t<line width=`"$($ln.Width)`" gap=`"$($ln.Gap)`">"
-	X "`t`t<v8ui:style xsi:type=`"v8ui:SpreadsheetDocumentCellLineType`">$($ln.Style)</v8ui:style>"
+	$lineKind = if ($ln.Kind -ceq 'Drawing') { 'SpreadsheetDocumentDrawingLineType' } else { 'SpreadsheetDocumentCellLineType' }
+	X "`t`t<v8ui:style xsi:type=`"v8ui:$lineKind`">$($ln.Style)</v8ui:style>"
 	X "`t</line>"
 }
 
@@ -2404,7 +2566,31 @@ foreach ($key in $formatRegistry.Keys) {
 	X "`t</format>"
 }
 
-# 7k. Close document
+# 7k. Палитра картинок — последний блок документа. Индекс здесь 0-based, а ссылки
+# на него (pictureIndex рисунка, picIndex стиля) 1-based.
+$picIdx = 0
+foreach ($pic in $pictureEntries) {
+	X "`t<picture>"
+	X "`t`t<index>$picIdx</index>"
+	if ($pic.Ref) {
+		X "`t`t<picture ref=`"$(Esc-Xml $pic.Ref)`"/>"
+	} elseif (-not $pic.Data) {
+		X "`t`t<picture/>"
+	} else {
+		$attr = if ($pic.Transparent) { " t=`"$($pic.Transparent)`"" } else { '' }
+		if ($pic.PixelX) { $attr += " tx=`"$($pic.PixelX)`" ty=`"$($pic.PixelY)`"" }
+		# Данные платформа переносит по строкам тем же переводом, что и весь файл, —
+		# в отличие от блоба настроек элемента управления, где перенос голый LF.
+		$parts = @("$($pic.Data)" -split "`r?`n")
+		$parts[0] = "`t`t<picture$attr>$($parts[0])"
+		$parts[-1] = "$($parts[-1])</picture>"
+		foreach ($line in $parts) { X $line }
+	}
+	X "`t</picture>"
+	$picIdx++
+}
+
+# 7l. Close document
 X '</document>'
 
 # --- 8. Write output ---

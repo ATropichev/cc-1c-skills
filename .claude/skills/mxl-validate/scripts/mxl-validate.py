@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-validate v1.6 — Validate 1C spreadsheet document Template.xml
+# mxl-validate v1.7 — Validate 1C spreadsheet document Template.xml
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates spreadsheet Template.xml: height, palette refs, column/row indices, areas, merges."""
 import sys, os, argparse
@@ -404,6 +404,16 @@ def main():
                 draw_id_node = drawing.find(f'{{{NS_D}}}id')
                 draw_id = draw_id_node.text if draw_id_node is not None else '?'
                 r.error(f'Drawing id={draw_id}: pictureIndex={pic_idx} > picture count ({picture_count})')
+
+        # Оформление рисунка — такая же запись палитры форматов, как у ячейки, и висячая
+        # ссылка на неё так же валит загрузку макета.
+        fmt_idx_node = drawing.find(f'{{{NS_D}}}formatIndex')
+        if fmt_idx_node is not None and fmt_idx_node.text:
+            fmt_idx = int(fmt_idx_node.text)
+            if fmt_idx > format_count:
+                draw_id_node = drawing.find(f'{{{NS_D}}}id')
+                draw_id = draw_id_node.text if draw_id_node is not None else '?'
+                r.error(f'Drawing id={draw_id}: formatIndex={fmt_idx} > format palette size ({format_count})')
 
     # --- Check 13: value cells (input fields) ---
     # Свойства containsValue/valueType/controlType принадлежат ЯЧЕЙКЕ: на корпусе ERP

@@ -708,14 +708,84 @@ current-config не объявляет, поэтому вынести объяв
 подсказки (`verticalAlignment: Top` + `style:ToolTipTextColor` + `style:ToolTipBackColor`),
 105 — он же с заливкой `#FFFAD9`.
 
-## Ресурсы картинок
+## Палитра картинок
+
+Идёт последним блоком документа. Внутренний `<index>` 0-based, а ссылки на него — 1-based:
+`<pictureIndex>` у рисунка, `picIndex` в записи формата у картинки в ячейке.
 
 ```xml
 <picture>
     <index>0</index>
-    <picture ref="v8ui:Штрихкод"/>    <!-- ссылка на предопределённую картинку -->
+    <picture ref="v8ui:Штрихкод"/>    <!-- ссылка на библиотеку картинок платформы -->
+</picture>
+<picture>
+    <index>1</index>
+    <picture t="false">iVBORw0KGgoAAAANSUhEUgAAAG4AAAA2CAIAAACp5Ds2AAAAAXNSR0IArs4c6QAA
+AARnQUlBAACxjwv8YQUAAAAgY0hSTQAAeiYAAICEAAD6AAAAgOgAAHUwAADqYAAA</picture>
 </picture>
 ```
+
+Данные base64 платформа переносит по строкам тем же переводом, что и весь файл (CRLF), —
+в отличие от блоба настроек элемента управления, где перенос голый LF.
+
+Атрибуты внутреннего `<picture>` по корпусу ERP (10 130 записей):
+
+| Вид | Сколько | Смысл |
+|-----|--------:|-------|
+| данные без атрибутов | 9 896 | картинка хранится в макете |
+| `<picture/>` | 151 | картинка не задана; ровно по одной такой записи на макет |
+| `ref="v8ui:Имя"` | 83 | ссылка на библиотеку картинок платформы |
+| `tx`, `ty` при данных | 9 | координата пикселя внутри картинки (проверено: это НЕ её размеры — у `tx=97 ty=83` сама картинка 368×117) |
+
+Атрибут `t` (прозрачность) в корпусе не встречается, но платформа его пишет: `t="false"`
+появляется у картинки, вставленной в ячейку.
+
+## Рисунки
+
+Рисунок — объект поверх сетки: картинка, фигура, надпись, диаграмма. Лежит в `<drawing>`
+перед палитрами; геометрия задана двумя якорями «ячейка + смещение в точках».
+
+```xml
+<drawing>
+    <drawingType>Picture</drawingType>
+    <id>3</id>
+    <zOrder>3</zOrder>
+    <beginRow>1</beginRow>
+    <beginColumn>1</beginColumn>
+    <beginRowOffset>0</beginRowOffset>
+    <beginColumnOffset>0</beginColumnOffset>
+    <endRow>3</endRow>
+    <endColumn>2</endColumn>
+    <endRowOffset>34</endRowOffset>
+    <endColumnOffset>115</endColumnOffset>
+    <formatIndex>4</formatIndex>
+    <pictureSize>Proportionally</pictureSize>
+    <pictureIndex>2</pictureIndex>
+    <detailParameter>Расшифровка</detailParameter>
+</drawing>
+```
+
+Координаты строк и колонок здесь 0-based, в отличие от `<i>` ячейки. `<id>` и `<zOrder>`
+самостоятельны: на корпусе они расходятся у 8 253 рисунков из 11 268, так что выводить их
+из порядка следования нельзя. `<pictureSize>Stretch</pictureSize>` — умолчание, пишется всегда.
+
+Имя рисунка хранится отдельно, среди именованных элементов:
+
+```xml
+<namedItem xsi:type="NamedItemDrawing">
+    <name>Логотип</name>
+    <drawingID>3</drawingID>
+</namedItem>
+```
+
+Оформление рисунка — обычная запись палитры форматов, но с собственными тегами: `drawingBorder`
+(ссылка в палитру линий, вид `SpreadsheetDocumentDrawingLineType`) и
+`drawingHaveLeftBorder` / `drawingHaveTopBorder` / `drawingHaveRightBorder` /
+`drawingHaveBottomBorder`. У ячейки таких свойств не бывает: все 2 135 записей корпуса с ними
+принадлежат рисункам. Остальное в записи — общие свойства (заливка, шрифт, выравнивание).
+
+Тело диаграмм (`Chart`, `GanttChart`) лежит в том же `<drawing>` в отдельном пространстве имён
+и здесь не разбирается.
 
 ## Типичная структура макета печатной формы
 

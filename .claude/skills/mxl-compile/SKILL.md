@@ -66,7 +66,10 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
   columnGroups: [{ cols, name, collapsed, titleLocation }],
   header: { left, center, right, font, verticalAlignment, show, startPage }, footer: { … },
   printSettings: { pageOrientation, topMargin, …, fitToPage, firstPageNumber },
-  columnSets: { name: { columns, columnWidths, columnStyles } }
+  columnSets: { name: { columns, columnWidths, columnStyles } },
+  pictures: { name: { ref } | { data, transparent, transparentPixel } | {} },
+  drawings: [{ type, begin: { row, col, dy, dx }, end: { … }, picture, pictureSize,
+               text, name, detail, style, line, sides, id, zOrder }]
 }
 ```
 
@@ -87,6 +90,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 - `rowGroups`/`columnGroups` — группы строк и колонок (сворачиваются кнопкой на полях): плоский список диапазонов, вложенность выражена вхождением одного в другой
 - `header`/`footer` — колонтитулы: три слота (`left`/`center`/`right`), общий шрифт и вертикальное выравнивание; текст может нести поля `[&НомерСтраницы]`, `[&Дата]`
 - `note` — всплывающая подсказка у ячейки: строка, объект языков или `{ text, style, autoSize, box }`
+- `drawings` — рисунки поверх сетки (картинка, фигура, надпись): положение задают два якоря «ячейка + смещение в точках», картинка берётся по имени из `pictures`
 - `valueType` делает ячейку полем ввода (`"Number(15,3,nonneg)"`, `"String(10)"`, `"CatalogRef.Валюты"`, составной через ` + `); текста в такой ячейке быть не может, значение задаётся ключом `value`
 
 Двухуровневая шапка массивами:

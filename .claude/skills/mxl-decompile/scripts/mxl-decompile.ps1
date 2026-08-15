@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.26 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.27 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -41,7 +41,7 @@ function Get-FormatTagKind {
 		'autoIndent' = 'int'; 'autoMarkIncomplete' = 'bool'; 'autoWidthCalculation' = 'bool'
 		'backColor' = 'color'; 'border' = 'line'; 'borderColor' = 'color'
 		'bottomBorder' = 'line'; 'bySelectedColumns' = 'bool'; 'columnSizeChange' = 'enum'
-		'detailsUse' = 'enum'; 'drawingBorder' = 'int'
+		'detailsUse' = 'enum'; 'drawingBorder' = 'line'
 		'drawingHaveBottomBorder' = 'bool'; 'drawingHaveLeftBorder' = 'bool'
 		'drawingHaveRightBorder' = 'bool'; 'drawingHaveTopBorder' = 'bool'
 		'editFormat' = 'ml'; 'fillType' = 'enum'; 'font' = 'int'; 'format' = 'ml'
@@ -263,6 +263,98 @@ function Get-Format {
 	param([int]$idx)
 	if ($idx -le 0 -or $idx -gt $rawFormats.Count) { return $null }
 	return $rawFormats[$idx - 1]
+}
+
+# --- 4-bis. Палитра картинок и рисунки ---
+# Картинка хранится ссылкой на библиотеку либо данными base64; ссылки на палитру (у рисунка
+# pictureIndex, у ячейки picIndex) — 1-based, сам <index> — 0-based.
+$picturesOut = [ordered]@{}
+$pictureKey = @{}
+$picI = 0
+foreach ($picNode in $root.SelectNodes("d:picture", $ns)) {
+	$inner = $picNode.SelectSingleNode("d:picture", $ns)
+	if (-not $inner) { continue }
+	$picI++
+	$name = "pic$picI"
+	$entry = [ordered]@{}
+	if ($inner.GetAttribute('ref')) {
+		$entry["ref"] = $inner.GetAttribute('ref')
+	} elseif (($inner.InnerText).Trim()) {
+		# System.Xml переводы строк в тексте не нормализует, а lxml нормализует: без этой
+		# замены порты дали бы разный JSON на одном и том же файле.
+		$entry["data"] = ($inner.InnerText -replace "`r`n", "`n").Trim()
+		if ($inner.HasAttribute('t')) { $entry["transparent"] = ($inner.GetAttribute('t') -ceq 'true') }
+		# Пиксель прозрачного цвета: координата внутри самой картинки (проверено —
+		# это не её размеры). В корпусе встречается без атрибута t.
+		if ($inner.HasAttribute('tx')) {
+			$entry["transparentPixel"] = [ordered]@{
+				x = [int]$inner.GetAttribute('tx')
+				y = [int]$inner.GetAttribute('ty')
+			}
+		}
+	}
+	$picturesOut[$name] = $entry
+	$pictureKey[$picI] = $name
+}
+
+$drawingNames = @{}
+foreach ($niNode in $root.SelectNodes("d:namedItem", $ns)) {
+	if ($niNode.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance") -cne 'NamedItemDrawing') { continue }
+	$idN = $niNode.SelectSingleNode("d:drawingID", $ns)
+	$nmN = $niNode.SelectSingleNode("d:name", $ns)
+	$drawingNames[$(if ($idN) { $idN.InnerText } else { '' })] = $(if ($nmN) { $nmN.InnerText } else { '' })
+}
+
+$drawingsOut = @()
+$drI = 0
+foreach ($dr in $root.SelectNodes("d:drawing", $ns)) {
+	$drI++
+	$item = [ordered]@{}
+	$tN = $dr.SelectSingleNode("d:drawingType", $ns)
+	$item["type"] = if ($tN) { $tN.InnerText } else { 'Picture' }
+	$idN = $dr.SelectSingleNode("d:id", $ns)
+	$did = if ($idN) { $idN.InnerText } else { "$drI" }
+	if ($did -cne "$drI") { $item["id"] = [int]$did }
+	$zN = $dr.SelectSingleNode("d:zOrder", $ns)
+	$zorder = if ($zN) { $zN.InnerText } else { "$drI" }
+	if ($zorder -cne "$drI") { $item["zOrder"] = [int]$zorder }
+	if ($drawingNames.ContainsKey($did)) { $item["name"] = $drawingNames[$did] }
+	$piN = $dr.SelectSingleNode("d:pictureIndex", $ns)
+	if ($piN -and $pictureKey.ContainsKey([int]$piN.InnerText)) {
+		$item["picture"] = $pictureKey[[int]$piN.InnerText]
+	}
+	$dpN = $dr.SelectSingleNode("d:detailParameter", $ns)
+	if ($dpN -and $dpN.InnerText) { $item["detail"] = $dpN.InnerText }
+	$tEl = $dr.SelectSingleNode("d:text", $ns)
+	if ($tEl) {
+		$byLang = [ordered]@{}
+		foreach ($it in $tEl.SelectNodes("v8:item", $ns)) {
+			$l = $it.SelectSingleNode("v8:lang", $ns)
+			$cnt = $it.SelectSingleNode("v8:content", $ns)
+			$byLang[$(if ($l) { $l.InnerText } else { '' })] = $(if ($cnt) { $cnt.InnerText } else { '' })
+		}
+		$item["text"] = $byLang
+	}
+	# Оформление разбирается позже: линию нужно развернуть в описание, а помощник для
+	# этого появляется вместе с палитрой стилей.
+	$fN = $dr.SelectSingleNode("d:formatIndex", $ns)
+	foreach ($pair in @(@('begin', 'beginRowOffset', 'beginColumnOffset'), @('end', 'endRowOffset', 'endColumnOffset'))) {
+		$prefix = $pair[0]
+		$rN = $dr.SelectSingleNode("d:$($prefix)Row", $ns)
+		$cN = $dr.SelectSingleNode("d:$($prefix)Column", $ns)
+		$dyN = $dr.SelectSingleNode("d:$($pair[1])", $ns)
+		$dxN = $dr.SelectSingleNode("d:$($pair[2])", $ns)
+		$item[$prefix] = [ordered]@{
+			row = $(if ($rN) { [int]$rN.InnerText } else { 0 }) + 1
+			col = $(if ($cN) { [int]$cN.InnerText } else { 0 }) + 1
+			dy  = $(if ($dyN) { [int]$dyN.InnerText } else { 0 })
+			dx  = $(if ($dxN) { [int]$dxN.InnerText } else { 0 })
+		}
+	}
+	$psN = $dr.SelectSingleNode("d:pictureSize", $ns)
+	if ($psN -and $psN.InnerText -cne 'Stretch') { $item["pictureSize"] = $psN.InnerText }
+	$item["_fmt"] = if ($fN) { [int]$fN.InnerText } else { 0 }
+	$drawingsOut += , $item
 }
 
 # --- 4a. Колонтитулы и параметры печати ---
@@ -640,7 +732,11 @@ function Get-DslText {
 # общий на многие ячейки, а они индивидуальны. Компилятор таких ключей не знает, так что
 # в DSL они были чистым шумом.
 $nonStyleTags = @('width', 'height', 'fillType', 'font',
-	'containsValue', 'valueType', 'controlType')
+	'containsValue', 'valueType', 'controlType',
+	# Линия рисунка и её стороны — свойства рисунка, а не общего оформления:
+	# на корпусе все 2 135 записей с ними принадлежат только рисункам.
+	'drawingBorder', 'drawingHaveLeftBorder', 'drawingHaveTopBorder',
+	'drawingHaveRightBorder', 'drawingHaveBottomBorder')
 $borderTags = @('border', 'leftBorder', 'topBorder', 'rightBorder', 'bottomBorder')
 
 function ConvertTo-DslLine {
@@ -790,6 +886,20 @@ foreach ($r in ($rowData.Keys | Sort-Object { [int]$_ } | ForEach-Object { $rowD
 				$formatToStyleKey[$cell.Note.FormatIdx] = $nkey
 			}
 		}
+	}
+}
+
+# Формат рисунка — ещё один владелец записи палитры, наравне с ячейкой, строкой, колонкой
+# и примечанием: без этого оформление рисунка теряло имя и вырезалось как неиспользуемое.
+foreach ($item in $drawingsOut) {
+	$fi = [int]$item['_fmt']
+	if ($fi -le 0) { continue }
+	$dfmt = Get-Format $fi
+	if (-not $dfmt) { continue }
+	if ((Get-StyleProps $dfmt).Count -gt 0 -or $dfmt.FontIdx -ge 0) {
+		$dkey = Get-StyleKey $dfmt
+		if (-not $styleKeys.Contains($dkey)) { $styleKeys[$dkey] = $dfmt }
+		$formatToStyleKey[$fi] = $dkey
 	}
 }
 
@@ -1519,6 +1629,15 @@ foreach ($cs in $columnSets) {
 		if ($name) { $usedStyles[$name] = $true }
 	}
 }
+# Рисунок — пятый владелец формата. Имя ему присваивается позже, при сборке результата,
+# поэтому здесь считаем его из ссылки на палитру: иначе стиль рисунка вырежется как
+# неиспользуемый, а ссылка на него останется висячей.
+foreach ($item in $drawingsOut) {
+	$fi = [int]$item['_fmt']
+	if ($fi -le 0) { continue }
+	$dname = Get-StyleName $fi
+	if ($dname -cne 'default') { $usedStyles[$dname] = $true }
+}
 $toRemove = @($styleDefs.Keys | Where-Object { -not $usedStyles.ContainsKey($_) })
 foreach ($s in $toRemove) { $styleDefs.Remove($s)
 }
@@ -1553,9 +1672,43 @@ if ($colGroups.Count -gt 0) { $result["columnGroups"] = [array]$colGroups }
 # становится известен только после разбора строк.
 $headerPart = Read-HeaderPart 'Header'
 $footerPart = Read-HeaderPart 'Footer'
-if ($headerPart) { $result["header"] = $headerPart }
-if ($footerPart) { $result["footer"] = $footerPart }
+# Пустой словарь в PowerShell истинен, поэтому проверяем именно наполнение: макет со ссылкой
+# на общую запись палитры, но без своих настроек колонтитула, иначе получал в DSL пустой ключ.
+if ($headerPart -and $headerPart.Count -gt 0) { $result["header"] = $headerPart }
+if ($footerPart -and $footerPart.Count -gt 0) { $result["footer"] = $footerPart }
 if ($printSettings) { $result["printSettings"] = $printSettings }
+
+# Оформление рисунка: линия и её стороны — его собственные ключи, общее — именованный стиль.
+# Порядок ключей задаём здесь же, чтобы он не зависел от того, что разбиралось раньше.
+$drawingsOrdered = @()
+foreach ($item in $drawingsOut) {
+	$fmtIdx = [int]$item['_fmt']
+	$item.Remove('_fmt')
+	if ($item.Contains("text")) { $item["text"] = Get-DslText $item["text"] }
+	$lineVal = $null
+	$sides = [ordered]@{}
+	if ($fmtIdx -gt 0) {
+		$dfmt = Get-Format $fmtIdx
+		$props = if ($dfmt) { $dfmt.Props } else { @{} }
+		if ($props.Contains('drawingBorder')) { $lineVal = ConvertTo-DslLine ([int]$props['drawingBorder']) }
+		foreach ($side in @('Left', 'Top', 'Right', 'Bottom')) {
+			$tag = "drawingHave${side}Border"
+			if ($props.Contains($tag)) { $sides[$side.ToLowerInvariant()] = ($props[$tag] -ceq 'true') }
+		}
+		$dname = Get-StyleName $fmtIdx
+		if ($dname -cne 'default') { $item["style"] = $dname }
+	}
+	if ($null -ne $lineVal) { $item["line"] = $lineVal }
+	if ($sides.Count -gt 0) { $item["sides"] = $sides }
+	$outItem = [ordered]@{}
+	foreach ($key in @('type', 'id', 'zOrder', 'name', 'picture', 'detail', 'text',
+			'style', 'line', 'sides', 'begin', 'end', 'pictureSize')) {
+		if ($item.Contains($key)) { $outItem[$key] = $item[$key] }
+	}
+	$drawingsOrdered += , $outItem
+}
+if ($picturesOut.Count -gt 0) { $result["pictures"] = $picturesOut }
+if ($drawingsOrdered.Count -gt 0) { $result["drawings"] = [array]$drawingsOrdered }
 
 $result["areas"] = [array]$dslAreas
 

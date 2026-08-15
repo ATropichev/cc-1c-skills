@@ -1,0 +1,10 @@
+{
+  "name": "Ошибка: прозрачность задана у картинки без данных",
+  "input": {
+    "columns": 2,
+    "pictures": { "пусто": { "transparent": true } },
+    "areas": [{ "rows": [["Бланк"]] }]
+  },
+  "params": { "outputPath": "Template.xml" },
+  "expectError": "pictures[пусто]: 'transparent' and 'transparentPixel' require 'data'"
+}

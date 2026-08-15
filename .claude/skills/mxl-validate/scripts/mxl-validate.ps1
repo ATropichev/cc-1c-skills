@@ -1,4 +1,4 @@
-﻿# mxl-validate v1.6 — Validate 1C spreadsheet
+﻿# mxl-validate v1.7 — Validate 1C spreadsheet
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Alias('Path')]
@@ -406,6 +406,16 @@ foreach ($drawing in $root.SelectNodes("d:drawing", $nsMgr)) {
 		if ($picIdx -gt $pictureCount) {
 			$drawId = $drawing.SelectSingleNode("d:id", $nsMgr).InnerText
 			Report-Error "Drawing id=${drawId}: pictureIndex=$picIdx > picture count ($pictureCount)"
+		}
+	}
+	# Оформление рисунка — такая же запись палитры форматов, как у ячейки, и висячая
+	# ссылка на неё так же валит загрузку макета.
+	$fmtIdxNode = $drawing.SelectSingleNode("d:formatIndex", $nsMgr)
+	if ($fmtIdxNode) {
+		$fmtIdx = [int]$fmtIdxNode.InnerText
+		if ($fmtIdx -gt $formatCount) {
+			$drawId = $drawing.SelectSingleNode("d:id", $nsMgr).InnerText
+			Report-Error "Drawing id=${drawId}: formatIndex=$fmtIdx > format palette size ($formatCount)"
 		}
 	}
 }

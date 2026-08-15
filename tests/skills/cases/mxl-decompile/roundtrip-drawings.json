@@ -1,0 +1,30 @@
+{
+  "name": "Roundtrip — рисунки и палитра картинок",
+  "preRun": [
+    { "script": "mxl-compile/scripts/mxl-compile",
+      "input": {
+        "columns": 4,
+        "styles": { "заливка": { "backColor": "web:LightYellow" } },
+        "pictures": {
+          "стоп": { "ref": "v8ui:Стоп48" },
+          "пусто": {}
+        },
+        "areas": [{ "rows": [["Бланк"]] }],
+        "drawings": [
+          { "type": "Picture", "picture": "стоп", "name": "Знак",
+            "begin": { "row": 1, "col": 1 }, "end": { "row": 2, "col": 2, "dy": 20, "dx": 40 },
+            "pictureSize": "Proportionally" },
+          { "type": "Rectangle", "style": "заливка", "line": { "style": "Dashed", "width": 2 },
+            "sides": { "left": true, "top": true, "right": false, "bottom": false },
+            "begin": { "row": 4, "col": 1 }, "end": { "row": 5, "col": 3 } },
+          { "type": "Text", "id": 42, "text": { "ru": "Подпись", "en": "Signature" },
+            "begin": { "row": 7, "col": 1 }, "end": { "row": 7, "col": 3, "dy": 12 } }
+        ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "Template.xml" },
+      "cwd": "{workDir}" }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "args_extra": ["-OutputPath", "{workDir}/back.json"],
+  "expect": { "files": ["back.json"], "stdoutContains": "[OK] Decompiled:" }
+}

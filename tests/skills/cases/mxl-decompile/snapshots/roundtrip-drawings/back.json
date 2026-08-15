@@ -1,0 +1,13 @@
+{
+  "columns": 4,
+  "defaultWidth": 10,
+  "fonts": {},
+  "styles": { "bg": { "backColor": "web:LightYellow" } },
+  "pictures": { "pic1": { "ref": "v8ui:Стоп48" }, "pic2": {} },
+  "drawings": [
+    { "type": "Picture", "name": "Знак", "picture": "pic1", "begin": { "row": 1, "col": 1, "dy": 0, "dx": 0 }, "end": { "row": 2, "col": 2, "dy": 20, "dx": 40 }, "pictureSize": "Proportionally" },
+    { "type": "Rectangle", "style": "bg", "line": { "style": "Dashed", "width": 2 }, "sides": { "left": true, "top": true, "right": false, "bottom": false }, "begin": { "row": 4, "col": 1, "dy": 0, "dx": 0 }, "end": { "row": 5, "col": 3, "dy": 0, "dx": 0 } },
+    { "type": "Text", "id": 42, "text": { "ru": "Подпись", "en": "Signature" }, "begin": { "row": 7, "col": 1, "dy": 0, "dx": 0 }, "end": { "row": 7, "col": 3, "dy": 12, "dx": 0 } }
+  ],
+  "areas": [{ "rows": [["Бланк"]] }]
+}

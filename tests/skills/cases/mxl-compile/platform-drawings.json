@@ -1,0 +1,13 @@
+{
+  "name": "Раундтрип макета ПЛАТФОРМЫ байт в байт: Рисунки2",
+  "setup": "fixture:platform-roundtrip",
+  "preRun": [
+    { "script": "mxl-decompile/scripts/mxl-decompile",
+      "args": { "-TemplatePath": "Рисунки2.xml", "-OutputPath": "back.json" },
+      "cwd": "{workDir}" }
+  ],
+  "params": { "outputPath": "out.xml" },
+  "noSnapshot": "эталон — файл платформы, сверяется expect.filesEqual",
+  "expect": { "filesEqual": { "actual": "out.xml", "expected": "Рисунки2.xml" } },
+  "inputFrom": "back.json"
+}

@@ -1,0 +1,34 @@
+{
+  "name": "Рисунки: типы, картинки, линия, стороны, расшифровка",
+  "input": {
+    "columns": 4,
+    "styles": {
+      "заливка": { "backColor": "web:LightYellow" }
+    },
+    "pictures": {
+      "стоп": { "ref": "v8ui:Стоп48" },
+      "точка": { "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==", "transparent": false }
+    },
+    "areas": [{ "rows": [["Бланк"]] }],
+    "drawings": [
+      { "type": "Picture", "picture": "стоп", "name": "Знак",
+        "begin": { "row": 1, "col": 1, "dy": 0, "dx": 0 },
+        "end": { "row": 2, "col": 2, "dy": 20, "dx": 40 },
+        "pictureSize": "Proportionally" },
+      { "type": "Picture", "picture": "точка", "detail": "ПараметрРасшифровки",
+        "begin": { "row": 3, "col": 1 },
+        "end": { "row": 3, "col": 2, "dy": 34, "dx": 115 } },
+      { "type": "Rectangle", "style": "заливка",
+        "line": { "style": "Dashed", "width": 2 },
+        "sides": { "left": true, "top": true, "right": false, "bottom": false },
+        "begin": { "row": 5, "col": 1 }, "end": { "row": 6, "col": 3 } },
+      { "type": "Ellipse", "line": "Solid",
+        "begin": { "row": 8, "col": 1 }, "end": { "row": 9, "col": 2 } },
+      { "type": "Line", "zOrder": 9,
+        "begin": { "row": 11, "col": 1 }, "end": { "row": 11, "col": 4 } },
+      { "type": "Text", "id": 42, "text": { "ru": "Подпись", "en": "Signature" },
+        "begin": { "row": 13, "col": 1 }, "end": { "row": 13, "col": 3, "dy": 12 } }
+    ]
+  },
+  "params": { "outputPath": "Template.xml" }
+}

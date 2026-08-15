@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.26 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.27 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -79,7 +79,7 @@ def format_tag_kind():
         'autoIndent': 'int', 'autoMarkIncomplete': 'bool', 'autoWidthCalculation': 'bool',
         'backColor': 'color', 'border': 'line', 'borderColor': 'color',
         'bottomBorder': 'line', 'bySelectedColumns': 'bool', 'columnSizeChange': 'enum',
-        'detailsUse': 'enum', 'drawingBorder': 'int',
+        'detailsUse': 'enum', 'drawingBorder': 'line',
         'drawingHaveBottomBorder': 'bool', 'drawingHaveLeftBorder': 'bool',
         'drawingHaveRightBorder': 'bool', 'drawingHaveTopBorder': 'bool',
         'editFormat': 'ml', 'fillType': 'enum', 'font': 'int', 'format': 'ml',
@@ -430,6 +430,77 @@ def main():
         if idx <= 0 or idx > len(raw_formats):
             return None
         return raw_formats[idx - 1]
+
+    # --- 4-bis. Палитра картинок и рисунки ---
+    # Картинка хранится ссылкой на библиотеку либо данными base64; ссылки на палитру (у рисунка
+    # pictureIndex, у ячейки picIndex) — 1-based, сам <index> — 0-based.
+    pictures_out = OrderedDict()
+    picture_key = {}
+    for pic_i, pic_node in enumerate(findall(root, "d:picture"), start=1):
+        inner = find(pic_node, "d:picture")
+        if inner is None:
+            continue
+        name = f'pic{pic_i}'
+        entry = OrderedDict()
+        if inner.get("ref"):
+            entry["ref"] = inner.get("ref")
+        elif (inner.text or "").strip():
+            entry["data"] = (inner.text or "").strip()
+            if inner.get("t") is not None:
+                entry["transparent"] = inner.get("t") == "true"
+            # Пиксель прозрачного цвета: координата внутри самой картинки (проверено —
+            # это не её размеры). В корпусе встречается без атрибута t.
+            if inner.get("tx") is not None:
+                entry["transparentPixel"] = OrderedDict([("x", int(inner.get("tx"))),
+                                                         ("y", int(inner.get("ty") or 0))])
+        pictures_out[name] = entry
+        picture_key[pic_i] = name
+
+    drawing_names = {}
+    for ni_node in findall(root, "d:namedItem"):
+        if (ni_node.get(f'{{{XSI_NS}}}type') or '') == 'NamedItemDrawing':
+            drawing_names[text_of(find(ni_node, "d:drawingID")) or ''] = text_of(find(ni_node, "d:name")) or ''
+
+    drawings_out = []
+    for dr_i, dr in enumerate(findall(root, "d:drawing"), start=1):
+        item = OrderedDict()
+        item["type"] = text_of(find(dr, "d:drawingType")) or "Picture"
+        did = text_of(find(dr, "d:id")) or str(dr_i)
+        if did != str(dr_i):
+            item["id"] = int(did)
+        zorder = text_of(find(dr, "d:zOrder")) or str(dr_i)
+        if zorder != str(dr_i):
+            item["zOrder"] = int(zorder)
+        if did in drawing_names:
+            item["name"] = drawing_names[did]
+        pic_ref = text_of(find(dr, "d:pictureIndex"))
+        if pic_ref and int(pic_ref) in picture_key:
+            item["picture"] = picture_key[int(pic_ref)]
+        detail = text_of(find(dr, "d:detailParameter"))
+        if detail:
+            item["detail"] = detail
+        t_el = find(dr, "d:text")
+        if t_el is not None:
+            by_lang = OrderedDict()
+            for it in findall(t_el, "v8:item"):
+                by_lang[text_of(find(it, "v8:lang")) or ''] = text_of(find(it, "v8:content")) or ''
+            item["text"] = by_lang
+        # Оформление разбирается позже: линию нужно развернуть в описание, а помощник для
+        # этого появляется вместе с палитрой стилей.
+        fmt_idx = int_of(find(dr, "d:formatIndex"))
+
+        def anchor(prefix, off_row, off_col):
+            return OrderedDict([("row", int_of(find(dr, f'd:{prefix}Row')) + 1),
+                                ("col", int_of(find(dr, f'd:{prefix}Column')) + 1),
+                                ("dy", int_of(find(dr, f'd:{off_row}'))),
+                                ("dx", int_of(find(dr, f'd:{off_col}')))])
+        item["begin"] = anchor("begin", "beginRowOffset", "beginColumnOffset")
+        item["end"] = anchor("end", "endRowOffset", "endColumnOffset")
+        psize = text_of(find(dr, "d:pictureSize"))
+        if psize and psize != "Stretch":
+            item["pictureSize"] = psize
+        item["_fmt"] = fmt_idx
+        drawings_out.append(item)
 
     # --- 4a. Колонтитулы и параметры печати ---
     # Слот колонтитула устроен как ячейка: ссылка на формат плюс текст. Признак вывода и стартовую
@@ -790,7 +861,11 @@ def main():
     # общий на многие ячейки, а они индивидуальны. Компилятор таких ключей не знает, так что
     # в DSL они были чистым шумом.
     NON_STYLE_TAGS = ("width", "height", "fillType", "font",
-                      "containsValue", "valueType", "controlType")
+                      "containsValue", "valueType", "controlType",
+                      # Линия рисунка и её стороны — свойства рисунка, а не общего оформления:
+                      # на корпусе все 2 135 записей с ними принадлежат только рисункам.
+                      "drawingBorder", "drawingHaveLeftBorder", "drawingHaveTopBorder",
+                      "drawingHaveRightBorder", "drawingHaveBottomBorder")
     BORDER_TAGS = ("border", "leftBorder", "topBorder", "rightBorder", "bottomBorder")
 
     def line_to_dsl(idx):
@@ -933,6 +1008,19 @@ def main():
                     if nkey not in style_keys:
                         style_keys[nkey] = nfmt
                     format_to_style_key[cell["Note"]["FormatIdx"]] = nkey
+
+    # Формат рисунка — ещё один владелец записи палитры, наравне с ячейкой, строкой, колонкой
+    # и примечанием: без этого оформление рисунка теряло имя и вырезалось как неиспользуемое.
+    for _item in drawings_out:
+        _fi = _item.get("_fmt") or 0
+        if not _fi:
+            continue
+        _fmt = get_format(_fi)
+        if _fmt and (style_props(_fmt) or _fmt["FontIdx"] >= 0):
+            _key = get_style_key(_fmt)
+            if _key not in style_keys:
+                style_keys[_key] = _fmt
+            format_to_style_key[_fi] = _key
 
     def row_style_fmt(fmt):
         """Оформление строки без её собственных свойств: скрытие уезжает инлайном к height,
@@ -1509,6 +1597,15 @@ def main():
         for name in column_styles_of(cs).values():
             if name:
                 used_styles.add(name)
+    # Рисунок — пятый владелец формата. Имя ему присваивается позже, при сборке результата,
+    # поэтому здесь считаем его из ссылки на палитру: иначе стиль рисунка вырежется как
+    # неиспользуемый, а ссылка на него останется висячей.
+    for _item in drawings_out:
+        _fi = _item.get("_fmt") or 0
+        if _fi:
+            _name = get_style_name(_fi)
+            if _name != "default":
+                used_styles.add(_name)
     to_remove = [s for s in style_defs if s not in used_styles]
     for s in to_remove:
         del style_defs[s]
@@ -1551,6 +1648,43 @@ def main():
         result["footer"] = footer_part
     if print_settings:
         result["printSettings"] = print_settings
+
+    # Оформление рисунка: линия и её стороны — его собственные ключи, общее — именованный стиль.
+    # Порядок ключей задаём здесь же, чтобы он не зависел от того, что разбиралось раньше.
+    ordered = []
+    for item in drawings_out:
+        fmt_idx = item.pop("_fmt", 0)
+        if "text" in item:
+            item["text"] = get_dsl_text(item["text"])
+        line_val = None
+        sides = OrderedDict()
+        if fmt_idx:
+            fmt = get_format(fmt_idx)
+            props = fmt["Props"] if fmt else {}
+            if "drawingBorder" in props:
+                line_val = line_to_dsl(int(props["drawingBorder"]))
+            for side in ("Left", "Top", "Right", "Bottom"):
+                tag = f'drawingHave{side}Border'
+                if tag in props:
+                    sides[side.lower()] = props[tag] == "true"
+            name = get_style_name(fmt_idx)
+            if name != "default":
+                item["style"] = name
+        if line_val is not None:
+            item["line"] = line_val
+        if sides:
+            item["sides"] = sides
+        out_item = OrderedDict()
+        for key in ("type", "id", "zOrder", "name", "picture", "detail", "text",
+                    "style", "line", "sides", "begin", "end", "pictureSize"):
+            if key in item:
+                out_item[key] = item[key]
+        ordered.append(out_item)
+    drawings_out = ordered
+    if pictures_out:
+        result["pictures"] = pictures_out
+    if drawings_out:
+        result["drawings"] = drawings_out
 
     result["areas"] = dsl_areas
 
