@@ -422,6 +422,13 @@ def main():
         ctl = fmt.find(f'{{{NS_D}}}controlType')
         if ctl is not None and (ctl.text or '').strip().lower() not in control_guids:
             r.warn(f'Format {i}: unknown controlType {(ctl.text or "").strip()}')
+        # Флажок Конфигуратор предлагает только для булева и числа. Движок принимает его на
+        # любом типе (проверено сборкой EPF и обратной выгрузкой), поэтому это предупреждение,
+        # а не ошибка: собрать такую ячейку в Конфигураторе нельзя, и почти наверняка это описка.
+        if ctl is not None and (ctl.text or '').strip().lower() == control_guids[1] and vt is not None:
+            kinds = [(t.text or '').strip() for t in vt if t.tag.endswith('}Type')]
+            if kinds != ['xs:boolean'] and kinds != ['xs:decimal']:
+                r.warn(f'Format {i}: checkbox control on a type other than Boolean or Number')
 
     if value_format_idx:
         for ri in root.findall(f'{{{NS_D}}}rowsItem'):

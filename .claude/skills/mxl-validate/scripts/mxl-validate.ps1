@@ -434,6 +434,19 @@ for ($i = 0; $i -lt $formatNodes.Count; $i++) {
 	if ($ctl -and ($controlGuids -notcontains $ctl.InnerText.Trim().ToLowerInvariant())) {
 		Report-Warn "Format ${num}: unknown controlType $($ctl.InnerText.Trim())"
 	}
+	# Флажок Конфигуратор предлагает только для булева и числа. Движок принимает его на любом
+	# типе (проверено сборкой EPF и обратной выгрузкой), поэтому это предупреждение, а не ошибка:
+	# собрать такую ячейку в Конфигураторе нельзя, и почти наверняка это описка.
+	if ($ctl -and $ctl.InnerText.Trim().ToLowerInvariant() -ceq $controlGuids[1] -and $vt) {
+		$kinds = @()
+		foreach ($child in $vt.ChildNodes) {
+			if ($child.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
+			if ($child.get_LocalName() -ceq 'Type') { $kinds += $child.InnerText.Trim() }
+		}
+		if (-not (($kinds.Count -eq 1) -and ($kinds[0] -ceq 'xs:boolean' -or $kinds[0] -ceq 'xs:decimal'))) {
+			Report-Warn "Format ${num}: checkbox control on a type other than Boolean or Number"
+		}
+	}
 }
 
 if ($valueFormatIdx.Count -gt 0) {

@@ -1,0 +1,28 @@
+{
+  "name": "Предупреждение: флажок у типа, отличного от булева и числа",
+  "preRun": [
+    {
+      "script": "mxl-compile/scripts/mxl-compile",
+      "input": {
+        "columns": 3,
+        "areas": [
+          {
+            "name": "Проверка",
+            "rows": [
+              { "cells": [
+                { "col": 1, "valueType": "Boolean", "controlType": "checkbox" },
+                { "col": 2, "valueType": "Number(10,2)", "controlType": "checkbox" },
+                { "col": 3, "valueType": "String(10)", "controlType": "checkbox" }
+              ]}
+            ]
+          }
+        ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "Template.xml" },
+      "cwd": "{workDir}"
+    }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "args_extra": ["-Detailed"],
+  "expect": { "stdoutContains": "checkbox control on a type other than Boolean or Number" }
+}
