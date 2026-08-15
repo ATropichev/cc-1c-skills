@@ -1,0 +1,29 @@
+{
+  "name": "Колонтитулы и параметры печати",
+  "input": {
+    "columns": 2,
+    "fonts": { "мелкий": { "face": "Arial", "size": 8 } },
+    "areas": [{ "rows": [["Отчёт"]] }],
+    "header": {
+      "font": "мелкий",
+      "verticalAlignment": "Bottom",
+      "startPage": 2,
+      "left": "Слева\nвторая строка",
+      "center": "Стр. [&НомерСтраницы] из [&СтраницВсего]",
+      "right": { "ru": "Справа", "en": "Right" }
+    },
+    "footer": {
+      "font": "мелкий",
+      "verticalAlignment": "Top",
+      "show": false,
+      "center": { "formatted": "<b>Итог</> <colorstyle -16>красным</>" }
+    },
+    "printSettings": {
+      "pageOrientation": "Landscape",
+      "topMargin": 500, "leftMargin": 500, "bottomMargin": 500, "rightMargin": 500,
+      "headerSize": 1000, "footerSize": 1000,
+      "fitToPage": true, "blackAndWhite": false, "firstPageNumber": 7
+    }
+  },
+  "params": { "outputPath": "Template.xml" }
+}

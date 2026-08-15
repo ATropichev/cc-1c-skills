@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.24 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.25 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -263,6 +263,68 @@ function Get-Format {
 	param([int]$idx)
 	if ($idx -le 0 -or $idx -gt $rawFormats.Count) { return $null }
 	return $rawFormats[$idx - 1]
+}
+
+# --- 4a. Колонтитулы и параметры печати ---
+# Слот колонтитула устроен как ячейка: ссылка на формат плюс текст. Признак вывода и стартовую
+# страницу читаем только у записи, где есть <height>: палитра дедуплицирована, и колонтитул без
+# своих настроек ссылается на чужую запись, где <width> — ширина колонки, а не номер страницы.
+function Read-HeaderPart {
+	param([string]$suffix)
+	$out = [ordered]@{}
+	$fmtIdx = $null
+	foreach ($slot in @('left', 'center', 'right')) {
+		$el = $root.SelectSingleNode("d:$slot$suffix", $ns)
+		if (-not $el) { continue }
+		if ($null -eq $fmtIdx) {
+			$fNode = $el.SelectSingleNode("d:f", $ns)
+			$fmtIdx = if ($fNode) { [int]$fNode.InnerText } else { 0 }
+		}
+		foreach ($textTag in @('tl', 'tfl')) {
+			$t = $el.SelectSingleNode("d:$textTag", $ns)
+			if (-not $t) { continue }
+			$byLang = [ordered]@{}
+			foreach ($it in $t.SelectNodes("v8:item", $ns)) {
+				$l = $it.SelectSingleNode("v8:lang", $ns)
+				$cnt = $it.SelectSingleNode("v8:content", $ns)
+				$byLang[$(if ($l) { $l.InnerText } else { '' })] = $(if ($cnt) { $cnt.InnerText } else { '' })
+			}
+			$value = Get-DslText $byLang
+			$out[$slot] = if ($textTag -ceq 'tfl') { [ordered]@{ formatted = $value } } else { $value }
+			break
+		}
+	}
+	if ($out.Count -eq 0 -and $null -eq $fmtIdx) { return $null }
+	$fmt = if ($fmtIdx) { Get-Format $fmtIdx } else { $null }
+	if ($fmt) {
+		$props = $fmt.Props
+		$head = [ordered]@{}
+		if ($fmt.FontIdx -ge 0) { $head["font"] = $fontNames[$fmt.FontIdx] }
+		if ($props.Contains('height')) {
+			if ("$($props['height'])" -ceq '-1') { $head["show"] = $false }
+			$w = if ($props.Contains('width')) { [int]$props['width'] } else { 1 }
+			if ($w -ne 1) { $head["startPage"] = $w }
+		}
+		if ($props.Contains('verticalAlignment')) { $head["verticalAlignment"] = $props['verticalAlignment'] }
+		foreach ($k in $out.Keys) { $head[$k] = $out[$k] }
+		$out = $head
+	}
+	return $out
+}
+
+$printSettings = $null
+$psNode = $root.SelectSingleNode("d:printSettings", $ns)
+if ($psNode) {
+	$printSettings = [ordered]@{}
+	foreach ($c in $psNode.ChildNodes) {
+		if ($c.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
+		$v = $c.InnerText.Trim()
+		$i = 0
+		if ($v -ceq 'true') { $printSettings[$c.get_LocalName()] = $true }
+		elseif ($v -ceq 'false') { $printSettings[$c.get_LocalName()] = $false }
+		elseif ([int]::TryParse($v, [ref]$i)) { $printSettings[$c.get_LocalName()] = $i }
+		else { $printSettings[$c.get_LocalName()] = $v }
+	}
 }
 
 # --- 4b. Группировки строк и колонок ---
@@ -1476,6 +1538,14 @@ foreach ($g in ($rowGroups + $colGroups)) {
 }
 if ($rowGroups.Count -gt 0) { $result["rowGroups"] = [array]$rowGroups }
 if ($colGroups.Count -gt 0) { $result["columnGroups"] = [array]$colGroups }
+
+# Читаем здесь, а не в разделе 4a: тексту колонтитула нужен свод языков макета, который
+# становится известен только после разбора строк.
+$headerPart = Read-HeaderPart 'Header'
+$footerPart = Read-HeaderPart 'Footer'
+if ($headerPart) { $result["header"] = $headerPart }
+if ($footerPart) { $result["footer"] = $footerPart }
+if ($printSettings) { $result["printSettings"] = $printSettings }
 
 $result["areas"] = [array]$dslAreas
 

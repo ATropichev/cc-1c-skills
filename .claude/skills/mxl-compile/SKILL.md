@@ -64,6 +64,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
   namedAreas: [{ name, rows, cols }],
   rowGroups: [{ rows, name, collapsed, titleLocation }],
   columnGroups: [{ cols, name, collapsed, titleLocation }],
+  header: { left, center, right, font, verticalAlignment, show, startPage }, footer: { … },
+  printSettings: { pageOrientation, topMargin, …, fitToPage, firstPageNumber },
   columnSets: { name: { columns, columnWidths, columnStyles } }
 }
 ```
@@ -83,6 +85,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 - `rowspan` — объединение строк вниз (rowStyle учитывает занятые ячейки)
 - Содержимое ячейки задаётся одним из ключей: `param` — параметр заполнения, `text` — статический текст, `template` — текст со вставками `[Параметр]`
 - `rowGroups`/`columnGroups` — группы строк и колонок (сворачиваются кнопкой на полях): плоский список диапазонов, вложенность выражена вхождением одного в другой
+- `header`/`footer` — колонтитулы: три слота (`left`/`center`/`right`), общий шрифт и вертикальное выравнивание; текст может нести поля `[&НомерСтраницы]`, `[&Дата]`
 - `note` — всплывающая подсказка у ячейки: строка, объект языков или `{ text, style, autoSize, box }`
 - `valueType` делает ячейку полем ввода (`"Number(15,3,nonneg)"`, `"String(10)"`, `"CatalogRef.Валюты"`, составной через ` + `); текста в такой ячейке быть не может, значение задаётся ключом `value`
 

@@ -1,0 +1,10 @@
+{
+  "columns": 2,
+  "defaultWidth": 10,
+  "fonts": { "default": { "face": "Arial", "size": 8 } },
+  "styles": {},
+  "header": { "font": "default", "startPage": 2, "verticalAlignment": "Bottom", "left": "Слева\nвторая строка", "center": "Стр. [&НомерСтраницы]" },
+  "footer": { "font": "default", "show": false, "center": { "formatted": "<b>Итог</>" } },
+  "printSettings": { "pageOrientation": "Landscape", "fitToPage": true, "firstPageNumber": 7 },
+  "areas": [{ "rows": [["Отчёт"]] }]
+}

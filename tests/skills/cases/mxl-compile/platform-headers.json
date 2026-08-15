@@ -1,0 +1,13 @@
+{
+  "name": "Раундтрип макета ПЛАТФОРМЫ байт в байт: Колонтитулы",
+  "setup": "fixture:platform-roundtrip",
+  "preRun": [
+    { "script": "mxl-decompile/scripts/mxl-decompile",
+      "args": { "-TemplatePath": "Колонтитулы.xml", "-OutputPath": "back.json" },
+      "cwd": "{workDir}" }
+  ],
+  "params": { "outputPath": "out.xml" },
+  "noSnapshot": "эталон — файл платформы, сверяется expect.filesEqual",
+  "expect": { "filesEqual": { "actual": "out.xml", "expected": "Колонтитулы.xml" } },
+  "inputFrom": "back.json"
+}

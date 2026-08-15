@@ -1,0 +1,21 @@
+{
+  "name": "Roundtrip — колонтитулы и параметры печати",
+  "preRun": [
+    { "script": "mxl-compile/scripts/mxl-compile",
+      "input": {
+        "columns": 2,
+        "fonts": { "мелкий": { "face": "Arial", "size": 8 } },
+        "areas": [{ "rows": [["Отчёт"]] }],
+        "header": { "font": "мелкий", "verticalAlignment": "Bottom", "startPage": 2,
+                    "left": "Слева\nвторая строка", "center": "Стр. [&НомерСтраницы]" },
+        "footer": { "font": "мелкий", "show": false,
+                    "center": { "formatted": "<b>Итог</>" } },
+        "printSettings": { "pageOrientation": "Landscape", "fitToPage": true, "firstPageNumber": 7 }
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "Template.xml" },
+      "cwd": "{workDir}" }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "args_extra": ["-OutputPath", "{workDir}/back.json"],
+  "expect": { "files": ["back.json"], "stdoutContains": "[OK] Decompiled:" }
+}

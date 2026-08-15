@@ -1,0 +1,10 @@
+{
+  "name": "Ошибка: неизвестный ключ параметров печати",
+  "input": {
+    "columns": 1,
+    "areas": [{ "rows": [["a"]] }],
+    "printSettings": { "topMargin": 500, "marginTop": 500 }
+  },
+  "params": { "outputPath": "Template.xml" },
+  "expectError": "printSettings: unknown key \"marginTop\""
+}

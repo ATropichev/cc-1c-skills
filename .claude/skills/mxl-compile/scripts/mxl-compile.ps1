@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.44 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.45 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1485,8 +1485,107 @@ foreach ($area in $def.areas) {
 	}
 }
 
+# 7d-ter. Колонтитулы. Шесть слотов: left/center/right у верхнего и нижнего. Слот устроен
+# как ячейка — ссылка на формат плюс текст, — а формат несёт то, что в диалоге задаётся на весь
+# колонтитул: шрифт, вертикальное выравнивание, признак вывода (<height> 1/-1) и страницу,
+# с которой колонтитул печатается (<width>).
+$script:headerSlots = @('left', 'center', 'right')
+
+function Get-HeaderFormatIndex {
+	param($hf)
+	if ($null -eq $hf) { return 0 }
+	$props = @{}
+	if ($hf.font -and $fontMap.Contains("$($hf.font)")) { $props['font'] = $fontMap["$($hf.font)"] }
+	# Признак вывода и стартовая страница осмысленны только вместе: платформа пишет их парой.
+	$props['height'] = if ($hf.show -eq $false -or "$($hf.show)" -eq 'false') { -1 } else { 1 }
+	$props['width'] = if ($hf.startPage) { [int]$hf.startPage } else { 1 }
+	if ($hf.verticalAlignment) { $props['verticalAlignment'] = "$($hf.verticalAlignment)" }
+	return Register-Format $props
+}
+
+function Emit-HeaderSlot {
+	param([string]$tag, $value, [int]$fmtIdx)
+	if ($null -eq $value) { return }
+	# Форматированная строка платформы — тот же текст, только разметка живёт внутри содержимого
+	# (<b>жирный</>, <fontsize 12>…), поэтому возим её как есть и различаем именем тега.
+	$formatted = $false
+	$text = $value
+	if ($value -is [System.Management.Automation.PSCustomObject] -and $null -ne $value.formatted) {
+		$formatted = $true
+		$text = $value.formatted
+	}
+	$pairs = @()
+	if ($text -is [System.Collections.IDictionary]) {
+		foreach ($k in $text.Keys) { $pairs += @{ Lang = "$k"; Text = "$($text[$k])" } }
+	} elseif ($text -is [System.Management.Automation.PSCustomObject]) {
+		foreach ($pr in $text.PSObject.Properties) { $pairs += @{ Lang = $pr.Name; Text = "$($pr.Value)" } }
+	} else {
+		foreach ($l in $textLanguages) { $pairs += @{ Lang = $l; Text = "$text" } }
+	}
+	$textTag = if ($formatted) { 'tfl' } else { 'tl' }
+	X "`t<$tag>"
+	X "`t`t<f>$fmtIdx</f>"
+	if ($pairs.Count -eq 0) {
+		X "`t`t<$textTag/>"
+	} else {
+		X "`t`t<$textTag>"
+		foreach ($pr in $pairs) {
+			X "`t`t`t<v8:item>"
+			X "`t`t`t`t<v8:lang>$($pr.Lang)</v8:lang>"
+			# Перенос строки внутри колонтитула платформа хранит голым LF, тогда как весь файл
+			# идёт CRLF. Пишем содержимое одной строкой вывода, чтобы перенос не переписался.
+			X "`t`t`t`t<v8:content>$(Esc-XmlText $pr.Text)</v8:content>"
+			X "`t`t`t</v8:item>"
+		}
+		X "`t`t</$textTag>"
+	}
+	X "`t</$tag>"
+}
+
+# Параметры печати. Имя ключа совпадает с именем тега в выгрузке, как у свойств стиля.
+# Порядок снят с корпуса (2350 макетов): платформа пишет теги строго в этой последовательности.
+function Get-PrintSettingsOrder {
+	return @(
+	'pageOrientation', 'scale', 'collate', 'copies', 'perPage',
+	'topMargin', 'leftMargin', 'bottomMargin', 'rightMargin', 'headerSize', 'footerSize',
+	'fitToPage', 'blackAndWhite', 'printerName', 'paper', 'paperSource',
+	'pageWidth', 'pageHeight', 'duplexType', 'pagePlacementAlternation', 'firstPageNumber'
+	)
+}
+
+function Emit-PrintSettings {
+	param($ps)
+	if ($null -eq $ps) { return }
+	$order = Get-PrintSettingsOrder
+	$known = @{}
+	foreach ($k in $order) { $known[$k] = $true }
+	foreach ($pr in $ps.PSObject.Properties) {
+		if (-not $known.ContainsKey($pr.Name)) {
+			[Console]::Error.WriteLine("printSettings: unknown key `"$($pr.Name)`". Allowed: $($order -join ', ')")
+			exit 1
+		}
+	}
+	$emitted = @()
+	foreach ($tag in $order) {
+		$v = $ps.$tag
+		if ($null -eq $v) { continue }
+		if ($v -is [bool]) { $v = if ($v) { 'true' } else { 'false' } }
+		$emitted += "`t`t<$tag>$(Esc-XmlText "$v")</$tag>"
+	}
+	if ($emitted.Count -eq 0) { return }
+	X "`t<printSettings>"
+	foreach ($line in $emitted) { X $line }
+	X "`t</printSettings>"
+}
+
 # Формат по умолчанию — последняя запись палитры (см. выше).
 $defaultFormatIndex = Register-Format @{ width = $defaultWidth }
+
+# Формат колонтитула заводим здесь же: он идёт в палитре следом за умолчанием, и он
+# обязан попасть в реестр ДО отсева неиспользуемых шрифтов — иначе шрифт колонтитула,
+# на который больше никто не ссылается, будет выброшен.
+$headerFmt = Get-HeaderFormatIndex $def.header
+$footerFmt = Get-HeaderFormatIndex $def.footer
 
 # Шрифт, на который не ссылается ни один формат, платформа в палитру не кладёт: у макета
 # без оформления элемента <font> нет вовсе. Мы же всегда заводили Arial 10 по умолчанию.
@@ -2037,6 +2136,14 @@ if ($def.namedAreas) {
 	}
 }
 
+# 7d-ter. Колонтитулы: шесть слотов идут после строк и перед скалярными свойствами документа.
+foreach ($slot in $script:headerSlots) {
+	if ($def.header) { Emit-HeaderSlot "$($slot)Header" $def.header.$slot $headerFmt }
+}
+foreach ($slot in $script:headerSlots) {
+	if ($def.footer) { Emit-HeaderSlot "$($slot)Footer" $def.footer.$slot $footerFmt }
+}
+
 # 7e-bis. Группировки строк и колонок. Платформа хранит их плоским списком диапазонов;
 # вложенность выражена вхождением одного диапазона в другой, а частичных пересечений не
 # бывает вовсе (корпус: 40 620 886 пар непересекающихся, 599 958 вложенных, 0 частичных).
@@ -2155,6 +2262,8 @@ if ($rowGroups.Count -gt 0) { X "`t<vgLevels>$(Get-GroupLevels $rowGroups)</vgLe
 X "`t<vgRows>$totalRowCount</vgRows>"
 Emit-Groups 'vg' $rowGroups
 Emit-Groups 'hg' $colGroups
+
+Emit-PrintSettings $def.printSettings
 
 # 7f. Merges
 foreach ($m in $merges) {

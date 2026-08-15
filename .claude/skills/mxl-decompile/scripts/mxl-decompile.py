@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.24 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.25 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -430,6 +430,67 @@ def main():
         if idx <= 0 or idx > len(raw_formats):
             return None
         return raw_formats[idx - 1]
+
+    # --- 4a. Колонтитулы и параметры печати ---
+    # Слот колонтитула устроен как ячейка: ссылка на формат плюс текст. Признак вывода и стартовую
+    # страницу читаем только у записи, где есть <height>: палитра дедуплицирована, и колонтитул без
+    # своих настроек ссылается на чужую запись, где <width> — ширина колонки, а не номер страницы.
+    def read_header_part(suffix):
+        slots = OrderedDict()
+        fmt_idx = None
+        for slot in ('left', 'center', 'right'):
+            el = find(root, f'd:{slot}{suffix}')
+            if el is None:
+                continue
+            if fmt_idx is None:
+                fmt_idx = int_of(find(el, 'd:f'))
+            for text_tag in ('tl', 'tfl'):
+                t = find(el, 'd:' + text_tag)
+                if t is None:
+                    continue
+                by_lang = OrderedDict()
+                for it in findall(t, 'v8:item'):
+                    lang = text_of(find(it, 'v8:lang')) or ''
+                    by_lang[lang] = text_of(find(it, 'v8:content')) or ''
+                value = get_dsl_text(by_lang)
+                slots[slot] = OrderedDict([('formatted', value)]) if text_tag == 'tfl' else value
+                break
+        if not slots and fmt_idx is None:
+            return None
+        fmt = get_format(fmt_idx) if fmt_idx else None
+        if not fmt:
+            return slots
+        head = OrderedDict()
+        if fmt["FontIdx"] >= 0:
+            head["font"] = font_names.get(fmt["FontIdx"], "default")
+        props = fmt["Props"]
+        if 'height' in props:
+            if str(props['height']) == '-1':
+                head["show"] = False
+            width = int(props.get('width', 1))
+            if width != 1:
+                head["startPage"] = width
+        if 'verticalAlignment' in props:
+            head["verticalAlignment"] = props['verticalAlignment']
+        head.update(slots)
+        return head
+
+    print_settings = None
+    ps_node = find(root, 'd:printSettings')
+    if ps_node is not None:
+        print_settings = OrderedDict()
+        for c in ps_node:
+            name = etree.QName(c).localname
+            v = (c.text or '').strip()
+            if v == 'true':
+                print_settings[name] = True
+            elif v == 'false':
+                print_settings[name] = False
+            else:
+                try:
+                    print_settings[name] = int(v)
+                except ValueError:
+                    print_settings[name] = v
 
     # --- 4b. Группировки строк и колонок ---
     # Платформа хранит их плоским списком диапазонов, родитель раньше детей. Число уровней
@@ -1471,6 +1532,17 @@ def main():
         result["rowGroups"] = row_groups
     if col_groups:
         result["columnGroups"] = col_groups
+
+    # Читаем здесь, а не в разделе 4a: тексту колонтитула нужен свод языков макета, который
+    # становится известен только после разбора строк.
+    header_part = read_header_part('Header')
+    footer_part = read_header_part('Footer')
+    if header_part:
+        result["header"] = header_part
+    if footer_part:
+        result["footer"] = footer_part
+    if print_settings:
+        result["printSettings"] = print_settings
 
     result["areas"] = dsl_areas
 

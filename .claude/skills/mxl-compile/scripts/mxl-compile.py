@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.44 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.45 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -1462,8 +1462,91 @@ def main():
                     if note:
                         register_note_format(note)
 
+    # Колонтитулы. Шесть слотов: left/center/right у верхнего и нижнего. Слот устроен как
+    # ячейка — ссылка на формат плюс текст, — а формат несёт то, что в диалоге задаётся на весь
+    # колонтитул: шрифт, вертикальное выравнивание, признак вывода (<height> 1/-1) и страницу,
+    # с которой колонтитул печатается (<width>).
+    def header_format_index(hf):
+        if not hf:
+            return 0
+        props = {}
+        if hf.get('font') and str(hf['font']) in font_map:
+            props['font'] = font_map[str(hf['font'])]
+        # Признак вывода и стартовая страница осмысленны только вместе: платформа пишет их парой.
+        props['height'] = -1 if (hf.get('show') is False or str(hf.get('show')).lower() == 'false') else 1
+        props['width'] = int(hf['startPage']) if hf.get('startPage') else 1
+        if hf.get('verticalAlignment'):
+            props['verticalAlignment'] = str(hf['verticalAlignment'])
+        return register_format(props)
+
+    def emit_header_slot(lines, tag, value, fmt_idx):
+        if value is None:
+            return
+        # Форматированная строка платформы — тот же текст, только разметка живёт внутри
+        # содержимого (<b>жирный</>, <fontsize 12>…), поэтому возим её как есть и различаем
+        # именем тега.
+        formatted = isinstance(value, dict) and value.get('formatted') is not None
+        text = value['formatted'] if formatted else value
+        if isinstance(text, dict):
+            pairs = [(str(k), str(v)) for k, v in text.items()]
+        else:
+            pairs = [(lang, str(text)) for lang in text_languages]
+        text_tag = 'tfl' if formatted else 'tl'
+        lines.append(f'\t<{tag}>')
+        lines.append(f'\t\t<f>{fmt_idx}</f>')
+        if not pairs:
+            lines.append(f'\t\t<{text_tag}/>')
+        else:
+            lines.append(f'\t\t<{text_tag}>')
+            for lang, content in pairs:
+                lines.append('\t\t\t<v8:item>')
+                lines.append(f'\t\t\t\t<v8:lang>{lang}</v8:lang>')
+                # Перенос строки внутри колонтитула платформа хранит голым LF, тогда как весь
+                # файл идёт CRLF. Содержимое кладём одним элементом списка, чтобы перенос
+                # не переписался при склейке строк документа.
+                lines.append(f'\t\t\t\t<v8:content>{esc_xml_text(content)}</v8:content>')
+                lines.append('\t\t\t</v8:item>')
+            lines.append(f'\t\t</{text_tag}>')
+        lines.append(f'\t</{tag}>')
+
+    # Параметры печати. Имя ключа совпадает с именем тега в выгрузке, как у свойств стиля.
+    # Порядок снят с корпуса (2350 макетов): платформа пишет теги строго в этой последовательности.
+    def print_settings_order():
+        return ('pageOrientation', 'scale', 'collate', 'copies', 'perPage',
+                'topMargin', 'leftMargin', 'bottomMargin', 'rightMargin', 'headerSize', 'footerSize',
+                'fitToPage', 'blackAndWhite', 'printerName', 'paper', 'paperSource',
+                'pageWidth', 'pageHeight', 'duplexType', 'pagePlacementAlternation', 'firstPageNumber')
+
+    def emit_print_settings(lines, ps):
+        if not ps:
+            return
+        order = print_settings_order()
+        for key in ps:
+            if key not in order:
+                print(f'printSettings: unknown key "{key}". Allowed: {", ".join(order)}', file=sys.stderr)
+                sys.exit(1)
+        emitted = []
+        for tag in order:
+            v = ps.get(tag)
+            if v is None:
+                continue
+            if isinstance(v, bool):
+                v = 'true' if v else 'false'
+            emitted.append(f'\t\t<{tag}>{esc_xml_text(str(v))}</{tag}>')
+        if not emitted:
+            return
+        lines.append('\t<printSettings>')
+        lines.extend(emitted)
+        lines.append('\t</printSettings>')
+
     # Формат по умолчанию — последняя запись палитры (см. выше).
     default_format_index = register_format({'width': default_width})
+
+    # Формат колонтитула заводим здесь же: он идёт в палитре следом за умолчанием, и он
+    # обязан попасть в реестр ДО отсева неиспользуемых шрифтов — иначе шрифт колонтитула,
+    # на который больше никто не ссылается, будет выброшен.
+    header_fmt = header_format_index(defn.get('header'))
+    footer_fmt = header_format_index(defn.get('footer'))
 
     # Шрифт, на который не ссылается ни один формат, платформа в палитру не кладёт: у макета
     # без оформления элемента <font> нет вовсе. Мы же всегда заводили Arial 10 по умолчанию.
@@ -1953,6 +2036,14 @@ def main():
             'EndCol': cols[1] - 1 if cols else -1,
         })
 
+    # 7d-ter. Колонтитулы: шесть слотов идут после строк и перед скалярными свойствами документа.
+    for slot in ('left', 'center', 'right'):
+        if defn.get('header'):
+            emit_header_slot(lines, f'{slot}Header', defn['header'].get(slot), header_fmt)
+    for slot in ('left', 'center', 'right'):
+        if defn.get('footer'):
+            emit_header_slot(lines, f'{slot}Footer', defn['footer'].get(slot), footer_fmt)
+
     # 7e-bis. Группировки строк и колонок. Платформа хранит их плоским списком диапазонов;
     # вложенность выражена вхождением одного диапазона в другой, а частичных пересечений не
     # бывает вовсе (корпус: 40 620 886 пар непересекающихся, 599 958 вложенных, 0 частичных).
@@ -2062,6 +2153,8 @@ def main():
     lines.append(f'\t<vgRows>{total_row_count}</vgRows>')
     emit_groups(lines, 'vg', row_groups)
     emit_groups(lines, 'hg', col_groups)
+
+    emit_print_settings(lines, defn.get('printSettings'))
 
     # 7f. Merges
     for m in merges:
