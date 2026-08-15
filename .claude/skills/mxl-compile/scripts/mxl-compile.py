@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.48 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.49 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -1567,7 +1567,7 @@ def main():
             entry['PixelX'] = str(int(pic_def['transparentPixel'].get('x', 0)))
             entry['PixelY'] = str(int(pic_def['transparentPixel'].get('y', 0)))
         if not entry['Ref'] and not entry['Data'] and (entry['Transparent'] or entry['PixelX']):
-            print(f"pictures[{pic_name}]: 'transparent' and 'transparentPixel' require 'data'", file=sys.stderr)
+            print(f"pictures[{pic_name}]: 'transparent' and 'transparentPixel' require 'ref' or 'data'", file=sys.stderr)
             sys.exit(1)
         picture_entries.append(entry)
         picture_names[pic_name] = len(picture_entries)
@@ -2424,14 +2424,16 @@ def main():
     for pic_i, pic in enumerate(picture_entries):
         lines.append('\t<picture>')
         lines.append(f'\t\t<index>{pic_i}</index>')
+        # Прозрачность записывается перед ссылкой и не зависит от того, где лежит картинка:
+        # в БП 8.3.27 таких ссылочных записей 67.
+        attr = f' t="{pic["Transparent"]}"' if pic['Transparent'] else ''
+        if pic['PixelX']:
+            attr += f' tx="{pic["PixelX"]}" ty="{pic["PixelY"]}"'
         if pic['Ref']:
-            lines.append(f'\t\t<picture ref="{esc_xml(pic["Ref"])}"/>')
+            lines.append(f'\t\t<picture{attr} ref="{esc_xml(pic["Ref"])}"/>')
         elif not pic['Data']:
             lines.append('\t\t<picture/>')
         else:
-            attr = f' t="{pic["Transparent"]}"' if pic['Transparent'] else ''
-            if pic['PixelX']:
-                attr += f' tx="{pic["PixelX"]}" ty="{pic["PixelY"]}"'
             # Данные платформа переносит по строкам тем же переводом, что и весь файл, —
             # в отличие от блоба настроек элемента управления, где перенос голый LF.
             parts = str(pic['Data']).replace('\r\n', '\n').split('\n')

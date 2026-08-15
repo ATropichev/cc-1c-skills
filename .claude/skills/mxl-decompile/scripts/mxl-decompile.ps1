@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.27 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.28 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -283,14 +283,16 @@ foreach ($picNode in $root.SelectNodes("d:picture", $ns)) {
 		# System.Xml переводы строк в тексте не нормализует, а lxml нормализует: без этой
 		# замены порты дали бы разный JSON на одном и том же файле.
 		$entry["data"] = ($inner.InnerText -replace "`r`n", "`n").Trim()
-		if ($inner.HasAttribute('t')) { $entry["transparent"] = ($inner.GetAttribute('t') -ceq 'true') }
-		# Пиксель прозрачного цвета: координата внутри самой картинки (проверено —
-		# это не её размеры). В корпусе встречается без атрибута t.
-		if ($inner.HasAttribute('tx')) {
-			$entry["transparentPixel"] = [ordered]@{
-				x = [int]$inner.GetAttribute('tx')
-				y = [int]$inner.GetAttribute('ty')
-			}
+	}
+	# Прозрачность живёт и у ссылочной картинки (в БП 8.3.27 таких записей 67), поэтому
+	# читаем её вне ветвления. Пиксель прозрачного цвета — координата внутри картинки.
+	if ($entry.Count -gt 0 -and $inner.HasAttribute('t')) {
+		$entry["transparent"] = ($inner.GetAttribute('t') -ceq 'true')
+	}
+	if ($entry.Count -gt 0 -and $inner.HasAttribute('tx')) {
+		$entry["transparentPixel"] = [ordered]@{
+			x = [int]$inner.GetAttribute('tx')
+			y = [int]$inner.GetAttribute('ty')
 		}
 	}
 	$picturesOut[$name] = $entry

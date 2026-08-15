@@ -4,9 +4,9 @@
     "columns": 2,
     "pictures": {
       "пусто": {},
+      "значок": { "ref": "v8ui:Стоп48", "transparent": false },
       "точка": {
         "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
-        "transparent": true,
         "transparentPixel": { "x": 3, "y": 5 }
       }
     },

@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.27 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.28 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -446,13 +446,13 @@ def main():
             entry["ref"] = inner.get("ref")
         elif (inner.text or "").strip():
             entry["data"] = (inner.text or "").strip()
-            if inner.get("t") is not None:
-                entry["transparent"] = inner.get("t") == "true"
-            # Пиксель прозрачного цвета: координата внутри самой картинки (проверено —
-            # это не её размеры). В корпусе встречается без атрибута t.
-            if inner.get("tx") is not None:
-                entry["transparentPixel"] = OrderedDict([("x", int(inner.get("tx"))),
-                                                         ("y", int(inner.get("ty") or 0))])
+        # Прозрачность живёт и у ссылочной картинки (в БП 8.3.27 таких записей 67), поэтому
+        # читаем её вне ветвления. Пиксель прозрачного цвета — координата внутри картинки.
+        if entry and inner.get("t") is not None:
+            entry["transparent"] = inner.get("t") == "true"
+        if entry and inner.get("tx") is not None:
+            entry["transparentPixel"] = OrderedDict([("x", int(inner.get("tx"))),
+                                                     ("y", int(inner.get("ty") or 0))])
         pictures_out[name] = entry
         picture_key[pic_i] = name
 

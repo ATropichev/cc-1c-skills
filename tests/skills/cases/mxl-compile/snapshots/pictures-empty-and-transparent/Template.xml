@@ -43,7 +43,7 @@
 		<autoSize>false</autoSize>
 		<pictureSize>Stretch</pictureSize>
 		<zOrder>1</zOrder>
-		<pictureIndex>2</pictureIndex>
+		<pictureIndex>3</pictureIndex>
 	</drawing>
 	<templateMode>true</templateMode>
 	<defaultFormatIndex>1</defaultFormatIndex>
@@ -58,6 +58,10 @@
 	</picture>
 	<picture>
 		<index>1</index>
-		<picture t="true" tx="3" ty="5">iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==</picture>
+		<picture t="false" ref="v8ui:Стоп48"/>
+	</picture>
+	<picture>
+		<index>2</index>
+		<picture tx="3" ty="5">iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==</picture>
 	</picture>
 </document>

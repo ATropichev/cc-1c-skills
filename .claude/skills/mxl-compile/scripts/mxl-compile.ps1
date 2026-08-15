@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.48 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.49 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1612,7 +1612,7 @@ if ($def.pictures) {
 		}
 		if (-not $entry.Ref -and -not $entry.Data -and
 			($entry.Transparent -or $entry.PixelX)) {
-			[Console]::Error.WriteLine("pictures[$($pr.Name)]: 'transparent' and 'transparentPixel' require 'data'")
+			[Console]::Error.WriteLine("pictures[$($pr.Name)]: 'transparent' and 'transparentPixel' require 'ref' or 'data'")
 			exit 1
 		}
 		$pictureEntries += $entry
@@ -2572,13 +2572,15 @@ $picIdx = 0
 foreach ($pic in $pictureEntries) {
 	X "`t<picture>"
 	X "`t`t<index>$picIdx</index>"
+	# Прозрачность записывается перед ссылкой и не зависит от того, где лежит картинка:
+	# в БП 8.3.27 таких ссылочных записей 67.
+	$attr = if ($pic.Transparent) { " t=`"$($pic.Transparent)`"" } else { '' }
+	if ($pic.PixelX) { $attr += " tx=`"$($pic.PixelX)`" ty=`"$($pic.PixelY)`"" }
 	if ($pic.Ref) {
-		X "`t`t<picture ref=`"$(Esc-Xml $pic.Ref)`"/>"
+		X "`t`t<picture$attr ref=`"$(Esc-Xml $pic.Ref)`"/>"
 	} elseif (-not $pic.Data) {
 		X "`t`t<picture/>"
 	} else {
-		$attr = if ($pic.Transparent) { " t=`"$($pic.Transparent)`"" } else { '' }
-		if ($pic.PixelX) { $attr += " tx=`"$($pic.PixelX)`" ty=`"$($pic.PixelY)`"" }
 		# Данные платформа переносит по строкам тем же переводом, что и весь файл, —
 		# в отличие от блоба настроек элемента управления, где перенос голый LF.
 		$parts = @("$($pic.Data)" -split "`r?`n")
