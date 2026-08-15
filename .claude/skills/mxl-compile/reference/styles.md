@@ -89,7 +89,9 @@
 | `"Solid"` | Стиль линии, ширина 1 |
 | `{ "style": "Solid", "width": 2 }` | Стиль и ширина |
 
-Стили линии: `Solid`, `None`, `Dotted`, `ThinDashed`, `LargeDashed`, `ThickDashed`, `Double`.
+Стили линии: `None`, `Solid`, `Dotted`, `Dashed`, `DashDotted`, `DashDottedDotted`,
+`ThinDashed`, `LargeDashed`, `ThickDashed`, `Double`. Конфигуратор предлагает разные наборы
+в разных местах — у рамки ячейки одни, у линии рисунка другие, — но палитра одна на документ.
 
 Задавать стороны по отдельности можно всегда: если все четыре совпали, компилятор сам свернёт
 их в один `border` — так это хранит платформа.

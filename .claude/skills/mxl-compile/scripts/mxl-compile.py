@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.46 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.47 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -417,8 +417,11 @@ def style_key_synonyms():
 
 
 def line_styles():
-    """Стили линии, встречающиеся в палитрах корпуса."""
-    return ['Solid', 'None', 'Dotted', 'ThinDashed', 'LargeDashed', 'ThickDashed', 'Double']
+    """Палитра линий одна на документ, а Конфигуратор предлагает РАЗНЫЕ наборы: у рамки
+    ячейки свой (сплошная, точечная, штриховые, двойная), у линии рисунка свой
+    (пунктирная, пунктирно-точечная, точечно-пунктирно-точечная). Домен — объединение:
+    перечень, снятый только с корпуса, отвергал стили рисунков."""
+    return ['None', 'Solid', 'Dashed', 'Dotted', 'DashDotted', 'DashDottedDotted', 'ThinDashed', 'LargeDashed', 'ThickDashed', 'Double']
 
 
 def color_namespace(val):

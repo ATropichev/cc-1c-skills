@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.46 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.47 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -302,8 +302,11 @@ function Register-Line {
 }
 
 function Get-LineStyles {
-	# Стили линии, встречающиеся в палитрах корпуса.
-	return @('Solid', 'None', 'Dotted', 'ThinDashed', 'LargeDashed', 'ThickDashed', 'Double')
+	# Палитра линий одна на документ, а Конфигуратор предлагает РАЗНЫЕ наборы: у рамки ячейки
+	# свой (сплошная, точечная, штриховые, двойная), у линии рисунка свой (пунктирная,
+	# пунктирно-точечная, точечно-пунктирно-точечная). Домен — объединение: перечень, снятый
+	# только с корпуса, отвергал стили рисунков.
+	return @('None', 'Solid', 'Dashed', 'Dotted', 'DashDotted', 'DashDottedDotted', 'ThinDashed', 'LargeDashed', 'ThickDashed', 'Double')
 }
 
 # --- 4. Parse column width specs ---
@@ -1048,7 +1051,8 @@ function Get-FormatEnumValues {
 		'detailsUse' = @('Cell', 'Row', 'WithoutProcessing')
 		'fillType' = @('Parameter', 'Template', 'Text')
 		'horizontalAlignment' = @('Auto', 'Center', 'Justify', 'Left', 'Right')
-		'pattern' = @('Pattern7', 'Pattern10', 'Pattern12', 'Pattern13', 'Pattern14', 'Pattern16', 'Solid', 'WithoutPattern')
+		# Узоры платформа нумерует подряд, без семантических имён: «Узор 1» … «Узор 17».
+		'pattern' = @('WithoutPattern', 'Solid', 'Pattern1', 'Pattern2', 'Pattern3', 'Pattern4', 'Pattern5', 'Pattern6', 'Pattern7', 'Pattern8', 'Pattern9', 'Pattern10', 'Pattern11', 'Pattern12', 'Pattern13', 'Pattern14', 'Pattern15', 'Pattern16', 'Pattern17')
 		'picHorizontalAlignment' = @('Auto', 'Center', 'Left', 'Right')
 		'picVerticalAlignment' = @('Bottom', 'Center', 'Top')
 		'pictureSizeMode' = @('AutoSize', 'Proportionally', 'RealSize')

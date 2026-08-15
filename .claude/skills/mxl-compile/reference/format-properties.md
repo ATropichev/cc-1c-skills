@@ -34,7 +34,7 @@
 | Ключ | Тип | Значение |
 |------|-----|----------|
 | `backColor` | цвет | Цвет фона |
-| `pattern` | перечисление | `Solid`, `WithoutPattern`, `Pattern7`, `Pattern10`, `Pattern12`, `Pattern13`, `Pattern14`, `Pattern16` |
+| `pattern` | перечисление | `WithoutPattern`, `Solid`, `Pattern1`…`Pattern17` (в Конфигураторе «Узор 1» … «Узор 17») |
 | `patternColor` | цвет | Цвет узора |
 | `border` | линия | Все четыре стороны |
 | `leftBorder`, `topBorder`, `rightBorder`, `bottomBorder` | линия | Отдельная сторона |
