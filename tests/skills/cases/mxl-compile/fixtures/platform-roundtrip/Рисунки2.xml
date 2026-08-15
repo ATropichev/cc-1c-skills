@@ -213,6 +213,23 @@
 		<pictureSize>Stretch</pictureSize>
 		<zOrder>11</zOrder>
 	</drawing>
+	<drawing>
+		<drawingType>Picture</drawingType>
+		<id>12</id>
+		<formatIndex>0</formatIndex>
+		<beginRow>26</beginRow>
+		<beginRowOffset>0</beginRowOffset>
+		<endRow>27</endRow>
+		<endRowOffset>36</endRowOffset>
+		<beginColumn>2</beginColumn>
+		<beginColumnOffset>0</beginColumnOffset>
+		<endColumn>2</endColumn>
+		<endColumnOffset>139</endColumnOffset>
+		<autoSize>false</autoSize>
+		<pictureSize>RealSize</pictureSize>
+		<zOrder>12</zOrder>
+		<pictureIndex>3</pictureIndex>
+	</drawing>
 	<templateMode>true</templateMode>
 	<defaultFormatIndex>8</defaultFormatIndex>
 	<height>31</height>
@@ -280,5 +297,18 @@ XmZgPIdyc6gAj7ZA0T5CBsyuhqDustqFypaoZPjIwZfxCNRP0aChhzWcrUS2fOe4
 jIGLGp2zcPefXf1FVPI5GqhCLKfPnm/jMWAIezcVXQzqShQKZlpre6ISffseDQmq
 X4/PVKhMiAm7iOi/9zZUtsTHNXkYt701rubgu4WMNEa6Ey9JXzzRCDq1aEIWw56R
 eChaPMsURcc41UkqlySJS5IA8AW5c2KJOTY6eAAAAABJRU5ErkJggg==</picture>
+	</picture>
+	<picture>
+		<index>2</index>
+		<picture tx="24" ty="29">iVBORw0KGgoAAAANSUhEUgAAABkAAAAeCAYAAADZ7LXbAAABjElEQVRIie3UoU8C
+URzA8S/uCBogSDBggADh3LzABakWA8W/QAOOCdNRLBT/BSbzAmeQYLYQLEQlPAKM
+YxMDBthwYwQJlGM7g07GPHfIvE03funt7X6/z37vd+95LMuycDlW3AaWyBJZIi4i
+QsuR04SbSB3RGDJsCOruIQpyBIjIKL+F1LUsqUyOa2M8ZZQgQWVKjA2ds1SKrG4s
+hvjW15AmQ6qFc/QPyB9SUUP+d0Bo5Ao1Rkj4NgO2NTzzPvXt+h21SgsSB8Sey1TZ
+IRGqUSqDvBtjT4l+mzs38hmGTqZQY4JE7OSSoy3nlB8NftwVCGTkVZB8ChEERnfs
+mOfYifnywI1+i+iN8G4nyadVeO3QIUzYDw8XWUotE19QZf/4kLjNWBw7qWglqr0R
+XvkDAGiVKbfel/HTPEnZy6hXpXRVsS9iOcXg0bpv9me2msW0lS42Z/b6zXvrcWBf
+QnLqhED0yxE0niZMaADTqW9sxdmwLSAWufFtTBMwTdpzfa8u8AsvEH/3qV8i/x95
+A0x239DYKjuDAAAAAElFTkSuQmCC</picture>
 	</picture>
 </document>
