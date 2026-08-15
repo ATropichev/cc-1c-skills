@@ -7,7 +7,7 @@
       "значок": { "ref": "v8ui:Стоп48", "transparent": false },
       "точка": {
         "data": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
-        "transparentPixel": { "x": 3, "y": 5 }
+        "transparent": { "x": 3, "y": 5 }
       }
     },
     "areas": [{ "rows": [["Бланк"]] }],

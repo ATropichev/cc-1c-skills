@@ -1,0 +1,19 @@
+{
+  "name": "Картинка в ячейке, подставляемая параметром",
+  "input": {
+    "columns": 3,
+    "pictures": { "статус": { "ref": "v8ui:Стоп48" } },
+    "styles": {
+      "значок": { "picIndex": 1, "picHorizontalAlignment": "Center", "picVerticalAlignment": "Center", "textPosition": "Bottom" }
+    },
+    "areas": [{
+      "rows": [
+        { "cells": [
+          { "col": 1, "style": "значок", "text": "удалить", "pictureParameter": "Удалить" },
+          { "col": 2, "param": "ПорядковыйНомер", "detail": "Строка", "pictureParameter": "Пиктограмма" }
+        ]}
+      ]
+    }]
+  },
+  "params": { "outputPath": "Template.xml" }
+}

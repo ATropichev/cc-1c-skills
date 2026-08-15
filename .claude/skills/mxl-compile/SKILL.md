@@ -67,7 +67,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
   header: { left, center, right, font, verticalAlignment, show, startPage }, footer: { … },
   printSettings: { pageOrientation, topMargin, …, fitToPage, firstPageNumber },
   columnSets: { name: { columns, columnWidths, columnStyles } },
-  pictures: { name: { ref } | { data, transparent, transparentPixel } | {} },
+  pictures: { name: { ref } | { data } | {} + transparent: false | { x, y } },
   drawings: [{ type, begin: { row, col, dy, dx }, end: { … }, picture, pictureSize,
                text, name, detail, style, line, sides, id, zOrder }]
 }

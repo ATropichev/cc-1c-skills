@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.49 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.50 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -1299,7 +1299,7 @@ def main():
         ключей есть ключ схемы ячейки, во втором ключи — идентификаторы языков. Пересечений
         нет: в корпусе это ru, en, ru1, Русский."""
         cell_keys = ('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template',
-                     'valueType', 'controlType', 'value', 'control')
+                     'valueType', 'controlType', 'value', 'control', 'note', 'pictureParameter')
         return any(k in el for k in cell_keys)
 
     def expand_shorthand_row(row, area_name, row_idx, open_by_col, max_cols):
@@ -1560,14 +1560,21 @@ def main():
             entry['Ref'] = str(pic_def['ref'])
         if pic_def.get('data') is not None:
             entry['Data'] = str(pic_def['data'])
-        if pic_def.get('transparent') is not None:
-            entry['Transparent'] = 'true' if (pic_def['transparent'] is True
-                                              or str(pic_def['transparent']).lower() == 'true') else 'false'
-        if pic_def.get('transparentPixel') is not None:
-            entry['PixelX'] = str(int(pic_def['transparentPixel'].get('x', 0)))
-            entry['PixelY'] = str(int(pic_def['transparentPixel'].get('y', 0)))
+        # Прозрачность — одна сущность диалога, записанная двумя способами: выключенную
+        # платформа хранит атрибутом, включённую — координатами пикселя, чей цвет прозрачен.
+        # Поэтому и ключ один, а форма значения выбирает способ.
+        tr = pic_def.get('transparent')
+        if tr is not None:
+            if isinstance(tr, bool) or str(tr).lower() in ('true', 'false'):
+                entry['Transparent'] = 'true' if (tr is True or str(tr).lower() == 'true') else 'false'
+            elif isinstance(tr, dict) and 'x' in tr and 'y' in tr:
+                entry['PixelX'] = str(int(tr['x']))
+                entry['PixelY'] = str(int(tr['y']))
+            else:
+                print(f"pictures[{pic_name}]: 'transparent' is either false/true or {{ x, y }}", file=sys.stderr)
+                sys.exit(1)
         if not entry['Ref'] and not entry['Data'] and (entry['Transparent'] or entry['PixelX']):
-            print(f"pictures[{pic_name}]: 'transparent' and 'transparentPixel' require 'ref' or 'data'", file=sys.stderr)
+            print(f"pictures[{pic_name}]: 'transparent' requires 'ref' or 'data'", file=sys.stderr)
             sys.exit(1)
         picture_entries.append(entry)
         picture_names[pic_name] = len(picture_entries)
@@ -1885,6 +1892,7 @@ def main():
                         'FormatIdx': fmt_idx,
                         'Param': cell.get('param'),
                         'Detail': cell.get('detail'),
+                        'PictureParam': cell.get('pictureParameter'),
                         'Text': cell.get('text'),
                         'Template': cell.get('template'),
                         'Value': (cell_value(cell, vp.get('valueType', ''),
@@ -2014,6 +2022,13 @@ def main():
                 # Порядок тегов ячейки снят с корпуса: parameter · текст · detailParameter.
                 if cell_info['Detail']:
                     lines.append(f'\t\t\t\t\t<detailParameter>{cell_info["Detail"]}</detailParameter>')
+
+                # Третий параметр ячейки — имя параметра, которым подставляют картинку. Сама
+                # картинка при этом задаётся оформлением (picIndex), а параметр — тут, последним
+                # из параметров ячейки (21 ячейка корпуса, порядок везде такой).
+                if cell_info.get('PictureParam'):
+                    lines.append('\t\t\t\t\t<pictureParameter>'
+                                 f'{esc_xml_text(cell_info["PictureParam"])}</pictureParameter>')
 
                 # Якорь конца примечания — координаты самой ячейки, поэтому его не задают:
                 # он выводится здесь, при эмиссии.

@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.28 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.29 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -290,7 +290,7 @@ foreach ($picNode in $root.SelectNodes("d:picture", $ns)) {
 		$entry["transparent"] = ($inner.GetAttribute('t') -ceq 'true')
 	}
 	if ($entry.Count -gt 0 -and $inner.HasAttribute('tx')) {
-		$entry["transparentPixel"] = [ordered]@{
+		$entry["transparent"] = [ordered]@{
 			x = [int]$inner.GetAttribute('tx')
 			y = [int]$inner.GetAttribute('ty')
 		}
@@ -603,6 +603,12 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 			$dNode = $cContent.SelectSingleNode("d:detailParameter", $ns)
 			if ($dNode) { $detail = $dNode.InnerText }
 
+			# Имя параметра, которым подставляют картинку. Сама картинка сидит в
+			# оформлении (picIndex), поэтому этот тег живёт отдельно от неё.
+			$picParam = $null
+			$ppNode = $cContent.SelectSingleNode("d:pictureParameter", $ns)
+			if ($ppNode) { $picParam = $ppNode.InnerText }
+
 			# Значение ячейки-поля ввода. Тип значения свой, из объявленного не выводится,
 			# поэтому читаем и его.
 			$value = $null
@@ -685,6 +691,7 @@ foreach ($riNode in $root.SelectNodes("d:rowsItem", $ns)) {
 				FormatIdx = $cellFmtIdx
 				Param     = $param
 				Detail    = $detail
+				PictureParam = $picParam
 				Value     = $value
 				Control   = $control
 				Note      = $note
@@ -1337,7 +1344,7 @@ foreach ($area in $blocks) {
 			$hasValue = ($cf -and $cf.Props['containsValue'] -ceq 'true')
 			# Расшифровка сама по себе делает ячейку содержательной: в корпусе 12 653 ячейки
 			# несут только её. Без этого такая ячейка уходила в заполнители и терялась.
-			$hasContent = $cell.Param -or $cell.HasText -or $hasValue -or $cell.Detail -or $cell.Note
+			$hasContent = $cell.Param -or $cell.HasText -or $hasValue -or $cell.Detail -or $cell.Note -or $cell.PictureParam
 			$hasMerge = $mergeMap.ContainsKey("$globalRow,$($cell.Col)")
 
 			if ($hasContent -or $hasMerge) {
@@ -1455,6 +1462,7 @@ foreach ($area in $blocks) {
 			# несут её без параметра против 8 582 с ним. Пока она читалась только вместе
 			# с параметром, две трети расшифровок терялись молча.
 			if ($cell.Detail) { $dslCell["detail"] = $cell.Detail }
+			if ($cell.PictureParam) { $dslCell["pictureParameter"] = $cell.PictureParam }
 
 			if ($cell.Note) {
 				$n = $cell.Note

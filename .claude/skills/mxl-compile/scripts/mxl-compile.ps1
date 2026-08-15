@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.49 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.50 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1307,7 +1307,7 @@ function Set-CellProp {
 function Test-CellObject {
 	param($el)
 	$cellKeys = @('col', 'span', 'rowspan', 'style', 'param', 'detail', 'text', 'template',
-		'valueType', 'controlType', 'value', 'control', 'note')
+		'valueType', 'controlType', 'value', 'control', 'note', 'pictureParameter')
 	foreach ($p in $el.PSObject.Properties) {
 		if ($cellKeys -contains $p.Name) { return $true }
 	}
@@ -1603,16 +1603,23 @@ if ($def.pictures) {
 		$entry = @{ Ref = ''; Data = ''; Transparent = ''; PixelX = ''; PixelY = '' }
 		if ($pr.Value.ref) { $entry.Ref = "$($pr.Value.ref)" }
 		if ($null -ne $pr.Value.data) { $entry.Data = "$($pr.Value.data)" }
-		if ($null -ne $pr.Value.transparent) {
-			$entry.Transparent = if ($pr.Value.transparent -eq $true -or "$($pr.Value.transparent)" -eq 'true') { 'true' } else { 'false' }
+		# Прозрачность — одна сущность диалога, записанная двумя способами: выключенную
+		# платформа хранит атрибутом, включённую — координатами пикселя, чей цвет прозрачен.
+		# Поэтому и ключ один, а форма значения выбирает способ.
+		$tr = $pr.Value.transparent
+		if ($null -ne $tr) {
+			if ($tr -is [bool] -or "$tr" -ceq 'true' -or "$tr" -ceq 'false') {
+				$entry.Transparent = if ($tr -eq $true -or "$tr" -ceq 'true') { 'true' } else { 'false' }
+			} elseif ($null -ne $tr.x -and $null -ne $tr.y) {
+				$entry.PixelX = "$([int]$tr.x)"
+				$entry.PixelY = "$([int]$tr.y)"
+			} else {
+				[Console]::Error.WriteLine("pictures[$($pr.Name)]: 'transparent' is either false/true or { x, y }")
+				exit 1
+			}
 		}
-		if ($null -ne $pr.Value.transparentPixel) {
-			$entry.PixelX = "$([int]$pr.Value.transparentPixel.x)"
-			$entry.PixelY = "$([int]$pr.Value.transparentPixel.y)"
-		}
-		if (-not $entry.Ref -and -not $entry.Data -and
-			($entry.Transparent -or $entry.PixelX)) {
-			[Console]::Error.WriteLine("pictures[$($pr.Name)]: 'transparent' and 'transparentPixel' require 'ref' or 'data'")
+		if (-not $entry.Ref -and -not $entry.Data -and ($entry.Transparent -or $entry.PixelX)) {
+			[Console]::Error.WriteLine("pictures[$($pr.Name)]: 'transparent' requires 'ref' or 'data'")
 			exit 1
 		}
 		$pictureEntries += $entry
@@ -1976,8 +1983,9 @@ foreach ($area in $def.areas) {
 				$cellInfo = @{
 					Col       = $colStart - 1  # 0-based
 					FormatIdx = $fmtIdx
-					Param     = $cell.param
-					Detail    = $cell.detail
+					Param        = $cell.param
+					Detail       = $cell.detail
+					PictureParam = $cell.pictureParameter
 					Text      = $cell.text
 					Template  = $cell.template
 					Value     = $(if ($vp.Count -gt 0) { Get-CellValue $cell "$($vp['valueType'])" "area `"$areaName`", row $($localRow + 1)" } else { $null })
@@ -2116,6 +2124,13 @@ foreach ($area in $def.areas) {
 			# Порядок тегов ячейки снят с корпуса: parameter · текст · detailParameter.
 			if ($cellInfo.Detail) {
 				X "`t`t`t`t`t<detailParameter>$($cellInfo.Detail)</detailParameter>"
+			}
+
+			# Третий параметр ячейки — имя параметра, которым подставляют картинку. Сама
+			# картинка при этом задаётся оформлением (picIndex), а параметр — тут, последним
+			# из параметров ячейки (21 ячейка корпуса, порядок везде такой).
+			if ($cellInfo.PictureParam) {
+				X "`t`t`t`t`t<pictureParameter>$(Esc-XmlText $cellInfo.PictureParam)</pictureParameter>"
 			}
 
 			# Якорь конца примечания — координаты самой ячейки, поэтому его не задают:

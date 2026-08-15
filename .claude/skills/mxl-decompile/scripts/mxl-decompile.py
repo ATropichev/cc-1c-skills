@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.28 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.29 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -451,8 +451,8 @@ def main():
         if entry and inner.get("t") is not None:
             entry["transparent"] = inner.get("t") == "true"
         if entry and inner.get("tx") is not None:
-            entry["transparentPixel"] = OrderedDict([("x", int(inner.get("tx"))),
-                                                     ("y", int(inner.get("ty") or 0))])
+            entry["transparent"] = OrderedDict([("x", int(inner.get("tx"))),
+                                                ("y", int(inner.get("ty") or 0))])
         pictures_out[name] = entry
         picture_key[pic_i] = name
 
@@ -738,6 +738,13 @@ def main():
                 if d_node is not None and d_node.text:
                     detail = d_node.text
 
+                # Имя параметра, которым подставляют картинку. Сама картинка сидит в
+                # оформлении (picIndex), поэтому этот тег живёт отдельно от неё.
+                pic_param = None
+                pp_node = find(c_content, "d:pictureParameter")
+                if pp_node is not None and pp_node.text:
+                    pic_param = pp_node.text
+
                 # Значение ячейки-поля ввода. Тип значения свой, из объявленного не выводится,
                 # поэтому читаем и его: пустое значение сворачивается в "", остальные едут как есть.
                 value = None
@@ -814,6 +821,7 @@ def main():
                     "FormatIdx": cell_fmt_idx,
                     "Param": param,
                     "Detail": detail,
+                    "PictureParam": pic_param,
                     "Value": value,
                     "Control": control,
                     "Note": note,
@@ -1296,7 +1304,7 @@ def main():
                 # Расшифровка сама по себе делает ячейку содержательной: в корпусе 12 653 ячейки
                 # несут только её. Без этого такая ячейка уходила в заполнители и терялась.
                 has_content = (cell["Param"] or cell["HasText"] or has_value
-                               or cell["Detail"] or cell["Note"])
+                               or cell["Detail"] or cell["Note"] or cell["PictureParam"])
                 has_merge = f"{global_row},{cell['Col']}" in merge_map
 
                 if has_content or has_merge:
@@ -1409,6 +1417,8 @@ def main():
                 # с параметром, две трети расшифровок терялись молча.
                 if cell["Detail"]:
                     dsl_cell["detail"] = cell["Detail"]
+                if cell["PictureParam"]:
+                    dsl_cell["pictureParameter"] = cell["PictureParam"]
 
                 if cell["Note"]:
                     n = cell["Note"]

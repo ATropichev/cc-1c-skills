@@ -6,5 +6,5 @@
     "areas": [{ "rows": [["Бланк"]] }]
   },
   "params": { "outputPath": "Template.xml" },
-  "expectError": "pictures[пусто]: 'transparent' and 'transparentPixel' require 'ref' or 'data'"
+  "expectError": "pictures[пусто]: 'transparent' requires 'ref' or 'data'"
 }
