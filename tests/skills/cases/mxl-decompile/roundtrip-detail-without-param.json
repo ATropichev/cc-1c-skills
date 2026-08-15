@@ -1,0 +1,31 @@
+{
+  "name": "Roundtrip — расшифровка без параметра заполнения",
+  "preRun": [
+    {
+      "script": "mxl-compile/scripts/mxl-compile",
+      "input": {
+        "columns": 3,
+        "areas": [
+          {
+            "name": "Расшифровки",
+            "rows": [
+              { "cells": [
+                { "col": 1, "text": "Итого", "detail": "ПоказательИтога" },
+                { "col": 2, "detail": "ПустаяЯчейка" },
+                { "col": 3, "param": "Сумма", "detail": "Расшифровка" }
+              ]}
+            ]
+          }
+        ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "Template.xml" },
+      "cwd": "{workDir}"
+    }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "args_extra": ["-OutputPath", "{workDir}/back.json"],
+  "expect": {
+    "files": ["back.json"],
+    "stdoutContains": "[OK] Decompiled:"
+  }
+}

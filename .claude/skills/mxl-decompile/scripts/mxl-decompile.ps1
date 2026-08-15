@@ -1035,7 +1035,9 @@ foreach ($area in $blocks) {
 			# значение задаёт её формат. Без этого такая строка уходила бы в пустые.
 			$cf = Get-Format $cell.FormatIdx
 			$hasValue = ($cf -and $cf.Props['containsValue'] -ceq 'true')
-			$hasContent = $cell.Param -or $cell.HasText -or $hasValue
+			# Расшифровка сама по себе делает ячейку содержательной: в корпусе 12 653 ячейки
+			# несут только её. Без этого такая ячейка уходила в заполнители и терялась.
+			$hasContent = $cell.Param -or $cell.HasText -or $hasValue -or $cell.Detail
 			$hasMerge = $mergeMap.ContainsKey("$globalRow,$($cell.Col)")
 
 			if ($hasContent -or $hasMerge) {
@@ -1140,12 +1142,15 @@ foreach ($area in $blocks) {
 
 			if ($cell.Param) {
 				$dslCell["param"] = $cell.Param
-				if ($cell.Detail) { $dslCell["detail"] = $cell.Detail }
 			} elseif ($fillType -eq "Template" -and $cell.HasText) {
 				$dslCell["template"] = Get-DslText $cell.Text
 			} elseif ($cell.HasText) {
 				$dslCell["text"] = Get-DslText $cell.Text
 			}
+			# Расшифровка живёт отдельно от параметра заполнения: на корпусе 20 404 ячейки
+			# несут её без параметра против 8 582 с ним. Пока она читалась только вместе
+			# с параметром, две трети расшифровок терялись молча.
+			if ($cell.Detail) { $dslCell["detail"] = $cell.Detail }
 
 			$dslCells += $dslCell
 		}

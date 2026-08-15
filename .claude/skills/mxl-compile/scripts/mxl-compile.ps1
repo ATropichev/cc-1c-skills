@@ -1711,9 +1711,6 @@ foreach ($area in $def.areas) {
 
 			if ($cellInfo.Param) {
 				X "`t`t`t`t`t<parameter>$($cellInfo.Param)</parameter>"
-				if ($cellInfo.Detail) {
-					X "`t`t`t`t`t<detailParameter>$($cellInfo.Detail)</detailParameter>"
-				}
 			}
 
 			# Проверяем НАЛИЧИЕ ключа, а не истинность: пустая строка — это текст, платформа
@@ -1721,6 +1718,14 @@ foreach ($area in $def.areas) {
 			if ($null -ne $cellInfo.Text) { Emit-CellText $cellInfo.Text }
 
 			if ($null -ne $cellInfo.Template) { Emit-CellText $cellInfo.Template }
+
+			# Расшифровка от параметра заполнения не зависит: на корпусе 20 404 ячейки несут
+			# её БЕЗ параметра (у текста, у пустой ячейки, у поля ввода) против 8 582 с ним.
+			# Пока она стояла внутри ветки параметра, две трети расшифровок терялись молча.
+			# Порядок тегов ячейки снят с корпуса: parameter · текст · detailParameter.
+			if ($cellInfo.Detail) {
+				X "`t`t`t`t`t<detailParameter>$($cellInfo.Detail)</detailParameter>"
+			}
 
 			X "`t`t`t`t</c>"
 			X "`t`t`t</c>"

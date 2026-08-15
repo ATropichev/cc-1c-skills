@@ -1032,7 +1032,9 @@ def main():
                 # нет: значение задаёт её формат. Без этого такая строка уходила бы в пустые.
                 cf = get_format(cell["FormatIdx"])
                 has_value = bool(cf and cf["Props"].get("containsValue") == "true")
-                has_content = cell["Param"] or cell["HasText"] or has_value
+                # Расшифровка сама по себе делает ячейку содержательной: в корпусе 12 653 ячейки
+                # несут только её. Без этого такая ячейка уходила в заполнители и терялась.
+                has_content = cell["Param"] or cell["HasText"] or has_value or cell["Detail"]
                 has_merge = f"{global_row},{cell['Col']}" in merge_map
 
                 if has_content or has_merge:
@@ -1132,12 +1134,15 @@ def main():
 
                 if cell["Param"]:
                     dsl_cell["param"] = cell["Param"]
-                    if cell["Detail"]:
-                        dsl_cell["detail"] = cell["Detail"]
                 elif fill_type == "Template" and cell["HasText"]:
                     dsl_cell["template"] = get_dsl_text(cell["Text"])
                 elif cell["HasText"]:
                     dsl_cell["text"] = get_dsl_text(cell["Text"])
+                # Расшифровка живёт отдельно от параметра заполнения: на корпусе 20 404 ячейки
+                # несут её без параметра против 8 582 с ним. Пока она читалась только вместе
+                # с параметром, две трети расшифровок терялись молча.
+                if cell["Detail"]:
+                    dsl_cell["detail"] = cell["Detail"]
 
                 dsl_cells.append(dsl_cell)
 

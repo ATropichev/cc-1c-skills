@@ -1658,8 +1658,6 @@ def main():
 
                 if cell_info['Param']:
                     lines.append(f'\t\t\t\t\t<parameter>{cell_info["Param"]}</parameter>')
-                    if cell_info['Detail']:
-                        lines.append(f'\t\t\t\t\t<detailParameter>{cell_info["Detail"]}</detailParameter>')
 
                 # Проверяем НАЛИЧИЕ ключа, а не истинность: пустая строка — это текст,
                 # платформа такие ячейки пишет с пустым <tl>, и по истинности он терялся.
@@ -1668,6 +1666,13 @@ def main():
 
                 if cell_info['Template'] is not None:
                     emit_cell_text(lines, cell_info['Template'])
+
+                # Расшифровка от параметра заполнения не зависит: на корпусе 20 404 ячейки несут
+                # её БЕЗ параметра (у текста, у пустой ячейки, у поля ввода) против 8 582 с ним.
+                # Пока она стояла внутри ветки параметра, две трети расшифровок терялись молча.
+                # Порядок тегов ячейки снят с корпуса: parameter · текст · detailParameter.
+                if cell_info['Detail']:
+                    lines.append(f'\t\t\t\t\t<detailParameter>{cell_info["Detail"]}</detailParameter>')
 
                 lines.append('\t\t\t\t</c>')
                 lines.append('\t\t\t</c>')

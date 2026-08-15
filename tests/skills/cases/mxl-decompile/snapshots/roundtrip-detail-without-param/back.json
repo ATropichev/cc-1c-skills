@@ -1,0 +1,1 @@
+{ "columns": 3, "defaultWidth": 10, "fonts": {}, "styles": {}, "areas": [{ "name": "Расшифровки", "rows": [[{ "text": "Итого", "detail": "ПоказательИтога" }, { "detail": "ПустаяЯчейка" }, { "param": "Сумма", "detail": "Расшифровка" }]] }] }
