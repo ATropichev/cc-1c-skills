@@ -62,6 +62,8 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
     { col, span, rowspan, style, param, detail, text, template, valueType, controlType, value, note }
   ]}]}],
   namedAreas: [{ name, rows, cols }],
+  rowGroups: [{ rows, name, collapsed, titleLocation }],
+  columnGroups: [{ cols, name, collapsed, titleLocation }],
   columnSets: { name: { columns, columnWidths, columnStyles } }
 }
 ```
@@ -80,8 +82,9 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 - `col` — 1-based позиция колонки
 - `rowspan` — объединение строк вниз (rowStyle учитывает занятые ячейки)
 - Содержимое ячейки задаётся одним из ключей: `param` — параметр заполнения, `text` — статический текст, `template` — текст со вставками `[Параметр]`
+- `rowGroups`/`columnGroups` — группы строк и колонок (сворачиваются кнопкой на полях): плоский список диапазонов, вложенность выражена вхождением одного в другой
 - `note` — всплывающая подсказка у ячейки: строка, объект языков или `{ text, style, autoSize, box }`
-- `valueType` делает ячейку полем ввода (`"Number(15,3,nonneg)"`, `"String(10)"`, `"CatalogRef.Валюты"`, составной через ` + `); текста в такой ячейке быть не может. `value` — значение в поле, `controlType: "checkbox"` — флажок вместо поля ввода
+- `valueType` делает ячейку полем ввода (`"Number(15,3,nonneg)"`, `"String(10)"`, `"CatalogRef.Валюты"`, составной через ` + `); текста в такой ячейке быть не может, значение задаётся ключом `value`
 
 Двухуровневая шапка массивами:
 ```json

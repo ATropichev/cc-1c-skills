@@ -1,0 +1,28 @@
+{
+  "name": "Roundtrip — группировки строк и колонок",
+  "preRun": [
+    {
+      "script": "mxl-compile/scripts/mxl-compile",
+      "input": {
+        "columns": 3,
+        "areas": [
+          { "rows": [["11", "12", "13"], ["21", "22", "23"], ["31"], ["41"], ["51"]] }
+        ],
+        "rowGroups": [
+          { "rows": "2-4" },
+          { "rows": 3 },
+          { "rows": 5, "name": "Итоговая", "collapsed": true, "titleLocation": "begin" }
+        ],
+        "columnGroups": [
+          { "cols": "2-3", "name": { "#": "R2" } },
+          { "cols": 3, "titleLocation": "end" }
+        ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "Template.xml" },
+      "cwd": "{workDir}"
+    }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "args_extra": ["-OutputPath", "{workDir}/back.json"],
+  "expect": { "files": ["back.json"], "stdoutContains": "[OK] Decompiled:" }
+}

@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.23 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.24 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -264,6 +264,41 @@ function Get-Format {
 	if ($idx -le 0 -or $idx -gt $rawFormats.Count) { return $null }
 	return $rawFormats[$idx - 1]
 }
+
+# --- 4b. Группировки строк и колонок ---
+# Платформа хранит их плоским списком диапазонов, родитель раньше детей. Число уровней
+# (<vgLevels>) не читаем: оно выводится из вложенности — совпало на всех 1797 макетах.
+function Read-Groups {
+	param([string]$tag, [string]$axis)
+	$out = @()
+	foreach ($g in $root.SelectNodes("d:$tag", $ns)) {
+		$bNode = $g.SelectSingleNode("d:b", $ns)
+		$b = if ($bNode) { [int]$bNode.InnerText } else { 0 }
+		$eNode = $g.SelectSingleNode("d:e", $ns)
+		$e = if ($eNode) { [int]$eNode.InnerText } else { $b }
+		$item = [ordered]@{}
+		$item[$axis] = if ($e -eq $b) { $b + 1 } else { "$($b + 1)-$($e + 1)" }
+		$tEl = $g.SelectSingleNode("d:t", $ns)
+		if ($tEl) {
+			$byLang = [ordered]@{}
+			foreach ($it in $tEl.SelectNodes("v8:item", $ns)) {
+				$l = $it.SelectSingleNode("v8:lang", $ns)
+				$cnt = $it.SelectSingleNode("v8:content", $ns)
+				$byLang[$(if ($l) { $l.InnerText } else { '' })] = $(if ($cnt) { $cnt.InnerText } else { '' })
+			}
+			if ($byLang.Count -gt 0) { $item["name"] = $byLang }
+		}
+		$oNode = $g.SelectSingleNode("d:o", $ns)
+		if ($oNode -and $oNode.InnerText.Trim() -ceq 'false') { $item["collapsed"] = $true }
+		$gNode = $g.SelectSingleNode("d:g", $ns)
+		if ($gNode -and $gNode.InnerText) { $item["titleLocation"] = $gNode.InnerText.Trim().ToLowerInvariant() }
+		$out += $item
+	}
+	return @($out)
+}
+
+$rowGroups = Read-Groups 'vg' 'rows'
+$colGroups = Read-Groups 'hg' 'cols'
 
 # --- 5. Extract columns and default width ---
 
@@ -1434,6 +1469,13 @@ if ($extraSets.Count -gt 0) {
 	}
 	$result["columnSets"] = $setsOut
 }
+
+# Имя группировки — та же мультиязычная строка, что текст ячейки, и сворачивается так же.
+foreach ($g in ($rowGroups + $colGroups)) {
+	if ($g.Contains("name")) { $g["name"] = Get-DslText $g["name"] }
+}
+if ($rowGroups.Count -gt 0) { $result["rowGroups"] = [array]$rowGroups }
+if ($colGroups.Count -gt 0) { $result["columnGroups"] = [array]$colGroups }
 
 $result["areas"] = [array]$dslAreas
 

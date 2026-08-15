@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.43 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.44 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -1953,11 +1953,115 @@ def main():
             'EndCol': cols[1] - 1 if cols else -1,
         })
 
+    # 7e-bis. Группировки строк и колонок. Платформа хранит их плоским списком диапазонов;
+    # вложенность выражена вхождением одного диапазона в другой, а частичных пересечений не
+    # бывает вовсе (корпус: 40 620 886 пар непересекающихся, 599 958 вложенных, 0 частичных).
+    def parse_groups(key, axis):
+        out = []
+        for i, g in enumerate(defn.get(key) or [], start=1):
+            where = f'{key}[{i}]'
+            if not isinstance(g, dict):
+                print(f'{key}: element must be an object: {where}', file=sys.stderr)
+                sys.exit(1)
+            spec = g.get(axis)
+            if spec is None or str(spec).strip() == '':
+                print(f"{key}: '{axis}' is required: {where}", file=sys.stderr)
+                sys.exit(1)
+            spec = str(spec).strip()
+            m = re.match(r'^(\d+)\s*-\s*(\d+)$', spec)
+            if m:
+                frm, to = int(m.group(1)), int(m.group(2))
+            elif re.match(r'^\d+$', spec):
+                frm = to = int(spec)
+            else:
+                print(f"{key}: invalid '{axis}' value \"{spec}\": {where}", file=sys.stderr)
+                sys.exit(1)
+            if frm < 1:
+                frm = 1
+            if to < frm:
+                print(f"{key}: '{axis}' range is reversed \"{spec}\": {where}", file=sys.stderr)
+                sys.exit(1)
+            header = g.get('titleLocation')
+            header = str(header).strip().lower() if header is not None else ''
+            if header in ('', 'auto'):
+                header = ''
+            elif header == 'begin':
+                header = 'Begin'
+            elif header == 'end':
+                header = 'End'
+            else:
+                print(f"{key}: unknown 'titleLocation' value \"{g.get('titleLocation')}\""
+                      f' ({where}). Allowed: begin, end, auto', file=sys.stderr)
+                sys.exit(1)
+            out.append({
+                'B': frm - 1, 'E': to - 1,
+                'Name': g.get('name'),
+                'Collapsed': g.get('collapsed') is True or str(g.get('collapsed')).lower() == 'true',
+                'Header': header,
+            })
+        for i in range(len(out)):
+            for j in range(i + 1, len(out)):
+                a, b = out[i], out[j]
+                if a['E'] < b['B'] or b['E'] < a['B']:
+                    continue
+                if (a['B'] <= b['B'] and b['E'] <= a['E']) or (b['B'] <= a['B'] and a['E'] <= b['E']):
+                    continue
+                print(f'{key}: ranges must nest or be disjoint, got a partial overlap'
+                      f' ({a["B"] + 1}-{a["E"] + 1} and {b["B"] + 1}-{b["E"] + 1})', file=sys.stderr)
+                sys.exit(1)
+        # Порядок платформы — родитель раньше детей, по возрастанию начала.
+        out.sort(key=lambda x: (x['B'], -x['E']))
+        return out
+
+    row_groups = parse_groups('rowGroups', 'rows')
+    col_groups = parse_groups('columnGroups', 'cols')
+
+    def group_levels(groups):
+        """Глубина вложенности. На корпусе она совпала с <vgLevels> у всех 1797 макетов."""
+        depth = 0
+        for i, g in enumerate(groups):
+            d = 1
+            for j, o in enumerate(groups):
+                if j != i and o['B'] <= g['B'] and g['E'] <= o['E'] and (o['B'], o['E']) != (g['B'], g['E']):
+                    d += 1
+            depth = max(depth, d)
+        return depth
+
+    def emit_groups(lines, tag, groups):
+        for g in groups:
+            lines.append(f'\t<{tag}>')
+            lines.append(f'\t\t<b>{g["B"]}</b>')
+            if g['E'] != g['B']:
+                lines.append(f'\t\t<e>{g["E"]}</e>')
+            if g['Name'] is not None:
+                value = g['Name']
+                if isinstance(value, dict):
+                    pairs = [(str(k), str(v)) for k, v in value.items()]
+                else:
+                    pairs = [(lang, str(value)) for lang in text_languages]
+                lines.append('\t\t<t>')
+                for lang, content in pairs:
+                    lines.append('\t\t\t<v8:item>')
+                    lines.append(f'\t\t\t\t<v8:lang>{lang}</v8:lang>')
+                    lines.append(f'\t\t\t\t<v8:content>{esc_xml_text(content)}</v8:content>')
+                    lines.append('\t\t\t</v8:item>')
+                lines.append('\t\t</t>')
+            # Развёрнутая группировка тега не пишет: на корпусе <o> только со значением false.
+            if g['Collapsed']:
+                lines.append('\t\t<o>false</o>')
+            if g['Header']:
+                lines.append(f'\t\t<g>{g["Header"]}</g>')
+            lines.append(f'\t</{tag}>')
+
     # 7e. Scalar metadata
     lines.append(f'\t<templateMode>true</templateMode>')
     lines.append(f'\t<defaultFormatIndex>{default_format_index}</defaultFormatIndex>')
     lines.append(f'\t<height>{total_row_count}</height>')
+    if row_groups:
+        lines.append(f'\t<vgLevels>{group_levels(row_groups)}</vgLevels>')
     lines.append(f'\t<vgRows>{total_row_count}</vgRows>')
+    emit_groups(lines, 'vg', row_groups)
+    emit_groups(lines, 'hg', col_groups)
 
     # 7f. Merges
     for m in merges:

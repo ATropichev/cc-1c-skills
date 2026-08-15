@@ -1,0 +1,10 @@
+{
+  "name": "Ошибка: неизвестное расположение заголовка группировки",
+  "input": {
+    "columns": 2,
+    "areas": [{ "rows": [["a"], ["b"]] }],
+    "rowGroups": [{ "rows": 2, "titleLocation": "middle" }]
+  },
+  "params": { "outputPath": "Template.xml" },
+  "expectError": "rowGroups: unknown 'titleLocation' value \"middle\" (rowGroups[1]). Allowed: begin, end, auto"
+}

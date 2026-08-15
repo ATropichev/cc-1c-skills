@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-validate v1.5 — Validate 1C spreadsheet document Template.xml
+# mxl-validate v1.6 — Validate 1C spreadsheet document Template.xml
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates spreadsheet Template.xml: height, palette refs, column/row indices, areas, merges."""
 import sys, os, argparse
@@ -493,6 +493,35 @@ def main():
         r.warn('defaultFormatIndex points to a value format (cell-only property)')
     if value_format_idx:
         r.ok(f'Value cells: {len(value_format_idx)} value formats')
+
+    # --- Check 14: группировки строк и колонок ---
+    # Диапазоны группировок либо вложены, либо не пересекаются: на корпусе 40 620 886 пар
+    # непересекающихся и 599 958 вложенных, частичных пересечений нет ни одного.
+    for tag in ('vg', 'hg'):
+        ranges = []
+        for g in root.findall(f'{{{NS_D}}}{tag}'):
+            b_node = g.find(f'{{{NS_D}}}b')
+            if b_node is None or not b_node.text:
+                r.error(f'Group <{tag}>: <b> is missing')
+                continue
+            b = int(b_node.text)
+            e_node = g.find(f'{{{NS_D}}}e')
+            e = int(e_node.text) if e_node is not None and e_node.text else b
+            if e < b:
+                r.error(f'Group <{tag}> {b}..{e}: range is reversed')
+            if tag == 'vg' and doc_height > 0 and b >= doc_height:
+                r.warn(f'Group <vg> starts at row {b}, beyond document height ({doc_height})')
+            ranges.append((b, e))
+        for i in range(len(ranges)):
+            for j in range(i + 1, len(ranges)):
+                a, c = ranges[i], ranges[j]
+                if a[1] < c[0] or c[1] < a[0]:
+                    continue
+                if (a[0] <= c[0] and c[1] <= a[1]) or (c[0] <= a[0] and a[1] <= c[1]):
+                    continue
+                r.error(f'Groups <{tag}> {a[0]}..{a[1]} and {c[0]}..{c[1]} overlap partially')
+        if ranges:
+            r.ok(f'Groups <{tag}>: {len(ranges)}')
 
     # --- Finalize ---
     checks = r.ok_count + r.errors + r.warnings

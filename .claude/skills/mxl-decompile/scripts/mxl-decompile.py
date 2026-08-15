@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.23 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.24 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -430,6 +430,36 @@ def main():
         if idx <= 0 or idx > len(raw_formats):
             return None
         return raw_formats[idx - 1]
+
+    # --- 4b. Группировки строк и колонок ---
+    # Платформа хранит их плоским списком диапазонов, родитель раньше детей. Число уровней
+    # (<vgLevels>) не читаем: оно выводится из вложенности — совпало на всех 1797 макетах.
+    def read_groups(tag, axis):
+        out = []
+        for g in findall(root, "d:" + tag):
+            b = int_of(find(g, "d:b"))
+            e_node = find(g, "d:e")
+            e = int_of(e_node, b) if e_node is not None else b
+            item = OrderedDict()
+            item[axis] = (b + 1) if e == b else f'{b + 1}-{e + 1}'
+            t_el = find(g, "d:t")
+            if t_el is not None:
+                by_lang = OrderedDict()
+                for it in findall(t_el, "v8:item"):
+                    lang = text_of(find(it, "v8:lang")) or ''
+                    by_lang[lang] = text_of(find(it, "v8:content")) or ''
+                if by_lang:
+                    item["name"] = by_lang
+            if (text_of(find(g, "d:o")) or 'true').strip() == 'false':
+                item["collapsed"] = True
+            place = text_of(find(g, "d:g"))
+            if place:
+                item["titleLocation"] = place.strip().lower()
+            out.append(item)
+        return out
+
+    row_groups = read_groups("vg", "rows")
+    col_groups = read_groups("hg", "cols")
 
     # --- 5. Extract columns and default width ---
 
@@ -1432,6 +1462,15 @@ def main():
                 entry["columnStyles"] = styles_out
             sets_out[cs["Id"]] = entry
         result["columnSets"] = sets_out
+
+    # Имя группировки — та же мультиязычная строка, что текст ячейки, и сворачивается так же.
+    for _g in row_groups + col_groups:
+        if "name" in _g:
+            _g["name"] = get_dsl_text(_g["name"])
+    if row_groups:
+        result["rowGroups"] = row_groups
+    if col_groups:
+        result["columnGroups"] = col_groups
 
     result["areas"] = dsl_areas
 

@@ -1,4 +1,4 @@
-﻿# mxl-validate v1.5 — Validate 1C spreadsheet
+﻿# mxl-validate v1.6 — Validate 1C spreadsheet
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Alias('Path')]
@@ -505,6 +505,38 @@ if ($dfi -and $valueFormatIdx.ContainsKey([int]$dfi.InnerText)) {
 }
 if ($valueFormatIdx.Count -gt 0) {
 	Report-OK "Value cells: $($valueFormatIdx.Count) value formats"
+}
+
+# --- Check 14: группировки строк и колонок ---
+# Диапазоны группировок либо вложены, либо не пересекаются: на корпусе 40 620 886 пар
+# непересекающихся и 599 958 вложенных, частичных пересечений нет ни одного.
+
+foreach ($tag in @('vg', 'hg')) {
+	$ranges = @()
+	foreach ($g in $root.SelectNodes("d:$tag", $nsMgr)) {
+		$bNode = $g.SelectSingleNode("d:b", $nsMgr)
+		if (-not $bNode) {
+			Report-Error "Group <$tag>: <b> is missing"
+			continue
+		}
+		$b = [int]$bNode.InnerText
+		$eNode = $g.SelectSingleNode("d:e", $nsMgr)
+		$e = if ($eNode) { [int]$eNode.InnerText } else { $b }
+		if ($e -lt $b) { Report-Error "Group <$tag> $b..${e}: range is reversed" }
+		if ($tag -ceq 'vg' -and $docHeight -gt 0 -and $b -ge $docHeight) {
+			Report-Warn "Group <vg> starts at row $b, beyond document height ($docHeight)"
+		}
+		$ranges += ,@($b, $e)
+	}
+	for ($i = 0; $i -lt $ranges.Count; $i++) {
+		for ($j = $i + 1; $j -lt $ranges.Count; $j++) {
+			$a = $ranges[$i]; $c = $ranges[$j]
+			if ($a[1] -lt $c[0] -or $c[1] -lt $a[0]) { continue }
+			if (($a[0] -le $c[0] -and $c[1] -le $a[1]) -or ($c[0] -le $a[0] -and $a[1] -le $c[1])) { continue }
+			Report-Error "Groups <$tag> $($a[0])..$($a[1]) and $($c[0])..$($c[1]) overlap partially"
+		}
+	}
+	if ($ranges.Count -gt 0) { Report-OK "Groups <$tag>: $($ranges.Count)" }
 }
 
 # --- Summary ---

@@ -1,0 +1,1 @@
+{ "columns": 3, "defaultWidth": 10, "fonts": {}, "styles": {}, "rowGroups": [{ "rows": "2-4" }, { "rows": 3 }, { "rows": 5, "name": "Итоговая", "collapsed": true, "titleLocation": "begin" }], "columnGroups": [{ "cols": "2-3", "name": { "#": "R2" } }, { "cols": 3, "titleLocation": "end" }], "areas": [{ "rows": [["11", "12", "13"], ["21", "22", "23"], ["31"], ["41"], ["51"]] }] }

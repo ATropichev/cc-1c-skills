@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.43 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.44 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -2037,11 +2037,124 @@ if ($def.namedAreas) {
 	}
 }
 
+# 7e-bis. Группировки строк и колонок. Платформа хранит их плоским списком диапазонов;
+# вложенность выражена вхождением одного диапазона в другой, а частичных пересечений не
+# бывает вовсе (корпус: 40 620 886 пар непересекающихся, 599 958 вложенных, 0 частичных).
+function Get-Groups {
+	param([string]$key, [string]$axis)
+	$out = @()
+	$idx = 0
+	foreach ($g in $def.$key) {
+		$idx++
+		$where = "$key[$idx]"
+		$spec = "$($g.$axis)".Trim()
+		if (-not $spec) {
+			[Console]::Error.WriteLine("${key}: '$axis' is required: $where")
+			exit 1
+		}
+		if ($spec -match '^(\d+)\s*-\s*(\d+)$') {
+			$frm = [int]$Matches[1]; $to = [int]$Matches[2]
+		} elseif ($spec -match '^\d+$') {
+			$frm = [int]$spec; $to = $frm
+		} else {
+			[Console]::Error.WriteLine("${key}: invalid '$axis' value `"$spec`": $where")
+			exit 1
+		}
+		if ($frm -lt 1) { $frm = 1 }
+		if ($to -lt $frm) {
+			[Console]::Error.WriteLine("${key}: '$axis' range is reversed `"$spec`": $where")
+			exit 1
+		}
+		$header = ''
+		if ($null -ne $g.titleLocation -and "$($g.titleLocation)" -ne '') {
+			switch ("$($g.titleLocation)".Trim().ToLowerInvariant()) {
+				'auto'  { $header = '' }
+				'begin' { $header = 'Begin' }
+				'end'   { $header = 'End' }
+				default {
+					[Console]::Error.WriteLine("${key}: unknown 'titleLocation' value `"$($g.titleLocation)`" ($where). Allowed: begin, end, auto")
+					exit 1
+				}
+			}
+		}
+		$out += @{
+			B = $frm - 1; E = $to - 1
+			Name = $g.name
+			Collapsed = ($g.collapsed -eq $true -or "$($g.collapsed)" -eq 'true')
+			Header = $header
+		}
+	}
+	for ($i = 0; $i -lt $out.Count; $i++) {
+		for ($j = $i + 1; $j -lt $out.Count; $j++) {
+			$a = $out[$i]; $b = $out[$j]
+			if ($a.E -lt $b.B -or $b.E -lt $a.B) { continue }
+			if (($a.B -le $b.B -and $b.E -le $a.E) -or ($b.B -le $a.B -and $a.E -le $b.E)) { continue }
+			[Console]::Error.WriteLine("${key}: ranges must nest or be disjoint, got a partial overlap ($($a.B + 1)-$($a.E + 1) and $($b.B + 1)-$($b.E + 1))")
+			exit 1
+		}
+	}
+	# Порядок платформы — родитель раньше детей, по возрастанию начала.
+	return @($out | Sort-Object @{ Expression = { $_.B } }, @{ Expression = { -$_.E } })
+}
+
+function Get-GroupLevels {
+	# Глубина вложенности. На корпусе она совпала с <vgLevels> у всех 1797 макетов.
+	param($groups)
+	$depth = 0
+	for ($i = 0; $i -lt $groups.Count; $i++) {
+		$g = $groups[$i]; $d = 1
+		for ($j = 0; $j -lt $groups.Count; $j++) {
+			if ($j -eq $i) { continue }
+			$o = $groups[$j]
+			if ($o.B -le $g.B -and $g.E -le $o.E -and -not ($o.B -eq $g.B -and $o.E -eq $g.E)) { $d++ }
+		}
+		if ($d -gt $depth) { $depth = $d }
+	}
+	return $depth
+}
+
+function Emit-Groups {
+	param([string]$tag, $groups)
+	foreach ($g in $groups) {
+		X "`t<$tag>"
+		X "`t`t<b>$($g.B)</b>"
+		if ($g.E -ne $g.B) { X "`t`t<e>$($g.E)</e>" }
+		if ($null -ne $g.Name) {
+			$pairs = @()
+			if ($g.Name -is [System.Collections.IDictionary]) {
+				foreach ($k in $g.Name.Keys) { $pairs += @{ Lang = "$k"; Text = "$($g.Name[$k])" } }
+			} elseif ($g.Name -is [System.Management.Automation.PSCustomObject]) {
+				foreach ($pr in $g.Name.PSObject.Properties) { $pairs += @{ Lang = $pr.Name; Text = "$($pr.Value)" } }
+			} else {
+				foreach ($l in $textLanguages) { $pairs += @{ Lang = $l; Text = "$($g.Name)" } }
+			}
+			X "`t`t<t>"
+			foreach ($pr in $pairs) {
+				X "`t`t`t<v8:item>"
+				X "`t`t`t`t<v8:lang>$($pr.Lang)</v8:lang>"
+				X "`t`t`t`t<v8:content>$(Esc-XmlText $pr.Text)</v8:content>"
+				X "`t`t`t</v8:item>"
+			}
+			X "`t`t</t>"
+		}
+		# Развёрнутая группировка тега не пишет: на корпусе <o> только со значением false.
+		if ($g.Collapsed) { X "`t`t<o>false</o>" }
+		if ($g.Header) { X "`t`t<g>$($g.Header)</g>" }
+		X "`t</$tag>"
+	}
+}
+
+$rowGroups = Get-Groups 'rowGroups' 'rows'
+$colGroups = Get-Groups 'columnGroups' 'cols'
+
 # 7e. Scalar metadata
 X "`t<templateMode>true</templateMode>"
 X "`t<defaultFormatIndex>$defaultFormatIndex</defaultFormatIndex>"
 X "`t<height>$totalRowCount</height>"
+if ($rowGroups.Count -gt 0) { X "`t<vgLevels>$(Get-GroupLevels $rowGroups)</vgLevels>" }
 X "`t<vgRows>$totalRowCount</vgRows>"
+Emit-Groups 'vg' $rowGroups
+Emit-Groups 'hg' $colGroups
 
 # 7f. Merges
 foreach ($m in $merges) {

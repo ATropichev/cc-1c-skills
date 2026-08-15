@@ -1,0 +1,15 @@
+{
+  "name": "Раундтрип макета ПЛАТФОРМЫ байт в байт: Группировки",
+  "setup": "fixture:platform-roundtrip",
+  "preRun": [
+    {
+      "script": "mxl-decompile/scripts/mxl-decompile",
+      "args": { "-TemplatePath": "Группировки.xml", "-OutputPath": "back.json" },
+      "cwd": "{workDir}"
+    }
+  ],
+  "params": { "outputPath": "out.xml" },
+  "noSnapshot": "эталон — файл платформы, сверяется expect.filesEqual",
+  "expect": { "filesEqual": { "actual": "out.xml", "expected": "Группировки.xml" } },
+  "inputFrom": "back.json"
+}

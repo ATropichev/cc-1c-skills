@@ -1,0 +1,25 @@
+{
+  "name": "Группировки строк и колонок",
+  "input": {
+    "columns": 3,
+    "areas": [
+      { "rows": [
+        ["11", "12", "13"],
+        ["21", "22", "23"],
+        ["31", "32", "33"],
+        ["41"],
+        ["51"]
+      ]}
+    ],
+    "rowGroups": [
+      { "rows": "2-4" },
+      { "rows": 3 },
+      { "rows": 5, "name": "Итоговая", "collapsed": true, "titleLocation": "begin" }
+    ],
+    "columnGroups": [
+      { "cols": "2-3", "name": { "ru": "Показатели", "en": "Values" } },
+      { "cols": 3, "titleLocation": "end" }
+    ]
+  },
+  "params": { "outputPath": "Template.xml" }
+}
