@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<document xmlns="http://v8.1c.ru/8.2/data/spreadsheet" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+	<languageSettings>
+		<currentLanguage>ru</currentLanguage>
+		<defaultLanguage>ru</defaultLanguage>
+		<languageInfo>
+			<id>ru</id>
+			<code>Русский</code>
+			<description>Русский</description>
+		</languageInfo>
+	</languageSettings>
+	<columns>
+		<size>2</size>
+	</columns>
+	<rowsItem>
+		<index>0</index>
+		<row>
+			<c>
+				<c>
+					<f>1</f>
+					<control xsi:type="xs:base64Binary">77u/MiwxLDM4MWVkNjI0LTkyMTctNGU2My04NWRiLWM0YzNjYjg3ZGFhZSwNCnsN
+Cns5LA0KeyJQYXR0ZXJuIiwNCnsiUyJ9DQp9LA0Kew0Kew0KezE2LDEsDQp7Myw0
+LA0KezB9DQp9LA0KezMsNCwNCnswfQ0KfSwNCns3LDMsMCwxLDEwMH0sMCwNCnsz
+LDQsDQp7MH0NCn0sDQp7Myw0LA0KezB9DQp9LA0KezMsNCwNCnswfQ0KfSwNCnsz
+LDMsDQp7LTd9DQp9LA0KezMsMywNCnstMjF9DQp9LA0KezMsMSwNCnstMTh9LDAs
+MCwwfSwNCnsxLDB9LDAsMCwxMDAsMCwwfSwzMCwwLDAsMSwwLDAsMSwxLDEsMCwx
+LDAsMCwwLDAsMCw0LDAsDQp7IlUifSwNCnsiVSJ9LCIiLDAsMSwwLDAsMCwwLA0K
+ezQsMCwNCnswfSwiIiwtMSwtMSwxLDAsIiJ9LA0KezQsMCwNCnswfSwiIiwtMSwt
+MSwxLDAsIiJ9LDAsMCwwLA0KezAsMCwwfSwNCnsxLDB9LDAsMCwwLDAsMCwwLDAs
+MTY3NzcyMTUsMn0NCn0sDQp7MSwNCns5YTc2NDNkMi0xOWU5LTQ1ZTItODg5My0y
+ODBiYzkxOTVhOTcsDQp7NCwNCnsiVSJ9LA0KeyJVIn0sMCwiIiwwLDB9DQp9DQp9
+LA0KezB9LDAsMSwwLA0KezEsMH0sMH0NCn0sMA==</control>
+				</c>
+			</c>
+			<c>
+				<c>
+					<f>1</f>
+				</c>
+			</c>
+		</row>
+	</rowsItem>
+	<templateMode>true</templateMode>
+	<defaultFormatIndex>2</defaultFormatIndex>
+	<height>1</height>
+	<vgRows>1</vgRows>
+	<namedItem xsi:type="NamedItemCells">
+		<name>Настройки</name>
+		<area>
+			<type>Rows</type>
+			<beginRow>0</beginRow>
+			<endRow>0</endRow>
+			<beginColumn>-1</beginColumn>
+			<endColumn>-1</endColumn>
+		</area>
+	</namedItem>
+	<format>
+		<containsValue>true</containsValue>
+		<valueType>
+			<v8:Type>xs:decimal</v8:Type>
+			<v8:NumberQualifiers>
+				<v8:Digits>10</v8:Digits>
+				<v8:FractionDigits>2</v8:FractionDigits>
+				<v8:AllowedSign>Any</v8:AllowedSign>
+			</v8:NumberQualifiers>
+		</valueType>
+		<controlType>35af3d93-d7c7-4a2e-a8eb-bac87a1a3f26</controlType>
+	</format>
+	<format>
+		<width>10</width>
+	</format>
+</document>

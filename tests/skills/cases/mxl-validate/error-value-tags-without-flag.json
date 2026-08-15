@@ -1,0 +1,7 @@
+{
+  "name": "Ошибка: значение и настройки элемента управления у ячейки без признака значения",
+  "setup": "fixture:value-tags-without-flag",
+  "params": { "templatePath": "Template.xml" },
+  "expectError": true,
+  "expect": { "stdoutContains": "but its format has no containsValue" }
+}

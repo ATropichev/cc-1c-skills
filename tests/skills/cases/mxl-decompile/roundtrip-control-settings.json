@@ -1,0 +1,51 @@
+{
+  "name": "Roundtrip — настройки элемента управления",
+  "preRun": [
+    {
+      "script": "mxl-compile/scripts/mxl-compile",
+      "input": {
+        "columns": 2,
+        "areas": [
+          {
+            "name": "Настройки",
+            "rows": [
+              {
+                "cells": [
+                  {
+                    "col": 1,
+                    "valueType": "Number(10,2)",
+                    "controlType": "checkbox",
+                    "control": "77u/MiwxLDM4MWVkNjI0LTkyMTctNGU2My04NWRiLWM0YzNjYjg3ZGFhZSwNCnsN\nCns5LA0KeyJQYXR0ZXJuIiwNCnsiUyJ9DQp9LA0Kew0Kew0KezE2LDEsDQp7Myw0\nLA0KezB9DQp9LA0KezMsNCwNCnswfQ0KfSwNCns3LDMsMCwxLDEwMH0sMCwNCnsz\nLDQsDQp7MH0NCn0sDQp7Myw0LA0KezB9DQp9LA0KezMsNCwNCnswfQ0KfSwNCnsz\nLDMsDQp7LTd9DQp9LA0KezMsMywNCnstMjF9DQp9LA0KezMsMSwNCnstMTh9LDAs\nMCwwfSwNCnsxLDB9LDAsMCwxMDAsMCwwfSwzMCwwLDAsMSwwLDAsMSwxLDEsMCwx\nLDAsMCwwLDAsMCw0LDAsDQp7IlUifSwNCnsiVSJ9LCIiLDAsMSwwLDAsMCwwLA0K\nezQsMCwNCnswfSwiIiwtMSwtMSwxLDAsIiJ9LA0KezQsMCwNCnswfSwiIiwtMSwt\nMSwxLDAsIiJ9LDAsMCwwLA0KezAsMCwwfSwNCnsxLDB9LDAsMCwwLDAsMCwwLDAs\nMTY3NzcyMTUsMn0NCn0sDQp7MSwNCns5YTc2NDNkMi0xOWU5LTQ1ZTItODg5My0y\nODBiYzkxOTVhOTcsDQp7NCwNCnsiVSJ9LA0KeyJVIn0sMCwiIiwwLDB9DQp9DQp9\nLA0KezB9LDAsMSwwLA0KezEsMH0sMH0NCn0sMA=="
+                  },
+                  {
+                    "col": 2,
+                    "valueType": "Number(10,2)",
+                    "controlType": "checkbox"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "Template.xml"
+      },
+      "cwd": "{workDir}"
+    }
+  ],
+  "params": {
+    "templatePath": "Template.xml"
+  },
+  "args_extra": [
+    "-OutputPath",
+    "{workDir}/back.json"
+  ],
+  "expect": {
+    "files": [
+      "back.json"
+    ],
+    "stdoutContains": "[OK] Decompiled:"
+  }
+}

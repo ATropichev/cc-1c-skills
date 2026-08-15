@@ -1,5 +1,5 @@
-#!/usr/bin/env python3
-# mxl-validate v1.3 — Validate 1C spreadsheet document Template.xml
+﻿#!/usr/bin/env python3
+# mxl-validate v1.4 — Validate 1C spreadsheet document Template.xml
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates spreadsheet Template.xml: height, palette refs, column/row indices, areas, merges."""
 import sys, os, argparse
@@ -430,40 +430,61 @@ def main():
             if kinds != ['xs:boolean'] and kinds != ['xs:decimal']:
                 r.warn(f'Format {i}: checkbox control on a type other than Boolean or Number')
 
-    if value_format_idx:
-        for ri in root.findall(f'{{{NS_D}}}rowsItem'):
-            if r.stopped:
-                break
-            row = ri.find(f'{{{NS_D}}}row')
-            if row is None:
+    for ri in root.findall(f'{{{NS_D}}}rowsItem'):
+        if r.stopped:
+            break
+        row = ri.find(f'{{{NS_D}}}row')
+        if row is None:
+            continue
+        idx_node = ri.find(f'{{{NS_D}}}index')
+        rn = idx_node.text if idx_node is not None else '?'
+        row_fmt = row.find(f'{{{NS_D}}}formatIndex')
+        if row_fmt is not None and row_fmt.text and int(row_fmt.text) in value_format_idx:
+            r.warn(f'Row {rn}: formatIndex points to a value format (cell-only property)')
+        for c_group in row.findall(f'{{{NS_D}}}c'):
+            cell = c_group.find(f'{{{NS_D}}}c')
+            if cell is None:
                 continue
-            idx_node = ri.find(f'{{{NS_D}}}index')
-            rn = idx_node.text if idx_node is not None else '?'
-            row_fmt = row.find(f'{{{NS_D}}}formatIndex')
-            if row_fmt is not None and row_fmt.text and int(row_fmt.text) in value_format_idx:
-                r.warn(f'Row {rn}: formatIndex points to a value format (cell-only property)')
-            for c_group in row.findall(f'{{{NS_D}}}c'):
-                cell = c_group.find(f'{{{NS_D}}}c')
-                if cell is None:
-                    continue
-                f_node = cell.find(f'{{{NS_D}}}f')
-                if f_node is None or not f_node.text or int(f_node.text) not in value_format_idx:
-                    continue
-                if cell.find(f'{{{NS_D}}}tl') is not None:
-                    r.error(f'Row {rn}: cell contains a value and text at the same time')
-        for cols in root.findall(f'{{{NS_D}}}columns'):
-            for ci in cols.findall(f'{{{NS_D}}}columnsItem'):
-                col = ci.find(f'{{{NS_D}}}column')
-                if col is None:
-                    continue
-                fmt_node = col.find(f'{{{NS_D}}}formatIndex')
-                if fmt_node is not None and fmt_node.text and int(fmt_node.text) in value_format_idx:
-                    col_idx_node = ci.find(f'{{{NS_D}}}index')
-                    col_idx_text = col_idx_node.text if col_idx_node is not None else '?'
-                    r.warn(f'Column {col_idx_text}: formatIndex points to a value format (cell-only property)')
-        dfi = root.find(f'{{{NS_D}}}defaultFormatIndex')
-        if dfi is not None and dfi.text and int(dfi.text) in value_format_idx:
-            r.warn('defaultFormatIndex points to a value format (cell-only property)')
+            f_node = cell.find(f'{{{NS_D}}}f')
+            if f_node is None or not f_node.text or int(f_node.text) not in value_format_idx:
+                continue
+            if cell.find(f'{{{NS_D}}}tl') is not None:
+                r.error(f'Row {rn}: cell contains a value and text at the same time')
+    # Значение и настройки элемента управления бывают только у ячейки-поля ввода: на корпусе
+    # ни одного <v> и ни одного <control> в обычной ячейке.
+    for ri in root.findall(f'{{{NS_D}}}rowsItem'):
+        if r.stopped:
+            break
+        row = ri.find(f'{{{NS_D}}}row')
+        if row is None:
+            continue
+        idx_node = ri.find(f'{{{NS_D}}}index')
+        rn = idx_node.text if idx_node is not None else '?'
+        for c_group in row.findall(f'{{{NS_D}}}c'):
+            cell = c_group.find(f'{{{NS_D}}}c')
+            if cell is None:
+                continue
+            f_node = cell.find(f'{{{NS_D}}}f')
+            is_value = f_node is not None and f_node.text and int(f_node.text) in value_format_idx
+            if is_value:
+                continue
+            for tag, what in (('v', 'value'), ('control', 'control settings')):
+                if cell.find(f'{{{NS_D}}}{tag}') is not None:
+                    r.error(f'Row {rn}: cell carries {what} but its format has no containsValue')
+    for cols in root.findall(f'{{{NS_D}}}columns'):
+        for ci in cols.findall(f'{{{NS_D}}}columnsItem'):
+            col = ci.find(f'{{{NS_D}}}column')
+            if col is None:
+                continue
+            fmt_node = col.find(f'{{{NS_D}}}formatIndex')
+            if fmt_node is not None and fmt_node.text and int(fmt_node.text) in value_format_idx:
+                col_idx_node = ci.find(f'{{{NS_D}}}index')
+                col_idx_text = col_idx_node.text if col_idx_node is not None else '?'
+                r.warn(f'Column {col_idx_text}: formatIndex points to a value format (cell-only property)')
+    dfi = root.find(f'{{{NS_D}}}defaultFormatIndex')
+    if dfi is not None and dfi.text and int(dfi.text) in value_format_idx:
+        r.warn('defaultFormatIndex points to a value format (cell-only property)')
+    if value_format_idx:
         r.ok(f'Value cells: {len(value_format_idx)} value formats')
 
     # --- Finalize ---

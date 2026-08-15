@@ -1,4 +1,4 @@
-﻿# mxl-validate v1.3 — Validate 1C spreadsheet
+﻿# mxl-validate v1.4 — Validate 1C spreadsheet
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Alias('Path')]
@@ -449,43 +449,53 @@ for ($i = 0; $i -lt $formatNodes.Count; $i++) {
 	}
 }
 
+foreach ($ri in $root.SelectNodes("d:rowsItem", $nsMgr)) {
+	if ($stopped) { break }
+	$row = $ri.SelectSingleNode("d:row", $nsMgr)
+	if (-not $row) { continue }
+	$idxNode = $ri.SelectSingleNode("d:index", $nsMgr)
+	$rn = if ($idxNode) { $idxNode.InnerText } else { '?' }
+	$rowFmt = $row.SelectSingleNode("d:formatIndex", $nsMgr)
+	if ($rowFmt -and $valueFormatIdx.ContainsKey([int]$rowFmt.InnerText)) {
+		Report-Warn "Row ${rn}: formatIndex points to a value format (cell-only property)"
+	}
+	foreach ($cGroup in $row.SelectNodes("d:c", $nsMgr)) {
+		$cell = $cGroup.SelectSingleNode("d:c", $nsMgr)
+		if (-not $cell) { continue }
+		$fNode = $cell.SelectSingleNode("d:f", $nsMgr)
+		if (-not $fNode -or -not $valueFormatIdx.ContainsKey([int]$fNode.InnerText)) {
+			# Значение и настройки элемента управления бывают только у ячейки-поля ввода:
+			# на корпусе ни одного <v> и ни одного <control> в обычной ячейке.
+			if ($cell.SelectSingleNode("d:v", $nsMgr)) {
+				Report-Error "Row ${rn}: cell carries value but its format has no containsValue"
+			}
+			if ($cell.SelectSingleNode("d:control", $nsMgr)) {
+				Report-Error "Row ${rn}: cell carries control settings but its format has no containsValue"
+			}
+			continue
+		}
+		if ($cell.SelectSingleNode("d:tl", $nsMgr)) {
+			Report-Error "Row ${rn}: cell contains a value and text at the same time"
+		}
+	}
+}
+foreach ($cols in $root.SelectNodes("d:columns", $nsMgr)) {
+	foreach ($ci in $cols.SelectNodes("d:columnsItem", $nsMgr)) {
+		$col = $ci.SelectSingleNode("d:column", $nsMgr)
+		if (-not $col) { continue }
+		$fmtNode = $col.SelectSingleNode("d:formatIndex", $nsMgr)
+		if ($fmtNode -and $valueFormatIdx.ContainsKey([int]$fmtNode.InnerText)) {
+			$colIdxNode = $ci.SelectSingleNode("d:index", $nsMgr)
+			$colIdxText = if ($colIdxNode) { $colIdxNode.InnerText } else { '?' }
+			Report-Warn "Column ${colIdxText}: formatIndex points to a value format (cell-only property)"
+		}
+	}
+}
+$dfi = $root.SelectSingleNode("d:defaultFormatIndex", $nsMgr)
+if ($dfi -and $valueFormatIdx.ContainsKey([int]$dfi.InnerText)) {
+	Report-Warn "defaultFormatIndex points to a value format (cell-only property)"
+}
 if ($valueFormatIdx.Count -gt 0) {
-	foreach ($ri in $root.SelectNodes("d:rowsItem", $nsMgr)) {
-		if ($stopped) { break }
-		$row = $ri.SelectSingleNode("d:row", $nsMgr)
-		if (-not $row) { continue }
-		$idxNode = $ri.SelectSingleNode("d:index", $nsMgr)
-		$rn = if ($idxNode) { $idxNode.InnerText } else { '?' }
-		$rowFmt = $row.SelectSingleNode("d:formatIndex", $nsMgr)
-		if ($rowFmt -and $valueFormatIdx.ContainsKey([int]$rowFmt.InnerText)) {
-			Report-Warn "Row ${rn}: formatIndex points to a value format (cell-only property)"
-		}
-		foreach ($cGroup in $row.SelectNodes("d:c", $nsMgr)) {
-			$cell = $cGroup.SelectSingleNode("d:c", $nsMgr)
-			if (-not $cell) { continue }
-			$fNode = $cell.SelectSingleNode("d:f", $nsMgr)
-			if (-not $fNode -or -not $valueFormatIdx.ContainsKey([int]$fNode.InnerText)) { continue }
-			if ($cell.SelectSingleNode("d:tl", $nsMgr)) {
-				Report-Error "Row ${rn}: cell contains a value and text at the same time"
-			}
-		}
-	}
-	foreach ($cols in $root.SelectNodes("d:columns", $nsMgr)) {
-		foreach ($ci in $cols.SelectNodes("d:columnsItem", $nsMgr)) {
-			$col = $ci.SelectSingleNode("d:column", $nsMgr)
-			if (-not $col) { continue }
-			$fmtNode = $col.SelectSingleNode("d:formatIndex", $nsMgr)
-			if ($fmtNode -and $valueFormatIdx.ContainsKey([int]$fmtNode.InnerText)) {
-				$colIdxNode = $ci.SelectSingleNode("d:index", $nsMgr)
-				$colIdxText = if ($colIdxNode) { $colIdxNode.InnerText } else { '?' }
-				Report-Warn "Column ${colIdxText}: formatIndex points to a value format (cell-only property)"
-			}
-		}
-	}
-	$dfi = $root.SelectSingleNode("d:defaultFormatIndex", $nsMgr)
-	if ($dfi -and $valueFormatIdx.ContainsKey([int]$dfi.InnerText)) {
-		Report-Warn "defaultFormatIndex points to a value format (cell-only property)"
-	}
 	Report-OK "Value cells: $($valueFormatIdx.Count) value formats"
 }
 
