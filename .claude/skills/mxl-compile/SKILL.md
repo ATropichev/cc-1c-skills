@@ -49,7 +49,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 |---|---|
 | Полные таблицы полей, развёрнутый пример, ограничения формата | `reference/dsl-spec.md` |
 | Шрифты, стили, цвета, рамки, колоночные раскладки и стили колонок | `reference/styles.md` |
-| Полный перечень свойств стиля — все 44 | `reference/format-properties.md` |
+| Полный перечень свойств стиля | `reference/format-properties.md` |
 
 Краткая структура:
 
@@ -80,7 +80,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 - `col` — 1-based позиция колонки
 - `rowspan` — объединение строк вниз (rowStyle учитывает занятые ячейки)
 - Содержимое ячейки задаётся одним из ключей: `param` — параметр заполнения, `text` — статический текст, `template` — текст со вставками `[Параметр]`
-- `valueType` делает ячейку полем ввода (`"Number(15,3,nonneg)"`, `"String(10)"`, `"CatalogRef.Валюты"`, составной через ` + `); текста в такой ячейке быть не может, а `controlType: "checkbox"` меняет поле ввода на флажок; `value` — значение в поле
+- `valueType` делает ячейку полем ввода (`"Number(15,3,nonneg)"`, `"String(10)"`, `"CatalogRef.Валюты"`, составной через ` + `); текста в такой ячейке быть не может. `value` — значение в поле, `controlType: "checkbox"` — флажок вместо поля ввода
 
 Двухуровневая шапка массивами:
 ```json

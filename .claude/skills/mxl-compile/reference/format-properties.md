@@ -74,4 +74,4 @@
 - `fillType` — выводится из того, каким ключом задано содержимое ячейки
   (`text` / `param` / `template`);
 - `containsValue`, `valueType`, `controlType` — свойства конкретной ячейки, а не общего
-  оформления: задаются ключами ячейки `valueType` и `control`.
+  оформления: задаются ключами ячейки `valueType` и `controlType` (см. `dsl-spec.md`).
