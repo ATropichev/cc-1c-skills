@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.29 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.30 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -723,6 +723,10 @@ $textLanguages = @($docLangs.Keys)
 function Get-DslText {
 	param($byLang)
 	if ($byLang -isnot [System.Collections.IDictionary]) { return $byLang }
+	# Пустой текст (<tl/>) записывается в DSL пустой строкой — той же формой, что
+	# авторская. Без этой ветки макет, где ДРУГОГО текста нет вовсе, отдавал $null,
+	# и ячейка с пустым текстом теряла содержимое.
+	if ($byLang.Count -eq 0) { return '' }
 	if ($byLang.Count -ne $textLanguages.Count) { return $byLang }
 	$common = $null
 	foreach ($l in $textLanguages) {
@@ -1219,8 +1223,10 @@ function ConvertTo-PositionalCells {
 	# Позиционная форма ценна компактностью: если она длиннее объектной, смысла в ней нет.
 	$a = Try-InlineJson $out
 	$b = Try-InlineJson $cells
-	if ($null -ne $a -and $null -ne $b -and $a.Length -gt $b.Length) { return $cells }
-	return $out
+	if ($null -ne $a -and $null -ne $b -and $a.Length -gt $b.Length) { return ,$cells }
+	# Запятая обязательна: без неё список из одной ячейки разворачивается в саму ячейку,
+	# а список из одного $null — в $null, и строка целиком уходила в пустые.
+	return ,$out
 }
 
 # --- 12. Build areas ---

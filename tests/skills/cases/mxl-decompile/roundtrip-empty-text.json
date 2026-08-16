@@ -1,0 +1,18 @@
+{
+  "name": "Roundtrip — пустой текст ячейки возвращается как \"\"",
+  "preRun": [
+    { "script": "mxl-compile/scripts/mxl-compile",
+      "input": {
+        "columns": 2,
+        "areas": [{ "rows": [
+          { "cells": [{ "col": 1, "text": "" }] },
+          { "cells": [{ "col": 1, "text": "Текст" }] }
+        ]}]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "Template.xml" },
+      "cwd": "{workDir}" }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "args_extra": ["-OutputPath", "{workDir}/back.json"],
+  "expect": { "files": ["back.json"], "stdoutContains": "[OK] Decompiled:" }
+}

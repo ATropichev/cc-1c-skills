@@ -1,0 +1,16 @@
+{
+  "name": "Пустой текст ячейки: строка, объект и все языки пустые",
+  "input": {
+    "columns": 2,
+    "textLanguages": ["ru", "en"],
+    "areas": [{
+      "rows": [
+        { "cells": [{ "col": 1, "text": "" }] },
+        { "cells": [{ "col": 1, "text": {} }] },
+        { "cells": [{ "col": 1, "text": { "ru": "", "en": "" } }] },
+        { "cells": [{ "col": 1, "text": { "ru": "А", "en": "" } }] }
+      ]
+    }]
+  },
+  "params": { "outputPath": "Template.xml" }
+}

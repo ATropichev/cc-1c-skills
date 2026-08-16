@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.50 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.51 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -1210,10 +1210,10 @@ def main():
             pairs = [(str(k), str(v)) for k, v in value.items()]
         else:
             pairs = [(lang, str(value)) for lang in text_languages]
-        # Пустой объект — отдельное состояние: тег текста есть, языков в нём нет. Платформа
-        # пишет его самозакрывающимся. Для авторинга бесполезно (визуально это тот же пустой
-        # текст, что и ""), поэтому в описании DSL записи нет — она нужна раундтрипу.
-        if not pairs:
+        # Пустой текст платформа хранит ТОЛЬКО самозакрывающимся тегом: в корпусе ERP таких
+        # 1 224 460, а из 780 934 непустых блоков ни одного со всеми пустыми языками нет.
+        # Поэтому и пустая строка, и пустой объект дают одну и ту же запись.
+        if not pairs or all(content == '' for _, content in pairs):
             lines.append('\t\t\t\t\t<tl/>')
             return
         lines.append('\t\t\t\t\t<tl>')

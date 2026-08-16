@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.50 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.51 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1191,10 +1191,12 @@ function Emit-CellText {
 	} else {
 		foreach ($l in $textLanguages) { $pairs += @{ Lang = $l; Text = "$value" } }
 	}
-	# Пустой объект — отдельное состояние: тег текста есть, языков в нём нет. Платформа
-	# пишет его самозакрывающимся. Для авторинга бесполезно (визуально это тот же пустой
-	# текст, что и ""), поэтому в описании DSL записи нет — она нужна раундтрипу.
-	if ($pairs.Count -eq 0) {
+	# Пустой текст платформа хранит ТОЛЬКО самозакрывающимся тегом: в корпусе ERP таких
+	# 1 224 460, а из 780 934 непустых блоков ни одного со всеми пустыми языками нет.
+	# Поэтому и пустая строка, и пустой объект дают одну и ту же запись.
+	$allEmpty = $true
+	foreach ($pr in $pairs) { if ("$($pr.Text)" -ne '') { $allEmpty = $false; break } }
+	if ($pairs.Count -eq 0 -or $allEmpty) {
 		X "`t`t`t`t`t<tl/>"
 		return
 	}

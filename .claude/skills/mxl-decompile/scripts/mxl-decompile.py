@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.29 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.30 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -849,6 +849,11 @@ def main():
     def get_dsl_text(by_lang):
         if not isinstance(by_lang, dict):
             return by_lang
+        # Пустой текст (<tl/>) записывается в DSL пустой строкой — той же формой, что
+        # авторская. Без этой ветки макет, где ДРУГОГО текста нет вовсе, отдавал null,
+        # и ячейка с пустым текстом теряла содержимое.
+        if not by_lang:
+            return ''
         if len(by_lang) != len(text_languages):
             return by_lang
         common = None
