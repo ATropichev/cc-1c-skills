@@ -28,5 +28,10 @@
     }
   ],
   "params": { "extensionPath": "cfe" },
-  "expect": { "stdoutContains": "есть Module.bsl, но нет <xr:PropertyState> для Module" }
+  "expect": {
+    "stdoutContains": [
+      "есть Module.bsl, но нет <xr:PropertyState> для Module",
+      "=== Validation: Extension.Тест ==="
+    ]
+  }
 }

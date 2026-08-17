@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.12 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.13 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1268,22 +1268,22 @@ if ($versionRank -ge 219 -and $childObjNode) {
 		$typeName = $child.LocalName
 		if (-not $moduleKindsByType.ContainsKey($typeName)) { continue }
 		if (-not $childTypeDirMap.ContainsKey($typeName)) { continue }
-		$objName = $child.InnerText.Trim()
-		if (-not $objName) { continue }
+		$stateObjName = $child.InnerText.Trim()
+		if (-not $stateObjName) { continue }
 		$typeDir = Join-Path $configDir $childTypeDirMap[$typeName]
-		$objFile = Join-Path $typeDir "$objName.xml"
+		$objFile = Join-Path $typeDir "$stateObjName.xml"
 		if (-not (Test-Path $objFile)) { continue }
 		$objText = [System.IO.File]::ReadAllText($objFile, [System.Text.Encoding]::UTF8)
 		if ($objText -notmatch '<ObjectBelonging>Adopted</ObjectBelonging>') { continue }
 
 		foreach ($kind in $moduleKindsByType[$typeName]) {
 			$stateChecked++
-			$hasFile = Test-Path (Join-Path (Join-Path (Join-Path $typeDir $objName) "Ext") "$kind.bsl")
+			$hasFile = Test-Path (Join-Path (Join-Path (Join-Path $typeDir $stateObjName) "Ext") "$kind.bsl")
 			$hasFlag = $objText -match "<xr:Property>$kind</xr:Property>"
 			if ($hasFile -and -not $hasFlag) {
-				$stateIssues += "$typeName.$objName — есть $kind.bsl, но нет <xr:PropertyState> для $kind"
+				$stateIssues += "$typeName.$stateObjName — есть $kind.bsl, но нет <xr:PropertyState> для $kind"
 			} elseif ($hasFlag -and -not $hasFile) {
-				$stateIssues += "$typeName.$objName — есть <xr:PropertyState> для $kind, но нет $kind.bsl"
+				$stateIssues += "$typeName.$stateObjName — есть <xr:PropertyState> для $kind, но нет $kind.bsl"
 			}
 		}
 	}

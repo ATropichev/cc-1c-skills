@@ -6,5 +6,6 @@
       "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
     }
   ],
-  "params": { "extensionPath": "ext" }
+  "params": { "extensionPath": "ext" },
+  "expect": { "stdoutContains": "=== Validation OK: Extension.Тест" }
 }

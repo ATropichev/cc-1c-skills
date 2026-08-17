@@ -15,5 +15,6 @@
       "args": { "-ExtensionPath": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Object": "Catalog.Товары" }
     }
   ],
-  "params": { "extensionPath": "ext" }
+  "params": { "extensionPath": "ext" },
+  "expect": { "stdoutContains": "=== Validation OK: Extension.Тест" }
 }
