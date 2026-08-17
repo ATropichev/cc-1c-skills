@@ -1,0 +1,32 @@
+{
+  "name": "Предупреждение: модуль есть, пометки расширенного свойства нет",
+  "setup": "empty-config-220",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "CommonModule", "name": "ОбщийМодуль1", "properties": { "Server": true } },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "CommonModule.ОбщийМодуль1",
+        "-Module": "None"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "cfe/CommonModules/ОбщийМодуль1/Ext/Module.bsl",
+        "content": "// перехватчик добавлен вручную\n"
+      }
+    }
+  ],
+  "params": { "extensionPath": "cfe" },
+  "expect": { "stdoutContains": "есть Module.bsl, но нет <xr:PropertyState> для Module" }
+}

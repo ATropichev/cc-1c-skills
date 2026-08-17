@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.31 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.32 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -239,6 +239,32 @@ CHILD_TYPE_DIR_MAP = {
     "CommonAttribute": "CommonAttributes", "Style": "Styles",
     "Bot": "Bots", "Language": "Languages",
 }
+
+# --- Модули заимствованных объектов ---
+# Порядок внутри значения — порядок выгрузки Конфигуратора: сначала «объектный» модуль
+# (ObjectModule / RecordSetModule / ValueManagerModule), затем ManagerModule.
+MODULE_KINDS_BY_TYPE = {
+    "CommonModule": ["Module"], "HTTPService": ["Module"], "WebService": ["Module"],
+    "Catalog": ["ObjectModule", "ManagerModule"], "Document": ["ObjectModule", "ManagerModule"],
+    "Report": ["ObjectModule", "ManagerModule"], "DataProcessor": ["ObjectModule", "ManagerModule"],
+    "ExchangePlan": ["ObjectModule", "ManagerModule"],
+    "ChartOfCharacteristicTypes": ["ObjectModule", "ManagerModule"],
+    "ChartOfAccounts": ["ObjectModule", "ManagerModule"],
+    "ChartOfCalculationTypes": ["ObjectModule", "ManagerModule"],
+    "BusinessProcess": ["ObjectModule", "ManagerModule"], "Task": ["ObjectModule", "ManagerModule"],
+    "InformationRegister": ["RecordSetModule", "ManagerModule"],
+    "AccumulationRegister": ["RecordSetModule", "ManagerModule"],
+    "AccountingRegister": ["RecordSetModule", "ManagerModule"],
+    "CalculationRegister": ["RecordSetModule", "ManagerModule"],
+    "Sequence": ["RecordSetModule", "ManagerModule"],
+    "Constant": ["ValueManagerModule", "ManagerModule"],
+    "Enum": ["ManagerModule"], "DocumentJournal": ["ManagerModule"],
+    "FilterCriterion": ["ManagerModule"],
+}
+# Типы с ЕДИНСТВЕННЫМ модулем: ради него объект и заимствуют, поэтому файл создаётся молча.
+# Отказ — `-Module None`.
+AUTO_MODULE_TYPES = ["CommonModule", "HTTPService", "WebService"]
+MODULE_KIND_NAMES = ["Module", "ObjectModule", "ManagerModule", "RecordSetModule", "ValueManagerModule"]
 
 SYNONYM_MAP = {
     "\u0421\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a": "Catalog",
@@ -516,6 +542,55 @@ def format_rank(ver):
     return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
 
 
+# --- Пометка расширенного свойства (<xr:PropertyState>) ---
+# Свойство появилось в формате 2.19 (8.3.26): на 2.18 и ниже платформа молча выбрасывает элемент
+# при загрузке. С 2.19 Конфигуратор ставит его сам при выгрузке. Правило: флаг ставит тот, кто
+# создал файл модуля, — здесь это мы. Имя свойства = базовое имя файла модуля.
+# Копии этих функций есть в cfe-patch-method (навыки автономны); держать их одинаковыми — сознательно.
+def build_property_state_xml(property_name, indent):
+    return "\n".join([
+        f"{indent}<xr:PropertyState>",
+        f"{indent}\t<xr:Property>{property_name}</xr:Property>",
+        f"{indent}\t<xr:State>Extended</xr:State>",
+        f"{indent}</xr:PropertyState>",
+    ])
+
+
+def set_property_state_flag(obj_file, property_name, format_version):
+    if format_rank(format_version) < 219:
+        return
+    if not os.path.isfile(obj_file):
+        return
+
+    with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
+        text = fh.read()
+    nl = "\r\n" if "\r\n" in text else "\n"
+
+    # ПЕРВЫЙ <InternalInfo> в файле — собственный у объекта: у реквизитов и подобъектов свои,
+    # но они лежат ниже, внутри <ChildObjects>.
+    empty = re.search(r"([ \t]*)<InternalInfo\s*/>", text)
+    opened = re.search(r"([ \t]*)<InternalInfo>(.*?)</InternalInfo>", text, re.S)
+
+    if empty and (not opened or empty.start() < opened.start()):
+        ind = empty.group(1)
+        block = build_property_state_xml(property_name, ind + "\t")
+        replacement = f"{ind}<InternalInfo>{nl}{block}{nl}{ind}</InternalInfo>"
+        text = text[:empty.start()] + replacement + text[empty.end():]
+    elif opened:
+        if re.search(rf"<xr:Property>{re.escape(property_name)}</xr:Property>", opened.group(2)):
+            return
+        ind = opened.group(1)
+        block = build_property_state_xml(property_name, ind + "\t")
+        # Дописываем в КОНЕЦ InternalInfo: у Конфигуратора PropertyState идёт после GeneratedType.
+        close_at = opened.end() - len("</InternalInfo>") - len(ind)
+        text = text[:close_at] + block + nl + text[close_at:]
+    else:
+        return
+
+    with open(obj_file, "w", encoding="utf-8-sig", newline="") as fh:
+        fh.write(text)
+
+
 def apply_pal_ns(format_version):
     """2.21 (8.5) добавила в шапку пространство палитры — ради <Color> у значений перечисления.
     Вставляем НА МЕСТО (после lf, перед style): платформа держит объявления по алфавиту,
@@ -655,6 +730,7 @@ def main():
     parser.add_argument("-ConfigPath", required=True)
     parser.add_argument("-Object", required=True)
     parser.add_argument("-BorrowMainAttribute", nargs="?", const="Form", default=None)
+    parser.add_argument("-Module", default=None)
     args = ci_parse_args(parser)
 
     # --- 1. Resolve paths ---
@@ -859,6 +935,25 @@ def main():
             print(f"No uuid attribute on source form element: {src_file}", file=sys.stderr)
             sys.exit(1)
         return src_uuid
+
+    # --- Пустой модуль заимствованного объекта ---
+    def new_borrowed_module_file(type_name, obj_name, module_kind):
+        dir_name = CHILD_TYPE_DIR_MAP[type_name]
+        module_dir = os.path.join(ext_dir, dir_name, obj_name, "Ext")
+        os.makedirs(module_dir, exist_ok=True)
+
+        # NEVER overwrite an existing one: повторное заимствование не должно затирать дописанный
+        # код (то же правило, что у модуля формы).
+        module_file = os.path.join(module_dir, f"{module_kind}.bsl")
+        if os.path.isfile(module_file):
+            info(f"  Preserved existing {module_kind}.bsl")
+        else:
+            write_utf8_bom(module_file, "")
+            info(f"  Created: {module_file}")
+
+        # Флаг ставим и для уже существовавшего файла: состояние объекта должно отражать факт модуля.
+        set_property_state_flag(os.path.join(ext_dir, dir_name, f"{obj_name}.xml"), module_kind, format_version)
+        return module_file
 
     def build_internal_info_xml(type_name, obj_name, indent):
         types = GENERATED_TYPES.get(type_name)
@@ -2019,6 +2114,47 @@ def main():
             print("-BorrowMainAttribute requires a form in -Object (e.g. 'Catalog.X.Form.Y')", file=sys.stderr)
             sys.exit(1)
 
+    # --- 9c. Validate -Module ---
+    requested_modules = []
+    no_module = False
+    if args.Module:
+        for raw in re.split(r"[,;]", args.Module):
+            kind = raw.strip()
+            if not kind:
+                continue
+            # Сравнение РЕГИСТРОНЕЗАВИСИМОЕ явно: в ps1-порте `-ieq`, и молчаливое расхождение
+            # портов на «none» ловится только глазами.
+            if kind.lower() == "none":
+                no_module = True
+                continue
+            canon = [k for k in MODULE_KIND_NAMES if k.lower() == kind.lower()]
+            if not canon:
+                print(f"Неизвестный вид модуля '{kind}'. Допустимо: {', '.join(MODULE_KIND_NAMES)}, None", file=sys.stderr)
+                sys.exit(1)
+            requested_modules.append(canon[0])
+        if no_module and requested_modules:
+            print("-Module None нельзя сочетать с видами модулей", file=sys.stderr)
+            sys.exit(1)
+
+    # Какие модули создать для объекта. Тип с единственным модулем получает его всегда — уточнять
+    # там нечего; -Module разбирает только неоднозначные типы. Иначе батч смешанных типов
+    # (`CommonModule.X ;; Catalog.Y`) не выражался бы одним вызовом.
+    def resolve_module_kinds(type_name):
+        if no_module:
+            return []
+        allowed = MODULE_KINDS_BY_TYPE.get(type_name, [])
+        if not allowed:
+            return []
+        if type_name in AUTO_MODULE_TYPES:
+            return [allowed[0]]
+        if not requested_modules:
+            return []
+        # Порядок берём из таблицы типа, а не из порядка ключей в -Module.
+        selected = [k for k in allowed if k in requested_modules]
+        if not selected:
+            warn(f"  Тип {type_name} не имеет запрошенных модулей — пропущено. Допустимо: {', '.join(allowed)}")
+        return selected
+
     # --- 10. Process each item ---
     borrowed_count = 0
 
@@ -2070,6 +2206,9 @@ def main():
             has_bma = borrow_main_attribute_mode is not None
             form_files = borrow_form(type_name, obj_name, form_name, borrow_main_attr=has_bma)
             borrowed_files.extend(form_files)
+            # Замер на 8.3.26: платформа помечает форму расширенной сразу при заимствовании,
+            # даже если элементы не менялись. Флаг живёт в метаданных формы, не у владельца.
+            set_property_state_flag(form_files[0], "Form", format_version)
             borrowed_count += 1
 
             # Borrow main attribute if requested
@@ -2077,23 +2216,32 @@ def main():
                 borrow_main_attribute(type_name, obj_name, form_name, borrow_main_attribute_mode)
         else:
             # --- Object borrowing ---
-            info(f"Borrowing {type_name}.{obj_name}...")
-
-            src = read_source_object(type_name, obj_name)
-            info(f"  Source UUID: {src['Uuid']}")
-
-            borrowed_xml = build_borrowed_object_xml(type_name, obj_name, src["Uuid"], src["Properties"])
-
             target_dir = os.path.join(ext_dir, dir_name)
-            os.makedirs(target_dir, exist_ok=True)
-
             target_file = os.path.join(target_dir, f"{obj_name}.xml")
-            write_xml_file(target_file, borrowed_xml)
-            info(f"  Created: {target_file}")
+
+            # Уже заимствованный объект НЕ переписываем: в его XML лежат собственные реквизиты
+            # расширения, заимствованные подобъекты и состояния, которые из источника не
+            # выводятся. Повторный вызов — законный способ доделать модуль (-Module), а не
+            # переиздать заготовку.
+            if test_object_borrowed(type_name, obj_name):
+                info(f"Already borrowed: {type_name}.{obj_name} — XML сохранён без изменений")
+            else:
+                info(f"Borrowing {type_name}.{obj_name}...")
+
+                src = read_source_object(type_name, obj_name)
+                info(f"  Source UUID: {src['Uuid']}")
+
+                borrowed_xml = build_borrowed_object_xml(type_name, obj_name, src["Uuid"], src["Properties"])
+
+                os.makedirs(target_dir, exist_ok=True)
+                write_xml_file(target_file, borrowed_xml)
+                info(f"  Created: {target_file}")
 
             add_to_child_objects(type_name, obj_name)
 
             borrowed_files.append(target_file)
+            for kind in resolve_module_kinds(type_name):
+                borrowed_files.append(new_borrowed_module_file(type_name, obj_name, kind))
             borrowed_count += 1
 
     # --- Владельцы заимствованных справочников ---

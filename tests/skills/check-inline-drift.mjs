@@ -94,18 +94,35 @@ const FAMILIES = [
       // если <каталог>.xml — корень ExternalDataProcessor/ExternalReport, чего в дереве
       // конфигурации не бывает. Поэтому вариант один на всех, переключателя не нужно.
       { id: 'base', authority: 'form-compile',
-        consumers: ['cfe-borrow', 'form-add', 'form-validate', 'help-add', 'interface-edit', 'meta-compile',
-          'mxl-compile', 'role-compile', 'subsystem-compile', 'template-add', 'xdto-compile'] },
+        consumers: ['cfe-borrow', 'cfe-patch-method', 'form-add', 'form-validate', 'help-add', 'interface-edit',
+          'meta-compile', 'mxl-compile', 'role-compile', 'subsystem-compile', 'template-add', 'xdto-compile'] },
     ],
   },
   {
     name: 'format_rank', py: 'format_rank', ps1: 'Get-FormatRank',
     variants: [
       { id: 'base', authority: 'meta-compile',
-        consumers: ['cf-init', 'cf-validate', 'cfe-borrow', 'cfe-init', 'cfe-validate', 'epf-build',
+        consumers: ['cf-init', 'cf-validate', 'cfe-borrow', 'cfe-init', 'cfe-patch-method', 'cfe-validate', 'epf-build',
           'epf-init', 'epf-validate', 'erf-init', 'form-add', 'form-compile', 'form-validate',
           'meta-validate', 'mxl-compile', 'role-compile', 'subsystem-compile', 'subsystem-edit',
           'template-add', 'xdto-compile'] },
+    ],
+  },
+
+  // ─── Пометка расширенного свойства в расширении ──────────────────────────
+  // Флаг <xr:PropertyState> ставит тот навык, который создал файл модуля: cfe-borrow — при
+  // заимствовании, cfe-patch-method — когда модуль появляется вместе с перехватчиком. Копии
+  // обязаны совпадать, иначе один навык пишет пометку, а другой — нет.
+  {
+    name: 'build_property_state_xml', py: 'build_property_state_xml', ps1: 'Build-PropertyStateXml',
+    variants: [
+      { id: 'base', authority: 'cfe-borrow', consumers: ['cfe-patch-method'] },
+    ],
+  },
+  {
+    name: 'set_property_state_flag', py: 'set_property_state_flag', ps1: 'Set-PropertyStateFlag',
+    variants: [
+      { id: 'base', authority: 'cfe-borrow', consumers: ['cfe-patch-method'] },
     ],
   },
 

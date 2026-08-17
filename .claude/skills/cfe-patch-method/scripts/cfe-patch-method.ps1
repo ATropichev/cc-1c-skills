@@ -1,4 +1,4 @@
-﻿# cfe-patch-method v2.7 — Source-aware method interceptor for 1C extension (CFE) (+прощающий ввод: имя каталога наравне с именем типа)
+﻿# cfe-patch-method v2.8 — Source-aware method interceptor for 1C extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -788,6 +788,100 @@ if (Test-Path $ExtensionPath -PathType Leaf) { $ExtensionPath = Split-Path $Exte
 $cfgFile = Join-Path $ExtensionPath "Configuration.xml"
 if (-not (Test-Path $cfgFile)) { Write-Error "Configuration.xml не найден в расширении: $ExtensionPath"; exit 1 }
 
+# --- Пометка расширенного свойства (<xr:PropertyState>) ---
+# Свойство появилось в формате 2.19 (8.3.26): на 2.18 и ниже платформа молча выбрасывает элемент
+# при загрузке. С 2.19 Конфигуратор ставит его сам при выгрузке. Правило: флаг ставит тот, кто
+# создал файл модуля, — здесь это мы. Имя свойства = базовое имя файла модуля.
+# Копии этих функций есть в cfe-borrow (навыки автономны); держать их одинаковыми — сознательно.
+function Get-FormatRank([string]$ver) {
+	if ($ver -match '^(\d+)\.(\d+)$') { return [int]$Matches[1] * 100 + [int]$Matches[2] }
+	return 0
+}
+
+function Detect-FormatVersion([string]$dir) {
+	$d = $dir
+	while ($d) {
+		# Автономная внешняя обработка/отчёт: своего Configuration.xml у неё нет, версию несёт
+		# корень самой обработки. Без этого форма и макет внутри обработки 2.21 писались бы 2.17.
+		$extPath = "$d.xml"
+		if (Test-Path $extPath) {
+			$extText = [System.IO.File]::ReadAllText($extPath, [System.Text.Encoding]::UTF8)
+			$extHead = $extText.Substring(0, [Math]::Min(2000, $extText.Length))
+			if ($extHead -match '<(ExternalDataProcessor|ExternalReport)[ >]' -and $extHead -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { return $Matches[1] }
+		}
+		$cfgPath = Join-Path $d "Configuration.xml"
+		if (Test-Path $cfgPath) {
+			$cfgText = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
+			# Длину среза берём по СТРОКЕ, а не по размеру файла: размер в БАЙТАХ, Substring считает
+			# СИМВОЛЫ, и на кириллице байт больше — короткий Configuration.xml ронял навык исключением.
+			$head = $cfgText.Substring(0, [Math]::Min(2000, $cfgText.Length))
+			if ($head -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { return $Matches[1] }
+		}
+		$parent = Split-Path $d -Parent
+		if ($parent -eq $d) { break }
+		$d = $parent
+	}
+	return "2.17"
+}
+
+function Build-PropertyStateXml {
+	param([string]$propertyName, [string]$indent)
+
+	$sb = New-Object System.Text.StringBuilder
+	$sb.AppendLine("${indent}<xr:PropertyState>") | Out-Null
+	$sb.AppendLine("${indent}`t<xr:Property>${propertyName}</xr:Property>") | Out-Null
+	$sb.AppendLine("${indent}`t<xr:State>Extended</xr:State>") | Out-Null
+	$sb.Append("${indent}</xr:PropertyState>") | Out-Null
+	return $sb.ToString()
+}
+
+function Set-PropertyStateFlag {
+	param([string]$objFile, [string]$propertyName, [string]$formatVersion)
+
+	if ((Get-FormatRank $formatVersion) -lt 219) { return }
+	if (-not (Test-Path $objFile)) { return }
+
+	$enc = New-Object System.Text.UTF8Encoding($true)
+	$text = [System.IO.File]::ReadAllText($objFile, $enc)
+	$nl = if ($text -match "`r`n") { "`r`n" } else { "`n" }
+
+	# ПЕРВЫЙ <InternalInfo> в файле — собственный у объекта: у реквизитов и подобъектов свои,
+	# но они лежат ниже, внутри <ChildObjects>.
+	$empty = [regex]::Match($text, '([ \t]*)<InternalInfo\s*/>')
+	$open = [regex]::Match($text, '(?s)([ \t]*)<InternalInfo>(.*?)</InternalInfo>')
+
+	if ($empty.Success -and (-not $open.Success -or $empty.Index -lt $open.Index)) {
+		$ind = $empty.Groups[1].Value
+		$block = Build-PropertyStateXml $propertyName ($ind + "`t")
+		$replacement = "${ind}<InternalInfo>${nl}${block}${nl}${ind}</InternalInfo>"
+		$text = $text.Remove($empty.Index, $empty.Length).Insert($empty.Index, $replacement)
+	} elseif ($open.Success) {
+		if ($open.Groups[2].Value -match "<xr:Property>$([regex]::Escape($propertyName))</xr:Property>") { return }
+		$ind = $open.Groups[1].Value
+		$block = Build-PropertyStateXml $propertyName ($ind + "`t")
+		# Дописываем в КОНЕЦ InternalInfo: у Конфигуратора PropertyState идёт после GeneratedType.
+		$closeAt = $open.Index + $open.Length - "</InternalInfo>".Length - $ind.Length
+		$text = $text.Insert($closeAt, "${block}${nl}")
+	} else {
+		return
+	}
+
+	[System.IO.File]::WriteAllText($objFile, $text, $enc)
+}
+
+# Модуль формы сюда не попадает: у формы флаг называется Form и ставится при заимствовании,
+# а не при появлении модуля (замер на 8.3.26 — пустой модуль формы платформа не выгружает).
+function Get-ModuleFlagTarget {
+	param([string[]]$relParts, [string]$extRoot)
+
+	if ($relParts.Count -ne 4 -or $relParts[2] -ne "Ext") { return $null }
+	$prop = [System.IO.Path]::GetFileNameWithoutExtension($relParts[3])
+	return @{
+		File     = (Join-Path (Join-Path $extRoot $relParts[0]) "$($relParts[1]).xml")
+		Property = $prop
+	}
+}
+
 # --- Read NamePrefix ---
 $cfgDoc = New-Object System.Xml.XmlDocument
 $cfgDoc.PreserveWhitespace = $false
@@ -1082,6 +1176,12 @@ if ($reuseRegionIdx -ge 0) {
 		[System.IO.File]::WriteAllText($extBsl, $blockText, $enc)
 		$placement = "создан модуль"
 	}
+}
+
+# Модуль в расширении есть — отражаем это в метаданных объекта (формат ≥ 2.19).
+$flagTarget = Get-ModuleFlagTarget $relParts $ExtensionPath
+if ($flagTarget) {
+	Set-PropertyStateFlag $flagTarget.File $flagTarget.Property (Detect-FormatVersion $ExtensionPath)
 }
 
 Write-Host "[OK] Перехватчик &$decoratorRu(`"$MethodName`") — $placement"

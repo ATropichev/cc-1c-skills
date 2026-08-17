@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.11 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.12 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -107,7 +107,28 @@ function Get-FormatRank([string]$ver) {
 }
 
 # --- Reference tables ---
-$guidPattern = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+# Модули заимствованных объектов: тип → виды модулей. Имя свойства в <xr:PropertyState>
+# совпадает с базовым именем файла модуля. Копия таблицы есть в cfe-borrow (навыки автономны).
+$moduleKindsByType = @{
+	"CommonModule"=@("Module"); "HTTPService"=@("Module"); "WebService"=@("Module")
+	"Catalog"=@("ObjectModule","ManagerModule"); "Document"=@("ObjectModule","ManagerModule")
+	"Report"=@("ObjectModule","ManagerModule"); "DataProcessor"=@("ObjectModule","ManagerModule")
+	"ExchangePlan"=@("ObjectModule","ManagerModule")
+	"ChartOfCharacteristicTypes"=@("ObjectModule","ManagerModule")
+	"ChartOfAccounts"=@("ObjectModule","ManagerModule")
+	"ChartOfCalculationTypes"=@("ObjectModule","ManagerModule")
+	"BusinessProcess"=@("ObjectModule","ManagerModule"); "Task"=@("ObjectModule","ManagerModule")
+	"InformationRegister"=@("RecordSetModule","ManagerModule")
+	"AccumulationRegister"=@("RecordSetModule","ManagerModule")
+	"AccountingRegister"=@("RecordSetModule","ManagerModule")
+	"CalculationRegister"=@("RecordSetModule","ManagerModule")
+	"Sequence"=@("RecordSetModule","ManagerModule")
+	"Constant"=@("ValueManagerModule","ManagerModule")
+	"Enum"=@("ManagerModule"); "DocumentJournal"=@("ManagerModule")
+	"FilterCriterion"=@("ManagerModule")
+}
+
+$guidPattern ='^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
 $identPattern = '^[A-Za-z\u0410-\u042F\u0401\u0430-\u044F\u0451_][A-Za-z0-9\u0410-\u042F\u0401\u0430-\u044F\u0451_]*$'
 
 # 7 fixed ClassIds for Configuration
@@ -1233,6 +1254,48 @@ if ($defaultRoleNodes.Count -gt 0) {
 }
 
 if ($script:stopped) { & $finalize; exit 1 }
+
+# --- Check 16: модуль заимствованного объекта и пометка расширенного свойства ---
+# Свойство <xr:PropertyState> появилось в формате 2.19 (8.3.26); ниже платформа его молча
+# выбрасывает, поэтому там проверять нечего. С 2.19 состояние обязано соответствовать факту:
+# есть файл модуля — есть пометка, и наоборот. Перекос платформа принимает (проверено на стенде),
+# но выгрузка Конфигуратора так не выглядит — отсюда предупреждение, а не ошибка.
+if ($versionRank -ge 219 -and $childObjNode) {
+	$stateIssues = @()
+	$stateChecked = 0
+	foreach ($child in $childObjNode.ChildNodes) {
+		if ($child.NodeType -ne 'Element') { continue }
+		$typeName = $child.LocalName
+		if (-not $moduleKindsByType.ContainsKey($typeName)) { continue }
+		if (-not $childTypeDirMap.ContainsKey($typeName)) { continue }
+		$objName = $child.InnerText.Trim()
+		if (-not $objName) { continue }
+		$typeDir = Join-Path $configDir $childTypeDirMap[$typeName]
+		$objFile = Join-Path $typeDir "$objName.xml"
+		if (-not (Test-Path $objFile)) { continue }
+		$objText = [System.IO.File]::ReadAllText($objFile, [System.Text.Encoding]::UTF8)
+		if ($objText -notmatch '<ObjectBelonging>Adopted</ObjectBelonging>') { continue }
+
+		foreach ($kind in $moduleKindsByType[$typeName]) {
+			$stateChecked++
+			$hasFile = Test-Path (Join-Path (Join-Path (Join-Path $typeDir $objName) "Ext") "$kind.bsl")
+			$hasFlag = $objText -match "<xr:Property>$kind</xr:Property>"
+			if ($hasFile -and -not $hasFlag) {
+				$stateIssues += "$typeName.$objName — есть $kind.bsl, но нет <xr:PropertyState> для $kind"
+			} elseif ($hasFlag -and -not $hasFile) {
+				$stateIssues += "$typeName.$objName — есть <xr:PropertyState> для $kind, но нет $kind.bsl"
+			}
+		}
+	}
+
+	if ($stateChecked -gt 0) {
+		if ($stateIssues.Count -eq 0) {
+			Report-OK "16. Модули заимствованных объектов: пометки расширенных свойств согласованы ($stateChecked)"
+		} else {
+			foreach ($issue in $stateIssues) { Report-Warn "16. $issue" }
+		}
+	}
+}
 
 # --- Breadcrumb: controlled methods (&ИзменениеИКонтроль) drift is not checked here ---
 $extRootDir = Split-Path $resolvedPath -Parent

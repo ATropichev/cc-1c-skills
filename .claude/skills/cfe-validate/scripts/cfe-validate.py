@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.11 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.12 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -70,6 +70,27 @@ CHILD_OBJECT_TYPES = [
     'ChartOfCalculationTypes', 'CalculationRegister',
     'BusinessProcess', 'Task', 'IntegrationService',
 ]
+
+# Модули заимствованных объектов: тип → виды модулей. Имя свойства в <xr:PropertyState>
+# совпадает с базовым именем файла модуля. Копия таблицы есть в cfe-borrow (навыки автономны).
+MODULE_KINDS_BY_TYPE = {
+    "CommonModule": ["Module"], "HTTPService": ["Module"], "WebService": ["Module"],
+    "Catalog": ["ObjectModule", "ManagerModule"], "Document": ["ObjectModule", "ManagerModule"],
+    "Report": ["ObjectModule", "ManagerModule"], "DataProcessor": ["ObjectModule", "ManagerModule"],
+    "ExchangePlan": ["ObjectModule", "ManagerModule"],
+    "ChartOfCharacteristicTypes": ["ObjectModule", "ManagerModule"],
+    "ChartOfAccounts": ["ObjectModule", "ManagerModule"],
+    "ChartOfCalculationTypes": ["ObjectModule", "ManagerModule"],
+    "BusinessProcess": ["ObjectModule", "ManagerModule"], "Task": ["ObjectModule", "ManagerModule"],
+    "InformationRegister": ["RecordSetModule", "ManagerModule"],
+    "AccumulationRegister": ["RecordSetModule", "ManagerModule"],
+    "AccountingRegister": ["RecordSetModule", "ManagerModule"],
+    "CalculationRegister": ["RecordSetModule", "ManagerModule"],
+    "Sequence": ["RecordSetModule", "ManagerModule"],
+    "Constant": ["ValueManagerModule", "ManagerModule"],
+    "Enum": ["ManagerModule"], "DocumentJournal": ["ManagerModule"],
+    "FilterCriterion": ["ManagerModule"],
+}
 
 # Type -> directory mapping
 CHILD_TYPE_DIR_MAP = {
@@ -1200,6 +1221,48 @@ def main():
     if r.stopped:
         r.finalize(out_file)
         sys.exit(1)
+
+    # --- Check 16: модуль заимствованного объекта и пометка расширенного свойства ---
+    # Свойство <xr:PropertyState> появилось в формате 2.19 (8.3.26); ниже платформа его молча
+    # выбрасывает, поэтому там проверять нечего. С 2.19 состояние обязано соответствовать факту:
+    # есть файл модуля — есть пометка, и наоборот. Перекос платформа принимает (проверено на
+    # стенде), но выгрузка Конфигуратора так не выглядит — отсюда предупреждение, а не ошибка.
+    if version_rank >= 219 and child_obj_node is not None:
+        state_issues = []
+        state_checked = 0
+        for child in child_obj_node:
+            if not isinstance(child.tag, str):
+                continue
+            type_name = etree.QName(child.tag).localname
+            if type_name not in MODULE_KINDS_BY_TYPE or type_name not in CHILD_TYPE_DIR_MAP:
+                continue
+            obj_name_val = (child.text or '').strip()
+            if not obj_name_val:
+                continue
+            type_dir = os.path.join(config_dir, CHILD_TYPE_DIR_MAP[type_name])
+            obj_file = os.path.join(type_dir, f'{obj_name_val}.xml')
+            if not os.path.isfile(obj_file):
+                continue
+            with open(obj_file, 'r', encoding='utf-8-sig') as f:
+                obj_text = f.read()
+            if '<ObjectBelonging>Adopted</ObjectBelonging>' not in obj_text:
+                continue
+
+            for kind in MODULE_KINDS_BY_TYPE[type_name]:
+                state_checked += 1
+                has_file = os.path.isfile(os.path.join(type_dir, obj_name_val, 'Ext', f'{kind}.bsl'))
+                has_flag = f'<xr:Property>{kind}</xr:Property>' in obj_text
+                if has_file and not has_flag:
+                    state_issues.append(f'{type_name}.{obj_name_val} — есть {kind}.bsl, но нет <xr:PropertyState> для {kind}')
+                elif has_flag and not has_file:
+                    state_issues.append(f'{type_name}.{obj_name_val} — есть <xr:PropertyState> для {kind}, но нет {kind}.bsl')
+
+        if state_checked > 0:
+            if not state_issues:
+                r.ok(f'16. Модули заимствованных объектов: пометки расширенных свойств согласованы ({state_checked})')
+            else:
+                for issue in state_issues:
+                    r.warn(f'16. {issue}')
 
     # --- Breadcrumb: controlled methods (&ИзменениеИКонтроль) drift is not checked here ---
     ctrl_count = 0

@@ -1,0 +1,30 @@
+{
+  "name": "Модули справочника по -Module: файлы и пометки расширенных свойств (2.20)",
+  "setup": "empty-config-220",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Товары" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
+    }
+  ],
+  "params": { "extensionPath": "cfe" },
+  "object": "Catalog.Товары",
+  "args_extra": ["-Module", "ObjectModule,ManagerModule"],
+  "expect": {
+    "fileContains": [
+      {
+        "file": "cfe/Catalogs/Товары.xml",
+        "text": [
+          "<xr:Property>ObjectModule</xr:Property>",
+          "<xr:Property>ManagerModule</xr:Property>",
+          "<xr:State>Extended</xr:State>"
+        ]
+      }
+    ]
+  }
+}

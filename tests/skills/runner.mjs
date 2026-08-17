@@ -752,6 +752,12 @@ async function runCaseAsync(testCase, opts) {
           if (step.writeFile.executable) chmodSync(wfPath, 0o755);
           continue;
         }
+        // deletePath step — убрать файл или каталог из workDir: так выражается состояние,
+        // которое навыки сами не создают (например, пометка свойства без файла модуля).
+        if (step.deletePath) {
+          rmSync(join(workDir, step.deletePath), { recursive: true, force: true });
+          continue;
+        }
         const preScript = resolveScript(step.script, opts.runtime);
         const preArgs = [];
         for (const [flag, value] of Object.entries(step.args || {})) {

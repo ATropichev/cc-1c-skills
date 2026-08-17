@@ -31,6 +31,7 @@ allowed-tools:
 | `ExtensionPath` | Путь к каталогу расширения (обязат.) |
 | `ConfigPath` | Путь к конфигурации-источнику (обязат.) |
 | `Object` | Что заимствовать (обязат.), batch через `;;` |
+| `Module` | Создать пустые модули объекта: `ObjectModule`, `ManagerModule`, `RecordSetModule`, `ValueManagerModule` (через запятую) или `None`. У типов с единственным модулем (`CommonModule`, `HTTPService`, `WebService`) он создаётся и без параметра |
 | `BorrowMainAttribute` | Заимствовать основной реквизит формы. Без параметра — не заимствует. `Form` — реквизиты, используемые на форме. `All` — все реквизиты объекта. Требует форму в -Object |
 
 ## Формат -Object
@@ -65,7 +66,7 @@ allowed-tools:
 2. `/meta-edit` — добавить новый реквизит в объект расширения
 3. `/form-edit` — вывести реквизит на заимствованную форму
 
-**Защита существующих данных**: если зависимый объект уже заимствован с содержимым (реквизитами, формами) — скрипт не перезаписывает его, а добавляет только недостающее.
+**Защита существующих данных**: уже заимствованный объект не перезаписывается — добавляется только недостающее. Повторный вызов безопасен: собственные реквизиты расширения, заимствованные подобъекты и код в модулях сохраняются.
 
 ## Команда
 
@@ -78,6 +79,12 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/cfe-borrow.ps1" -Ex
 ```powershell
 # Заимствовать один объект
 ... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Object "Catalog.Контрагенты"
+
+# Заимствовать справочник вместе с модулями объекта и менеджера
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Object "Catalog.Контрагенты" -Module ObjectModule,ManagerModule
+
+# Общий модуль без файла модуля
+... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Object "CommonModule.РаботаСФайлами" -Module None
 
 # Заимствовать форму (автоматически заимствует родительский объект)
 ... -ExtensionPath src\cfe\extname -ConfigPath src\cf -Object "Catalog.Контрагенты.Form.ФормаЭлемента"

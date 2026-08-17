@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-patch-method v2.7 — Source-aware method interceptor for 1C extension (CFE) (+прощающий ввод: имя каталога наравне с именем типа)
+# cfe-patch-method v2.8 — Source-aware method interceptor for 1C extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -73,6 +73,99 @@ DECORATOR_MAP = {
 CONTEXT_RE = re.compile(
     r'^&(НаКлиенте|НаСервере|НаСервереБезКонтекста|НаКлиентеНаСервереБезКонтекста|НаКлиентеНаСервере)\s*$'
 )
+
+
+# --- Пометка расширенного свойства (<xr:PropertyState>) ---
+# Свойство появилось в формате 2.19 (8.3.26): на 2.18 и ниже платформа молча выбрасывает элемент
+# при загрузке. С 2.19 Конфигуратор ставит его сам при выгрузке. Правило: флаг ставит тот, кто
+# создал файл модуля, — здесь это мы. Имя свойства = базовое имя файла модуля.
+# Копии этих функций есть в cfe-borrow (навыки автономны); держать их одинаковыми — сознательно.
+def detect_format_version(d):
+    while d:
+        # Автономная внешняя обработка/отчёт: своего Configuration.xml у неё нет, версию несёт
+        # корень самой обработки. Без этого форма и макет внутри обработки 2.21 писались бы 2.17.
+        ext_path = d + ".xml"
+        if os.path.isfile(ext_path):
+            with open(ext_path, "r", encoding="utf-8-sig") as f:
+                ext_head = f.read(2000)
+            if re.search(r'<(ExternalDataProcessor|ExternalReport)[ >]', ext_head):
+                m = re.search(r'<MetaDataObject[^>]+version="(\d+\.\d+)"', ext_head)
+                if m:
+                    return m.group(1)
+        cfg_path = os.path.join(d, "Configuration.xml")
+        if os.path.isfile(cfg_path):
+            with open(cfg_path, "r", encoding="utf-8-sig") as f:
+                head = f.read(2000)
+            m = re.search(r'<MetaDataObject[^>]+version="(\d+\.\d+)"', head)
+            if m:
+                return m.group(1)
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return "2.17"
+
+
+def format_rank(ver):
+    """"2.20" → 220, "2.9" → 209. Строковое сравнение неверно ("2.9" > "2.17")."""
+    m = re.match(r'^(\d+)\.(\d+)$', ver or '')
+    return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
+
+
+def build_property_state_xml(property_name, indent):
+    return "\n".join([
+        f"{indent}<xr:PropertyState>",
+        f"{indent}\t<xr:Property>{property_name}</xr:Property>",
+        f"{indent}\t<xr:State>Extended</xr:State>",
+        f"{indent}</xr:PropertyState>",
+    ])
+
+
+def set_property_state_flag(obj_file, property_name, format_version):
+    if format_rank(format_version) < 219:
+        return
+    if not os.path.isfile(obj_file):
+        return
+
+    with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
+        text = fh.read()
+    nl = "\r\n" if "\r\n" in text else "\n"
+
+    # ПЕРВЫЙ <InternalInfo> в файле — собственный у объекта: у реквизитов и подобъектов свои,
+    # но они лежат ниже, внутри <ChildObjects>.
+    empty = re.search(r"([ \t]*)<InternalInfo\s*/>", text)
+    opened = re.search(r"([ \t]*)<InternalInfo>(.*?)</InternalInfo>", text, re.S)
+
+    if empty and (not opened or empty.start() < opened.start()):
+        ind = empty.group(1)
+        block = build_property_state_xml(property_name, ind + "\t")
+        replacement = f"{ind}<InternalInfo>{nl}{block}{nl}{ind}</InternalInfo>"
+        text = text[:empty.start()] + replacement + text[empty.end():]
+    elif opened:
+        if re.search(rf"<xr:Property>{re.escape(property_name)}</xr:Property>", opened.group(2)):
+            return
+        ind = opened.group(1)
+        block = build_property_state_xml(property_name, ind + "\t")
+        # Дописываем в КОНЕЦ InternalInfo: у Конфигуратора PropertyState идёт после GeneratedType.
+        close_at = opened.end() - len("</InternalInfo>") - len(ind)
+        text = text[:close_at] + block + nl + text[close_at:]
+    else:
+        return
+
+    with open(obj_file, "w", encoding="utf-8-sig", newline="") as fh:
+        fh.write(text)
+
+
+# Модуль формы сюда не попадает: у формы флаг называется Form и ставится при заимствовании,
+# а не при появлении модуля (замер на 8.3.26 — пустой модуль формы платформа не выгружает).
+def get_module_flag_target(rel_parts, ext_root):
+    if len(rel_parts) != 4 or rel_parts[2] != "Ext":
+        return None
+    prop = os.path.splitext(rel_parts[3])[0]
+    return {
+        "file": os.path.join(ext_root, rel_parts[0], f"{rel_parts[1]}.xml"),
+        "property": prop,
+    }
 
 
 def get_module_rel_path(module_path):
@@ -840,6 +933,12 @@ def main():
     core = build_interceptor_core(method, interceptor_type, interceptor_name)
 
     place_new(ext_bsl, ext_lines, ext_exists, method["chain"], core)
+
+    # Модуль в расширении есть — отражаем это в метаданных объекта (формат ≥ 2.19).
+    flag_target = get_module_flag_target(rel_parts, extension_path)
+    if flag_target:
+        set_property_state_flag(flag_target["file"], flag_target["property"],
+                                detect_format_version(extension_path))
 
     # emit summary
     placement = place_new.placement

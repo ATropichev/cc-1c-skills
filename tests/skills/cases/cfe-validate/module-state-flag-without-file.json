@@ -1,0 +1,26 @@
+{
+  "name": "Предупреждение: пометка расширенного свойства есть, файла модуля нет",
+  "setup": "empty-config-220",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "CommonModule", "name": "ОбщийМодуль1", "properties": { "Server": true } },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "CommonModule.ОбщийМодуль1"
+      }
+    },
+    { "deletePath": "cfe/CommonModules/ОбщийМодуль1/Ext/Module.bsl" }
+  ],
+  "params": { "extensionPath": "cfe" },
+  "expect": { "stdoutContains": "есть <xr:PropertyState> для Module, но нет Module.bsl" }
+}

@@ -1,10 +1,11 @@
-﻿# cfe-borrow v1.31 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.32 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
 	[Parameter(Mandatory)][string]$ConfigPath,
 	[Parameter(Mandatory)][string]$Object,
-	[string]$BorrowMainAttribute
+	[string]$BorrowMainAttribute,
+	[string]$Module
 )
 
 $ErrorActionPreference = "Stop"
@@ -260,6 +261,32 @@ $childTypeDirMap = @{
 	"HTTPService"="HTTPServices"; "WSReference"="WSReferences"
 	"CommonAttribute"="CommonAttributes"; "Style"="Styles"; "Bot"="Bots"; "Language"="Languages"
 }
+
+# --- 4a. Модули заимствованных объектов ---
+# Порядок внутри значения — порядок выгрузки Конфигуратора: сначала «объектный» модуль
+# (ObjectModule / RecordSetModule / ValueManagerModule), затем ManagerModule.
+$script:moduleKindsByType = @{
+	"CommonModule"=@("Module"); "HTTPService"=@("Module"); "WebService"=@("Module")
+	"Catalog"=@("ObjectModule","ManagerModule"); "Document"=@("ObjectModule","ManagerModule")
+	"Report"=@("ObjectModule","ManagerModule"); "DataProcessor"=@("ObjectModule","ManagerModule")
+	"ExchangePlan"=@("ObjectModule","ManagerModule")
+	"ChartOfCharacteristicTypes"=@("ObjectModule","ManagerModule")
+	"ChartOfAccounts"=@("ObjectModule","ManagerModule")
+	"ChartOfCalculationTypes"=@("ObjectModule","ManagerModule")
+	"BusinessProcess"=@("ObjectModule","ManagerModule"); "Task"=@("ObjectModule","ManagerModule")
+	"InformationRegister"=@("RecordSetModule","ManagerModule")
+	"AccumulationRegister"=@("RecordSetModule","ManagerModule")
+	"AccountingRegister"=@("RecordSetModule","ManagerModule")
+	"CalculationRegister"=@("RecordSetModule","ManagerModule")
+	"Sequence"=@("RecordSetModule","ManagerModule")
+	"Constant"=@("ValueManagerModule","ManagerModule")
+	"Enum"=@("ManagerModule"); "DocumentJournal"=@("ManagerModule")
+	"FilterCriterion"=@("ManagerModule")
+}
+# Типы с ЕДИНСТВЕННЫМ модулем: ради него объект и заимствуют, поэтому файл создаётся молча.
+# Отказ — `-Module None`.
+$script:autoModuleTypes = @("CommonModule", "HTTPService", "WebService")
+$script:moduleKindNames = @("Module", "ObjectModule", "ManagerModule", "RecordSetModule", "ValueManagerModule")
 
 # --- 4b. Russian synonym → English type ---
 $synonymMap = @{
@@ -589,6 +616,50 @@ if ($BorrowMainAttribute) {
 		Write-Error "-BorrowMainAttribute requires a form in -Object (e.g. 'Catalog.X.Form.Y')"
 		exit 1
 	}
+}
+
+# --- 9c. Validate -Module ---
+$script:requestedModules = @()
+$script:noModule = $false
+if ($Module) {
+	foreach ($raw in ($Module -split '[,;]')) {
+		$kind = $raw.Trim()
+		if (-not $kind) { continue }
+		# Сравнение РЕГИСТРОНЕЗАВИСИМОЕ явно (-ieq): в py-порте это отдельная ветка, и молчаливое
+		# расхождение портов на «none» ловится только глазами.
+		if ($kind -ieq "None") { $script:noModule = $true; continue }
+		$canon = @($script:moduleKindNames | Where-Object { $_ -ieq $kind })
+		if ($canon.Count -eq 0) {
+			Write-Error "Неизвестный вид модуля '$kind'. Допустимо: $($script:moduleKindNames -join ', '), None"
+			exit 1
+		}
+		$script:requestedModules += $canon[0]
+	}
+	if ($script:noModule -and $script:requestedModules.Count -gt 0) {
+		Write-Error "-Module None нельзя сочетать с видами модулей"
+		exit 1
+	}
+}
+
+# Какие модули создать для объекта. Тип с единственным модулем получает его всегда — уточнять
+# там нечего; -Module разбирает только неоднозначные типы. Иначе батч смешанных типов
+# (`CommonModule.X ;; Catalog.Y`) не выражался бы одним вызовом.
+function Resolve-ModuleKinds {
+	param([string]$typeName)
+
+	if ($script:noModule) { return @() }
+	$allowed = @($script:moduleKindsByType[$typeName])
+	if ($allowed.Count -eq 0) { return @() }
+
+	if ($script:autoModuleTypes -contains $typeName) { return @($allowed[0]) }
+	if ($script:requestedModules.Count -eq 0) { return @() }
+
+	# Порядок берём из таблицы типа, а не из порядка ключей в -Module.
+	$selected = @($allowed | Where-Object { $script:requestedModules -contains $_ })
+	if ($selected.Count -eq 0) {
+		Warn "  Тип $typeName не имеет запрошенных модулей — пропущено. Допустимо: $($allowed -join ', ')"
+	}
+	return $selected
 }
 
 # --- 10. Helper: read source object XML ---
@@ -1311,6 +1382,81 @@ function Test-ObjectBorrowed {
 	$dirName = $childTypeDirMap[$typeName]
 	$objFile = Join-Path (Join-Path $extDir $dirName) "${objName}.xml"
 	return (Test-Path $objFile)
+}
+
+# --- 10f. Helper: пометка расширенного свойства (<xr:PropertyState>) ---
+# Свойство появилось в формате 2.19 (8.3.26): на 2.18 и ниже платформа молча выбрасывает элемент
+# при загрузке. С 2.19 Конфигуратор ставит его сам при выгрузке — эмитим, чтобы исходники навыка
+# совпадали с эталоном. Имя свойства = базовое имя файла модуля (Module / ObjectModule / …),
+# у заимствованной формы — Form. Ставит тот, кто создал файл модуля (или форму).
+function Build-PropertyStateXml {
+	param([string]$propertyName, [string]$indent)
+
+	$sb = New-Object System.Text.StringBuilder
+	$sb.AppendLine("${indent}<xr:PropertyState>") | Out-Null
+	$sb.AppendLine("${indent}`t<xr:Property>${propertyName}</xr:Property>") | Out-Null
+	$sb.AppendLine("${indent}`t<xr:State>Extended</xr:State>") | Out-Null
+	$sb.Append("${indent}</xr:PropertyState>") | Out-Null
+	return $sb.ToString()
+}
+
+function Set-PropertyStateFlag {
+	param([string]$objFile, [string]$propertyName, [string]$formatVersion)
+
+	if ((Get-FormatRank $formatVersion) -lt 219) { return }
+	if (-not (Test-Path $objFile)) { return }
+
+	$enc = New-Object System.Text.UTF8Encoding($true)
+	$text = [System.IO.File]::ReadAllText($objFile, $enc)
+	$nl = if ($text -match "`r`n") { "`r`n" } else { "`n" }
+
+	# ПЕРВЫЙ <InternalInfo> в файле — собственный у объекта: у реквизитов и подобъектов свои,
+	# но они лежат ниже, внутри <ChildObjects>.
+	$empty = [regex]::Match($text, '([ \t]*)<InternalInfo\s*/>')
+	$open = [regex]::Match($text, '(?s)([ \t]*)<InternalInfo>(.*?)</InternalInfo>')
+
+	if ($empty.Success -and (-not $open.Success -or $empty.Index -lt $open.Index)) {
+		$ind = $empty.Groups[1].Value
+		$block = Build-PropertyStateXml $propertyName ($ind + "`t")
+		$replacement = "${ind}<InternalInfo>${nl}${block}${nl}${ind}</InternalInfo>"
+		$text = $text.Remove($empty.Index, $empty.Length).Insert($empty.Index, $replacement)
+	} elseif ($open.Success) {
+		if ($open.Groups[2].Value -match "<xr:Property>$([regex]::Escape($propertyName))</xr:Property>") { return }
+		$ind = $open.Groups[1].Value
+		$block = Build-PropertyStateXml $propertyName ($ind + "`t")
+		# Дописываем в КОНЕЦ InternalInfo: у Конфигуратора PropertyState идёт после GeneratedType.
+		$closeAt = $open.Index + $open.Length - "</InternalInfo>".Length - $ind.Length
+		$text = $text.Insert($closeAt, "${block}${nl}")
+	} else {
+		return
+	}
+
+	[System.IO.File]::WriteAllText($objFile, $text, $enc)
+}
+
+# --- 10g. Helper: пустой модуль заимствованного объекта ---
+function New-BorrowedModuleFile {
+	param([string]$typeName, [string]$objName, [string]$moduleKind)
+
+	$dirName = $childTypeDirMap[$typeName]
+	$objDir = Join-Path (Join-Path $extDir $dirName) $objName
+	$moduleDir = Join-Path $objDir "Ext"
+	if (-not (Test-Path $moduleDir)) { New-Item -ItemType Directory -Path $moduleDir -Force | Out-Null }
+
+	# NEVER overwrite an existing one: повторное заимствование не должно затирать дописанный код
+	# (то же правило, что у модуля формы).
+	$moduleFile = Join-Path $moduleDir "${moduleKind}.bsl"
+	if (Test-Path $moduleFile) {
+		Info "  Preserved existing ${moduleKind}.bsl"
+	} else {
+		$enc = New-Object System.Text.UTF8Encoding($true)
+		[System.IO.File]::WriteAllText($moduleFile, "", $enc)
+		Info "  Created: $moduleFile"
+	}
+
+	# Флаг ставим и для уже существовавшего файла: состояние объекта должно отражать факт модуля.
+	Set-PropertyStateFlag (Join-Path (Join-Path $extDir $dirName) "${objName}.xml") $moduleKind $script:formatVersion
+	return $moduleFile
 }
 
 # --- 11. Helper: generate InternalInfo XML ---
@@ -2204,6 +2350,9 @@ foreach ($item in $items) {
 		$hasBMA = [bool]$BorrowMainAttribute
 		$formFiles = Borrow-Form $typeName $objName $formName -BorrowMainAttr:$hasBMA
 		$script:borrowedFiles += $formFiles
+		# Замер на 8.3.26: платформа помечает форму расширенной сразу при заимствовании,
+		# даже если элементы не менялись. Флаг живёт в метаданных формы, не у владельца.
+		Set-PropertyStateFlag $formFiles[0] "Form" $script:formatVersion
 		$borrowedCount++
 
 		# Borrow main attribute if requested
@@ -2212,26 +2361,37 @@ foreach ($item in $items) {
 		}
 	} else {
 		# --- Object borrowing (existing logic) ---
-		Info "Borrowing ${typeName}.${objName}..."
-
-		$src = Read-SourceObject $typeName $objName
-		Info "  Source UUID: $($src.Uuid)"
-
-		$borrowedXml = Build-BorrowedObjectXml $typeName $objName $src.Uuid $src.Properties
-
 		$targetDir = Join-Path $extDir $dirName
-		if (-not (Test-Path $targetDir)) {
-			New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-		}
-
 		$targetFile = Join-Path $targetDir "${objName}.xml"
-		$enc = New-Object System.Text.UTF8Encoding($true)
-		[System.IO.File]::WriteAllText($targetFile, $borrowedXml, $enc)
-		Info "  Created: $targetFile"
+
+		# Уже заимствованный объект НЕ переписываем: в его XML лежат собственные реквизиты
+		# расширения, заимствованные подобъекты и состояния, которые из источника не выводятся.
+		# Повторный вызов — законный способ доделать модуль (-Module), а не переиздать заготовку.
+		if (Test-ObjectBorrowed $typeName $objName) {
+			Info "Already borrowed: ${typeName}.${objName} — XML сохранён без изменений"
+		} else {
+			Info "Borrowing ${typeName}.${objName}..."
+
+			$src = Read-SourceObject $typeName $objName
+			Info "  Source UUID: $($src.Uuid)"
+
+			$borrowedXml = Build-BorrowedObjectXml $typeName $objName $src.Uuid $src.Properties
+
+			if (-not (Test-Path $targetDir)) {
+				New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+			}
+
+			$enc = New-Object System.Text.UTF8Encoding($true)
+			[System.IO.File]::WriteAllText($targetFile, $borrowedXml, $enc)
+			Info "  Created: $targetFile"
+		}
 
 		Add-ToChildObjects $typeName $objName
 
 		$script:borrowedFiles += $targetFile
+		foreach ($kind in (Resolve-ModuleKinds $typeName)) {
+			$script:borrowedFiles += (New-BorrowedModuleFile $typeName $objName $kind)
+		}
 		$borrowedCount++
 	}
 }

@@ -1,0 +1,22 @@
+{
+  "name": "Формат 2.18: модуль создаётся, пометки расширенного свойства нет",
+  "setup": "empty-config-218",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "CommonModule", "name": "ОбщийМодуль1", "context": "server" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
+    }
+  ],
+  "params": { "extensionPath": "cfe" },
+  "object": "CommonModule.ОбщийМодуль1",
+  "expect": {
+    "fileContains": [
+      { "file": "cfe/CommonModules/ОбщийМодуль1.xml", "text": "<InternalInfo/>" }
+    ]
+  }
+}

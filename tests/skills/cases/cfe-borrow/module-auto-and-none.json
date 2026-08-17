@@ -1,0 +1,43 @@
+{
+  "name": "Общий модуль: файл создаётся сам, -Module None отменяет",
+  "setup": "empty-config-220",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "CommonModule", "name": "ОбщийМодуль1", "context": "server" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "CommonModule.ОбщийМодуль1",
+        "-Module": "None"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "CommonModule", "name": "ОбщийМодуль2", "context": "server" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    }
+  ],
+  "params": { "extensionPath": "cfe" },
+  "object": "CommonModule.ОбщийМодуль2",
+  "expect": {
+    "fileContains": [
+      {
+        "file": "cfe/CommonModules/ОбщийМодуль2.xml",
+        "text": ["<xr:Property>Module</xr:Property>", "<xr:State>Extended</xr:State>"]
+      },
+      {
+        "file": "cfe/CommonModules/ОбщийМодуль1.xml",
+        "text": "<InternalInfo/>"
+      }
+    ]
+  }
+}
