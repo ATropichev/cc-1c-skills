@@ -3,13 +3,13 @@
   "setup": "empty-config-221",
   "params": {
     "name": "Расш221",
-    "outputDir": "ext"
+    "outputDir": "cfe"
   },
-  "validatePath": "ext",
+  "validatePath": "cfe",
   "expect": {
     "fileContains": [
       {
-        "file": "ext/Configuration.xml",
+        "file": "cfe/Configuration.xml",
         "text": [
           "xmlns:lf=\"http://v8.1c.ru/8.2/managed-application/logform\" xmlns:pal=\"http://v8.1c.ru/8.1/data/ui/colors/palette\" xmlns:style=",
           "version=\"2.21\"",
@@ -18,7 +18,7 @@
         ]
       },
       {
-        "file": "ext/Languages/Русский.xml",
+        "file": "cfe/Languages/Русский.xml",
         "text": "xmlns:lf=\"http://v8.1c.ru/8.2/managed-application/logform\" xmlns:pal=\"http://v8.1c.ru/8.1/data/ui/colors/palette\" xmlns:style="
       }
     ]

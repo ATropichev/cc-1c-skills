@@ -1,9 +1,9 @@
 {
   "name": "Расширение без роли",
-  "params": { "name": "БезРоли", "outputDir": "ext" },
+  "params": { "name": "БезРоли", "outputDir": "cfe" },
   "args_extra": ["-NoRole"],
-  "validatePath": "ext",
+  "validatePath": "cfe",
   "expect": {
-    "files": ["ext/Configuration.xml"]
+    "files": ["cfe/Configuration.xml"]
   }
 }

@@ -14,15 +14,15 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     },
     {
       "script": "cfe-borrow/scripts/cfe-borrow",
-      "args": { "-ExtensionPath": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Object": "CommonModule.ОбщийМодуль3" }
+      "args": { "-ExtensionPath": "{workDir}/cfe", "-ConfigPath": "{workDir}", "-Object": "CommonModule.ОбщийМодуль3" }
     }
   ],
   "params": {
-    "extensionPath": "ext",
+    "extensionPath": "cfe",
     "modulePath": "CommonModule.ОбщийМодуль3",
     "methodName": "Вычислить",
     "interceptorType": "After"

@@ -13,15 +13,15 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     }
   ],
-  "params": { "extensionPath": "ext", "object": "Catalog.Терминалы" },
+  "params": { "extensionPath": "cfe", "object": "Catalog.Терминалы" },
   "expect": {
     "fileContains": {
-      "file": "ext/Catalogs/Терминалы.xml",
+      "file": "cfe/Catalogs/Терминалы.xml",
       "text": "<Owners><xr:Item xsi:type=\"xr:MDObjectRef\">Catalog.Договоры</xr:Item></Owners>"
     },
-    "files": ["ext/Catalogs/Договоры.xml"]
+    "files": ["cfe/Catalogs/Договоры.xml"]
   }
 }

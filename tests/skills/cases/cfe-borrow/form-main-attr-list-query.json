@@ -4,18 +4,18 @@
   "preRun": [
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     }
   ],
-  "params": { "extensionPath": "ext", "object": "Document.Расход.Form.ФормаСпискаЗапрос" },
+  "params": { "extensionPath": "cfe", "object": "Document.Расход.Form.ФормаСпискаЗапрос" },
   "args_extra": ["-BorrowMainAttribute", "Form"],
   "expect": {
     "fileContains": {
-      "file": "ext/Documents/Расход.xml",
+      "file": "cfe/Documents/Расход.xml",
       "text": ["<Name>Комментарий</Name>", "<Name>Склад</Name>"]
     },
     "fileNotContains": {
-      "file": "ext/Documents/Расход.xml",
+      "file": "cfe/Documents/Расход.xml",
       "text": "<Name>Товары</Name>"
     }
   }

@@ -3,8 +3,8 @@
   "preRun": [
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Исправление", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Purpose": "Patch" }
+      "args": { "-Name": "Исправление", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}", "-Purpose": "Patch" }
     }
   ],
-  "params": { "extensionPath": "ext" }
+  "params": { "extensionPath": "cfe" }
 }

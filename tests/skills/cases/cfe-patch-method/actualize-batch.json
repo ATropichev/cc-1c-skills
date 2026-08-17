@@ -14,20 +14,20 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     },
     {
       "script": "cfe-borrow/scripts/cfe-borrow",
-      "args": { "-ExtensionPath": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Object": "CommonModule.БатчМод" }
+      "args": { "-ExtensionPath": "{workDir}/cfe", "-ConfigPath": "{workDir}", "-Object": "CommonModule.БатчМод" }
     },
     {
       "writeFile": {
-        "path": "ext/CommonModules/БатчМод/Ext/Module.bsl",
+        "path": "cfe/CommonModules/БатчМод/Ext/Module.bsl",
         "content": "#Область ПрограммныйИнтерфейс\n&ИзменениеИКонтроль(\"РасчётА\")\nФункция Тест_РасчётА()\n\tХ = 1;\n\tВозврат Х;\nКонецФункции\n&ИзменениеИКонтроль(\"РасчётБ\")\nФункция Тест_РасчётБ()\n\tY = 2;\n\tВозврат Y;\nКонецФункции\n#КонецОбласти\n"
       }
     }
   ],
-  "params": { "extensionPath": "ext" },
+  "params": { "extensionPath": "cfe" },
   "args_extra": ["-Actualize"],
   "expect": { "stdoutContains": "актуализировано: 1" }
 }

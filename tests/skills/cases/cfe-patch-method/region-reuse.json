@@ -14,21 +14,21 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     },
     {
       "script": "cfe-borrow/scripts/cfe-borrow",
-      "args": { "-ExtensionPath": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Object": "CommonModule.РеюзМод" }
+      "args": { "-ExtensionPath": "{workDir}/cfe", "-ConfigPath": "{workDir}", "-Object": "CommonModule.РеюзМод" }
     },
     {
       "writeFile": {
-        "path": "ext/CommonModules/РеюзМод/Ext/Module.bsl",
+        "path": "cfe/CommonModules/РеюзМод/Ext/Module.bsl",
         "content": "#Область ПрограммныйИнтерфейс\n\n&Перед(\"МетодА\")\nПроцедура Тест_МетодА(П)\n\t// уже есть\nКонецПроцедуры\n\n#КонецОбласти\n"
       }
     }
   ],
   "params": {
-    "extensionPath": "ext",
+    "extensionPath": "cfe",
     "modulePath": "CommonModule.РеюзМод",
     "methodName": "МетодБ",
     "interceptorType": "Before"

@@ -35,14 +35,14 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     },
     {
       "script": "cfe-borrow/scripts/cfe-borrow",
-      "args": { "-ExtensionPath": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Object": "Document.ЗаказКлиента.Form.ФормаДокумента", "-BorrowMainAttribute": "Form" }
+      "args": { "-ExtensionPath": "{workDir}/cfe", "-ConfigPath": "{workDir}", "-Object": "Document.ЗаказКлиента.Form.ФормаДокумента", "-BorrowMainAttribute": "Form" }
     }
   ],
-  "params": { "extensionPath": "ext" },
+  "params": { "extensionPath": "cfe" },
   "expectError": true,
   "expect": { "stdoutContains": "TabularSection.Оплата" }
 }

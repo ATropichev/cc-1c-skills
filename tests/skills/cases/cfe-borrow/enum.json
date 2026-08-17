@@ -8,8 +8,8 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     }
   ],
-  "params": { "extensionPath": "ext", "object": "Enum.ВидыОплат" }
+  "params": { "extensionPath": "cfe", "object": "Enum.ВидыОплат" }
 }

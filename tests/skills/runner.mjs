@@ -736,6 +736,21 @@ async function runCaseAsync(testCase, opts) {
     workDir = workspace.path;
     copyCaseFiles(caseData, workDir, skillCasesDir);
 
+    // Каталог расширения не должен совпадать по имени — БЕЗ УЧЁТА РЕГИСТРА — с тем, что фикстура
+    // уже положила в корень конфигурации. На регистронезависимой ФС (Windows, APFS) такие каталоги
+    // сливаются в один: кейсы cfe-* просили `ext`, а cf-init создаёт платформенный `Ext/`, и эталон
+    // годами фиксировал слипшееся дерево, верное только на этих ФС (issue #74).
+    const extRel = caseData.params?.extensionPath || caseData.params?.outputDir;
+    if (typeof extRel === 'string' && extRel && extRel !== '.' && !extRel.includes('/') && !extRel.includes('\\')) {
+      const clash = readdirSync(workDir).find(e => e.toLowerCase() === extRel.toLowerCase());
+      if (clash) {
+        throw new Error(
+          `Каталог расширения "${extRel}" совпадает с "${clash}" из фикстуры конфигурации.\n`
+          + `  На регистронезависимой ФС это один каталог — эталон зафиксирует слипшееся дерево.\n`
+          + `  Назовите каталог иначе (в кейсах cfe-* принято "cfe").`);
+      }
+    }
+
     // Pre-run steps
     if (caseData.preRun) {
       for (const step of caseData.preRun) {

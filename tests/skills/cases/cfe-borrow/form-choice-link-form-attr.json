@@ -44,17 +44,17 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     }
   ],
-  "params": { "extensionPath": "ext", "object": "Document.Размещение.Form.ФормаДокумента" },
+  "params": { "extensionPath": "cfe", "object": "Document.Размещение.Form.ФормаДокумента" },
   "expect": {
     "fileContains": {
-      "file": "ext/Documents/Размещение/Forms/ФормаДокумента/Ext/Form.xml",
+      "file": "cfe/Documents/Размещение/Forms/ФормаДокумента/Ext/Form.xml",
       "text": "<xr:Link>"
     },
     "fileNotContains": {
-      "file": "ext/Documents/Размещение/Forms/ФормаДокумента/Ext/Form.xml",
+      "file": "cfe/Documents/Размещение/Forms/ФормаДокумента/Ext/Form.xml",
       "text": "<xr:DataPath xsi:type=\"xs:string\">Склад</xr:DataPath>"
     }
   }

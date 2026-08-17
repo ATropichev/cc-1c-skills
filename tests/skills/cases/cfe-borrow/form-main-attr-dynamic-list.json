@@ -4,14 +4,14 @@
   "preRun": [
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     }
   ],
-  "params": { "extensionPath": "ext", "object": "Document.Расход.Form.ФормаСписка" },
+  "params": { "extensionPath": "cfe", "object": "Document.Расход.Form.ФормаСписка" },
   "args_extra": ["-BorrowMainAttribute", "Form"],
   "expect": {
     "fileContains": {
-      "file": "ext/Documents/Расход/Forms/ФормаСписка/Ext/Form.xml",
+      "file": "cfe/Documents/Расход/Forms/ФормаСписка/Ext/Form.xml",
       "text": [
         "<Attribute name=\"Список\" id=\"1000001\">",
         "<v8:Type>cfg:DynamicList</v8:Type>",
@@ -22,7 +22,7 @@
       ]
     },
     "fileNotContains": {
-      "file": "ext/Documents/Расход/Forms/ФормаСписка/Ext/Form.xml",
+      "file": "cfe/Documents/Расход/Forms/ФормаСписка/Ext/Form.xml",
       "text": ["name=\"Объект\"", "<SavedData>"]
     }
   }

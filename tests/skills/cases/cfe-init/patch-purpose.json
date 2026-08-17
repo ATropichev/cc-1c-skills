@@ -1,9 +1,9 @@
 {
   "name": "Расширение-исправление (Patch)",
-  "params": { "name": "Исправление", "outputDir": "ext" },
+  "params": { "name": "Исправление", "outputDir": "cfe" },
   "args_extra": ["-Purpose", "Patch"],
-  "validatePath": "ext",
+  "validatePath": "cfe",
   "expect": {
-    "files": ["ext/Configuration.xml"]
+    "files": ["cfe/Configuration.xml"]
   }
 }

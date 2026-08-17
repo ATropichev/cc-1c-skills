@@ -14,21 +14,21 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     },
     {
       "script": "cfe-borrow/scripts/cfe-borrow",
-      "args": { "-ExtensionPath": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Object": "CommonModule.РесинкМод" }
+      "args": { "-ExtensionPath": "{workDir}/cfe", "-ConfigPath": "{workDir}", "-Object": "CommonModule.РесинкМод" }
     },
     {
       "writeFile": {
-        "path": "ext/CommonModules/РесинкМод/Ext/Module.bsl",
+        "path": "cfe/CommonModules/РесинкМод/Ext/Module.bsl",
         "content": "#Область ПрограммныйИнтерфейс\n&ИзменениеИКонтроль(\"Расчёт\")\nФункция Тест_Расчёт(А, Б)\n\tИтог = 0;\n#Вставка\n\tИтог = 100;\n#КонецВставки\n\tИтог = А + Б;\n\tВозврат Итог;\nКонецФункции\n#КонецОбласти\n"
       }
     }
   ],
   "params": {
-    "extensionPath": "ext",
+    "extensionPath": "cfe",
     "modulePath": "CommonModule.РесинкМод",
     "methodName": "Расчёт",
     "interceptorType": "ModificationAndControl"

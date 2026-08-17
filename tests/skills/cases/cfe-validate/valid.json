@@ -3,9 +3,9 @@
   "preRun": [
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     }
   ],
-  "params": { "extensionPath": "ext" },
+  "params": { "extensionPath": "cfe" },
   "expect": { "stdoutContains": "=== Validation OK: Extension.Тест" }
 }

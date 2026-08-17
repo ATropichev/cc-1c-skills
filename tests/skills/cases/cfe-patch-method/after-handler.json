@@ -14,15 +14,15 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     },
     {
       "script": "cfe-borrow/scripts/cfe-borrow",
-      "args": { "-ExtensionPath": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Object": "Catalog.Товары" }
+      "args": { "-ExtensionPath": "{workDir}/cfe", "-ConfigPath": "{workDir}", "-Object": "Catalog.Товары" }
     }
   ],
   "params": {
-    "extensionPath": "ext",
+    "extensionPath": "cfe",
     "modulePath": "Catalog.Товары.ObjectModule",
     "methodName": "ПриЗаписи",
     "interceptorType": "After"

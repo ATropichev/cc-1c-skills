@@ -14,21 +14,21 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     },
     {
       "script": "cfe-borrow/scripts/cfe-borrow",
-      "args": { "-ExtensionPath": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Object": "CommonModule.ПереносМод" }
+      "args": { "-ExtensionPath": "{workDir}/cfe", "-ConfigPath": "{workDir}", "-Object": "CommonModule.ПереносМод" }
     },
     {
       "writeFile": {
-        "path": "ext/CommonModules/ПереносМод/Ext/Module.bsl",
+        "path": "cfe/CommonModules/ПереносМод/Ext/Module.bsl",
         "content": "#Область ПрограммныйИнтерфейс\n&ИзменениеИКонтроль(\"П\")\nПроцедура Тест_П()\n\tШаг1();\n#Удаление\n\tШаг2();\n#КонецУдаления\n\tШаг3();\nКонецПроцедуры\n#КонецОбласти\n"
       }
     }
   ],
   "params": {
-    "extensionPath": "ext",
+    "extensionPath": "cfe",
     "modulePath": "CommonModule.ПереносМод",
     "methodName": "П",
     "interceptorType": "ModificationAndControl"

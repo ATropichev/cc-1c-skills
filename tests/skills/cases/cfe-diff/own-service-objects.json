@@ -5,7 +5,7 @@
       "script": "cfe-init/scripts/cfe-init",
       "args": {
         "-Name": "Сервисы",
-        "-OutputDir": "{workDir}/ext",
+        "-OutputDir": "{workDir}/cfe",
         "-ConfigPath": "{workDir}"
       }
     },
@@ -19,7 +19,7 @@
       },
       "args": {
         "-JsonPath": "{inputFile}",
-        "-OutputDir": "{workDir}/ext"
+        "-OutputDir": "{workDir}/cfe"
       }
     },
     {
@@ -27,12 +27,12 @@
       "args": {
         "-Xsd": "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" targetNamespace=\"http://example.org/probe\"><xs:element name=\"Ping\" type=\"xs:string\"/></xs:schema>",
         "-Name": "Сервисы_Пакет",
-        "-OutputDir": "{workDir}/ext"
+        "-OutputDir": "{workDir}/cfe"
       }
     }
   ],
   "params": {
-    "extensionPath": "ext"
+    "extensionPath": "cfe"
   },
   "expect": {
     "stdoutContains": ["HTTPService.Сервисы_API", "XDTOPackage.Сервисы_Пакет"],

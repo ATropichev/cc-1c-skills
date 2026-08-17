@@ -121,13 +121,13 @@
       "script": "cfe-init/scripts/cfe-init",
       "args": {
         "-Name": "Тест",
-        "-OutputDir": "{workDir}/ext",
+        "-OutputDir": "{workDir}/cfe",
         "-ConfigPath": "{workDir}"
       }
     }
   ],
   "params": {
-    "extensionPath": "ext",
+    "extensionPath": "cfe",
     "object": "Document.ЗаказКлиента.Form.ФормаДокумента"
   },
   "args_extra": [

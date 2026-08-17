@@ -4,14 +4,14 @@
   "preRun": [
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     }
   ],
-  "params": { "extensionPath": "ext", "object": "Document.Расход.Form.ФормаДокумента" },
+  "params": { "extensionPath": "cfe", "object": "Document.Расход.Form.ФормаДокумента" },
   "args_extra": ["-BorrowMainAttribute", "Form"],
   "expect": {
     "fileContains": {
-      "file": "ext/Documents/Расход/Forms/ФормаДокумента/Ext/Form.xml",
+      "file": "cfe/Documents/Расход/Forms/ФормаДокумента/Ext/Form.xml",
       "text": [
         "<RowPictureDataPath>Объект.Товары.ИндексКартинки</RowPictureDataPath>",
         "<ExcludedCommand>Post</ExcludedCommand>",
@@ -19,7 +19,7 @@
       ]
     },
     "fileNotContains": {
-      "file": "ext/Documents/Расход/Forms/ФормаДокумента/Ext/Form.xml",
+      "file": "cfe/Documents/Расход/Forms/ФормаДокумента/Ext/Form.xml",
       "text": ["<ExcludedCommand>MoveUp</ExcludedCommand>", "<CommandInterface>"]
     }
   }

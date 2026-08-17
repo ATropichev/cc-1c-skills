@@ -100,13 +100,13 @@
       "script": "cfe-init/scripts/cfe-init",
       "args": {
         "-Name": "Тест",
-        "-OutputDir": "{workDir}/ext",
+        "-OutputDir": "{workDir}/cfe",
         "-ConfigPath": "{workDir}"
       }
     }
   ],
   "params": {
-    "extensionPath": "ext",
+    "extensionPath": "cfe",
     "object": "Report.ОстаткиТоваров ;; DocumentJournal.Складские ;; Sequence.ПартионныйУчет ;; HTTPService.ОбменДанными ;; WebService.СервисОбмена ;; FilterCriterion.ПоКонтрагенту ;; SettingsStorage.ХранилищеОтчетов"
   }
 }

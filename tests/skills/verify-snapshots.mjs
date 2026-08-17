@@ -692,6 +692,37 @@ const EPF_SKILLS = new Map([
 // route is auto-detected after the main script runs.
 const EPF_OR_CONFIG_SKILLS = new Set(['template-add', 'help-add']);
 
+// Режим совместимости конфигурации против версии платформы: "Version8_3_27" на 8.3.24 не
+// загрузится. Возвращает причину пропуска либо null, если платформа подходит.
+function compatibilityGap(configDir, v8path) {
+  const cfgFile = join(configDir, 'Configuration.xml');
+  if (!existsSync(cfgFile)) return null;
+  const m = /<CompatibilityMode>Version(\d+)_(\d+)_(\d+)<\/CompatibilityMode>/.exec(readFileSync(cfgFile, 'utf8'));
+  if (!m) return null;
+  const need = [+m[1], +m[2], +m[3]];
+  const p = /(\d+)\.(\d+)\.(\d+)/.exec(v8path || '');
+  if (!p) return null;
+  const have = [+p[1], +p[2], +p[3]];
+  for (let i = 0; i < 3; i++) {
+    if (have[i] > need[i]) return null;
+    if (have[i] < need[i]) {
+      return `режим совместимости ${need.join('.')} выше платформы ${have.join('.')} — запустите с --v8path`;
+    }
+  }
+  return null;
+}
+
+// Аргументы cf-init для вариантов пустой конфигурации. Копия таблицы EMPTY_CONFIGS из
+// runner.mjs — держать одинаковыми: разойдутся, и верификация пойдёт не на том формате,
+// на котором прогонялся кейс.
+const EMPTY_CONFIG_ARGS = {
+  'empty-config': [],
+  'empty-config-218': ['-FormatVersion', '2.18', '-CompatibilityMode', 'Version8_3_24'],
+  'empty-config-220': ['-FormatVersion', '2.20', '-CompatibilityMode', 'Version8_3_27'],
+  'empty-config-220-compat24': ['-FormatVersion', '2.20', '-CompatibilityMode', 'Version8_3_24'],
+  'empty-config-221': ['-FormatVersion', '2.21', '-CompatibilityMode', 'Version8_3_27'],
+};
+
 // CFE skills — two-stage load: base config → extension
 const CFE_SKILLS = new Set([
   'cfe-init', 'cfe-borrow', 'cfe-patch-method',
@@ -737,8 +768,12 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
     }
   };
 
-  // Determine config dir
-  const setupType = skillConfig.setup || 'empty-config';
+  // Determine config dir.
+  // setup кейса перекрывает setup навыка — как в runner.mjs. Без этого кейсы с гейтом по версии
+  // формата (empty-config-218/220/221) проверялись на конфигурации 2.17, то есть платформа не
+  // видела ровно того поведения, ради которого кейс написан.
+  const caseSetup = typeof caseData.setup === 'string' ? caseData.setup : null;
+  const setupType = (caseSetup && caseSetup.startsWith('empty-config')) ? caseSetup : (skillConfig.setup || 'empty-config');
   const isStandalone = STANDALONE_SKILLS.has(skillName);
   let epfExt = EPF_SKILLS.get(skillName);
   let isEpf = !!epfExt;
@@ -746,7 +781,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
   // For 'empty-config': workDir is the config (setup creates it)
   // For cf-init: workDir becomes the config after the script runs
   // For 'none' + non-special: no config (standalone/EPF)
-  let configDir = (setupType === 'empty-config' || isCfInit) ? workDir : null;
+  let configDir = (setupType.startsWith('empty-config') || isCfInit) ? workDir : null;
 
   try {
     // ── Step 0: Case-level fixture/external setup (runner.mjs compatibility) ──
@@ -783,10 +818,11 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
     const caseProvidedConfig = typeof caseData.setup === 'string' &&
       (caseData.setup.startsWith('external:') || caseData.setup.startsWith('fixture:'));
     // Skip setup for cf-init skill — the test itself creates the config
-    if (configDir && setupType === 'empty-config' && !CONFIG_INIT_SKILLS.has(skillName) && !caseProvidedConfig) {
+    if (configDir && setupType.startsWith('empty-config') && !CONFIG_INIT_SKILLS.has(skillName) && !caseProvidedConfig) {
       try {
-        execSkill(opts.runtime, 'cf-init/scripts/cf-init', ['-Name', 'VerifyTest', '-OutputDir', workDir]);
-        log('cf-init', true);
+        const initArgs = ['-Name', 'VerifyTest', '-OutputDir', workDir, ...(EMPTY_CONFIG_ARGS[setupType] || [])];
+        execSkill(opts.runtime, 'cf-init/scripts/cf-init', initArgs);
+        log('cf-init', true, (EMPTY_CONFIG_ARGS[setupType] || []).join(' '));
       } catch (e) {
         log('cf-init', false, e.stderr || e.message);
         result.errors.push(`cf-init failed: ${(e.stderr || e.message).substring(0, 500)}`);
@@ -927,6 +963,19 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
       return result;
     }
     if (inputFile && existsSync(inputFile)) rmSync(inputFile);
+
+    // Режим совместимости конфигурации выше платформы — она такую не загрузит. Это свойство
+    // стенда, а не дефект кейса, поэтому пропускаем с причиной: иначе на машине без нужной
+    // платформы кейсы с гейтом по версии формата давали бы ложное падение.
+    if (opts.v8ctx && configDir) {
+      const compatSkip = compatibilityGap(configDir, opts.v8ctx.v8path);
+      if (compatSkip) {
+        result.skipped = true;
+        result.skipReason = compatSkip;
+        log('platform-load', true, `skipped (${compatSkip})`);
+        return result;
+      }
+    }
 
     // ── Step 5: Determine verification strategy ──
     if (SKD_PLATFORM_VERIFY.has(skillName)) {
@@ -1085,8 +1134,16 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
     }
 
     if (CFE_SKILLS.has(skillName)) {
-      // CFE: two-stage load — base config first, then extension
-      const extDir = join(workDir, 'ext');
+      // CFE: two-stage load — base config first, then extension.
+      // Каталог расширения берём из кейса, а не хардкодим: при жёстком 'ext' кейс, назвавший
+      // каталог иначе, молча терял вторую половину проверки — блок ниже обходился по existsSync,
+      // и в отчёте это выглядело как успех.
+      const extRel = caseData.params?.extensionPath || caseData.params?.outputDir;
+      if (!extRel || extRel === '.') {
+        result.errors.push('CFE verify требует params.extensionPath (или params.outputDir) с каталогом расширения');
+        return result;
+      }
+      const extDir = join(workDir, extRel);
       const baseConfigDir = workDir; // preRun puts base config directly in workDir
       const dbDir = join(workDir, 'testdb');
 
@@ -1124,6 +1181,16 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         log('db-load-xml (config)', true);
       } catch (e) {
         const detail = (e.stderr || e.stdout || e.message).trim();
+        // Формат выгрузки новее платформы — свойство стенда, а не дефект кейса. Платформа
+        // говорит об этом прямо, поэтому лестницу «платформа → версия формата» здесь
+        // дублировать не нужно: читаем её ответ.
+        const fmt = /Неизвестная версия формата ([\d.]+)/.exec(detail);
+        if (fmt) {
+          result.skipped = true;
+          result.skipReason = `формат выгрузки ${fmt[1]} новее платформы — запустите с --v8path`;
+          log('db-load-xml (config)', true, `skipped (${result.skipReason})`);
+          return result;
+        }
         log('db-load-xml (config)', false, detail);
         result.errors.push(`LoadConfig failed: ${detail.substring(0, 1000)}`);
         return result;

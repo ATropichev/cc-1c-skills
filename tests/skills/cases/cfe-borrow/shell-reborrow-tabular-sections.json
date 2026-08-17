@@ -4,23 +4,23 @@
   "preRun": [
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     },
     {
       "script": "cfe-borrow/scripts/cfe-borrow",
       "args": {
-        "-ExtensionPath": "{workDir}/ext",
+        "-ExtensionPath": "{workDir}/cfe",
         "-ConfigPath": "{workDir}",
         "-Object": "Document.Расход.Form.ФормаДокумента",
         "-BorrowMainAttribute": "Form"
       }
     }
   ],
-  "params": { "extensionPath": "ext", "object": "Document.Расход.Form.ФормаСписка" },
+  "params": { "extensionPath": "cfe", "object": "Document.Расход.Form.ФормаСписка" },
   "args_extra": ["-BorrowMainAttribute", "All"],
   "expect": {
     "fileContains": {
-      "file": "ext/Documents/Расход.xml",
+      "file": "cfe/Documents/Расход.xml",
       "text": ["<TabularSection uuid=", "<Name>Товары</Name>", "<Name>Комментарий</Name>", "<Name>Склад</Name>"]
     }
   }

@@ -14,21 +14,21 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/ext", "-ConfigPath": "{workDir}" }
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
     },
     {
       "script": "cfe-borrow/scripts/cfe-borrow",
-      "args": { "-ExtensionPath": "{workDir}/ext", "-ConfigPath": "{workDir}", "-Object": "CommonModule.РеанкорМод" }
+      "args": { "-ExtensionPath": "{workDir}/cfe", "-ConfigPath": "{workDir}", "-Object": "CommonModule.РеанкорМод" }
     },
     {
       "writeFile": {
-        "path": "ext/CommonModules/РеанкорМод/Ext/Module.bsl",
+        "path": "cfe/CommonModules/РеанкорМод/Ext/Module.bsl",
         "content": "#Область ПрограммныйИнтерфейс\n&ИзменениеИКонтроль(\"П\")\nПроцедура Тест_П(Сп)\n\tДля Каждого Э Из Сп Цикл\n\t\tЭ.Обработать();\n\tКонецЦикла;\n#Вставка\n\tСообщить(\"вставка\");\n#КонецВставки\n\tСообщить(\"A\");\n\tДля Каждого Э Из Сп Цикл\n\t\tЭ.Проверить();\n\tКонецЦикла;\nКонецПроцедуры\n#КонецОбласти\n"
       }
     }
   ],
   "params": {
-    "extensionPath": "ext",
+    "extensionPath": "cfe",
     "modulePath": "CommonModule.РеанкорМод",
     "methodName": "П",
     "interceptorType": "ModificationAndControl"

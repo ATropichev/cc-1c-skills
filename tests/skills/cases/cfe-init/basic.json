@@ -2,12 +2,12 @@
   "name": "Пустое расширение",
   "params": {
     "name": "МоёРасширение",
-    "outputDir": "ext"
+    "outputDir": "cfe"
   },
-  "validatePath": "ext",
+  "validatePath": "cfe",
   "expect": {
     "files": [
-      "ext/Configuration.xml"
+      "cfe/Configuration.xml"
     ],
     "preserves": {
       "file": "Configuration.xml",
