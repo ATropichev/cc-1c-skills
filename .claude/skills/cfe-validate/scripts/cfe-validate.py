@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.10 — Validate 1C configuration extension XML structure (CFE) (полнота GeneratedType, ТЧ из AdditionalColumns, сверка путей с -ConfigPath)
+# cfe-validate v1.11 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -1140,6 +1140,62 @@ def main():
 
                 if check14_ok:
                     r.ok(f'14. Object paths vs source config: {path_check_count} checked')
+
+    # --- Check 15: основные роли расширения не дают прав на заимствованные объекты ---
+    # Платформа: «Назначение прав доступа на заимствованные объекты основными ролями в
+    # расширениях недопустимо». Роль вне <DefaultRoles> так делать вправе — проверяем только
+    # основные. Ловится статически, а по симптому (отказ загрузки) причина не читается.
+    default_role_nodes = cfg_node.findall('md:Properties/md:DefaultRoles/xr:Item', NS)
+    if default_role_nodes:
+        adopted_cache = {}
+
+        def is_object_adopted(type_name, obj_name):
+            key = f"{type_name}.{obj_name}"
+            if key in adopted_cache:
+                return adopted_cache[key]
+            adopted_cache[key] = False
+            dir_name = CHILD_TYPE_DIR_MAP.get(type_name)
+            if dir_name:
+                obj_path = os.path.join(config_dir, dir_name, obj_name + '.xml')
+                if os.path.isfile(obj_path):
+                    try:
+                        obj_root = etree.parse(obj_path).getroot()
+                        ob = obj_root.find(f'md:{type_name}/md:Properties/md:ObjectBelonging', NS)
+                        if ob is not None and (ob.text or '') == 'Adopted':
+                            adopted_cache[key] = True
+                    except Exception:
+                        pass
+            return adopted_cache[key]
+
+        check15_ok = True
+        check15_count = 0
+        roles_ns = {'r': 'http://v8.1c.ru/8.2/roles'}
+        for rn in default_role_nodes:
+            m = re.match(r'^Role\.(.+)$', rn.text or '')
+            if not m:
+                continue
+            def_role_name = m.group(1)
+            rights_path = os.path.join(config_dir, 'Roles', def_role_name, 'Ext', 'Rights.xml')
+            if not os.path.isfile(rights_path):
+                continue
+            try:
+                rights_root = etree.parse(rights_path).getroot()
+            except Exception:
+                continue
+            for name_node in rights_root.findall('r:object/r:name', roles_ns):
+                full_name = name_node.text or ''
+                segs = full_name.split('.')
+                # Configuration.* — права самого расширения, не объект; заимствования там нет.
+                if len(segs) < 2 or segs[0] == 'Configuration':
+                    continue
+                check15_count += 1
+                if is_object_adopted(segs[0], segs[1]):
+                    r.error(f"15. Роль '{def_role_name}' входит в DefaultRoles и даёт права на заимствованный "
+                            f"{segs[0]}.{segs[1]} ({full_name}): платформа это запрещает. "
+                            "Вынесите такие права в отдельную роль вне DefaultRoles.")
+                    check15_ok = False
+        if check15_ok and check15_count > 0:
+            r.ok(f'15. Основные роли: прав на заимствованные объекты нет ({check15_count} checked)')
 
     if r.stopped:
         r.finalize(out_file)

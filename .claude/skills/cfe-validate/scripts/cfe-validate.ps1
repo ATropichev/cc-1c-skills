@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.10 — Validate 1C configuration extension structure (CFE) (полнота GeneratedType, ТЧ из AdditionalColumns, сверка путей с -ConfigPath)
+﻿# cfe-validate v1.11 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1166,6 +1166,69 @@ if (-not $script:stopped -and $script:borrowedFormsWithTree.Count -gt 0) {
 				Report-OK "14. Object paths vs source config: $pathCheckCount checked"
 			}
 		}
+	}
+}
+
+# --- Check 15: основные роли расширения не дают прав на заимствованные объекты ---
+# Платформа: «Назначение прав доступа на заимствованные объекты основными ролями в
+# расширениях недопустимо». Роль вне <DefaultRoles> так делать вправе — проверяем только
+# основные. Ловится статически, а по симптому (отказ загрузки) причина не читается.
+$defaultRoleNodes = @($cfgNode.SelectNodes("md:Properties/md:DefaultRoles/xr:Item", $ns))
+if ($defaultRoleNodes.Count -gt 0) {
+	$adoptedCache = @{}
+
+	function Test-ObjectAdopted {
+		param([string]$typeName, [string]$objName)
+		$key = "$typeName.$objName"
+		if ($adoptedCache.ContainsKey($key)) { return $adoptedCache[$key] }
+		$adoptedCache[$key] = $false
+		if ($childTypeDirMap.ContainsKey($typeName)) {
+			$objPath = Join-Path (Join-Path $configDir $childTypeDirMap[$typeName]) "$objName.xml"
+			if (Test-Path $objPath) {
+				try {
+					$objDoc = New-Object System.Xml.XmlDocument
+					$objDoc.Load($objPath)
+					$objNs = New-Object System.Xml.XmlNamespaceManager($objDoc.NameTable)
+					$objNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+					$ob = $objDoc.SelectSingleNode("/md:MetaDataObject/md:$typeName/md:Properties/md:ObjectBelonging", $objNs)
+					if ($ob -and $ob.InnerText -eq "Adopted") { $adoptedCache[$key] = $true }
+				} catch {}
+			}
+		}
+		return $adoptedCache[$key]
+	}
+
+	$check15Ok = $true
+	$check15Count = 0
+	foreach ($rn in $defaultRoleNodes) {
+		$roleRef = $rn.InnerText
+		if ($roleRef -notmatch '^Role\.(.+)$') { continue }
+		$defRoleName = $Matches[1]
+		$rightsPath = Join-Path (Join-Path (Join-Path $configDir "Roles") $defRoleName) "Ext\Rights.xml"
+		if (-not (Test-Path $rightsPath)) { continue }
+		try {
+			$rDoc = New-Object System.Xml.XmlDocument
+			$rDoc.Load($rightsPath)
+		} catch {
+			continue
+		}
+		$rNs = New-Object System.Xml.XmlNamespaceManager($rDoc.NameTable)
+		$rNs.AddNamespace("r", "http://v8.1c.ru/8.2/roles")
+		foreach ($nameNode in $rDoc.SelectNodes("/r:Rights/r:object/r:name", $rNs)) {
+			$fullName = $nameNode.InnerText
+			$segs = $fullName.Split(".")
+			# Configuration.* — права самого расширения, не объект; заимствования там нет.
+			if ($segs.Count -lt 2 -or $segs[0] -eq "Configuration") { continue }
+			$check15Count++
+			if (Test-ObjectAdopted $segs[0] $segs[1]) {
+				Report-Error ("15. Роль '$defRoleName' входит в DefaultRoles и даёт права на заимствованный $($segs[0]).$($segs[1]) " +
+					"($fullName): платформа это запрещает. Вынесите такие права в отдельную роль вне DefaultRoles.")
+				$check15Ok = $false
+			}
+		}
+	}
+	if ($check15Ok -and $check15Count -gt 0) {
+		Report-OK "15. Основные роли: прав на заимствованные объекты нет ($check15Count checked)"
 	}
 }
 
