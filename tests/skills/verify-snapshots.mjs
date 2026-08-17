@@ -1466,10 +1466,13 @@ async function main() {
     const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
 
     if (!opts.verbose) {
-      const icon = result.passed ? '\u2713' : '\u2717';
+      // Скип — своя иконка, а не ✗: скипнутый кейс `passed` не выставляет, и построчный
+      // вывод рисовал его падением. Итоговая строка при этом считала его skipped, из-за
+      // чего десяток «✗» под «0 failed» читался как сломанный набор.
+      const icon = result.skipped ? '\u25cb' : (result.passed ? '\u2713' : '\u2717');
       console.log(` ${icon} (${elapsed}s)${result.errors.length ? ' — ' + result.errors[0].substring(0, 80) : ''}`);
     } else {
-      console.log(`    → ${result.passed ? 'PASS' : 'FAIL'} (${elapsed}s)\n`);
+      console.log(`    → ${result.skipped ? 'SKIP' : (result.passed ? 'PASS' : 'FAIL')} (${elapsed}s)\n`);
     }
 
     results.push(result);

@@ -27,7 +27,9 @@
       "script": "meta-compile/scripts/meta-compile",
       "input": {
         "type": "InformationRegister",
-        "name": "Цены"
+        "name": "Цены",
+        "dimensions": ["Товар: CatalogRef.Товары"],
+        "resources": ["Цена: Number(15,2)"]
       },
       "args": {
         "-JsonPath": "{inputFile}",
