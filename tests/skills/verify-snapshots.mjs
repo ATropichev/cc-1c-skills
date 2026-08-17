@@ -1459,19 +1459,24 @@ function writeReport(results) {
     `# Snapshot Verification Report`,
     ``,
     `Date: ${new Date().toISOString().split('T')[0]}`,
-    `Total: ${results.length} | Passed: ${results.filter(r => r.passed).length} | Failed: ${results.filter(r => !r.passed).length}`,
+    `Total: ${results.length} | Passed: ${results.filter(r => r.passed && !r.skipped).length}`
+      + ` | Failed: ${results.filter(r => !r.passed && !r.skipped).length}`
+      + ` | Skipped: ${results.filter(r => r.skipped).length}`,
     ``,
   ];
 
   lines.push('| Skill | Case | Status | Error |');
   lines.push('|-------|------|--------|-------|');
   for (const r of results) {
-    const status = r.passed ? 'OK' : 'FAIL';
+    // Пропуск — не падение: в консольной сводке они уже различались, а в файле отчёта пропуск
+    // выглядел как FAIL и попадал в счётчик падений. Отчёт читают глазами и по нему решают,
+    // есть ли проблема, — расхождение с консолью здесь дороже всего.
+    const status = r.skipped ? 'SKIP' : (r.passed ? 'OK' : 'FAIL');
     const error = r.errors.length > 0 ? r.errors[0].substring(0, 100).replace(/\|/g, '\\|').replace(/\n/g, ' ') : '';
     lines.push(`| ${r.skill} | ${r.case} | ${status} | ${error} |`);
   }
 
-  const failures = results.filter(r => !r.passed);
+  const failures = results.filter(r => !r.passed && !r.skipped);
   if (failures.length > 0) {
     lines.push('', '## Findings', '');
     for (const r of failures) {
