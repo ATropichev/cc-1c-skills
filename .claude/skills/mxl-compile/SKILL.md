@@ -41,63 +41,184 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 
 **Если макет создаётся по изображению** (скриншот, скан печатной формы) — сначала вызвать `/img-grid` для наложения сетки, по ней определить границы колонок и пропорции, затем использовать `"Nx"` ширины + `"page"` для автоматического расчёта размеров.
 
-## JSON-схема DSL
+## Что читать под задачу
 
-Ниже — компактная структура и ключевые правила, достаточные для типового макета. Подробности читать по необходимости:
+Ниже — всё, что нужно для типового макета. Остальное лежит по файлу на задачу, читать нужно
+только свой:
 
-| Что нужно | Файл |
+| Задача | Файл |
 |---|---|
-| Полные таблицы полей, развёрнутый пример, ограничения формата | `reference/dsl-spec.md` |
-| Шрифты, стили, цвета, рамки, колоночные раскладки и стили колонок | `reference/styles.md` |
-| Полный перечень свойств стиля | `reference/format-properties.md` |
+| Свойство стиля вне частых: отступ, защита, узор, маска, формат редактирования | `reference/style-properties.md` |
+| Область, не описываемая диапазоном строк; свои ширины колонок у части документа | `reference/layout.md` |
+| Колонтитулы, ориентация, поля, масштаб | `reference/print.md` |
+| Картинка, фигура или надпись поверх сетки; картинка в ячейке | `reference/drawings.md` |
+| Ячейки для ввода данных пользователем | `reference/input-cells.md` |
+| Сворачиваемые группы строк или колонок | `reference/groups.md` |
+| Всплывающая подсказка у ячейки | `reference/notes.md` |
 
-Краткая структура:
+## Пример
 
-```
-{ columns, page, defaultWidth, columnWidths, columnStyles,
-  fonts: { name: { face, size, bold, italic, underline, strikeout } | { ref } },
-  styles: { name: { font, horizontalAlignment, verticalAlignment, textPlacement,
-                    backColor, textColor, border, borderColor, format, hidden } },
-  areas: [{ name, columnSet, rows: [{ height, hidden, rowStyle, cells: [
-    { col, span, rowspan, style, param, detail, text, template, valueType, controlType, value, note }
-  ]}]}],
-  namedAreas: [{ name, rows, cols }],
-  rowGroups: [{ rows, name, collapsed, titleLocation }],
-  columnGroups: [{ cols, name, collapsed, titleLocation }],
-  header: { left, center, right, font, verticalAlignment, show, startPage }, footer: { … },
-  printSettings: { pageOrientation, topMargin, …, fitToPage, firstPageNumber },
-  columnSets: { name: { columns, columnWidths, columnStyles } },
-  pictures: { name: { ref } | { data } | {} + transparent: false | { x, y } },
-  drawings: [{ type, begin: { row, col, dy, dx }, end: { … }, picture, pictureSize,
-               text, name, detail, style, line, sides, id, zOrder }]
+```json
+{
+  "columns": 5,
+  "columnWidths": { "1": 5, "2": 40, "3-5": 12 },
+  "fonts": { "жирный": { "face": "Arial", "size": 10, "bold": true } },
+  "styles": {
+    "шапка":  { "font": "жирный", "horizontalAlignment": "Center", "textPlacement": "Wrap", "border": "Solid" },
+    "клетка": { "border": "Solid" },
+    "число":  { "border": "Solid", "horizontalAlignment": "Right", "format": "ЧЦ=15; ЧДЦ=2" },
+    "итог":   { "font": "жирный", "horizontalAlignment": "Right", "topBorder": "Solid" }
+  },
+  "areas": [
+    { "name": "Заголовок", "rows": [
+      { "height": 20, "cells": [{ "col": 1, "span": 5, "style": "шапка", "param": "ЗаголовокОтчёта" }] },
+      {}
+    ]},
+    { "name": "ШапкаТаблицы", "rows": [
+      { "rowStyle": "шапка", "cells": [
+        { "col": 1, "text": "№" }, { "col": 2, "text": "Номенклатура" },
+        { "col": 3, "text": "Количество" }, { "col": 4, "text": "Цена" }, { "col": 5, "text": "Сумма" }
+      ]}
+    ]},
+    { "name": "Строка", "rows": [
+      { "rowStyle": "клетка", "cells": [
+        { "col": 1, "param": "НомерСтроки" },
+        { "col": 2, "param": "Товар", "detail": "Номенклатура" },
+        { "col": 3, "style": "число", "param": "Количество" },
+        { "col": 4, "style": "число", "param": "Цена" },
+        { "col": 5, "style": "число", "param": "Сумма" }
+      ]}
+    ]},
+    { "name": "Итого", "rows": [
+      [null, null, null, { "style": "итог", "text": "Итого:" }, { "style": "итог", "param": "Всего" }]
+    ]}
+  ]
 }
 ```
 
-Ключевые правила:
-- `page` — формат страницы (`"A4-landscape"`, `"A4-portrait"` или число). Автоматически вычисляет `defaultWidth` из суммы пропорций `"Nx"`
-- `name` у области в `areas` необязателен: область без имени — просто кусок сетки, именованной она не станет
-- `namedAreas` — области, которые не описываются диапазоном подряд идущих строк: полоса колонок, прямоугольник, ячейка. Тип не указывается, он следует из того, какие оси заданы
-- `columnSet` у области — ссылка на раскладку из `columnSets`, когда группе строк нужны свои ширины колонок; без него действует документная раскладка
-- Ключ стиля — имя свойства как в выгрузке; `columnStyles` вешает стиль на колонку так же, как `style` на ячейку
-- Рамка — `border` (все стороны) или `leftBorder`/`topBorder`/`rightBorder`/`bottomBorder`; значение `"Solid"` либо `{ style, width }`
-- `rowStyle` — стиль строки: ложится и на строку, и на все её колонки, заполняя пустоты (рамки по всей ширине)
-- `height` и `hidden` — собственные свойства строки, у ячейки таких нет
-- `empty` в строке — шорткат для N подряд пустых строк (`{ "empty": 3 }` = три `{}`)
-- Строку можно писать массивом ячеек — позиция из порядка, `col` не нужен: `"текст"`, `"{Имя}"` — параметр, `">"` — продолжить ячейку слева, `"|"` — сверху, `null` — пропуск колонки
-- `col` — 1-based позиция колонки
-- `rowspan` — объединение строк вниз (rowStyle учитывает занятые ячейки)
-- Содержимое ячейки задаётся одним из ключей: `param` — параметр заполнения, `text` — статический текст, `template` — текст со вставками `[Параметр]`
-- `rowGroups`/`columnGroups` — группы строк и колонок (сворачиваются кнопкой на полях): плоский список диапазонов, вложенность выражена вхождением одного в другой
-- `header`/`footer` — колонтитулы: три слота (`left`/`center`/`right`), общий шрифт и вертикальное выравнивание; текст может нести поля `[&НомерСтраницы]`, `[&Дата]`
-- `note` — всплывающая подсказка у ячейки: строка, объект языков или `{ text, style, autoSize, box }`
-- `drawings` — рисунки поверх сетки (картинка, фигура, надпись): положение задают два якоря «ячейка + смещение в точках», картинка берётся по имени из `pictures`
-- `valueType` делает ячейку полем ввода (`"Number(15,3,nonneg)"`, `"String(10)"`, `"CatalogRef.Валюты"`, составной через ` + `); текста в такой ячейке быть не может, значение задаётся ключом `value`
+Область «Итого» записана короткой формой: позиция берётся из порядка, `col` не нужен.
 
-Двухуровневая шапка массивами:
+## Структура DSL
+
+```
+{ columns, page, defaultWidth, columnWidths, columnStyles, textLanguages,
+  fonts:  { имя: { face, size, bold, italic, underline, strikeout } | { ref } },
+  styles: { имя: { font, horizontalAlignment, verticalAlignment, textPlacement,
+                   border, leftBorder, topBorder, rightBorder, bottomBorder,
+                   borderColor, backColor, textColor, format } },
+  areas: [{ name, columnSet, rows: [
+    { height, hidden, rowStyle, empty, cells: [
+      { col, span, rowspan, style, param, detail, text, template, note,
+        valueType, controlType, value, pictureParameter } ] } ] }],
+  namedAreas, columnSets, rowGroups, columnGroups, header, footer, printSettings,
+  pictures, drawings
+}
+```
+
+Верхний уровень: `columns` обязателен, остальное по необходимости.
+
+| Ключ | Описание |
+|---|---|
+| `columns` | Количество колонок раскладки по умолчанию |
+| `page` | Формат страницы: `"A4-landscape"` (780), `"A4-portrait"` (540) или число. Сам вычисляет `defaultWidth` из суммы пропорций `"Nx"` |
+| `defaultWidth` | Ширина колонок по умолчанию (10) |
+| `columnWidths` | Ширины: ключи 1-based (`"1"`, `"3-14"`, `"5,7,9"`), значение — число или `"2x"` (доля от `defaultWidth`) |
+| `columnStyles` | Стиль на колонку целиком: те же ключи диапазонов, значение — имя стиля |
+| `textLanguages` | Языки, на которые разворачивается текст, заданный строкой (по умолчанию `["ru"]`) |
+| `areas` | Области — диапазоны подряд идущих строк, в порядке документа |
+
+## Области, строки, ячейки
+
+**Область** (`areas[]`) — диапазон подряд идущих строк: `name` (необязательно; с именем область
+доступна как `Макет.ПолучитьОбласть("Имя")`) и `rows`. Область без имени — просто кусок сетки.
+
+**Строка** (`rows[]`): `height`, `hidden`, `rowStyle`, `cells`. Пустая строка — `{}`,
+а `{ "empty": 3 }` заменяет три подряд. `height` и `hidden` — свойства самой строки, у ячейки
+таких нет.
+
+**Ячейка** (`cells[]`):
+
+| Ключ | Описание |
+|---|---|
+| `col` | Позиция колонки, 1-based |
+| `span` / `rowspan` | Объединение вправо / вниз |
+| `style` | Имя стиля; перекрывает `rowStyle` для этой ячейки |
+| `param` | Параметр заполнения — `Область.Параметры.Имя = …` |
+| `text` | Статический текст: строка или объект «язык → текст» |
+| `template` | Текст со вставками `[Параметр]` |
+| `detail` | Параметр расшифровки; ставится и без `param` |
+
+Содержимое задаётся ровно одним ключом из `param` / `text` / `template`; ячейка без них —
+пустая (нужна, например, ради рамки). Пустая строка `"text": ""` — это тоже текст, а не
+отсутствие текста.
+
+### Короткая форма: строка массивом
+
+Позиция берётся из порядка, `col` не нужен:
+
+| Элемент | Значение |
+|---|---|
+| `"текст"` | Статический текст |
+| `{ "ru": "…", "en": "…" }` | Тот же текст на нескольких языках |
+| `"{Имя}"` | Параметр заполнения |
+| `">"` | Продолжение ячейки слева — увеличивает её `span` |
+| `"|"` | Продолжение ячейки сверху — увеличивает её `rowspan` |
+| `null` | Пропуск колонки |
+| `{ … }` | Обычная ячейка без `col` — когда нужны `style`, `detail`, `template` |
+
 ```json
 "rows": [
   ["Вид", "Остаток", ">", "Итог"],
   ["|",   "начало",  "конец", "|"],
   ["{Вид}", "{Нач}", "{Кон}", "{Итог}"]
 ]
+```
+
+Здесь «Вид» и «Итог» объединены по вертикали, «Остаток» — по горизонтали на две колонки.
+Короткой формой не задать `height` и `rowStyle` — это свойства строки.
+
+### `rowStyle` — оформление строки
+
+Стиль ложится на ВСЮ ширину строки: колонки без явных ячеек получают его тоже — так выходят
+сплошные рамки в табличной части. Он же становится оформлением самой строки. Ячейки с `rowspan`
+из предыдущих строк при этом пропускаются.
+
+## Оформление
+
+Ячейка, строка и колонка ссылаются на один и тот же именованный стиль: ячейка — ключом `style`,
+строка — `rowStyle`, колонка — через `columnStyles`.
+
+**Шрифт** (`fonts.<имя>`): `face` (Arial), `size` (10), `bold`, `italic`, `underline`,
+`strikeout`. Либо ссылка вместо описания: `{ "ref": "style:TextFont" }`,
+`{ "ref": "sys:DefaultGUIFont" }`. Шрифт `"default"` берётся, когда стиль не указал свой.
+
+**Частые ключи стиля** — имя ключа совпадает с именем свойства в выгрузке, значения перечислений
+регистр не различают:
+
+| Ключ | Значение |
+|---|---|
+| `font` | Имя из `fonts` |
+| `horizontalAlignment` | `Left`, `Center`, `Right`, `Justify`, `Auto` |
+| `verticalAlignment` | `Top`, `Center`, `Bottom` |
+| `textPlacement` | Длинный текст: `Wrap` (перенос), `Cut` (обрезать), `Block`, `Auto` |
+| `border` | Рамка со всех сторон |
+| `leftBorder`, `topBorder`, `rightBorder`, `bottomBorder` | Отдельная сторона |
+| `borderColor` | Цвет рамки |
+| `backColor`, `textColor` | Цвет фона и текста |
+| `format` | Формат данных 1С: `"ЧЦ=15; ЧДЦ=2"`, `"ДФ=dd.MM.yyyy"` |
+
+**Рамка**: `"Solid"` (ширина 1) либо `{ "style": "Solid", "width": 2 }`. Стили линии: `None`,
+`Solid`, `Dotted`, `Dashed`, `DashDotted`, `DashDottedDotted`, `ThinDashed`, `LargeDashed`,
+`ThickDashed`, `Double`. Стороны можно задавать по отдельности всегда: совпавшие четыре
+компилятор свернёт сам.
+
+**Цвет** — нотация платформы: `#RRGGBB`, `style:ИмяСтиля` (элемент стиля конфигурации),
+`web:Имя`, `win:Имя`. Несуществующее имя платформа отвергнет при загрузке.
+
+```json
+"styles": {
+  "шапка":  { "font": "жирный", "horizontalAlignment": "Center", "backColor": "#EBEBEB" },
+  "рамка":  { "border": { "style": "Solid", "width": 2 } },
+  "снизу":  { "bottomBorder": "Dotted" }
+}
 ```
