@@ -692,6 +692,14 @@ const EPF_SKILLS = new Map([
 // route is auto-detected after the main script runs.
 const EPF_OR_CONFIG_SKILLS = new Set(['template-add', 'help-add']);
 
+// Диагностика падения навыка. Оба потока вместе: ps1 печатает строку ошибки в stdout, py — в
+// stderr, а лог платформы оба кладут в stdout. Читать только `stderr || stdout` значило на
+// python-порте потерять лог целиком — падение выглядело как «Error loading configuration (code: 1)»
+// без причины, и по нему нельзя было отличить неподдерживаемый формат от реального дефекта.
+function errDetail(e) {
+  return [e.stdout, e.stderr, e.message].filter(Boolean).join('\n').trim();
+}
+
 // Режим совместимости конфигурации против версии платформы: "Version8_3_27" на 8.3.24 не
 // загрузится. Возвращает причину пропуска либо null, если платформа подходит.
 function compatibilityGap(configDir, v8path) {
@@ -947,7 +955,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
       }
       log(skillName, true, lastLine);
     } catch (e) {
-      const detail = (e.stderr || e.stdout || e.message).trim();
+      const detail = errDetail(e);
       if (caseData.expectError) {
         if (typeof caseData.expectError === 'string' && !detail.includes(caseData.expectError)) {
           log(skillName, false, `expected "${caseData.expectError}" in stderr, got: ${detail.substring(0, 200)}`);
@@ -1001,7 +1009,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         execSkill(opts.runtime, 'erf-init/scripts/init', ['-Name', 'TestReport', '-SrcDir', erfDir, '-WithSKD']);
         log('erf-init', true);
       } catch (e) {
-        const detail = (e.stderr || e.stdout || e.message).trim();
+        const detail = errDetail(e);
         log('erf-init', false, detail);
         result.errors.push(`erf-init failed: ${detail.substring(0, 500)}`);
         return result;
@@ -1017,7 +1025,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         log('erf-build', true, 'platform accepted schema');
         result.passed = true;
       } catch (e) {
-        const detail = (e.stderr || e.stdout || e.message).trim();
+        const detail = errDetail(e);
         log('erf-build', false, detail);
         result.errors.push(`erf-build rejected schema: ${detail.substring(0, 1000)}`);
       }
@@ -1039,7 +1047,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         execSkill(opts.runtime, 'epf-init/scripts/init', ['-Name', 'TestProc', '-SrcDir', epfDir]);
         log('epf-init', true);
       } catch (e) {
-        const detail = (e.stderr || e.stdout || e.message).trim();
+        const detail = errDetail(e);
         log('epf-init', false, detail);
         result.errors.push(`epf-init failed: ${detail.substring(0, 500)}`);
         return result;
@@ -1053,7 +1061,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         ]);
         log('template-add', true);
       } catch (e) {
-        const detail = (e.stderr || e.stdout || e.message).trim();
+        const detail = errDetail(e);
         log('template-add', false, detail);
         result.errors.push(`template-add failed: ${detail.substring(0, 500)}`);
         return result;
@@ -1069,7 +1077,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         log('epf-build', true, 'platform accepted MXL');
         result.passed = true;
       } catch (e) {
-        const detail = (e.stderr || e.stdout || e.message).trim();
+        const detail = errDetail(e);
         log('epf-build', false, detail);
         result.errors.push(`epf-build rejected MXL: ${detail.substring(0, 1000)}`);
       }
@@ -1126,7 +1134,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         log('epf-build', true, `platform built ${epfExt}`);
         result.passed = true;
       } catch (e) {
-        const detail = (e.stderr || e.stdout || e.message).trim();
+        const detail = errDetail(e);
         log('epf-build', false, detail);
         result.errors.push(`epf-build failed: ${detail.substring(0, 1000)}`);
       }
@@ -1180,7 +1188,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
           ['-V8Path', opts.v8ctx.v8path, '-InfoBasePath', dbDir, '-ConfigDir', baseConfigDir, '-StrictLog'], 180_000);
         log('db-load-xml (config)', true);
       } catch (e) {
-        const detail = (e.stderr || e.stdout || e.message).trim();
+        const detail = errDetail(e);
         // Формат выгрузки новее платформы — свойство стенда, а не дефект кейса. Платформа
         // говорит об этом прямо, поэтому лестницу «платформа → версия формата» здесь
         // дублировать не нужно: читаем её ответ.
@@ -1201,7 +1209,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
           ['-V8Path', opts.v8ctx.v8path, '-InfoBasePath', dbDir], 180_000);
         log('db-update (config)', true);
       } catch (e) {
-        const detail = (e.stderr || e.stdout || e.message).trim();
+        const detail = errDetail(e);
         log('db-update (config)', false, detail);
         result.errors.push(`UpdateDBCfg config failed: ${detail.substring(0, 1000)}`);
         return result;
@@ -1221,7 +1229,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
             ['-V8Path', opts.v8ctx.v8path, '-InfoBasePath', dbDir, '-ConfigDir', extDir, '-Extension', extName, '-StrictLog'], 180_000);
           log('db-load-xml (ext)', true);
         } catch (e) {
-          const detail = (e.stderr || e.stdout || e.message).trim();
+          const detail = errDetail(e);
           log('db-load-xml (ext)', false, detail);
           result.errors.push(`LoadExtension failed: ${detail.substring(0, 1000)}`);
           return result;
@@ -1232,7 +1240,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
             ['-V8Path', opts.v8ctx.v8path, '-InfoBasePath', dbDir, '-Extension', extName], 180_000);
           log('db-update (ext)', true);
         } catch (e) {
-          const detail = (e.stderr || e.stdout || e.message).trim();
+          const detail = errDetail(e);
           log('db-update (ext)', false, detail);
           result.errors.push(`UpdateDBCfg ext failed: ${detail.substring(0, 1000)}`);
           return result;
@@ -1364,7 +1372,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         ['-V8Path', opts.v8ctx.v8path, '-InfoBasePath', dbDir, '-ConfigDir', configDir, '-StrictLog'], 180_000);
       log('db-load-xml', true);
     } catch (e) {
-      const detail = (e.stderr || e.stdout || e.message).trim();
+      const detail = errDetail(e);
       log('db-load-xml', false, detail);
       result.errors.push(`LoadConfigFromFiles failed: ${detail.substring(0, 1000)}`);
       return result;
@@ -1375,7 +1383,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         ['-V8Path', opts.v8ctx.v8path, '-InfoBasePath', dbDir], 180_000);
       log('db-update', true);
     } catch (e) {
-      const detail = (e.stderr || e.stdout || e.message).trim();
+      const detail = errDetail(e);
       log('db-update', false, detail);
       result.errors.push(`UpdateDBCfg failed: ${detail.substring(0, 1000)}`);
       return result;
