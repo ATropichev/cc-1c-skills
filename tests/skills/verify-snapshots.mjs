@@ -753,10 +753,25 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
   // Кейс может осознанно исключаться из платформенной проверки — когда его
   // результат невалиден by design (например, операция намеренно оставляет
   // висящий импорт). Причина обязательна, молча пропускать нельзя.
+  // Строка — пропуск всегда. Объект `{reason, platforms:[…]}` — пропуск ТОЛЬКО на перечисленных
+  // сборках платформы: бывает, что кейс валиден и проверяется на всех стендах, кроме одного,
+  // где сама платформа отвергает даже собственный артефакт. Глухой пропуск в таком случае снял
+  // бы проверку и там, где она работает.
   if (caseData.skipPlatformVerify) {
-    result.skipped = true;
-    result.skipReason = String(caseData.skipPlatformVerify);
-    return result;
+    const spec = caseData.skipPlatformVerify;
+    const isObj = typeof spec === 'object' && spec !== null;
+    const reason = isObj ? spec.reason : String(spec);
+    if (!reason) {
+      result.errors.push('skipPlatformVerify: причина обязательна');
+      return result;
+    }
+    const builds = isObj && Array.isArray(spec.platforms) ? spec.platforms : null;
+    const v8exe = (opts.v8ctx && opts.v8ctx.v8exe) || '';
+    if (!builds || builds.some(b => v8exe.includes(b))) {
+      result.skipped = true;
+      result.skipReason = reason;
+      return result;
+    }
   }
 
   // caseFiles — файловый вход кейса (напр. XSD для xdto-compile), как в runner.mjs
