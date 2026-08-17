@@ -46,15 +46,15 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/mxl-compile.ps1" -J
 Ниже — всё, что нужно для типового макета. Остальное лежит по файлу на задачу, читать нужно
 только свой:
 
-| Задача | Файл |
-|---|---|
-| Свойство стиля вне частых: отступ, защита, узор, маска, формат редактирования | `reference/style-properties.md` |
-| Область, не описываемая диапазоном строк; свои ширины колонок у части документа | `reference/layout.md` |
-| Колонтитулы, ориентация, поля, масштаб | `reference/print.md` |
-| Картинка, фигура или надпись поверх сетки; картинка в ячейке | `reference/drawings.md` |
-| Ячейки для ввода данных пользователем | `reference/input-cells.md` |
-| Сворачиваемые группы строк или колонок | `reference/groups.md` |
-| Всплывающая подсказка у ячейки | `reference/notes.md` |
+| Задача | Ключи | Файл |
+|---|---|---|
+| Свойство стиля вне частых: отступ, защита, узор, маска, поведение при выводе | — | `reference/style-properties.md` |
+| Область, не описываемая диапазоном строк; свои ширины колонок у части документа | `namedAreas`, `columnSets`, `columnSet` | `reference/layout.md` |
+| Колонтитулы, ориентация, поля, масштаб | `header`, `footer`, `printSettings` | `reference/print.md` |
+| Картинка, фигура или надпись поверх сетки; картинка в ячейке | `pictures`, `drawings`, `pictureParameter` | `reference/drawings.md` |
+| Ячейки для ввода данных пользователем | `valueType`, `controlType`, `value` | `reference/input-cells.md` |
+| Сворачиваемые группы строк или колонок | `rowGroups`, `columnGroups` | `reference/groups.md` |
+| Всплывающая подсказка у ячейки | `note` | `reference/notes.md` |
 
 ## Пример
 
