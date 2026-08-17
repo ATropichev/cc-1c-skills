@@ -1,4 +1,4 @@
-﻿# role-compile v1.25 — Compile 1C role from JSON (+русские алиасы типов: формы с ё и без)
+﻿# role-compile v1.26 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -469,6 +469,16 @@ $script:kindOwners = @{
 	"IntegrationServiceChannel" = "IntegrationService"
 }
 
+# Право на сервис живёт на ЛИСТЕ — методе шаблона URL, операции, канале, — а не на самом
+# сервисе: корневого узла нет ни в одной типовой роли (907 записей корпуса — ноль), в
+# Конфигураторе галки на корне нет вовсе. Короткая запись `HTTPService.X: Use` выражает
+# намерение «открой сервис целиком» и раскрывается в листья по метаданным сервиса.
+$script:serviceLeaves = @{
+	"WebService"         = @{ Dir = "WebServices";         Kinds = @("Operation") }
+	"HTTPService"        = @{ Dir = "HTTPServices";        Kinds = @("URLTemplate", "Method") }
+	"IntegrationService" = @{ Dir = "IntegrationServices"; Kinds = @("IntegrationServiceChannel") }
+}
+
 # Один и тот же вид под разными родителями имеет разный набор: измерение регистра —
 # View + Edit, измерение куба внешнего источника — только View. Объединять нельзя,
 # объединение молча разрешило бы Edit там, где платформа его не даёт.
@@ -669,6 +679,142 @@ function Validate-RightName {
 	return $true
 }
 
+# --- 5a. Service roots: expand to leaves ---
+
+# Метаданные сервиса читаются один раз на имя: раскрытие и проверка заимствования
+# спрашивают один и тот же файл.
+$script:serviceMetaCache = @{}
+
+function Get-ServiceMeta {
+	param([string]$objectType, [string]$serviceName, [string]$configRoot)
+
+	$key = "$objectType.$serviceName"
+	if ($script:serviceMetaCache.ContainsKey($key)) { return $script:serviceMetaCache[$key] }
+
+	$spec = $script:serviceLeaves[$objectType]
+	$xmlPath = Join-Path (Join-Path $configRoot $spec.Dir) "$serviceName.xml"
+	$result = @{ Path = $xmlPath; Found = $false; Adopted = $false; Leaves = @() }
+
+	if (Test-Path $xmlPath) {
+		try {
+			$doc = New-Object System.Xml.XmlDocument
+			$doc.PreserveWhitespace = $true
+			$doc.Load($xmlPath)
+			$ns = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
+			$ns.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+			$root = $doc.SelectSingleNode("/md:MetaDataObject/md:$objectType", $ns)
+			if ($root) {
+				$result.Found = $true
+				# ObjectBelonging=Adopted — сервис заимствован в расширение.
+				$ob = $root.SelectSingleNode("md:Properties/md:ObjectBelonging", $ns)
+				if ($ob -and $ob.InnerText -eq "Adopted") { $result.Adopted = $true }
+
+				# Спуск по видам: у HTTP-сервиса лист лежит на два уровня ниже
+				# (URLTemplate → Method), у остальных — на один.
+				$level = @(@{ Node = $root; Name = "$objectType.$serviceName" })
+				foreach ($kind in $spec.Kinds) {
+					$next = @()
+					foreach ($item in $level) {
+						foreach ($child in $item.Node.SelectNodes("md:ChildObjects/md:$kind", $ns)) {
+							# Имя берём SelectSingleNode: XML-адаптер PowerShell перекрывает
+							# .NET-члены атрибутами, $child.Name отдал бы не то и молча.
+							$nameNode = $child.SelectSingleNode("md:Properties/md:Name", $ns)
+							if (-not $nameNode) { continue }
+							$next += ,@{ Node = $child; Name = "$($item.Name).$kind.$($nameNode.InnerText)" }
+						}
+					}
+					$level = $next
+				}
+				$result.Leaves = @($level | ForEach-Object { $_.Name })
+			}
+		} catch {
+			# Битый XML — не наша забота: раскрывать нечего, дальше отработает отказ
+			# «метаданные не найдены» с тем же путём в подсказке.
+		}
+	}
+
+	$script:serviceMetaCache[$key] = $result
+	return $result
+}
+
+# Подсказка формата: единственное, что отличается у трёх видов сервисов, — путь до листа.
+function Get-ServiceLeafHint {
+	param([string]$objectType, [string]$serviceName)
+	switch ($objectType) {
+		"HTTPService"        { return "$objectType.$serviceName.URLTemplate.<Шаблон>.Method.<Метод>: Use" }
+		"WebService"         { return "$objectType.$serviceName.Operation.<Операция>: Use" }
+		default              { return "$objectType.$serviceName.IntegrationServiceChannel.<Канал>: Use" }
+	}
+}
+
+# Роль расширения, включённая в <DefaultRoles>, прав на заимствованные объекты давать не
+# может — платформа отвечает «Назначение прав доступа на заимствованные объекты основными
+# ролями в расширениях недопустимо». Считаем один раз: имя роли за прогон не меняется.
+$script:isDefaultRole = $null
+
+function Test-DefaultRole {
+	param([string]$configRoot, [string]$name)
+
+	if ($null -ne $script:isDefaultRole) { return $script:isDefaultRole }
+	$script:isDefaultRole = $false
+
+	$cfgPath = Join-Path $configRoot "Configuration.xml"
+	if (Test-Path $cfgPath) {
+		$text = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
+		# Только расширение: у обычной конфигурации DefaultRoles значит другое и запрета нет.
+		if ($text -match '<ConfigurationExtensionPurpose>' -and $text -match '(?s)<DefaultRoles>(.*?)</DefaultRoles>') {
+			# -cmatch, а не -match: -match регистронезависим и «Расш1_Роль1» совпал бы
+			# с «расш1_роль1», молча приняв роль за основную.
+			$script:isDefaultRole = ($Matches[1] -cmatch ([regex]::Escape("Role.$name") + '\s*<'))
+		}
+	}
+	return $script:isDefaultRole
+}
+
+# Возвращает список записей на замену исходной: сервисный корень раскрывается в листья,
+# всё остальное проходит как есть.
+function Expand-ServiceEntry {
+	param($parsed, [string]$configRoot, [string]$name)
+
+	$objName = $parsed.Name
+	$objectType = Get-ObjectType $objName
+	if (-not $script:serviceLeaves.ContainsKey($objectType)) { return @($parsed) }
+
+	$parts = $objName.Split(".")
+	if ($parts.Count -lt 2) { return @($parsed) }
+	$serviceName = $parts[1]
+	$meta = Get-ServiceMeta -objectType $objectType -serviceName $serviceName -configRoot $configRoot
+
+	if ($meta.Adopted -and (Test-DefaultRole -configRoot $configRoot -name $name)) {
+		Add-ValidationError ("${objName}: '$name' — основная роль расширения (входит в DefaultRoles), " +
+			"а $objectType.$serviceName заимствован; назначать права на заимствованные объекты " +
+			"основными ролями расширения платформа запрещает. Заведите отдельную роль и не включайте её в основные.")
+		return @()
+	}
+
+	# Полный путь пользователь задал сам — раскрывать нечего.
+	if ($parts.Count -gt 2) { return @($parsed) }
+
+	$hint = Get-ServiceLeafHint -objectType $objectType -serviceName $serviceName
+	if (-not $meta.Found) {
+		Add-ValidationError ("${objName}: метаданные сервиса не найдены ($($meta.Path)); " +
+			"право на сервис целиком платформа игнорирует — укажите листья явно: $hint")
+		return @()
+	}
+	if ($meta.Leaves.Count -eq 0) {
+		Add-ValidationError ("${objName}: у сервиса нет ни одного вложенного объекта, раскрывать нечего; " +
+			"право на сервис целиком платформа игнорирует. Для заимствованного сервиса заимствуйте нужные методы, затем: $hint")
+		return @()
+	}
+
+	$expanded = @()
+	foreach ($leaf in $meta.Leaves) {
+		$expanded += ,@{ Name = $leaf; Rights = $parsed.Rights }
+	}
+	Write-Host "     $objName -> раскрыт (вложенных объектов: $($expanded.Count))"
+	return $expanded
+}
+
 # --- 6. Parse object entries ---
 
 function Parse-ObjectEntry {
@@ -776,12 +922,24 @@ function Parse-ObjectEntry {
 # Synonym: accept "rights" as alias for "objects"
 if (-not $def.objects -and $def.rights) { $def | Add-Member -NotePropertyName objects -NotePropertyValue $def.rights }
 
+# Путь нужен уже здесь: раскрытие сервисного корня читает метаданные сервиса рядом с ролью.
+$resolvedOutputDir = if ([System.IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path (Get-Location) $OutputDir }
+
 $parsedObjects = @()
+$seenObjectNames = @{}
 if ($def.objects) {
 	foreach ($entry in $def.objects) {
 		$parsed = Parse-ObjectEntry -entry $entry
-		if ($parsed) {
-			$parsedObjects += ,$parsed
+		if (-not $parsed) { continue }
+		foreach ($p in (Expand-ServiceEntry -parsed $parsed -configRoot $resolvedOutputDir -name $roleName)) {
+			# Дубль возникает штатно: раскрытый лист совпал с явно заданным. Права на листе
+			# одни и те же (Use), так что вторая запись — шум, а не конфликт.
+			if ($seenObjectNames.ContainsKey($p.Name)) {
+				Write-Warning "$($p.Name): объект указан дважды, вторая запись пропущена"
+				continue
+			}
+			$seenObjectNames[$p.Name] = $true
+			$parsedObjects += ,$p
 		}
 	}
 }
@@ -831,7 +989,6 @@ function Get-FormatRank([string]$ver) {
 	return 0
 }
 
-$resolvedOutputDir =if ([System.IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path (Get-Location) $OutputDir }
 Assert-EditAllowed $resolvedOutputDir 'editable'
 $formatVersion = Detect-FormatVersion $resolvedOutputDir
 

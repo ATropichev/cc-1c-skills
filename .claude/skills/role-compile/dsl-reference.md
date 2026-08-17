@@ -22,7 +22,7 @@
 | `DocumentJournal` | Read, View |
 | `Sequence` | Read, Update |
 | `DataProcessor`, `Report` | Use, View |
-| `WebService`, `HTTPService`, `IntegrationService` | Use |
+| `WebService`, `HTTPService`, `IntegrationService` | — права только на вложенных объектах, см. ниже |
 | `CommonForm`, `CommonCommand`, `Subsystem`, `FilterCriterion` | View |
 | `CommonAttribute` | View, Edit |
 | `SessionParameter` | Get, Set |
@@ -50,7 +50,12 @@
 Примеры: `Catalog.Контрагенты.Attribute.ИНН: View, Edit`,
 `Document.Реализация.TabularSection.Товары.Attribute.Цена: View`,
 `WebService.Обмен.Operation.Загрузить: Use`,
-`HTTPService.API.URLTemplate.Файлы.Method.get: Use`.
+`HTTPService.API.URLTemplate.Файлы.Method.Получить: Use`.
+
+Сегмент после `Method.` — **имя объекта Method в дереве метаданных**, а не HTTP-глагол:
+встречаются и `Method.GET`, и `Method.Установить`, и `Method.СоздатьПодключение`.
+
+Про короткую запись `HTTPService.API: Use` — раздел «Сервисы» в `SKILL.md`.
 
 ### Вложенные объекты внешнего источника данных
 
@@ -129,7 +134,7 @@
 | CommonAttribute | View, Edit |
 
 Для сервисов (WebService, HTTPService, IntegrationService) и внешних источников данных
-пресеты не определены — задавай права явно: `"WebService.Имя: Use"`.
+пресеты не определены — задавай права явно: `"WebService.Обмен.Operation.Загрузить: Use"`.
 
 ## Шаблоны ограничений (RLS templates)
 

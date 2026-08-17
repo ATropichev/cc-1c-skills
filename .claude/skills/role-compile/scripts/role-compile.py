@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.25 — Compile 1C role from JSON (+русские алиасы типов: формы с ё и без)
+# role-compile v1.26 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -582,6 +582,16 @@ KIND_OWNERS = {
     'IntegrationServiceChannel': 'IntegrationService',
 }
 
+# Право на сервис живёт на ЛИСТЕ — методе шаблона URL, операции, канале, — а не на самом
+# сервисе: корневого узла нет ни в одной типовой роли (907 записей корпуса — ноль), в
+# Конфигураторе галки на корне нет вовсе. Короткая запись `HTTPService.X: Use` выражает
+# намерение «открой сервис целиком» и раскрывается в листья по метаданным сервиса.
+SERVICE_LEAVES = {
+    'WebService': {'dir': 'WebServices', 'kinds': ['Operation']},
+    'HTTPService': {'dir': 'HTTPServices', 'kinds': ['URLTemplate', 'Method']},
+    'IntegrationService': {'dir': 'IntegrationServices', 'kinds': ['IntegrationServiceChannel']},
+}
+
 # Один и тот же вид под разными родителями имеет разный набор: измерение регистра —
 # View + Edit, измерение куба внешнего источника — только View. Объединять нельзя,
 # объединение молча разрешило бы Edit там, где платформа его не даёт.
@@ -768,6 +778,133 @@ def validate_right_name(object_name, right_name):
     return True
 
 
+MD_NS = 'http://v8.1c.ru/8.3/MDClasses'
+
+# Метаданные сервиса читаются один раз на имя: раскрытие и проверка заимствования
+# спрашивают один и тот же файл.
+SERVICE_META_CACHE = {}
+
+
+def get_service_meta(object_type, service_name, config_root):
+    key = f"{object_type}.{service_name}"
+    if key in SERVICE_META_CACHE:
+        return SERVICE_META_CACHE[key]
+
+    spec = SERVICE_LEAVES[object_type]
+    xml_path = os.path.join(config_root, spec['dir'], f"{service_name}.xml")
+    result = {'path': xml_path, 'found': False, 'adopted': False, 'leaves': []}
+
+    if os.path.isfile(xml_path):
+        try:
+            root = etree.parse(xml_path).getroot()
+            node = root.find(f"{{{MD_NS}}}{object_type}")
+            if node is not None:
+                result['found'] = True
+                # ObjectBelonging=Adopted — сервис заимствован в расширение.
+                ob = node.find(f"{{{MD_NS}}}Properties/{{{MD_NS}}}ObjectBelonging")
+                if ob is not None and (ob.text or '') == 'Adopted':
+                    result['adopted'] = True
+
+                # Спуск по видам: у HTTP-сервиса лист лежит на два уровня ниже
+                # (URLTemplate → Method), у остальных — на один.
+                level = [(node, f"{object_type}.{service_name}")]
+                for kind in spec['kinds']:
+                    nxt = []
+                    for item_node, item_name in level:
+                        for child in item_node.findall(f"{{{MD_NS}}}ChildObjects/{{{MD_NS}}}{kind}"):
+                            name_node = child.find(f"{{{MD_NS}}}Properties/{{{MD_NS}}}Name")
+                            if name_node is None:
+                                continue
+                            nxt.append((child, f"{item_name}.{kind}.{name_node.text}"))
+                    level = nxt
+                result['leaves'] = [n for _, n in level]
+        except Exception:
+            # Битый XML — не наша забота: раскрывать нечего, дальше отработает отказ
+            # «метаданные не найдены» с тем же путём в подсказке.
+            pass
+
+    SERVICE_META_CACHE[key] = result
+    return result
+
+
+def get_service_leaf_hint(object_type, service_name):
+    """Подсказка формата: единственное, что отличается у трёх видов сервисов, — путь до листа."""
+    if object_type == 'HTTPService':
+        return f"{object_type}.{service_name}.URLTemplate.<Шаблон>.Method.<Метод>: Use"
+    if object_type == 'WebService':
+        return f"{object_type}.{service_name}.Operation.<Операция>: Use"
+    return f"{object_type}.{service_name}.IntegrationServiceChannel.<Канал>: Use"
+
+
+# Роль расширения, включённая в <DefaultRoles>, прав на заимствованные объекты давать не
+# может — платформа отвечает «Назначение прав доступа на заимствованные объекты основными
+# ролями в расширениях недопустимо». Считаем один раз: имя роли за прогон не меняется.
+IS_DEFAULT_ROLE = None
+
+
+def test_default_role(config_root, name):
+    global IS_DEFAULT_ROLE
+    if IS_DEFAULT_ROLE is not None:
+        return IS_DEFAULT_ROLE
+    IS_DEFAULT_ROLE = False
+
+    cfg_path = os.path.join(config_root, 'Configuration.xml')
+    if os.path.isfile(cfg_path):
+        with open(cfg_path, 'r', encoding='utf-8-sig') as f:
+            text = f.read()
+        # Только расширение: у обычной конфигурации DefaultRoles значит другое и запрета нет.
+        if '<ConfigurationExtensionPurpose>' in text:
+            m = re.search(r'<DefaultRoles>(.*?)</DefaultRoles>', text, re.S)
+            # Сравнение регистрозависимое — паритет с -cmatch в PS1, где регистронезависимый
+            # -match принял бы «расш1_роль1» за основную роль «Расш1_Роль1».
+            if m and re.search(re.escape(f"Role.{name}") + r'\s*<', m.group(1)):
+                IS_DEFAULT_ROLE = True
+    return IS_DEFAULT_ROLE
+
+
+def expand_service_entry(parsed, config_root, name):
+    """Возвращает список записей на замену исходной: сервисный корень раскрывается в листья,
+    всё остальное проходит как есть."""
+    obj_name = parsed['Name']
+    object_type = get_object_type(obj_name)
+    if object_type not in SERVICE_LEAVES:
+        return [parsed]
+
+    parts = obj_name.split('.')
+    if len(parts) < 2:
+        return [parsed]
+    service_name = parts[1]
+    meta = get_service_meta(object_type, service_name, config_root)
+
+    if meta['adopted'] and test_default_role(config_root, name):
+        add_validation_error(
+            f"{obj_name}: '{name}' — основная роль расширения (входит в DefaultRoles), "
+            f"а {object_type}.{service_name} заимствован; назначать права на заимствованные объекты "
+            "основными ролями расширения платформа запрещает. Заведите отдельную роль и не включайте её в основные.")
+        return []
+
+    # Полный путь пользователь задал сам — раскрывать нечего.
+    if len(parts) > 2:
+        return [parsed]
+
+    hint = get_service_leaf_hint(object_type, service_name)
+    if not meta['found']:
+        add_validation_error(
+            f"{obj_name}: метаданные сервиса не найдены ({meta['path']}); "
+            f"право на сервис целиком платформа игнорирует — укажите листья явно: {hint}")
+        return []
+    if not meta['leaves']:
+        add_validation_error(
+            f"{obj_name}: у сервиса нет ни одного вложенного объекта, раскрывать нечего; "
+            "право на сервис целиком платформа игнорирует. "
+            f"Для заимствованного сервиса заимствуйте нужные методы, затем: {hint}")
+        return []
+
+    expanded = [{'Name': leaf, 'Rights': parsed['Rights']} for leaf in meta['leaves']]
+    print(f"     {obj_name} -> раскрыт (вложенных объектов: {len(expanded)})")
+    return expanded
+
+
 def parse_object_entry(entry):
     # --- String shorthand ---
     if isinstance(entry, str):
@@ -891,11 +1028,20 @@ def main():
 
     # --- 2. Parse all object entries ---
     parsed_objects = []
+    seen_object_names = set()
     if defn.get('objects'):
         for entry in defn['objects']:
             parsed = parse_object_entry(entry)
-            if parsed:
-                parsed_objects.append(parsed)
+            if not parsed:
+                continue
+            for p in expand_service_entry(parsed, out_dir_resolved, role_name):
+                # Дубль возникает штатно: раскрытый лист совпал с явно заданным. Права на
+                # листе одни и те же (Use), так что вторая запись — шум, а не конфликт.
+                if p['Name'] in seen_object_names:
+                    print(f"WARNING: {p['Name']}: объект указан дважды, вторая запись пропущена", file=sys.stderr)
+                    continue
+                seen_object_names.add(p['Name'])
+                parsed_objects.append(p)
 
     # Отказ ДО записи: роль пишется тремя файлами (метаданные, права, регистрация в
     # Configuration.xml), и частично записанная роль хуже отсутствующей. Печатаем все

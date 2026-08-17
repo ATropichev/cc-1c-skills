@@ -60,7 +60,18 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/role-compile.ps1" -
 
 `@` обязателен в shorthand. В объектной форме — `"preset": "view"` без `@`.
 
-Для сервисов (WebService, HTTPService, IntegrationService) пресеты не определены — используй явные права: `"WebService.Имя: Use"`.
+### Сервисы
+
+Платформа проверяет право на **вложенном объекте** сервиса — методе шаблона URL, операции, канале. Права на сервис целиком не существует.
+
+Весь сервис — короткая запись, навык раскроет её по метаданным сервиса в `OutputDir`:
+
+```json
+"objects": ["HTTPService.ЭДО: Use"]
+```
+→ `HTTPService.ЭДО.URLTemplate.ЕстьНовыеДокументы.Method.POST: Use`, и так по каждому методу каждого шаблона.
+
+Часть маршрутов — полным путём: `"HTTPService.ЭДО.URLTemplate.ЕстьНовыеДокументы.Method.POST: Use"`.
 
 ### Русские синонимы
 
@@ -103,7 +114,9 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/role-compile.ps1" -
 
 Права имеют 27 типов объектов; тип или имя права вне списка — ошибка: роль не создаётся, файлы не пишутся, `Configuration.xml` не меняется. Права нельзя назначить на `Enum`, `CommonModule`, `DefinedType`, `CommonPicture`, `CommonTemplate`, `Language`, `FunctionalOption`, `EventSubscription`, `ScheduledJob`, `StyleItem`, `SettingsStorage` и подобные — в дереве редактора ролей их нет.
 
-Права на части объекта задаются точечным путём: `Catalog.Контрагенты.Attribute.ИНН: View, Edit`, `WebService.Обмен.Operation.Загрузить: Use`.
+Права на части объекта задаются точечным путём: `Catalog.Контрагенты.Attribute.ИНН: View, Edit`, `WebService.Обмен.Operation.Загрузить: Use`, `HTTPService.ЭДО.URLTemplate.ЕстьНовыеДокументы.Method.POST: Use`.
+
+Роль расширения, включённая в основные (`DefaultRoles`), прав на заимствованные объекты давать не может — платформа это запрещает. Такие права выноси в отдельную роль вне основных.
 
 Полные таблицы «тип → права», виды вложенности (включая внешние источники данных), список типов без прав, таблицы пресетов и дополнительные примеры — в `dsl-reference.md`.
 
