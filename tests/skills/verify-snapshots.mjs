@@ -764,8 +764,13 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
       log(`fixture: ${fixtureName}`, true);
     } else if (typeof caseData.setup === 'string' && caseData.setup.startsWith('external:')) {
       const extPath = resolve(REPO_ROOT, caseData.setup.slice('external:'.length));
+      // Недоступная внешняя выгрузка — СКИП, как в runner.mjs (`ensureSetup`, ветка
+      // external). Путь к дампу ERP/БП машинозависим: на маке его нет, и падение
+      // здесь красило набор при полностью исправном навыке — расхождение двух
+      // раннеров по одному и тому же ключу DSL.
       if (!existsSync(extPath)) {
-        result.errors.push(`External setup path not found: ${extPath}`);
+        result.skipped = true;
+        result.skipReason = `внешняя выгрузка недоступна на этой машине: ${extPath}`;
         return result;
       }
       cpSync(extPath, workDir, { recursive: true });
