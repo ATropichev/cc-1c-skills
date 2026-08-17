@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-validate v1.3 — Validate 1C role Rights.xml structure
+# role-validate v1.4 — Validate 1C role Rights.xml structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates role Rights.xml: root element, global flags, objects, rights, RLS, templates."""
 import sys, os, argparse, re
@@ -192,6 +192,13 @@ KIND_OWNERS = {
     'Operation': 'WebService',
     'Method': 'HTTPService',
     'IntegrationServiceChannel': 'IntegrationService',
+}
+
+# Подсказка формата для каждого вида сервиса: {0} подставляется как `Тип.Имя` из роли.
+SERVICE_LEAF_HINTS = {
+    'WebService': '{0}.Operation.<Операция>',
+    'HTTPService': '{0}.URLTemplate.<Шаблон>.Method.<Метод>',
+    'IntegrationService': '{0}.IntegrationServiceChannel.<Канал>',
 }
 
 # Один и тот же вид под разными родителями имеет разный набор: измерение регистра —
@@ -436,6 +443,14 @@ def main():
             report_error(f"{obj_name}: вид '{nested_kind}' бывает только у {KIND_OWNERS[nested_kind]}")
         elif is_nested and get_nested_rights(object_type, nested_kind) is None:
             report_error(f"{obj_name}: неизвестный вид вложенности '{nested_kind}'")
+        elif not is_nested and object_type in SERVICE_LEAF_HINTS:
+            # Право на сервис целиком платформа игнорирует: проверяется лист (метод шаблона
+            # URL, операция, канал). Роль формально валидна и молча не работает — 403 на всех
+            # маршрутах, причина по симптому не читается. В Конфигураторе галки на корне
+            # сервиса нет вовсе, так что это недостижимое состояние, а не стилистика.
+            hint = SERVICE_LEAF_HINTS[object_type].format(obj_name)
+            report_error(f"{obj_name}: право на сервис целиком не действует — "
+                         f"назначайте права на вложенные объекты: {hint}")
 
         # Check rights
         for child in obj:

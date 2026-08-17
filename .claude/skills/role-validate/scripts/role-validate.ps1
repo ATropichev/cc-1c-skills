@@ -1,4 +1,4 @@
-﻿# role-validate v1.3 — Validate 1C role structure
+﻿# role-validate v1.4 — Validate 1C role structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -174,6 +174,13 @@ $script:kindOwners = @{
 	"Operation"                 = "WebService"
 	"Method"                    = "HTTPService"
 	"IntegrationServiceChannel" = "IntegrationService"
+}
+
+# Подсказка формата для каждого вида сервиса: {0} подставляется как `Тип.Имя` из роли.
+$script:serviceLeafHints = @{
+	"WebService"         = "{0}.Operation.<Операция>"
+	"HTTPService"        = "{0}.URLTemplate.<Шаблон>.Method.<Метод>"
+	"IntegrationService" = "{0}.IntegrationServiceChannel.<Канал>"
 }
 
 # Один и тот же вид под разными родителями имеет разный набор: измерение регистра —
@@ -405,6 +412,12 @@ foreach ($obj in $objects) {
 		Report-Error "${objName}: вид '$nestedKind' бывает только у $($script:kindOwners[$nestedKind])"
 	} elseif ($isNested -and $null -eq (Get-NestedRights $objectType $nestedKind)) {
 		Report-Error "${objName}: неизвестный вид вложенности '$nestedKind'"
+	} elseif (-not $isNested -and $script:serviceLeafHints.ContainsKey($objectType)) {
+		# Право на сервис целиком платформа игнорирует: проверяется лист (метод шаблона URL,
+		# операция, канал). Роль формально валидна и молча не работает — 403 на всех
+		# маршрутах, причина по симптому не читается. В Конфигураторе галки на корне сервиса
+		# нет вовсе, так что это недостижимое состояние, а не стилистика.
+		Report-Error "${objName}: право на сервис целиком не действует — назначайте права на вложенные объекты: $($script:serviceLeafHints[$objectType] -f $objName)"
 	}
 
 	# Check rights
