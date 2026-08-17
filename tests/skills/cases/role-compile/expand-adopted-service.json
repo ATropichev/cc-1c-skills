@@ -1,0 +1,24 @@
+{
+  "name": "Позитив: заимствованный сервис в обычной роли расширения раскрывается в заимствованные методы",
+  "setup": "fixture:ext-services",
+  "input": {
+    "name": "Расш1_Роль1",
+    "synonym": "Роль 1",
+    "objects": [
+      "HTTPService.ЭДО: Use",
+      "HTTPService.Расш1_HTTPСервис1: Use"
+    ]
+  },
+  "validatePath": "Roles/Расш1_Роль1",
+  "expect": {
+    "files": [
+      "Roles/Расш1_Роль1.xml",
+      "Roles/Расш1_Роль1/Ext/Rights.xml"
+    ],
+    "stdoutContains": [
+      "HTTPService.ЭДО -> раскрыт (вложенных объектов: 1)",
+      "HTTPService.Расш1_HTTPСервис1 -> раскрыт (вложенных объектов: 1)"
+    ]
+  },
+  "skipPlatformVerify": "фикстура — расширение ERP с заимствованным HTTP-сервисом; без конфигурации-источника платформа его не принимает"
+}

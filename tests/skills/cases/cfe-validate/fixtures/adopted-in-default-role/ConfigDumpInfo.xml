@@ -1,0 +1,20 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<ConfigDumpInfo xmlns="http://v8.1c.ru/8.3/xcf/dumpinfo" xmlns:xen="http://v8.1c.ru/8.3/xcf/enums" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" format="Hierarchical" version="2.20">
+	<ConfigVersions>
+		<Metadata name="Configuration.Расширение1" id="397bd84b-3d37-4beb-8536-dba836ae92bd" configVersion="e7043a58cdb52bee32ce7203b307b1d906e6e0f6"/>
+		<Metadata name="HTTPService.Расш1_HTTPСервис1" id="6c941eed-1e98-4f99-acca-36ea67d496fd" configVersion="dace55e5b7d03787e0afd82b3a317a0ae5961c40">
+			<Metadata name="HTTPService.Расш1_HTTPСервис1.URLTemplate.ШаблонURL1.Method.Метод1" id="88695ffb-354b-489e-8526-dc13e16c66f7"/>
+			<Metadata name="HTTPService.Расш1_HTTPСервис1.URLTemplate.ШаблонURL1" id="c3736df9-c579-4fba-9172-44e83994aa9e"/>
+		</Metadata>
+		<Metadata name="HTTPService.Расш1_HTTPСервис1.Module" id="6c941eed-1e98-4f99-acca-36ea67d496fd.0" configVersion="991b3ccee21ed3b68db2970f9349b4a91ab3bdd4"/>
+		<Metadata name="HTTPService.ЭДО" id="f4c12d1d-3b1f-4b91-9140-6ac350f7b73a" configVersion="4cda642007e1bdf2d297f2dcc188658ef6d3eefa">
+			<Metadata name="HTTPService.ЭДО.URLTemplate.ЕстьНовыеДокументы" id="24778e70-17fe-4509-9aab-7a46bdfe30a6"/>
+			<Metadata name="HTTPService.ЭДО.URLTemplate.ЕстьНовыеДокументы.Method.POST" id="6253109e-d955-4efc-bcaf-94fed3f69dfc"/>
+		</Metadata>
+		<Metadata name="Language.Русский" id="eebce631-949d-40a3-9d4d-d51bc60f9579" configVersion="e74ea5ed9dcdd8a24f296934f27dccb8ad8f3f65"/>
+		<Metadata name="Role.Расш1_ОсновнаяРоль" id="5686fa70-df27-4c0e-b146-85a540b0d306" configVersion="f9d9315caa23d860de262485db126170f275bdba"/>
+		<Metadata name="Role.Расш1_ОсновнаяРоль.Rights" id="5686fa70-df27-4c0e-b146-85a540b0d306.0" configVersion="954648fd330f50c4422e9b6b732c5b6ef242c4e7"/>
+		<Metadata name="Role.Расш1_Роль1" id="37030a0a-9c9d-4423-8a24-162c4c615f34" configVersion="0e34d999ff7cc7fc86498eac6516bed86ec543e7"/>
+		<Metadata name="Role.Расш1_Роль1.Rights" id="37030a0a-9c9d-4423-8a24-162c4c615f34.0" configVersion="00455851a838119e5f674d0121e000390fa29a09"/>
+	</ConfigVersions>
+</ConfigDumpInfo>

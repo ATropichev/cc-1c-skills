@@ -1,0 +1,22 @@
+{
+  "name": "Позитив: короткая запись на сервис интеграции раскрывается в каналы",
+  "setup": "fixture:services-config",
+  "input": {
+    "name": "ДоступКШине",
+    "synonym": "Доступ к шине",
+    "objects": [
+      "IntegrationService.Сообщения: Use"
+    ]
+  },
+  "validatePath": "Roles/ДоступКШине",
+  "expect": {
+    "files": [
+      "Roles/ДоступКШине.xml",
+      "Roles/ДоступКШине/Ext/Rights.xml"
+    ],
+    "stdoutContains": [
+      "IntegrationService.Сообщения -> раскрыт (вложенных объектов: 2)"
+    ]
+  },
+  "skipPlatformVerify": "IntegrationService не создаёт ни один навык (meta-compile его не поддерживает), поэтому фикстура написана вручную и платформа отвергает её по составу сервиса, а не по формату Rights.xml"
+}

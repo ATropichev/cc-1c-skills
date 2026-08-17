@@ -1,0 +1,12 @@
+{
+  "name": "Ошибка: основная роль расширения даёт права на заимствованный объект",
+  "setup": "fixture:adopted-in-default-role",
+  "params": { "extensionPath": "." },
+  "expectError": true,
+  "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст и код возврата",
+  "expect": {
+    "stdoutContains": [
+      "Роль 'Расш1_ОсновнаяРоль' входит в DefaultRoles и даёт права на заимствованный HTTPService.ЭДО"
+    ]
+  }
+}

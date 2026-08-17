@@ -1,0 +1,18 @@
+{
+  "name": "Негатив: основная роль расширения не может давать права на заимствованный сервис",
+  "setup": "fixture:ext-services",
+  "input": {
+    "name": "Расш1_ОсновнаяРоль",
+    "objects": [
+      "HTTPService.ЭДО: Use"
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stderrContains": [
+      "основная роль расширения (входит в DefaultRoles)",
+      "HTTPService.ЭДО заимствован"
+    ]
+  },
+  "noSnapshot": "негатив: роль не создаётся, файлы не пишутся"
+}

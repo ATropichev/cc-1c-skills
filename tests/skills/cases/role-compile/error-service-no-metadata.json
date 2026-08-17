@@ -1,0 +1,20 @@
+{
+  "name": "Негатив: короткая запись на сервис без метаданных — отказ с подсказкой формата",
+  "setup": "fixture:services-config",
+  "input": {
+    "name": "Битая",
+    "objects": [
+      "HTTPService.НетТакого: Use",
+      "WebService.ТожеНет: Use"
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stderrContains": [
+      "HTTPService.НетТакого: метаданные сервиса не найдены",
+      "HTTPService.НетТакого.URLTemplate.<Шаблон>.Method.<Метод>: Use",
+      "WebService.ТожеНет.Operation.<Операция>: Use"
+    ]
+  },
+  "noSnapshot": "негатив: роль не создаётся, файлы не пишутся"
+}

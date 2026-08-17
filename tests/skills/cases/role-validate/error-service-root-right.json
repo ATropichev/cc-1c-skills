@@ -1,0 +1,17 @@
+{
+  "name": "Ошибка: право на сервис целиком вместо вложенного объекта",
+  "setup": "fixture:service-root-right",
+  "params": { "rightsPath": "Roles/РольСервисы/Ext/Rights.xml" },
+  "expectError": true,
+  "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст и код возврата",
+  "expect": {
+    "stdoutContains": [
+      "HTTPService.ВнешнийAPI: право на сервис целиком не действует",
+      "HTTPService.ВнешнийAPI.URLTemplate.<Шаблон>.Method.<Метод>",
+      "WebService.ОбменДанными.Operation.<Операция>"
+    ],
+    "stdoutNotContains": [
+      "HTTPService.ВнешнийAPI.URLTemplate.Заказы.Method.Получить: право"
+    ]
+  }
+}
