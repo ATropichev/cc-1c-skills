@@ -160,8 +160,7 @@ python scripts/switch.py --runtime powershell  # вернуть на PowerShell
 - [Встроенная справка](docs/1c-help-spec.md) — Help.xml, HTML-страницы, кнопка справки на форме
 - [Пакетный режим конфигуратора 1С](docs/build-spec.md) — команды `1cv8.exe`, DESIGNER, ENTERPRISE, CREATEINFOBASE
 - [Табличный документ (MXL)](docs/1c-spreadsheet-spec.md) — XML-формат SpreadsheetDocument, совместимость версий
-- [MXL DSL](docs/mxl-dsl-spec.md) — JSON-формат описания макета для `/mxl-compile` и `/mxl-decompile`
-- [MXL DSL: оформление](docs/mxl-dsl-styles.md) — шрифты, стили, цвета, рамки, колоночные раскладки
+- [MXL DSL](docs/mxl-dsl-spec.md) — JSON-формат описания макета для `/mxl-compile` и `/mxl-decompile`: структура, оформление, полный перечень свойств стиля
 - [Form DSL](docs/form-dsl-spec.md) — JSON-формат описания формы для `/form-compile`
 - [Роли (Rights.xml)](docs/1c-role-spec.md) — XML-формат прав роли, типы объектов, RLS
 - [Role DSL](docs/role-dsl-spec.md) — JSON-формат описания ролей для `/role-compile`
@@ -269,8 +268,6 @@ docs/
 ├── build-spec.md           # Пакетный режим конфигуратора 1С
 ├── 1c-spreadsheet-spec.md  # Спецификация табличного документа
 ├── mxl-dsl-spec.md         # Спецификация MXL DSL
-├── mxl-dsl-styles.md       # MXL DSL: оформление
-├── mxl-dsl-format-properties.md  # MXL DSL: полный перечень свойств стиля
 ├── form-dsl-spec.md        # Спецификация Form DSL
 ├── meta-dsl-spec.md        # Спецификация Meta DSL
 ├── 1c-role-spec.md         # Спецификация ролей (Rights.xml)

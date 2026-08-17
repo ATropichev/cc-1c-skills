@@ -169,7 +169,5 @@
 | Meta DSL | JSON-формат для создания/редактирования объектов | [meta-dsl-spec.md](meta-dsl-spec.md) |
 | Form DSL | JSON-формат для компиляции форм | [form-dsl-spec.md](form-dsl-spec.md) |
 | SKD DSL | JSON-формат для компиляции СКД | [skd-dsl-spec.md](skd-dsl-spec.md) |
-| MXL DSL | JSON-формат для компиляции табличных документов | [mxl-dsl-spec.md](mxl-dsl-spec.md) |
-| MXL DSL: оформление | Шрифты, стили, цвета, рамки, колонки | [mxl-dsl-styles.md](mxl-dsl-styles.md) |
-| MXL DSL: свойства стиля | Полный перечень свойств формата | [mxl-dsl-format-properties.md](mxl-dsl-format-properties.md) |
+| MXL DSL | JSON-формат для компиляции табличных документов, включая оформление и полный перечень свойств стиля | [mxl-dsl-spec.md](mxl-dsl-spec.md) |
 | Role DSL | JSON-формат для компиляции ролей | [role-dsl-spec.md](role-dsl-spec.md) |
