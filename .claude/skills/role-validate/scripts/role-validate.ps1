@@ -1,7 +1,8 @@
-﻿# role-validate v1.4 — Validate 1C role structure
+﻿# role-validate v1.5 — Validate 1C role structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
-	[Parameter(Mandatory)]
+	[Parameter(Mandatory, Position=0)]
 	[Alias('Path')]
 	[string]$RightsPath,
 

@@ -123,6 +123,6 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/role-compile.ps1" -
 ## Верификация
 
 ```
-/role-validate <RightsPath> [MetadataPath]  — проверка корректности XML, прав, RLS
-/role-info <RightsPath>                     — визуальная сводка структуры
+/role-validate <RightsPath>  — проверка корректности XML, прав, RLS
+/role-info <RightsPath>      — визуальная сводка структуры
 ```
