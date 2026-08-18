@@ -122,6 +122,12 @@ try {
 
       const r = spawnSync(cmd, argv, { cwd: work, encoding: 'utf8' });
 
+      // Не запустившийся интерпретатор даёт status: null — «код возврата ненулевой» прошло бы
+      // вакуумно, и гард молча зеленел бы, ничего не проверив.
+      if (r.error) {
+        fail(skill, `[${runtime}] не удалось запустить ${cmd}: ${r.error.message}`);
+        continue;
+      }
       if (r.status === 0) {
         fail(skill, `[${runtime}] лишний позиционный аргумент принят без ошибки`);
       }
