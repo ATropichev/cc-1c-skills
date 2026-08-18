@@ -1,6 +1,8 @@
-﻿# mxl-validate v1.7 — Validate 1C spreadsheet
+﻿# mxl-validate v1.8 — Validate 1C spreadsheet
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
+	[Parameter(Position=0)]
 	[Alias('Path')]
 	[string]$TemplatePath,
 	[string]$ProcessorName,

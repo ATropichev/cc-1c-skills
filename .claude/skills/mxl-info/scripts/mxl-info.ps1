@@ -1,6 +1,8 @@
-﻿# mxl-info v1.4 — Analyze 1C spreadsheet structure (+единое имя хелпера состояния поддержки)
+﻿# mxl-info v1.5 — Analyze 1C spreadsheet structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
+	[Parameter(Position=0)]
 	[Alias('Path')]
 	[string]$TemplatePath,
 	[string]$ProcessorName,

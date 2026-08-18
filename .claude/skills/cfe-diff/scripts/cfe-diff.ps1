@@ -1,7 +1,8 @@
-﻿# cfe-diff v1.2 — Analyze and compare 1C configuration extension (CFE) (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+﻿# cfe-diff v1.3 — Analyze and compare 1C configuration extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
-	[Parameter(Mandatory)]
+	[Parameter(Mandatory, Position=0)]
 	[string]$ExtensionPath,
 
 	[Parameter(Mandatory)]

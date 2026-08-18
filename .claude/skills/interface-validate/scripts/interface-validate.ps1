@@ -1,7 +1,8 @@
-﻿# interface-validate v1.3 — Validate 1C CommandInterface.xml structure (+Report-*: общий эталон вывода валидаторов)
+﻿# interface-validate v1.4 — Validate 1C CommandInterface.xml structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
-	[Parameter(Mandatory)][Alias('Path')][string]$CIPath,
+	[Parameter(Mandatory, Position=0)][Alias('Path')][string]$CIPath,
 	[switch]$Detailed,
 	[int]$MaxErrors = 30,
 	[string]$OutFile

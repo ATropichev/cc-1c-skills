@@ -1,7 +1,8 @@
-﻿# xdto-validate v1.3 — Validate a 1C XDTO package (+Report-*: общий эталон вывода валидаторов)
+﻿# xdto-validate v1.4 — Validate a 1C XDTO package
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
-	[Parameter(Mandatory)]
+	[Parameter(Mandatory, Position=0)]
 	[Alias('Path')]
 	[string]$PackagePath,
 

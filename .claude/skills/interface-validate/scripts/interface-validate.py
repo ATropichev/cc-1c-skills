@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# interface-validate v1.3 — Validate 1C CommandInterface.xml structure (+Report-*: общий эталон вывода валидаторов)
+# interface-validate v1.4 — Validate 1C CommandInterface.xml structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates CommandInterface.xml sections, command references, order, duplicates."""
 import sys, os, argparse, re

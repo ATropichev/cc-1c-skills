@@ -14,6 +14,7 @@ const GUARDS = [
   ['check-inline-drift.mjs', 'общие inline-реализации: копии совпадают с эталонами'],
   ['check-type-maps.mjs', 'карты типов метаданных: согласованы со спецификацией'],
   ['check-format-versions.mjs', 'проверенный диапазон версий формата: согласован со спецификацией'],
+  ['check-positional-binding.mjs', 'read-only навыки: позиционным остаётся только путь ко входу'],
 ];
 
 let failed = 0;

@@ -1,4 +1,4 @@
-﻿# web-info v1.4 — Apache & 1C publication status
+﻿# web-info v1.5 — Apache & 1C publication status
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -18,9 +18,9 @@
     .\web-info.ps1 -ApachePath "C:\tools\apache24"
 #>
 
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding=$false)]
 param(
-    [Parameter(Mandatory=$false)]
+    [Parameter(Mandatory=$false, Position=0)]
     [string]$ApachePath
 )
 

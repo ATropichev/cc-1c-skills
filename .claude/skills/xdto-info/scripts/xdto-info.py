@@ -1,4 +1,4 @@
-# xdto-info v1.1 — Analyze 1C XDTO package structure (Python port)
+# xdto-info v1.2 — Analyze 1C XDTO package structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os

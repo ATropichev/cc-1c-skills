@@ -1,7 +1,8 @@
-﻿# skd-validate v1.3 — Validate 1C DCS structure
+﻿# skd-validate v1.4 — Validate 1C DCS structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
-	[Parameter(Mandatory)]
+	[Parameter(Mandatory, Position=0)]
 	[Alias('Path')]
 	[string]$TemplatePath,
 

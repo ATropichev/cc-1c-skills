@@ -1,4 +1,4 @@
-# xdto-validate v1.3 — Validate a 1C XDTO package (Python port) (+Report-*: общий эталон вывода валидаторов)
+# xdto-validate v1.4 — Validate a 1C XDTO package (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os

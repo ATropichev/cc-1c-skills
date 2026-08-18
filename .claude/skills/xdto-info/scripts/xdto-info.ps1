@@ -1,7 +1,8 @@
-﻿# xdto-info v1.1 — Analyze 1C XDTO package structure
+﻿# xdto-info v1.2 — Analyze 1C XDTO package structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
-	[Parameter(Mandatory=$true)]
+	[Parameter(Mandatory=$true, Position=0)]
 	[Alias('Path')]
 	[string]$PackagePath,
 	[string]$Package,

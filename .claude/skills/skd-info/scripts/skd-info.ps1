@@ -1,7 +1,8 @@
-﻿# skd-info v1.11 — Analyze 1C DCS structure (+единое имя хелпера состояния поддержки)
+﻿# skd-info v1.12 — Analyze 1C DCS structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
-	[Parameter(Mandatory=$true)]
+	[Parameter(Mandatory=$true, Position=0)]
 	[Alias('Path')]
 	[string]$TemplatePath,
 	[ValidateSet("overview", "query", "fields", "links", "calculated", "resources", "params", "variant", "trace", "templates", "full")]

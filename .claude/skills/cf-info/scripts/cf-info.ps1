@@ -1,7 +1,8 @@
-﻿# cf-info v1.5 — Compact summary of 1C configuration root
+﻿# cf-info v1.6 — Compact summary of 1C configuration root
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
-	[Parameter(Mandatory=$true)][Alias('Path')][string]$ConfigPath,
+	[Parameter(Mandatory=$true, Position=0)][Alias('Path')][string]$ConfigPath,
 	[ValidateSet("overview","brief","full")]
 	[string]$Mode = "overview",
 	[Alias('Name')]

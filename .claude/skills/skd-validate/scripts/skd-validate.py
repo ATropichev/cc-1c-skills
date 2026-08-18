@@ -1,4 +1,4 @@
-# skd-validate v1.3 — Validate 1C DCS structure (Python port)
+# skd-validate v1.4 — Validate 1C DCS structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os

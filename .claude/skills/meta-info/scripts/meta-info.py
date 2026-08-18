@@ -1,4 +1,4 @@
-# meta-info v1.10 — Compact summary of 1C metadata object (Python port) (+единое имя хелпера состояния поддержки)
+# meta-info v1.11 — Compact summary of 1C metadata object (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os

@@ -1,7 +1,8 @@
-﻿# form-validate v1.17 — Validate 1C managed form
+﻿# form-validate v1.18 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
-	[Parameter(Mandatory)]
+	[Parameter(Mandatory, Position=0)]
 	[Alias('Path')]
 	[string]$FormPath,
 

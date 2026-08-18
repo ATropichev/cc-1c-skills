@@ -1,7 +1,8 @@
-﻿# cfe-validate v1.13 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.14 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
-	[Parameter(Mandatory)]
+	[Parameter(Mandatory, Position=0)]
 	[Alias('Path')]
 	[string]$ExtensionPath,
 
