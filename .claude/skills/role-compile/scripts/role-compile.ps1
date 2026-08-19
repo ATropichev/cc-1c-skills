@@ -1,4 +1,4 @@
-﻿# role-compile v1.27 — Compile 1C role from JSON
+﻿# role-compile v1.28 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -1120,87 +1120,82 @@ $enc = New-Object System.Text.UTF8Encoding($true)
 
 # --- 12. Register in Configuration.xml ---
 
-$configXmlPath = Join-Path $configDir "Configuration.xml"
-$regResult = $null
+# Регистрация объекта в <ChildObjects> родительского XML. Общая реализация: эталон —
+# meta-compile, копия — role-compile. Реестр семьи: tests/skills/check-inline-drift.mjs.
+# Возвращает исход: added | already | no-childobj | no-config.
+function Register-InChildObjects([string]$ParentXmlPath, [string]$ParentTag, [string]$ChildTag, [string]$ChildName) {
+	if (-not (Test-Path $ParentXmlPath)) { return "no-config" }
 
-if (Test-Path $configXmlPath) {
-	$configDoc = New-Object System.Xml.XmlDocument
-	$configDoc.PreserveWhitespace = $true
-	$configDoc.Load($configXmlPath)
+	$doc = New-Object System.Xml.XmlDocument
+	$doc.PreserveWhitespace = $true
+	$doc.Load($ParentXmlPath)
 
-	$nsMgr = New-Object System.Xml.XmlNamespaceManager($configDoc.NameTable)
+	$nsMgr = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
 	$nsMgr.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
 
-	$childObjects = $configDoc.SelectSingleNode("//md:Configuration/md:ChildObjects", $nsMgr)
-	if ($childObjects) {
-		$existing = $childObjects.SelectNodes("md:Role", $nsMgr)
-		$alreadyExists = $false
-		foreach ($r in $existing) {
-			if ($r.InnerText -eq $roleName) {
-				$alreadyExists = $true
-				break
-			}
-		}
+	$childObjects = $doc.SelectSingleNode("//md:$ParentTag/md:ChildObjects", $nsMgr)
+	if (-not $childObjects) { return "no-childobj" }
 
-		if ($alreadyExists) {
-			$regResult = "already"
-		} else {
-			$roleElem = $configDoc.CreateElement("Role", "http://v8.1c.ru/8.3/MDClasses")
-			$roleElem.InnerText = $roleName
-
-			if ($existing.Count -gt 0) {
-				# Insert after last existing <Role>
-				$lastRole = $existing[$existing.Count - 1]
-				$newWs = $configDoc.CreateWhitespace("`n`t`t`t")
-				$childObjects.InsertAfter($newWs, $lastRole) | Out-Null
-				$childObjects.InsertAfter($roleElem, $newWs) | Out-Null
-			} else {
-				# No existing roles — insert before closing whitespace
-				$lastChild = $childObjects.LastChild
-				if ($lastChild.NodeType -eq [System.Xml.XmlNodeType]::Whitespace) {
-					$newWs = $configDoc.CreateWhitespace("`n`t`t`t")
-					$childObjects.InsertBefore($newWs, $lastChild) | Out-Null
-					$childObjects.InsertBefore($roleElem, $lastChild) | Out-Null
-				} else {
-					$childObjects.AppendChild($configDoc.CreateWhitespace("`n`t`t`t")) | Out-Null
-					$childObjects.AppendChild($roleElem) | Out-Null
-					$childObjects.AppendChild($configDoc.CreateWhitespace("`n`t`t")) | Out-Null
-				}
-			}
-
-			# Save
-			$cfgSettings = New-Object System.Xml.XmlWriterSettings
-			$cfgSettings.Encoding = New-Object System.Text.UTF8Encoding($true)
-			$cfgSettings.Indent = $false
-			$cfgSettings.NewLineHandling = [System.Xml.NewLineHandling]::None
-			# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
-			$memStream = New-Object System.IO.MemoryStream
-			$writer = [System.Xml.XmlWriter]::Create($memStream, $cfgSettings)
-			$configDoc.Save($writer)
-			$writer.Flush(); $writer.Close()
-
-			$cfgText = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
-			$memStream.Close()
-			if ($cfgText.Length -gt 0 -and $cfgText[0] -eq [char]0xFEFF) { $cfgText = $cfgText.Substring(1) }
-			$cfgText = $cfgText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
-			# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
-			# поэтому они идут первыми ветками альтернации и возвращаются как есть.
-			$cfgText = [regex]::Replace($cfgText, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
-			# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
-			# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
-			$targetEol = if ((Test-Path -LiteralPath $configXmlPath) -and ([System.IO.File]::ReadAllText($configXmlPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
-			$cfgText = ($cfgText -replace "`r`n", "`n") -replace "`n", $targetEol
-			[System.IO.File]::WriteAllText($configXmlPath, $cfgText, (New-Object System.Text.UTF8Encoding($true)))
-
-			$regResult = "added"
-		}
-	} else {
-		$regResult = "no-childobj"
+	$existing = $childObjects.SelectNodes("md:$ChildTag", $nsMgr)
+	foreach ($e in $existing) {
+		if ($e.InnerText -eq $ChildName) { return "already" }
 	}
-} else {
-	$regResult = "no-config"
+
+	$newElem = $doc.CreateElement($ChildTag, "http://v8.1c.ru/8.3/MDClasses")
+	$newElem.InnerText = $ChildName
+
+	if ($existing.Count -gt 0) {
+		# Insert after last existing element of same type
+		$lastElem = $existing[$existing.Count - 1]
+		$newWs = $doc.CreateWhitespace("`n`t`t`t")
+		$childObjects.InsertAfter($newWs, $lastElem) | Out-Null
+		$childObjects.InsertAfter($newElem, $newWs) | Out-Null
+	} else {
+		# No existing elements of this type — insert before closing whitespace.
+		# Самозакрытый <ChildObjects/> попадает сюда же: LastChild пуст, идёт ветка AppendChild.
+		$lastChild = $childObjects.LastChild
+		if ($lastChild.NodeType -eq [System.Xml.XmlNodeType]::Whitespace) {
+			$newWs = $doc.CreateWhitespace("`n`t`t`t")
+			$childObjects.InsertBefore($newWs, $lastChild) | Out-Null
+			$childObjects.InsertBefore($newElem, $lastChild) | Out-Null
+		} else {
+			$childObjects.AppendChild($doc.CreateWhitespace("`n`t`t`t")) | Out-Null
+			$childObjects.AppendChild($newElem) | Out-Null
+			$childObjects.AppendChild($doc.CreateWhitespace("`n`t`t")) | Out-Null
+		}
+	}
+
+	# Save. Пишем через MemoryStream, а не прямо в файл: нужен шаг пост-обработки
+	# строки — XmlWriter отдаёт `encoding="utf-8"` и `<a />`, Конфигуратор пишет
+	# `encoding="UTF-8"` и `<a/>`.
+	$cfgSettings = New-Object System.Xml.XmlWriterSettings
+	$cfgSettings.Encoding = New-Object System.Text.UTF8Encoding($true)
+	$cfgSettings.Indent = $false
+	$cfgSettings.NewLineHandling = [System.Xml.NewLineHandling]::None
+	$memStream = New-Object System.IO.MemoryStream
+	$writer = [System.Xml.XmlWriter]::Create($memStream, $cfgSettings)
+	$doc.Save($writer)
+	$writer.Flush(); $writer.Close()
+
+	$cfgText = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
+	$memStream.Close()
+	if ($cfgText.Length -gt 0 -and $cfgText[0] -eq [char]0xFEFF) { $cfgText = $cfgText.Substring(1) }
+	$cfgText = $cfgText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
+	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+	# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+	# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+	$cfgText = [regex]::Replace($cfgText, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+	# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+	# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+	$targetEol = if ([System.IO.File]::ReadAllText($ParentXmlPath) -notmatch "`r`n") { "`n" } else { "`r`n" }
+	$cfgText = ($cfgText -replace "`r`n", "`n") -replace "`n", $targetEol
+	[System.IO.File]::WriteAllText($ParentXmlPath, $cfgText, (New-Object System.Text.UTF8Encoding($true)))
+
+	return "added"
 }
+
+$configXmlPath = Join-Path $configDir "Configuration.xml"
+$regResult = Register-InChildObjects $configXmlPath "Configuration" "Role" $roleName
 
 # --- 13. Summary ---
 

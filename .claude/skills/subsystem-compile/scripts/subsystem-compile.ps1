@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.25 — Create 1C subsystem from JSON definition (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+﻿# subsystem-compile v1.26 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -600,9 +600,106 @@ if ($children.Count -gt 0) {
 }
 
 # --- 6. Register in parent ---
+
+# Регистрация объекта в <ChildObjects> родительского XML. Вариант семьи: отступ берётся
+# из самого документа, а запись дописывается в конец блока. Отличие от эталона
+# (meta-compile) осознанное: родителем бывает вложенный Subsystem.xml произвольной
+# глубины, где фиксированные три табуляции неверны, а группировать записи по типу
+# внутри подсистемы нечего — потомок там всегда один и тот же.
+# Реестр семьи: tests/skills/check-inline-drift.mjs.
+# Возвращает исход: added | already | no-childobj | no-config.
+function Register-InChildObjects([string]$ParentXmlPath, [string]$ParentTag, [string]$ChildTag, [string]$ChildName) {
+	if (-not (Test-Path $ParentXmlPath)) { return "no-config" }
+
+	$doc = New-Object System.Xml.XmlDocument
+	$doc.PreserveWhitespace = $true
+	$doc.Load($ParentXmlPath)
+
+	$ns = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
+	$ns.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
+
+	$childObjects = $doc.SelectSingleNode("//md:$ParentTag/md:ChildObjects", $ns)
+	if (-not $childObjects) { return "no-childobj" }
+
+	# Check for self-closing tag
+	$isSelfClosing = (-not $childObjects.HasChildNodes) -or ($childObjects.IsEmpty)
+
+	# Check if already registered
+	foreach ($child in $childObjects.ChildNodes) {
+		if ($child.NodeType -eq 'Element' -and $child.LocalName -eq $ChildTag -and $child.InnerText -eq $ChildName) {
+			return "already"
+		}
+	}
+
+	$newEl = $doc.CreateElement($ChildTag, "http://v8.1c.ru/8.3/MDClasses")
+	$newEl.InnerText = $ChildName
+
+	if ($isSelfClosing) {
+		# Expand self-closing tag
+		$parentIndent = ""
+		$prev = $childObjects.PreviousSibling
+		if ($prev -and ($prev.NodeType -eq 'Whitespace' -or $prev.NodeType -eq 'SignificantWhitespace')) {
+			if ($prev.Value -match '(\t+)$') { $parentIndent = $Matches[1] }
+		}
+		$childIndent = "$parentIndent`t"
+		$ws1 = $doc.CreateWhitespace("`r`n$childIndent")
+		$ws2 = $doc.CreateWhitespace("`r`n$parentIndent")
+		$childObjects.AppendChild($ws1) | Out-Null
+		$childObjects.AppendChild($newEl) | Out-Null
+		$childObjects.AppendChild($ws2) | Out-Null
+	} else {
+		# Insert before trailing whitespace
+		$childIndent = "`t`t`t"
+		foreach ($child in $childObjects.ChildNodes) {
+			if ($child.NodeType -eq 'Whitespace' -or $child.NodeType -eq 'SignificantWhitespace') {
+				if ($child.Value -match '^\r?\n(\t+)') { $childIndent = $Matches[1]; break }
+			}
+		}
+		$trailing = $childObjects.LastChild
+		$ws = $doc.CreateWhitespace("`r`n$childIndent")
+		if ($trailing -and ($trailing.NodeType -eq 'Whitespace' -or $trailing.NodeType -eq 'SignificantWhitespace')) {
+			$childObjects.InsertBefore($ws, $trailing) | Out-Null
+			$childObjects.InsertBefore($newEl, $trailing) | Out-Null
+		} else {
+			$childObjects.AppendChild($ws) | Out-Null
+			$childObjects.AppendChild($newEl) | Out-Null
+		}
+	}
+
+	# Save parent XML
+	$settings = New-Object System.Xml.XmlWriterSettings
+	$settings.Encoding = New-Object System.Text.UTF8Encoding($true)
+	$settings.Indent = $false
+	$settings.NewLineHandling = [System.Xml.NewLineHandling]::None
+
+	$memStream = New-Object System.IO.MemoryStream
+	$writer = [System.Xml.XmlWriter]::Create($memStream, $settings)
+	$doc.Save($writer)
+	$writer.Flush(); $writer.Close()
+
+	$bytes = $memStream.ToArray()
+	$memStream.Close()
+	$text = [System.Text.Encoding]::UTF8.GetString($bytes)
+	if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
+	$text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
+	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+	# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+	# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+	$text = [regex]::Replace($text, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+	# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+	# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+	$targetEol = if ((Test-Path -LiteralPath $ParentXmlPath) -and ([System.IO.File]::ReadAllText($ParentXmlPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+	$text = ($text -replace "`r`n", "`n") -replace "`n", $targetEol
+	[System.IO.File]::WriteAllText($ParentXmlPath, $text, (New-Object System.Text.UTF8Encoding($true)))
+
+	return "added"
+}
+
 $parentXmlPath = $null
+$parentTag = "Configuration"
 if ($Parent) {
 	$parentXmlPath = $Parent
+	$parentTag = "Subsystem"
 } else {
 	$configXml = Join-Path $OutputDir "Configuration.xml"
 	if (Test-Path $configXml) {
@@ -610,103 +707,12 @@ if ($Parent) {
 	}
 }
 
-if ($parentXmlPath -and (Test-Path $parentXmlPath)) {
-	$doc = New-Object System.Xml.XmlDocument
-	$doc.PreserveWhitespace = $true
-	$doc.Load($parentXmlPath)
-
-	$ns = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
-	$ns.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
-
-	# Find ChildObjects
-	$childObjects = $null
-	if ($Parent) {
-		$childObjects = $doc.SelectSingleNode("//md:Subsystem/md:ChildObjects", $ns)
-	} else {
-		$childObjects = $doc.SelectSingleNode("//md:Configuration/md:ChildObjects", $ns)
-	}
-
-	if ($childObjects) {
-		# Check for self-closing tag
-		$isSelfClosing = (-not $childObjects.HasChildNodes) -or ($childObjects.IsEmpty)
-
-		# Check if already registered
-		$alreadyExists = $false
-		foreach ($child in $childObjects.ChildNodes) {
-			if ($child.NodeType -eq 'Element' -and $child.LocalName -eq "Subsystem" -and $child.InnerText -eq $objName) {
-				$alreadyExists = $true
-				break
-			}
-		}
-
-		if (-not $alreadyExists) {
-			$newEl = $doc.CreateElement("Subsystem", "http://v8.1c.ru/8.3/MDClasses")
-			$newEl.InnerText = $objName
-
-			if ($isSelfClosing) {
-				# Expand self-closing tag
-				$parentIndent = ""
-				$prev = $childObjects.PreviousSibling
-				if ($prev -and ($prev.NodeType -eq 'Whitespace' -or $prev.NodeType -eq 'SignificantWhitespace')) {
-					if ($prev.Value -match '(\t+)$') { $parentIndent = $Matches[1] }
-				}
-				$childIndent = "$parentIndent`t"
-				$ws1 = $doc.CreateWhitespace("`r`n$childIndent")
-				$ws2 = $doc.CreateWhitespace("`r`n$parentIndent")
-				$childObjects.AppendChild($ws1) | Out-Null
-				$childObjects.AppendChild($newEl) | Out-Null
-				$childObjects.AppendChild($ws2) | Out-Null
-			} else {
-				# Insert before trailing whitespace
-				$childIndent = "`t`t`t"
-				foreach ($child in $childObjects.ChildNodes) {
-					if ($child.NodeType -eq 'Whitespace' -or $child.NodeType -eq 'SignificantWhitespace') {
-						if ($child.Value -match '^\r?\n(\t+)') { $childIndent = $Matches[1]; break }
-					}
-				}
-				$trailing = $childObjects.LastChild
-				$ws = $doc.CreateWhitespace("`r`n$childIndent")
-				if ($trailing -and ($trailing.NodeType -eq 'Whitespace' -or $trailing.NodeType -eq 'SignificantWhitespace')) {
-					$childObjects.InsertBefore($ws, $trailing) | Out-Null
-					$childObjects.InsertBefore($newEl, $trailing) | Out-Null
-				} else {
-					$childObjects.AppendChild($ws) | Out-Null
-					$childObjects.AppendChild($newEl) | Out-Null
-				}
-			}
-
-			# Save parent XML
-			$settings = New-Object System.Xml.XmlWriterSettings
-			$settings.Encoding = New-Object System.Text.UTF8Encoding($true)
-			$settings.Indent = $false
-			$settings.NewLineHandling = [System.Xml.NewLineHandling]::None
-
-			$memStream = New-Object System.IO.MemoryStream
-			$writer = [System.Xml.XmlWriter]::Create($memStream, $settings)
-			$doc.Save($writer)
-			$writer.Flush(); $writer.Close()
-
-			$bytes = $memStream.ToArray()
-			$memStream.Close()
-			$text = [System.Text.Encoding]::UTF8.GetString($bytes)
-			if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
-			$text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-			# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
-			# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
-			# поэтому они идут первыми ветками альтернации и возвращаются как есть.
-			$text = [regex]::Replace($text, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
-			# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
-			# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
-			$targetEol = if ((Test-Path -LiteralPath $parentXmlPath) -and ([System.IO.File]::ReadAllText($parentXmlPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
-			$text = ($text -replace "`r`n", "`n") -replace "`n", $targetEol
-			[System.IO.File]::WriteAllText($parentXmlPath, $text, $utf8Bom)
-
-			Write-Host "[OK] Registered in: $parentXmlPath"
-		} else {
-			Write-Host "[SKIP] Already registered in: $parentXmlPath"
-		}
-	} else {
-		Write-Host "[WARN] ChildObjects not found in: $parentXmlPath"
+if ($parentXmlPath) {
+	switch (Register-InChildObjects $parentXmlPath $parentTag "Subsystem" $objName) {
+		"added"       { Write-Host "[OK] Registered in: $parentXmlPath" }
+		"already"     { Write-Host "[SKIP] Already registered in: $parentXmlPath" }
+		"no-childobj" { Write-Host "[WARN] ChildObjects not found in: $parentXmlPath" }
+		"no-config"   { Write-Host "[INFO] No parent XML to register in" }
 	}
 } else {
 	Write-Host "[INFO] No parent XML to register in"

@@ -383,6 +383,16 @@ const FAMILIES = [
       { id: 'legacy', authority: 'meta-decompile', consumers: [],
         why: 'ранний вариант со своим Quote-Json и без inline-попытки; сведение меняет вывод meta-decompile' }],
   },
+  // ─── Регистрация объекта в <ChildObjects> файла конфигурации ─────────────
+  {
+    name: 'ChildObjects: регистрация объекта в составе',
+    py: 'register_in_childobjects', ps1: 'Register-InChildObjects',
+    variants: [
+      { id: 'grouped', authority: 'meta-compile', consumers: ['role-compile'] },
+      { id: 'nested-parent', authority: 'subsystem-compile', consumers: [],
+        why: 'родителем бывает вложенный Subsystem.xml произвольной глубины: отступ берётся из документа, а запись дописывается в конец блока — фиксированные три табуляции там неверны, и группировать по типу нечего' },
+    ],
+  },
 
 ];
 

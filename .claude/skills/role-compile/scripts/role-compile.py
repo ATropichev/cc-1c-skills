@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.27 — Compile 1C role from JSON
+# role-compile v1.28 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -7,6 +7,7 @@ import os
 import re
 import sys
 import uuid
+import xml.etree.ElementTree as ET
 
 from lxml import etree
 
@@ -993,6 +994,79 @@ def parse_object_entry(entry):
     return {'Name': obj_name, 'Rights': rights}
 
 
+def register_in_childobjects(parent_xml_path, parent_tag, child_tag, child_name):
+    """Регистрация объекта в <ChildObjects> родительского XML.
+
+    Общая реализация: эталон — meta-compile, копия — role-compile.
+    Реестр семьи: tests/skills/check-inline-drift.mjs.
+    Возвращает исход: added | already | no-childobj | no-config.
+    """
+    if not os.path.isfile(parent_xml_path):
+        return 'no-config'
+
+    # Read raw content, preserving BOM/EOL byte-for-byte (newline='' => no translation)
+    with open(parent_xml_path, 'r', encoding='utf-8-sig', newline='') as f:
+        config_content = f.read()
+
+    ns = 'http://v8.1c.ru/8.3/MDClasses'
+    # ET is used ONLY read-only here: to locate ChildObjects and detect a duplicate.
+    # We deliberately do NOT re-serialize Configuration.xml with ElementTree.write():
+    # it drops every xmlns declaration used only inside attribute VALUES (e.g.
+    # xsi:type="app:ApplicationUsePurpose" in UsePurposes) because ET never sees such
+    # prefixes in element/attribute names. The dropped declaration makes XDTO read the
+    # value as anyType and Designer refuses to load the file (issue #38). Registration is
+    # therefore done by raw-text insertion, preserving BOM, EOL and all namespaces
+    # byte-for-byte (same approach as subsystem-compile).
+    tree = ET.parse(parent_xml_path)
+    root = tree.getroot()
+
+    child_objects = root.find(f'{{{ns}}}{parent_tag}/{{{ns}}}ChildObjects')
+    if child_objects is None:
+        # Try direct path
+        parent_elem = root.find(f'{{{ns}}}{parent_tag}')
+        if parent_elem is not None:
+            child_objects = parent_elem.find(f'{{{ns}}}ChildObjects')
+
+    if child_objects is None:
+        return 'no-childobj'
+
+    existing = child_objects.findall(f'{{{ns}}}{child_tag}')
+    if any((e.text or '').strip() == child_name for e in existing):
+        return 'already'
+
+    eol = '\r\n' if '\r\n' in config_content else '\n'
+    entry = f'<{child_tag}>{esc_xml_text(child_name)}</{child_tag}>'
+
+    block = re.search(r'<ChildObjects\s*>.*?</ChildObjects>', config_content, re.S)
+    if block is None:
+        # Empty self-closing <ChildObjects/> => open it with the first entry.
+        empty = re.search(r'<ChildObjects\s*/>', config_content)
+        if empty is None:
+            return 'no-childobj'
+        replacement = f'<ChildObjects>{eol}\t\t\t{entry}{eol}\t\t</ChildObjects>'
+        new_content = config_content[:empty.start()] + replacement + config_content[empty.end():]
+        write_utf8_bom(parent_xml_path, new_content)
+        return 'added'
+
+    close_same = f'</{child_tag}>'
+    last_same = config_content.rfind(close_same, block.start(), block.end())
+    if last_same != -1:
+        # After the last element of the same type (keeps them grouped).
+        insert_at = last_same + len(close_same)
+        new_content = (config_content[:insert_at]
+                       + f'{eol}\t\t\t{entry}'
+                       + config_content[insert_at:])
+    else:
+        # No element of this type yet: new line before </ChildObjects>,
+        # reusing the block's existing closing indent for </ChildObjects>.
+        close_at = config_content.rfind('</ChildObjects>', block.start(), block.end())
+        new_content = (config_content[:close_at]
+                       + f'\t{entry}{eol}\t\t'
+                       + config_content[close_at:])
+    write_utf8_bom(parent_xml_path, new_content)
+    return 'added'
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -1163,59 +1237,7 @@ def main():
 
     # --- 7. Register in Configuration.xml ---
     config_xml_path = os.path.join(config_dir, 'Configuration.xml')
-    reg_result = None
-
-    if os.path.exists(config_xml_path):
-        # newline='' => без трансляции переводов строк: иначе CRLF молча схлопнется
-        # в LF при чтении и файл будет переписан в LF.
-        with open(config_xml_path, 'r', encoding='utf-8-sig', newline='') as f:
-            raw_text = f.read()
-
-        eol = detect_eol(raw_text)
-
-        # Check if already registered
-        if f'<Role>{role_name}</Role>' in raw_text:
-            reg_result = 'already'
-        else:
-            new_role_tag = f'<Role>{role_name}</Role>'
-            block = re.search(r'<ChildObjects\s*>.*?</ChildObjects>', raw_text, re.S)
-
-            if block is None:
-                # Самозакрытый <ChildObjects/> раскрываем первой записью; если тега нет вовсе —
-                # регистрировать некуда, и файл трогать нельзя. Раньше обе эти ветки писали
-                # исход 'added', не изменив ни байта: модель считала роль включённой в состав,
-                # а её там не было.
-                empty = re.search(r'<ChildObjects\s*/>', raw_text)
-                if empty is None:
-                    reg_result = 'no-childobj'
-                else:
-                    replacement = ('<ChildObjects>' + eol + f'\t\t\t{new_role_tag}'
-                                   + eol + '\t\t</ChildObjects>')
-                    raw_text = raw_text[:empty.start()] + replacement + raw_text[empty.end():]
-                    write_utf8_bom(config_xml_path, raw_text)
-                    reg_result = 'added'
-            else:
-                role_pattern = re.compile(r'(<Role>[^<]*</Role>)')
-                matches = list(role_pattern.finditer(raw_text))
-
-                if matches:
-                    # Insert after last existing <Role>
-                    last_match = matches[-1]
-                    insert_pos = last_match.end()
-                    raw_text = raw_text[:insert_pos] + eol + f'\t\t\t{new_role_tag}' + raw_text[insert_pos:]
-                else:
-                    # No existing roles — insert before </ChildObjects>
-                    # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
-                    # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
-                    # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
-                    raw_text = re.sub(r'([ \t]*)</ChildObjects>',
-                                      lambda m: m.group(1) + '\t' + new_role_tag + eol + m.group(1) + '</ChildObjects>',
-                                      raw_text, count=1)
-
-                write_utf8_bom(config_xml_path, raw_text)
-                reg_result = 'added'
-    else:
-        reg_result = 'no-config'
+    reg_result = register_in_childobjects(config_xml_path, 'Configuration', 'Role', role_name)
 
     # --- 8. Summary ---
     print(f"[OK] Role '{role_name}' compiled")

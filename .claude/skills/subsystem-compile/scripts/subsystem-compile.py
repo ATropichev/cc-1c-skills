@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-compile v1.25 — Create 1C subsystem from JSON definition (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+# subsystem-compile v1.26 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -388,6 +388,60 @@ def write_child_subsystem_stub(child_path, child_name, format_version):
     write_utf8_bom(child_path, '\r\n'.join(lines))
 
 
+def register_in_childobjects(parent_xml_path, parent_tag, child_tag, child_name):
+    """Регистрация объекта в <ChildObjects> родительского XML.
+
+    Вариант семьи: отступ берётся из самого документа, а запись дописывается в конец
+    блока. Отличие от эталона (meta-compile) осознанное: родителем бывает вложенный
+    Subsystem.xml произвольной глубины, где фиксированные три табуляции неверны,
+    а группировать записи по типу внутри подсистемы нечего — потомок там всегда один.
+    Реестр семьи: tests/skills/check-inline-drift.mjs.
+    Возвращает исход: added | already | no-childobj | no-config.
+    """
+    if not os.path.exists(parent_xml_path):
+        return 'no-config'
+
+    # newline='' => без трансляции переводов строк: иначе CRLF молча схлопнется
+    # в LF при чтении и файл будет переписан в LF.
+    with open(parent_xml_path, 'r', encoding='utf-8-sig', newline='') as f:
+        raw_text = f.read()
+
+    eol = detect_eol(raw_text)
+    doc = ET.ElementTree(ET.fromstring(raw_text))
+    root = doc.getroot()
+    md_ns = 'http://v8.1c.ru/8.3/MDClasses'
+
+    # Find ChildObjects
+    child_objects = None
+    for holder in root.iter(f'{{{md_ns}}}{parent_tag}'):
+        child_objects = holder.find(f'{{{md_ns}}}ChildObjects')
+        break
+
+    if child_objects is None:
+        return 'no-childobj'
+
+    for child in child_objects:
+        if child.tag == f'{{{md_ns}}}{child_tag}' and child.text == child_name:
+            return 'already'
+
+    # Правку ведём по сырому тексту, а не сериализацией ET: она не сохраняет отступы
+    # и теряет xmlns, объявленные только внутри значений атрибутов (#38).
+    entry = f'<{child_tag}>{esc_xml_text(child_name)}</{child_tag}>'
+    if '<ChildObjects/>' in raw_text:
+        replacement = '<ChildObjects>' + eol + f'\t\t\t{entry}' + eol + '\t\t</ChildObjects>'
+        raw_text = raw_text.replace('<ChildObjects/>', replacement, 1)
+    elif '</ChildObjects>' in raw_text:
+        # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
+        # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
+        # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
+        raw_text = re.sub(r'([ \t]*)</ChildObjects>',
+                          lambda m: m.group(1) + '\t' + entry + eol + m.group(1) + '</ChildObjects>',
+                          raw_text, count=1)
+
+    write_utf8_bom(parent_xml_path, raw_text)
+    return 'added'
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -656,71 +710,25 @@ def main():
 
     # --- 5. Register in parent ---
     parent_xml_path = None
+    parent_tag = 'Configuration'
     if parent:
         parent_xml_path = parent
+        parent_tag = 'Subsystem'
     else:
         config_xml = os.path.join(output_dir, 'Configuration.xml')
         if os.path.exists(config_xml):
             parent_xml_path = config_xml
 
-    if parent_xml_path and os.path.exists(parent_xml_path):
-        # newline='' => без трансляции переводов строк: иначе CRLF молча схлопнется
-        # в LF при чтении и файл будет переписан в LF.
-        with open(parent_xml_path, 'r', encoding='utf-8-sig', newline='') as f:
-            raw_text = f.read()
-
-        eol = detect_eol(raw_text)
-        doc = ET.ElementTree(ET.fromstring(raw_text))
-        root = doc.getroot()
-        md_ns = 'http://v8.1c.ru/8.3/MDClasses'
-
-        # Find ChildObjects
-        child_objects = None
-        if parent:
-            for sub in root.iter(f'{{{md_ns}}}Subsystem'):
-                child_objects = sub.find(f'{{{md_ns}}}ChildObjects')
-                break
-        else:
-            for cfg in root.iter(f'{{{md_ns}}}Configuration'):
-                child_objects = cfg.find(f'{{{md_ns}}}ChildObjects')
-                break
-
-        if child_objects is not None:
-            # Check if already registered
-            already_exists = False
-            for child in child_objects:
-                if child.tag == f'{{{md_ns}}}Subsystem' and child.text == obj_name:
-                    already_exists = True
-                    break
-
-            if not already_exists:
-                new_el = ET.SubElement(child_objects, f'{{{md_ns}}}Subsystem')
-                new_el.text = obj_name
-
-                # Re-serialize with whitespace preservation via raw text manipulation instead
-                # Since ElementTree doesn't preserve whitespace well, use regex-based insertion
-                # Find </ChildObjects> or <ChildObjects/> and inject
-                pass  # Fall through to raw text approach below
-
-            if not already_exists:
-                # Use raw text manipulation to preserve formatting
-                if '<ChildObjects/>' in raw_text:
-                    replacement = ('<ChildObjects>' + eol + f'\t\t\t<Subsystem>{esc_xml_text(obj_name)}</Subsystem>' + eol + '\t\t</ChildObjects>')
-                    raw_text = raw_text.replace('<ChildObjects/>', replacement, 1)
-                elif '</ChildObjects>' in raw_text:
-                    # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
-                    # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
-                    # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
-                    raw_text = re.sub(r'([ \t]*)</ChildObjects>',
-                                      lambda m: m.group(1) + '\t' + f'<Subsystem>{esc_xml_text(obj_name)}</Subsystem>' + eol + m.group(1) + '</ChildObjects>',
-                                      raw_text, count=1)
-
-                write_utf8_bom(parent_xml_path, raw_text)
-                print(f"[OK] Registered in: {parent_xml_path}")
-            else:
-                print(f"[SKIP] Already registered in: {parent_xml_path}")
-        else:
+    if parent_xml_path:
+        outcome = register_in_childobjects(parent_xml_path, parent_tag, 'Subsystem', obj_name)
+        if outcome == 'added':
+            print(f"[OK] Registered in: {parent_xml_path}")
+        elif outcome == 'already':
+            print(f"[SKIP] Already registered in: {parent_xml_path}")
+        elif outcome == 'no-childobj':
             print(f"[WARN] ChildObjects not found in: {parent_xml_path}")
+        else:
+            print("[INFO] No parent XML to register in")
     else:
         print("[INFO] No parent XML to register in")
 
