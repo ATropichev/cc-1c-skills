@@ -1,4 +1,4 @@
-// web-test core/state v1.18 — module-level state for the web-test engine.
+// web-test core/state v1.19 — module-level state for the web-test engine.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 //
 // Holds the single browser/page/recorder slot plus the multi-context registry,
@@ -10,7 +10,7 @@
 import { dirname, resolve as pathResolve } from 'path';
 import { fileURLToPath } from 'url';
 
-// Project root: 6 levels up from .claude/skills/web-test/scripts/engine/core/state.mjs
+// Project root: 6 levels up from <skills>/web-test/scripts/engine/core/state.mjs
 const __fn_state = fileURLToPath(import.meta.url);
 export const projectRoot = pathResolve(dirname(__fn_state), '..', '..', '..', '..', '..', '..');
 

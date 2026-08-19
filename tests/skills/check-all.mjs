@@ -15,6 +15,7 @@ const GUARDS = [
   ['check-type-maps.mjs', 'карты типов метаданных: согласованы со спецификацией'],
   ['check-format-versions.mjs', 'проверенный диапазон версий формата: согласован со спецификацией'],
   ['check-positional-binding.mjs', 'read-only навыки: позиционным остаётся только путь ко входу'],
+  ['check-agent-portability.mjs', 'исходники навыков: без привязки к конкретному AI-агенту'],
 ];
 
 let failed = 0;
