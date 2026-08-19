@@ -1,4 +1,4 @@
-# skd-edit v1.37 — Atomic 1C DCS editor (Python port) (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+# skd-edit v1.38 — Atomic 1C DCS editor (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -435,6 +435,30 @@ def parse_field_shorthand(s):
     return result
 
 
+# lxml отдаёт фрагмент через tostring как самостоятельный документ и переобъявляет на нём каждый
+# префикс, который был в области видимости. Такие объявления избыточны: родительский контекст в точке
+# вставки их уже даёт. Но объявление, которого в корне НЕТ, значимо — например xmlns:d5p1 на <v8:Type>:
+# только оно связывает префикс, которым квалифицировано значение узла (d5p1:CatalogRef.X). Срезать его
+# нельзя, иначе отказ будет тихим: XML останется well-formed (префикс в тексте парсер не проверяет), а
+# 1С отвергнет тип. Поэтому выбрасываем лишь унаследованное — префикс, объявленный в корне с тем же URI.
+def strip_inherited_xmlns(raw):
+    if not raw:
+        return raw
+    # Корень не распознан — сохраняем прежнее поведение, чтобы не менять статус-кво.
+    if not raw_root_opening:
+        return re.sub(r' xmlns(?::\w+)?="[^"]*"', "", raw)
+    root_ns = {}
+    # В корне атрибуты бывают разложены по строкам — разделитель \s+, а не пробел.
+    for m in re.finditer(r'\s+xmlns(?::(\w+))?="([^"]*)"', raw_root_opening):
+        root_ns[m.group(1) or ""] = m.group(2)
+
+    def _drop_inherited(m):
+        prefix = m.group(1) or ""
+        return "" if root_ns.get(prefix) == m.group(2) else m.group(0)
+
+    return re.sub(r' xmlns(?::(\w+))?="([^"]*)"', _drop_inherited, raw)
+
+
 def read_field_properties(field_el):
     props = {"dataPath": "", "field": "", "title": "", "type": "", "roles": [], "restrict": [], "_rawTypeText": "",
              "_rawTitle": None, "_unknownChildren": []}
@@ -450,7 +474,7 @@ def read_field_properties(field_el):
         elif ln == "title":
             # Preserve full multi-lang title OuterXml; also extract ru content for compat.
             raw = etree.tostring(ch, encoding="unicode", with_tail=False)
-            raw = re.sub(r' xmlns(?::\w+)?="[^"]*"', "", raw)
+            raw = strip_inherited_xmlns(raw)
             props["_rawTitle"] = raw
             for item in ch:
                 if isinstance(item.tag, str) and local_name(item) == "item":
@@ -469,7 +493,7 @@ def read_field_properties(field_el):
             # expressible via shorthand. Strip xmlns declarations that lxml re-emits when
             # serializing a sub-element (parent context already provides them).
             raw = etree.tostring(ch, encoding="unicode", with_tail=False)
-            raw = re.sub(r' xmlns(?::\w+)?="[^"]*"', "", raw)
+            raw = strip_inherited_xmlns(raw)
             props["_rawValueType"] = raw
             for gc in ch:
                 if isinstance(gc.tag, str) and local_name(gc) == "Type":
@@ -494,7 +518,7 @@ def read_field_properties(field_el):
             # Defense in depth: preserve OuterXml of unknown children so rebuild
             # doesn't silently drop them (custom <editFormat>, <appearance>, etc.).
             raw = etree.tostring(ch, encoding="unicode", with_tail=False)
-            raw = re.sub(r' xmlns(?::\w+)?="[^"]*"', "", raw)
+            raw = strip_inherited_xmlns(raw)
             props["_unknownChildren"].append(raw)
     return props
 
@@ -2238,7 +2262,7 @@ elif operation == "modify-parameter":
             title_frag = None
             if existing_title is not None:
                 raw_title = etree.tostring(existing_title, encoding="unicode", with_tail=False)
-                raw_title = re.sub(r' xmlns(?::\w+)?="[^"]*"', "", raw_title)
+                raw_title = strip_inherited_xmlns(raw_title)
                 if raw_title.count("<v8:item>") > 1:
                     title_frag = child_indent + patch_mltext_ru(raw_title, title_val, child_indent)
                 remove_node_with_whitespace(existing_title)
@@ -3201,7 +3225,7 @@ elif operation == "set-field-role":
                 if ln in kv_keys:
                     continue
                 raw = etree.tostring(gc, encoding="unicode", with_tail=False)
-                raw = re.sub(r' xmlns(?::\w+)?="[^"]*"', "", raw)
+                raw = strip_inherited_xmlns(raw)
                 preserved_role_children.append(raw)
             remove_node_with_whitespace(old_role)
 

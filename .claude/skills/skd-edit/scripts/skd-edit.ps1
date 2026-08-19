@@ -1,4 +1,4 @@
-﻿# skd-edit v1.37 — Atomic 1C DCS editor (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# skd-edit v1.38 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: парный .py собирает выражения автодат вне f-string ради совместимости с python 3.9 (PEP 701).
 param(
@@ -335,6 +335,36 @@ function Parse-FieldShorthand {
 	return $result
 }
 
+# DOM отдаёт фрагмент через OuterXml как самостоятельный документ и переобъявляет на нём каждый
+# префикс, который был в области видимости. Такие объявления избыточны: родительский контекст в точке
+# вставки их уже даёт. Но объявление, которого в корне НЕТ, значимо — например xmlns:d5p1 на <v8:Type>:
+# только оно связывает префикс, которым квалифицировано значение узла (d5p1:CatalogRef.X). Срезать его
+# нельзя, иначе отказ будет тихим: XML останется well-formed (префикс в тексте парсер не проверяет), а
+# 1С отвергнет тип. Поэтому выбрасываем лишь унаследованное — префикс, объявленный в корне с тем же URI.
+function Strip-InheritedXmlns([string]$raw) {
+	if ([string]::IsNullOrEmpty($raw)) { return $raw }
+	# Корень не распознан — сохраняем прежнее поведение, чтобы не менять статус-кво.
+	if (-not $script:RawRootOpening) {
+		return [regex]::Replace($raw, ' xmlns(?::\w+)?="[^"]*"', '')
+	}
+	# Dictionary, а не @{}: хэш в PS сравнивает ключи регистронезависимо, а префикс XML регистрозависим.
+	$rootNs = New-Object 'System.Collections.Generic.Dictionary[string,string]'
+	# В корне атрибуты бывают разложены по строкам — разделитель \s+, а не пробел.
+	foreach ($m in [regex]::Matches($script:RawRootOpening, '\s+xmlns(?::(\w+))?="([^"]*)"')) {
+		$rootNs[$m.Groups[1].Value] = $m.Groups[2].Value
+	}
+	return [regex]::Replace($raw, ' xmlns(?::(\w+))?="([^"]*)"', {
+		param($m)
+		$prefix = $m.Groups[1].Value
+		$uri = $m.Groups[2].Value
+		# URI регистрозависим: -eq в PS этого не даёт, сравниваем ординально.
+		if ($rootNs.ContainsKey($prefix) -and [string]::Equals($rootNs[$prefix], $uri, [System.StringComparison]::Ordinal)) {
+			return ''
+		}
+		return $m.Value
+	})
+}
+
 function Read-FieldProperties($fieldEl) {
 	$props = @{
 		dataPath = ""; field = ""; title = ""; type = ""
@@ -353,7 +383,7 @@ function Read-FieldProperties($fieldEl) {
 				# siblings when shorthand overrides only the ru content. Strip xmlns
 				# redeclarations that OuterXml adds for sub-elements.
 				$raw = $ch.OuterXml
-				$raw = [regex]::Replace($raw, ' xmlns(?::\w+)?="[^"]*"', '')
+				$raw = Strip-InheritedXmlns $raw
 				$props._rawTitle = $raw
 				# Also extract ru content as plain string (backward compat — used by
 				# external consumers reading $existing.title).
@@ -376,7 +406,7 @@ function Read-FieldProperties($fieldEl) {
 				# .NET OuterXml re-declares xmlns on every element where the prefix is in
 				# scope (because the fragment is treated as standalone). Strip these since
 				# the parent context at insertion point already provides them.
-				$raw = [regex]::Replace($raw, ' xmlns(?::\w+)?="[^"]*"', '')
+				$raw = Strip-InheritedXmlns $raw
 				$props["_rawValueType"] = $raw
 				$typeEl = $null
 				foreach ($gc in $ch.ChildNodes) {
@@ -412,7 +442,7 @@ function Read-FieldProperties($fieldEl) {
 				# Defense in depth: preserve OuterXml of unknown children so rebuild
 				# doesn't silently drop them (custom <editFormat>, <appearance>, etc.).
 				$raw = $ch.OuterXml
-				$raw = [regex]::Replace($raw, ' xmlns(?::\w+)?="[^"]*"', '')
+				$raw = Strip-InheritedXmlns $raw
 				$props._unknownChildren += $raw
 			}
 		}
@@ -2455,7 +2485,7 @@ switch ($Operation) {
 				$titleFrag = $null
 				if ($existingTitle) {
 					$rawTitle = $existingTitle.OuterXml
-					$rawTitle = [regex]::Replace($rawTitle, ' xmlns(?::\w+)?="[^"]*"', '')
+					$rawTitle = Strip-InheritedXmlns $rawTitle
 					# Count <v8:item> occurrences — if >1, treat as multi-lang.
 					$itemCount = ([regex]::Matches($rawTitle, '<v8:item>')).Count
 					if ($itemCount -gt 1) {
@@ -3730,7 +3760,7 @@ switch ($Operation) {
 					# what the user explicitly set.
 					if ($kv.Contains($gc.LocalName)) { continue }
 					$raw = $gc.OuterXml
-					$raw = [regex]::Replace($raw, ' xmlns(?::\w+)?="[^"]*"', '')
+					$raw = Strip-InheritedXmlns $raw
 					$preservedRoleChildren += $raw
 				}
 				Remove-NodeWithWhitespace $oldRole

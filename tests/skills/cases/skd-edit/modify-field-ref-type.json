@@ -1,0 +1,22 @@
+{
+  "name": "modify-field: локальное объявление xmlns у ссылочного типа сохраняется",
+  "preRun": [
+    {
+      "script": "skd-compile/scripts/skd-compile",
+      "input": {
+        "dataSets": [{
+          "name": "Основной",
+          "query": "ВЫБРАТЬ Т.Сотрудник, Т.Сумма ИЗ Регистр КАК Т",
+          "fields": ["Сотрудник: CatalogRef.Сотрудники", "Сумма: decimal(15,2)"]
+        }]
+      },
+      "args": { "-DefinitionFile": "{inputFile}", "-OutputPath": "{workDir}/Template.xml" }
+    }
+  ],
+  "params": {
+    "templatePath": "Template.xml",
+    "operation": "modify-field",
+    "value": "Сотрудник [Работник]"
+  },
+  "idempotent": true
+}
