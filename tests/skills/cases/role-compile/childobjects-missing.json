@@ -1,0 +1,16 @@
+{
+  "name": "Configuration.xml без <ChildObjects>: регистрировать некуда, успех не объявляется",
+  "setup": "fixture:childobjects-missing",
+  "input": { "name": "Пустая" },
+  "validatePath": "Roles/Пустая",
+  "expect": {
+    "files": [
+      "Roles/Пустая.xml",
+      "Roles/Пустая/Ext/Rights.xml"
+    ],
+    "stdoutNotContains": [
+      "added to ChildObjects",
+      "already registered"
+    ]
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "Самозакрытый <ChildObjects/>: тег раскрывается, роль регистрируется",
+  "setup": "fixture:childobjects-selfclosed",
+  "input": { "name": "Пустая" },
+  "validatePath": "Roles/Пустая",
+  "expect": {
+    "files": [
+      "Roles/Пустая.xml",
+      "Roles/Пустая/Ext/Rights.xml"
+    ],
+    "stdoutContains": "<Role>Пустая</Role> added to ChildObjects",
+    "preserves": {
+      "file": "Configuration.xml",
+      "bom": true,
+      "eol": "crlf",
+      "encoding": "UTF-8",
+      "finalNewline": false,
+      "noCR13": true
+    }
+  }
+}

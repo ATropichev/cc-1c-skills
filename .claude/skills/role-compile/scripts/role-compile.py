@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.26 — Compile 1C role from JSON
+# role-compile v1.27 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1177,27 +1177,43 @@ def main():
         if f'<Role>{role_name}</Role>' in raw_text:
             reg_result = 'already'
         else:
-            # Find last <Role>...</Role> and insert after it
-            role_pattern = re.compile(r'(<Role>[^<]*</Role>)')
-            matches = list(role_pattern.finditer(raw_text))
             new_role_tag = f'<Role>{role_name}</Role>'
+            block = re.search(r'<ChildObjects\s*>.*?</ChildObjects>', raw_text, re.S)
 
-            if matches:
-                # Insert after last existing <Role>
-                last_match = matches[-1]
-                insert_pos = last_match.end()
-                raw_text = raw_text[:insert_pos] + eol + f'\t\t\t{new_role_tag}' + raw_text[insert_pos:]
+            if block is None:
+                # Самозакрытый <ChildObjects/> раскрываем первой записью; если тега нет вовсе —
+                # регистрировать некуда, и файл трогать нельзя. Раньше обе эти ветки писали
+                # исход 'added', не изменив ни байта: модель считала роль включённой в состав,
+                # а её там не было.
+                empty = re.search(r'<ChildObjects\s*/>', raw_text)
+                if empty is None:
+                    reg_result = 'no-childobj'
+                else:
+                    replacement = ('<ChildObjects>' + eol + f'\t\t\t{new_role_tag}'
+                                   + eol + '\t\t</ChildObjects>')
+                    raw_text = raw_text[:empty.start()] + replacement + raw_text[empty.end():]
+                    write_utf8_bom(config_xml_path, raw_text)
+                    reg_result = 'added'
             else:
-                # No existing roles — insert before </ChildObjects>
-                # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
-                # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
-                # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
-                raw_text = re.sub(r'([ \t]*)</ChildObjects>',
-                                  lambda m: m.group(1) + '\t' + new_role_tag + eol + m.group(1) + '</ChildObjects>',
-                                  raw_text, count=1)
+                role_pattern = re.compile(r'(<Role>[^<]*</Role>)')
+                matches = list(role_pattern.finditer(raw_text))
 
-            write_utf8_bom(config_xml_path, raw_text)
-            reg_result = 'added'
+                if matches:
+                    # Insert after last existing <Role>
+                    last_match = matches[-1]
+                    insert_pos = last_match.end()
+                    raw_text = raw_text[:insert_pos] + eol + f'\t\t\t{new_role_tag}' + raw_text[insert_pos:]
+                else:
+                    # No existing roles — insert before </ChildObjects>
+                    # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
+                    # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
+                    # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
+                    raw_text = re.sub(r'([ \t]*)</ChildObjects>',
+                                      lambda m: m.group(1) + '\t' + new_role_tag + eol + m.group(1) + '</ChildObjects>',
+                                      raw_text, count=1)
+
+                write_utf8_bom(config_xml_path, raw_text)
+                reg_result = 'added'
     else:
         reg_result = 'no-config'
 
