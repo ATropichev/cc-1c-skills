@@ -65,6 +65,7 @@ node tests/skills/check-inline-drift.mjs --list # реестр: семья → �
 | `check-inline-drift.mjs` | копии общих inline-утилит совпадают с эталонами своих вариантов |
 | `check-type-maps.mjs` | карты типов метаданных согласованы с таблицей `ChildObjects` из `docs/1c-configuration-spec.md` |
 | `check-format-versions.mjs` | проверенный диапазон версий формата: границы одинаковы во всех навыках и сходятся с лестницей из `docs/1c-configuration-spec.md` |
+| `check-positional-binding.mjs` | read-only навыки (`*-info` / `*-validate` / `cfe-diff`): позиционным остаётся только путь ко входу, лишний позиционный аргумент не перезаписывает указанный файл |
 
 `check-inline-drift.mjs` держит реестр семей внутри себя: у каждой семьи перечислены варианты, у
 варианта — навык-эталон и список копий. Отклоняющийся вариант обязан иметь обоснование (`why`),
