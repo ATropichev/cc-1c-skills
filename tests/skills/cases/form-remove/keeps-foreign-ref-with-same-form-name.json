@@ -1,0 +1,12 @@
+{
+  "name": "Удаление своей формы не трогает ссылку на чужую форму с тем же именем",
+  "setup": "fixture:doc-own-form-same-name",
+  "objectName": "Documents/Заказ",
+  "formName": "ФормаЭлемента",
+  "args_extra": [
+    "-Force"
+  ],
+  "expect": {
+    "stdoutContains": "Форма ФормаЭлемента удалена"
+  }
+}

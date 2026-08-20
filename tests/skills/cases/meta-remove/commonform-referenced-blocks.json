@@ -1,0 +1,15 @@
+{
+  "name": "Удаление общей формы, на которую ссылается Configuration.xml, останавливается",
+  "setup": "fixture:commonform-referenced",
+  "object": "CommonForm.МояФорма",
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "<DefaultReportForm>CommonForm.МояФорма",
+      "<DefaultForm>CommonForm.МояФорма"
+    ],
+    "files": [
+      "CommonForms/МояФорма.xml"
+    ]
+  }
+}

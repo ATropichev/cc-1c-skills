@@ -1,0 +1,9 @@
+{
+  "name": "Валидатор находит ошибку: Default*Form ссылается на незарегистрированную форму",
+  "setup": "fixture:catalog-dangling-default-form",
+  "params": { "objectPath": "Catalogs/Товары.xml" },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "20. DefaultObjectForm 'Catalog.Товары.Form.НетТакойФормы'"
+  }
+}

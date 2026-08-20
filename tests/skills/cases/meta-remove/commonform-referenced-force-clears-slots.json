@@ -1,0 +1,17 @@
+{
+  "name": "-Force удаляет общую форму и очищает form-слоты, ссылавшиеся на неё",
+  "setup": "fixture:commonform-referenced",
+  "object": "CommonForm.МояФорма",
+  "args_extra": [
+    "-Force"
+  ],
+  "expect": {
+    "stdoutContains": [
+      "Cleared in Configuration.xml: DefaultReportForm",
+      "DefaultForm"
+    ],
+    "filesAbsent": [
+      "CommonForms/МояФорма.xml"
+    ]
+  }
+}

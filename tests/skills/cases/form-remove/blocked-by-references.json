@@ -1,0 +1,17 @@
+{
+  "name": "Удаление формы, на которую ссылаются, останавливается",
+  "setup": "fixture:catalog-form-referenced",
+  "objectName": "Catalogs/Товары",
+  "formName": "ФормаЭлемента",
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "На форму Catalog.Товары.Form.ФормаЭлемента ссылаются",
+      "Заказ.xml — <ChoiceForm>",
+      "HomePageWorkArea.xml — <Form>"
+    ],
+    "files": [
+      "Catalogs/Товары/Forms/ФормаЭлемента.xml"
+    ]
+  }
+}
