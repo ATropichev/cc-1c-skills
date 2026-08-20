@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-remove v1.9 — Remove metadata object from 1C configuration dump
+# meta-remove v1.10 — Remove metadata object from 1C configuration dump
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -293,6 +293,25 @@ V8_NS = "http://v8.1c.ru/8.1/data/core"
 NSMAP = {"md": MD_NS, "v8": V8_NS}
 
 
+def remove_node_with_indent(node):
+    """Удалить элемент вместе с предшествующим whitespace; опустевший контейнер сделать
+    самозакрывающимся. Копия из form-remove: одна задача — одна реализация."""
+    parent = node.getparent()
+    if parent is None:
+        return
+    # В DOM (PS) whitespace — отдельные узлы: удаляются предшествующий и сам элемент, а
+    # whitespace ПОСЛЕ элемента остаётся. В lxml он лежит в node.tail и ушёл бы вместе с
+    # узлом, поэтому его надо передать предшественнику.
+    prev = node.getprevious()
+    if prev is not None:
+        prev.tail = node.tail
+    else:
+        parent.text = node.tail
+    parent.remove(node)
+    if len(parent) == 0 and not (parent.text or "").strip():
+        parent.text = None
+
+
 def localname(el):
     return etree.QName(el.tag).localname
 
@@ -459,10 +478,21 @@ def main():
         exclude_dirs.append(obj_dir)
     exclude_file = obj_xml if has_xml else ""
 
+    # Ссылки на формы удаляемого объекта: слоты вида <DefaultListForm>, <ChoiceForm>,
+    # <SettingsStorage>, элемент начальной страницы. Их, в отличие от типов и вызовов в .bsl,
+    # можно починить однозначно — пустой слот легален, — поэтому -Force их чистит.
+    form_slot_re = re.compile(
+        r"<([A-Za-z0-9_.]+)>(" + re.escape(f"{obj_type}.{obj_name}") + r"\.Form\.[^<]+|"
+        + re.escape(f"CommonForm.{obj_name}") + r")</")
+    form_slot_files = {}
+
     # Search all XML and BSL files
     references = []
     search_extensions = (".xml", ".bsl")
 
+    # Один проход вместо двух: раньше конфигурация обходилась дважды и каждый файл читался
+    # по два раза. Зеркало EnumerateFiles-прохода в PS.
+    type_name_ref = f"{obj_type}.{obj_name}"
     for root_path, dirs, files in os.walk(config_dir):
         for fname in files:
             ext = os.path.splitext(fname)[1].lower()
@@ -485,9 +515,11 @@ def main():
             rel_path = os.path.relpath(full_path, config_dir)
             rel_path_fwd = rel_path.replace("\\", "/")
 
-            # Skip auto-cleaned files
-            if rel_path_fwd == "Configuration.xml" or rel_path_fwd == "ConfigDumpInfo.xml" or rel_path_fwd.startswith("Subsystems"):
-                continue
+            # Auto-cleaned: ChildObjects в Configuration.xml и состав подсистем. Сам
+            # Configuration.xml при этом НЕ слепая зона — его form-слоты (DefaultReportForm
+            # и соседи) не чистятся автоматически и раньше терялись молча.
+            is_auto_cleaned = (rel_path_fwd in ("Configuration.xml", "ConfigDumpInfo.xml")
+                               or rel_path_fwd.startswith("Subsystems"))
 
             try:
                 with open(full_path, "r", encoding="utf-8-sig") as fh:
@@ -495,47 +527,30 @@ def main():
             except Exception:
                 continue
 
+            if ext == ".xml":
+                slot_matches = list(form_slot_re.finditer(content))
+                if slot_matches:
+                    form_slot_files[full_path] = rel_path
+                    for m in slot_matches:
+                        references.append({"File": rel_path,
+                                           "Pattern": f"<{m.group(1)}>{m.group(2)}"})
+
+            if is_auto_cleaned:
+                continue
+
+            # Общие паттерны ищем в тексте БЕЗ form-слотов: «Catalog.Товары» есть внутри
+            # «Catalog.Товары.Form.X», и файл со слотом попадал бы в список дважды. Вырезаем
+            # слоты, а не пропускаем файл целиком — иначе настоящая ссылка рядом со слотом
+            # осталась бы незамеченной, а её, в отличие от слота, автоматически не починить.
+            content_no_slots = form_slot_re.sub("", content) if full_path in form_slot_files else content
+
+            matched = False
             for pat in search_patterns:
-                if pat in content:
+                if pat in content_no_slots:
                     references.append({"File": rel_path, "Pattern": pat})
+                    matched = True
                     break
-
-    # Also check Type.Name references
-    type_name_ref = f"{obj_type}.{obj_name}"
-    already_found_files = {r["File"] for r in references}
-
-    for root_path, dirs, files in os.walk(config_dir):
-        for fname in files:
-            if not fname.lower().endswith(".xml"):
-                continue
-            full_path = os.path.join(root_path, fname)
-
-            if exclude_file and os.path.normcase(full_path) == os.path.normcase(exclude_file):
-                continue
-            skip = False
-            for ed in exclude_dirs:
-                if os.path.normcase(full_path).startswith(os.path.normcase(ed + os.sep)) or os.path.normcase(full_path) == os.path.normcase(ed):
-                    skip = True
-                    break
-            if skip:
-                continue
-
-            rel_path = os.path.relpath(full_path, config_dir)
-            rel_path_fwd = rel_path.replace("\\", "/")
-
-            if rel_path_fwd == "Configuration.xml" or rel_path_fwd == "ConfigDumpInfo.xml" or rel_path_fwd.startswith("Subsystems"):
-                continue
-
-            if rel_path in already_found_files:
-                continue
-
-            try:
-                with open(full_path, "r", encoding="utf-8-sig") as fh:
-                    content = fh.read()
-            except Exception:
-                continue
-
-            if type_name_ref in content:
+            if ext == ".xml" and not matched and type_name_ref in content_no_slots:
                 references.append({"File": rel_path, "Pattern": type_name_ref})
 
     if references:
@@ -555,7 +570,8 @@ def main():
 
         if not args.Force:
             print(f"[ERROR] Cannot remove: object has {len(references)} reference(s).")
-            print("        Use -Force to remove anyway, or fix references first.")
+            print("        The user decides: fix the references, keep the object, or")
+            print("        re-run with -Force — form references are cleared.")
             sys.exit(1)
         else:
             print("[WARN]  -Force specified, proceeding despite references")
@@ -584,15 +600,9 @@ def main():
                 if localname(child) == obj_type and (child.text or "").strip() == obj_name:
                     found = True
                     if not args.DryRun:
-                        # Remove preceding whitespace (tail of previous sibling or text of parent)
-                        prev = child.getprevious()
-                        if prev is not None:
-                            if prev.tail and prev.tail.strip() == "":
-                                prev.tail = prev.tail.rsplit("\n", 1)[0] + "\n" if "\n" in prev.tail else ""
-                                if not prev.tail.strip():
-                                    # Keep just the last newline+indent before the next element
-                                    pass
-                        child_objects.remove(child)
+                        # Общий помощник — зеркало DOM-поведения PS. Прежняя ветка теряла
+                        # отступ следующего элемента, если удалялся ПЕРВЫЙ ребёнок.
+                        remove_node_with_indent(child)
                     print(f"[OK]    Removed <{obj_type}>{obj_name}</{obj_type}> from ChildObjects")
                     actions += 1
                     break
@@ -681,6 +691,53 @@ def main():
             print("[OK]    Not referenced in any subsystem")
     else:
         print("[OK]    No Subsystems directory")
+
+    # --- 4b. Clear form slots pointing at this object's forms ---
+
+    # Только слоты форм: пустой слот легален (164 508 пустых на корпус), поэтому замена
+    # однозначна. Ссылки на типы и вызовы в .bsl не трогаем — чем их заменить, неизвестно.
+    if form_slot_files:
+        print()
+        print("--- Form slots ---")
+        slot_prefix = f"{obj_type}.{obj_name}.Form."
+        common_form_ref = f"CommonForm.{obj_name}"
+        for slot_path in sorted(form_slot_files):
+            if args.DryRun:
+                print(f"[DRY-RUN] Would clear form slot(s) in {form_slot_files[slot_path]}")
+                continue
+            slot_parser = etree.XMLParser(remove_blank_text=False)
+            slot_tree = etree.parse(slot_path, slot_parser)
+            slot_root = slot_tree.getroot()
+            is_form_file = localname(slot_root) == "Form"
+            touched = []
+            for el in list(slot_root.iter()):
+                if not isinstance(el.tag, str) or len(el) > 0:
+                    continue
+                val = (el.text or "").strip()
+                if not val:
+                    continue
+                # Сравнение регистронезависимое — как у платформы (в PS -eq регистр не различает).
+                if val.lower() != common_form_ref.lower() and not val.lower().startswith(slot_prefix.lower()):
+                    continue
+
+                parent = el.getparent()
+                ln = localname(el)
+                if ln == "Form" and parent is not None and localname(parent) == "Item":
+                    touched.append(f"{localname(parent)}/{ln}")
+                    remove_node_with_indent(parent)
+                elif is_form_file:
+                    # Внутри Ext/Form.xml пустых <ChoiceForm/> и <SettingsStorage/> нет ни
+                    # одного — каноничное «не задано» там это отсутствие тега.
+                    touched.append(ln)
+                    remove_node_with_indent(el)
+                else:
+                    # text=None, а не "": Конфигуратор пустых пар не пишет.
+                    touched.append(ln)
+                    el.text = None
+            if not touched:
+                continue
+            save_xml_bom(slot_tree, slot_path)
+            print(f"[OK]    Cleared in {form_slot_files[slot_path]}: {', '.join(sorted(set(touched)))}")
 
     # --- 5. Delete object files ---
     print()

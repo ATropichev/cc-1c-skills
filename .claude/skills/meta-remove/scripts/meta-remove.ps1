@@ -1,4 +1,4 @@
-﻿# meta-remove v1.9 — Remove metadata object from 1C configuration dump
+﻿# meta-remove v1.10 — Remove metadata object from 1C configuration dump
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -71,6 +71,10 @@ if (-not (Test-Path $ConfigDir -PathType Container)) {
 	Write-Host "[ERROR] Config directory not found: $ConfigDir"
 	exit 1
 }
+
+# Длинная форма пути: Resolve-Path/параметр могут нести короткое имя 8.3 (NSHIRO~1), а
+# перечисление файлов отдаёт длинное (nshirokov) — сравнение путей молча не совпадало.
+$ConfigDir = (Get-Item -LiteralPath $ConfigDir -Force).FullName
 
 $configXml = Join-Path $ConfigDir "Configuration.xml"
 if (-not (Test-Path $configXml)) {
@@ -238,6 +242,51 @@ if ($DryRun) {
 $actions = 0
 $errors = 0
 
+# Копия из form-remove: одна задача — одна реализация, расходиться им нельзя.
+function Remove-NodeWithIndent {
+	param([System.Xml.XmlNode]$node)
+	$parent = $node.ParentNode
+	if (-not $parent) { return }
+	$prev = $node.PreviousSibling
+	if ($prev -and $prev.NodeType -eq [System.Xml.XmlNodeType]::Whitespace) {
+		$parent.RemoveChild($prev) | Out-Null
+	}
+	$parent.RemoveChild($node) | Out-Null
+	# Опустевший контейнер: остаётся отступ-whitespace, и XmlWriter пишет пару
+	# <ChildObjects>\n\t\t</ChildObjects>. Платформа пишет только <ChildObjects/>.
+	if ($parent.SelectNodes("*").Count -eq 0) { $parent.IsEmpty = $true }
+}
+
+function Save-XmlPreservingStyle {
+	param([System.Xml.XmlDocument]$doc, [string]$path)
+
+	$encBom = New-Object System.Text.UTF8Encoding($true)
+	$settings = New-Object System.Xml.XmlWriterSettings
+	$settings.Encoding = $encBom
+	$settings.Indent = $false
+	$settings.NewLineHandling = [System.Xml.NewLineHandling]::None
+
+	# Через MemoryStream, а не прямо в файл: нужен шаг пост-обработки строки.
+	$memStream = New-Object System.IO.MemoryStream
+	$writer = [System.Xml.XmlWriter]::Create($memStream, $settings)
+	$doc.Save($writer)
+	$writer.Flush(); $writer.Close()
+
+	$xmlText = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
+	$memStream.Close()
+	if ($xmlText.Length -gt 0 -and $xmlText[0] -eq [char]0xFEFF) { $xmlText = $xmlText.Substring(1) }
+	$xmlText = $xmlText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
+	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+	# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+	# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+	$xmlText = [regex]::Replace($xmlText, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+	# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
+	# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
+	$targetEol = if ((Test-Path -LiteralPath $path) -and ([System.IO.File]::ReadAllText($path) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+	$xmlText = ($xmlText -replace "`r`n", "`n") -replace "`n", $targetEol
+	[System.IO.File]::WriteAllText($path, $xmlText, $encBom)
+}
+
 # --- 1. Find object files ---
 
 $typeDir = Join-Path $ConfigDir $typePlural
@@ -357,64 +406,70 @@ if ($hasDir) { $excludeDirs += $objDir }
 $excludeFile = ""
 if ($hasXml) { $excludeFile = $objXml }
 
+# Ссылки на формы удаляемого объекта: слоты вида <DefaultListForm>, <ChoiceForm>,
+# <SettingsStorage>, элемент начальной страницы. Их, в отличие от типов и вызовов в .bsl,
+# можно починить однозначно — пустой слот легален, — поэтому -Force их чистит.
+$formSlotRe = [regex]("<([A-Za-z0-9_.]+)>(" + [regex]::Escape("${objType}.${objName}") + "\.Form\.[^<]+|" + [regex]::Escape("CommonForm.${objName}") + ")</")
+$formSlotFiles = @{}
+
 # Search all XML and BSL files
 $references = @()
-$searchExtensions = @("*.xml", "*.bsl")
+$searchExtensions = @(".xml", ".bsl")
 
-foreach ($ext in $searchExtensions) {
-	$files = @(Get-ChildItem $ConfigDir -Filter $ext -Recurse -File -ErrorAction SilentlyContinue)
-	foreach ($file in $files) {
-		# Skip own files
-		if ($excludeFile -and $file.FullName -eq $excludeFile) { continue }
-		if ($excludeDirs.Count -gt 0) {
-			$skip = $false
-			foreach ($ed in $excludeDirs) {
-				if ($file.FullName.StartsWith($ed)) { $skip = $true; break }
-			}
-			if ($skip) { continue }
-		}
-		# Skip auto-cleaned files (Configuration.xml, ConfigDumpInfo.xml, Subsystems)
-		$relPath = $file.FullName.Substring($ConfigDir.Length + 1)
-		if ($relPath -eq "Configuration.xml" -or $relPath -eq "ConfigDumpInfo.xml" -or $relPath.StartsWith("Subsystems")) { continue }
-
-		$content = [System.IO.File]::ReadAllText($file.FullName, [System.Text.Encoding]::UTF8)
-		foreach ($pat in $searchPatterns) {
-			if ($content.Contains($pat)) {
-				$references += @{ File = $relPath; Pattern = $pat }
-				break  # one match per file is enough
-			}
-		}
-	}
-}
-
-# Also check for Type.Name references (subsystem content, doc journal, etc.) — but NOT in own files
+# EnumerateFiles одним проходом, а не Get-ChildItem -Recurse дважды: на ERP (73 904 XML)
+# обход обёртками занимает 180 с против 47 с, а проходов было два.
 $typeNameRef = "${objType}.${objName}"
-$files = @(Get-ChildItem $ConfigDir -Filter "*.xml" -Recurse -File -ErrorAction SilentlyContinue)
-foreach ($file in $files) {
-	if ($excludeFile -and $file.FullName -eq $excludeFile) { continue }
+foreach ($filePath in [System.IO.Directory]::EnumerateFiles($ConfigDir, "*.*", [System.IO.SearchOption]::AllDirectories)) {
+	$ext = [System.IO.Path]::GetExtension($filePath).ToLowerInvariant()
+	if ($searchExtensions -notcontains $ext) { continue }
+
+	# Skip own files
+	if ($excludeFile -and $filePath -eq $excludeFile) { continue }
 	if ($excludeDirs.Count -gt 0) {
 		$skip = $false
 		foreach ($ed in $excludeDirs) {
-			if ($file.FullName.StartsWith($ed)) { $skip = $true; break }
+			if ($filePath.StartsWith($ed)) { $skip = $true; break }
 		}
 		if ($skip) { continue }
 	}
-	# Skip Configuration.xml and Subsystems — they will be cleaned automatically
-	$relPath = $file.FullName.Substring($ConfigDir.Length + 1)
-	if ($relPath -eq "Configuration.xml") { continue }
-	if ($relPath -eq "ConfigDumpInfo.xml") { continue }
-	if ($relPath.StartsWith("Subsystems")) { continue }
 
-	$content = [System.IO.File]::ReadAllText($file.FullName, [System.Text.Encoding]::UTF8)
-	if ($content.Contains($typeNameRef)) {
-		# Check it's not already in references
-		$alreadyFound = $false
-		foreach ($r in $references) {
-			if ($r.File -eq $relPath) { $alreadyFound = $true; break }
+	$relPath = $filePath.Substring($ConfigDir.Length + 1)
+	# Auto-cleaned: ChildObjects в Configuration.xml и состав подсистем. Сам Configuration.xml
+	# при этом НЕ слепая зона — его form-слоты (DefaultReportForm и соседи) не чистятся
+	# автоматически и раньше терялись молча.
+	$isConfigXml = ($relPath -eq "Configuration.xml")
+	$isAutoCleaned = $isConfigXml -or ($relPath -eq "ConfigDumpInfo.xml") -or $relPath.StartsWith("Subsystems")
+
+	$content = [System.IO.File]::ReadAllText($filePath, [System.Text.Encoding]::UTF8)
+
+	if ($ext -eq ".xml") {
+		$slotMatches = $formSlotRe.Matches($content)
+		if ($slotMatches.Count -gt 0) {
+			$formSlotFiles[$filePath] = $relPath
+			foreach ($m in $slotMatches) {
+				$references += @{ File = $relPath; Pattern = "<$($m.Groups[1].Value)>$($m.Groups[2].Value)"; FormSlot = $true }
+			}
 		}
-		if (-not $alreadyFound) {
-			$references += @{ File = $relPath; Pattern = $typeNameRef }
+	}
+
+	if ($isAutoCleaned) { continue }
+
+	# Общие паттерны ищем в тексте БЕЗ form-слотов: «Catalog.Товары» есть внутри
+	# «Catalog.Товары.Form.X», и файл со слотом попадал бы в список дважды. Вырезаем слоты,
+	# а не пропускаем файл целиком — иначе настоящая ссылка рядом со слотом осталась бы
+	# незамеченной, а её, в отличие от слота, автоматически не починить.
+	$contentNoSlots = if ($formSlotFiles.ContainsKey($filePath)) { $formSlotRe.Replace($content, "") } else { $content }
+
+	$matched = $false
+	foreach ($pat in $searchPatterns) {
+		if ($contentNoSlots.Contains($pat)) {
+			$references += @{ File = $relPath; Pattern = $pat }
+			$matched = $true
+			break  # one match per file is enough
 		}
+	}
+	if ($ext -eq ".xml" -and -not $matched -and $contentNoSlots.Contains($typeNameRef)) {
+		$references += @{ File = $relPath; Pattern = $typeNameRef }
 	}
 }
 
@@ -438,7 +493,8 @@ if ($references.Count -gt 0) {
 
 	if (-not $Force) {
 		Write-Host "[ERROR] Cannot remove: object has $($references.Count) reference(s)."
-		Write-Host "        Use -Force to remove anyway, or fix references first."
+		Write-Host "        The user decides: fix the references, keep the object, or"
+		Write-Host "        re-run with -Force — form references are cleared."
 		exit 1
 	} else {
 		Write-Host "[WARN]  -Force specified, proceeding despite references"
@@ -620,6 +676,52 @@ if (Test-Path $subsystemsDir -PathType Container) {
 	}
 } else {
 	Write-Host "[OK]    No Subsystems directory"
+}
+
+# --- 4b. Clear form slots pointing at this object's forms ---
+
+# Только слоты форм: пустой слот легален (164 508 пустых на корпус), поэтому замена
+# однозначна. Ссылки на типы и вызовы в .bsl не трогаем — чем их заменить, неизвестно.
+if ($formSlotFiles.Count -gt 0) {
+	Write-Host ""
+	Write-Host "--- Form slots ---"
+	foreach ($slotPath in ($formSlotFiles.Keys | Sort-Object)) {
+		if ($DryRun) {
+			Write-Host "[DRY-RUN] Would clear form slot(s) in $($formSlotFiles[$slotPath])"
+			continue
+		}
+		$slotDoc = New-Object System.Xml.XmlDocument
+		$slotDoc.PreserveWhitespace = $true
+		$slotDoc.Load($slotPath)
+		$isFormFile = $slotDoc.DocumentElement -and $slotDoc.DocumentElement.LocalName -eq "Form"
+		$touched = @()
+		foreach ($node in @($slotDoc.SelectNodes("//*"))) {
+			if ($node.NodeType -ne [System.Xml.XmlNodeType]::Element) { continue }
+			if ($node.SelectNodes("*").Count -gt 0) { continue }
+			$val = $node.InnerText.Trim()
+			if (-not $val) { continue }
+			# Сравнение регистронезависимое — как у платформы (в py-порту .lower()).
+			if ($val -ne "CommonForm.$objName" -and -not $val.StartsWith("${objType}.${objName}.Form.")) { continue }
+
+			$parent = $node.ParentNode
+			if ($node.LocalName -eq "Form" -and $parent -and $parent.LocalName -eq "Item") {
+				$touched += "$($parent.LocalName)/$($node.LocalName)"
+				Remove-NodeWithIndent $parent
+			} elseif ($isFormFile) {
+				# Внутри Ext/Form.xml пустых <ChoiceForm/> и <SettingsStorage/> нет ни одного —
+				# каноничное «не задано» там это отсутствие тега.
+				$touched += $node.LocalName
+				Remove-NodeWithIndent $node
+			} else {
+				# IsEmpty, а не InnerText="": Конфигуратор пустых пар не пишет.
+				$touched += $node.LocalName
+				$node.IsEmpty = $true
+			}
+		}
+		if ($touched.Count -eq 0) { continue }
+		Save-XmlPreservingStyle $slotDoc $slotPath
+		Write-Host "[OK]    Cleared in $($formSlotFiles[$slotPath]): $(($touched | Sort-Object -Unique) -join ', ')"
+	}
 }
 
 # --- 5. Delete object files ---
