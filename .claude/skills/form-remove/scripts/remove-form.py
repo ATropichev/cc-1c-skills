@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-remove v1.9 — Remove form from 1C object
+# form-remove v1.10 — Remove form from 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -83,6 +83,69 @@ def save_xml_with_bom(tree, path):
         f.write(xml_bytes)
 
 
+def long_path(path):
+    """Полный путь в длинной форме. Зеркало Get-LongPath в PS: там Resolve-Path оставляет
+    короткое имя 8.3 (NSHIRO~1), а перечисление отдаёт длинное — сравнение молча не совпадало."""
+    if not os.path.exists(path):
+        return ""
+    return os.path.realpath(path)
+
+
+def remove_node_with_indent(node):
+    """Удалить элемент вместе с предшествующим whitespace; опустевший контейнер сделать
+    самозакрывающимся. Зеркало Remove-NodeWithIndent в PS."""
+    parent = node.getparent()
+    if parent is None:
+        return
+    # В DOM (PS) whitespace — отдельные узлы: удаляются предшествующий и сам элемент, а
+    # whitespace ПОСЛЕ элемента остаётся. В lxml он лежит в node.tail и ушёл бы вместе с
+    # узлом, поэтому его надо передать предшественнику — иначе `</Attributes></Form>`.
+    prev = node.getprevious()
+    if prev is not None:
+        prev.tail = node.tail
+    else:
+        parent.text = node.tail
+    parent.remove(node)
+    # Опустевший контейнер: text="" сериализуется парой <ChildObjects></ChildObjects>,
+    # а нужен <ChildObjects/> — PS-порт через DOM даёт именно его.
+    if len(parent) == 0 and not (parent.text or "").strip():
+        parent.text = None
+
+
+def clear_form_refs(tree, ref):
+    """Очистить ссылки на форму. Каноничное «не задано» зависит от файла: в корневом XML
+    объекта и в Configuration.xml пустой слот штатен (164 508 пустых на корпус), а внутри
+    Ext/Form.xml пустых <ChoiceForm/> и <SettingsStorage/> нет ни одного — там свойство
+    просто отсутствует. Зеркало Clear-FormRefs в PS."""
+    root = tree.getroot()
+    is_form_file = etree.QName(root).localname == "Form"
+    touched = []
+    ref_lc = ref.lower()
+    for el in list(root.iter()):
+        if not isinstance(el.tag, str):
+            continue
+        if len(el) > 0:                                    # только листья
+            continue
+        # Сравнение регистронезависимое — как у платформы (в PS -eq регистр не различает).
+        if (el.text or "").strip().lower() != ref_lc:
+            continue
+
+        ln = etree.QName(el).localname
+        parent = el.getparent()
+        if ln == "Form" and parent is not None and etree.QName(parent).localname == "Item":
+            touched.append(f"{etree.QName(parent).localname}/{ln}")
+            remove_node_with_indent(parent)
+        elif is_form_file:
+            touched.append(ln)
+            remove_node_with_indent(el)
+        else:
+            # text=None, а не "": пустая строка сериализуется парой <Tag></Tag>, а
+            # Конфигуратор пустых пар не пишет (0 на 476 942 XML корпуса) — нужен <Tag/>.
+            touched.append(ln)
+            el.text = None
+    return touched
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -90,11 +153,13 @@ def main():
     parser.add_argument("-ObjectName", "-ProcessorName", required=True)
     parser.add_argument("-FormName", required=True)
     parser.add_argument("-SrcDir", default="src")
+    parser.add_argument("-Force", action="store_true")
     args = ci_parse_args(parser)
 
     object_name = args.ObjectName
     form_name = args.FormName
     src_dir = args.SrcDir
+    force = args.Force
 
     # --- Checks ---
 
@@ -112,6 +177,91 @@ def main():
         print(f"Метаданные формы не найдены: {form_meta_path}", file=sys.stderr)
         sys.exit(1)
 
+    # --- Load root XML: kind and object name ---
+
+    root_xml_full = long_path(root_xml_path) or os.path.abspath(root_xml_path)
+    parser_xml = etree.XMLParser(remove_blank_text=False)
+    tree = etree.parse(root_xml_full, parser_xml)
+    root = tree.getroot()
+
+    type_node = None
+    for c in root:
+        if isinstance(c.tag, str):
+            type_node = c
+            break
+    if type_node is None:
+        print(f"Не удалось определить вид объекта в {root_xml_path}", file=sys.stderr)
+        sys.exit(1)
+    md_type = etree.QName(type_node).localname
+    name_node = type_node.find("md:Properties/md:Name", NSMAP)
+    obj_meta_name = (name_node.text or "").strip() if name_node is not None else ""
+    if not obj_meta_name:
+        obj_meta_name = os.path.splitext(os.path.basename(root_xml_path))[0]
+
+    # Полная ссылка на форму. Матч по ней целиком, а не по хвосту "Form.<Имя>": иначе при
+    # удалении своей ФормаСписка обнулялась бы и ссылка на DocumentJournal.Ж.Form.ФормаСписка.
+    form_ref = f"{md_type}.{obj_meta_name}.Form.{form_name}"
+
+    # --- Find references across the configuration ---
+
+    config_dir = None
+    probe = long_path(src_dir) or os.path.abspath(src_dir)
+    for _ in range(4):
+        if not probe:
+            break
+        if os.path.exists(os.path.join(probe, "Configuration.xml")):
+            config_dir = probe
+            break
+        parent_probe = os.path.dirname(probe)
+        if parent_probe == probe:
+            break
+        probe = parent_probe
+
+    form_meta_full = long_path(form_meta_path)
+    form_dir_full = long_path(form_dir)
+
+    references = []
+    if config_dir:
+        ref_pattern = re.compile(r"<([A-Za-z0-9_.]+)>" + re.escape(form_ref) + r"</")
+        for dirpath, _dirnames, filenames in os.walk(config_dir):
+            for fn in filenames:
+                if not fn.lower().endswith(".xml"):
+                    continue
+                fp = os.path.join(dirpath, fn)
+                if fp == root_xml_full or fp == form_meta_full:
+                    continue                                  # свой файл и файлы удаляемой формы
+                if form_dir_full and fp.startswith(form_dir_full):
+                    continue
+                try:
+                    with open(fp, "r", encoding="utf-8-sig") as f:
+                        content = f.read()
+                except OSError:
+                    continue
+                if form_ref not in content:
+                    continue
+                for m in ref_pattern.finditer(content):
+                    references.append({"path": fp, "rel": os.path.relpath(fp, config_dir),
+                                       "tag": m.group(1)})
+
+    if references:
+        print(f"[WARN]  На форму {form_ref} ссылаются {len(references)} раз(а):")
+        grouped = {}
+        for r in references:
+            grouped[(r["rel"], r["tag"])] = grouped.get((r["rel"], r["tag"]), 0) + 1
+        for (rel, tag) in sorted(grouped):
+            suffix = f" x{grouped[(rel, tag)]}" if grouped[(rel, tag)] > 1 else ""
+            print(f"        {rel} — <{tag}>{suffix}")
+        print()
+        if not force:
+            print("[ERROR] Удаление остановлено: форма используется.")
+            print("        Решает пользователь: убрать ссылки, отказаться от удаления или")
+            print("        повторить с -Force — тогда ссылки будут очищены.")
+            sys.exit(1)
+        print("[WARN]  -Force: ссылки будут очищены")
+        print()
+    elif not config_dir:
+        print("[WARN]  Корень конфигурации не найден — ссылки в других объектах не проверены")
+
     # --- Delete files ---
 
     if os.path.isdir(form_dir):
@@ -123,47 +273,30 @@ def main():
 
     # --- Modify root XML ---
 
-    root_xml_full = os.path.abspath(root_xml_path)
-    parser_xml = etree.XMLParser(remove_blank_text=False)
-    tree = etree.parse(root_xml_full, parser_xml)
-    root = tree.getroot()
-
     # Remove <Form>FormName</Form> from ChildObjects
     for node in root.findall(".//md:ChildObjects/md:Form", NSMAP):
         if node.text and node.text.strip() == form_name:
-            parent = node.getparent()
-            prev = node.getprevious()
-            if prev is not None:
-                # Whitespace is in prev.tail
-                if prev.tail and prev.tail.strip() == "":
-                    prev.tail = ""
-            else:
-                # First child — whitespace is in parent.text
-                if parent.text and parent.text.strip() == "":
-                    parent.text = ""
-            parent.remove(node)
-            # Опустевший контейнер: text="" сериализуется парой <ChildObjects></ChildObjects>,
-            # а нужен <ChildObjects/> — PS-порт через DOM даёт именно его.
-            if len(parent) == 0 and not (parent.text or "").strip():
-                parent.text = None
+            remove_node_with_indent(node)
             break
 
-    # Clear any Default*/Auxiliary* form slot that pointed to the removed form
-    # (form-add writes the purpose-specific property: DefaultObjectForm / DefaultListForm /
-    #  DefaultChoiceForm / DefaultRecordForm / DefaultForm — not just generic DefaultForm).
-    ref_re = re.compile(rf"Form\.{re.escape(form_name)}$")
-    for el in root.iter():
-        if not isinstance(el.tag, str):
-            continue
-        if etree.QName(el).localname.endswith("Form") and el.text and ref_re.search(el.text):
-            # text=None, а не "": пустая строка сериализуется парой <Tag></Tag>, а
-            # Конфигуратор пустых пар не пишет (0 на 476 942 XML корпуса) — нужен <Tag/>.
-            el.text = None
+    # Очистить слоты своего объекта: Default*/Auxiliary*Form и ChoiceForm у реквизитов.
+    clear_form_refs(tree, form_ref)
 
     # Save with BOM
     save_xml_with_bom(tree, root_xml_full)
 
     print(f"[OK] Форма {form_name} удалена из {root_xml_path}")
+
+    # --- Clean references in other files (only with -Force) ---
+
+    for fp in sorted({r["path"] for r in references}):
+        other_tree = etree.parse(fp, parser_xml)
+        touched = clear_form_refs(other_tree, form_ref)
+        if not touched:
+            continue
+        save_xml_with_bom(other_tree, fp)
+        rel = os.path.relpath(fp, config_dir)
+        print(f"[OK] Очищена ссылка в {rel} — {', '.join(sorted(set(touched)))}")
 
 
 if __name__ == "__main__":

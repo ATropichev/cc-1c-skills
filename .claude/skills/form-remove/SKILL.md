@@ -27,11 +27,12 @@ allowed-tools:
 | ObjectName | да           | —            | Имя объекта                         |
 | FormName   | да           | —            | Имя формы для удаления              |
 | SrcDir     | нет          | `src`        | Каталог исходников                  |
+| Force      | нет          | —            | Удалить, даже если на форму ссылаются, и очистить ссылки |
 
 ## Команда
 
 ```powershell
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/remove-form.ps1" -ObjectName "<ObjectName>" -FormName "<FormName>" [-SrcDir "<SrcDir>"]
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/remove-form.ps1" -ObjectName "<ObjectName>" -FormName "<FormName>" [-SrcDir "<SrcDir>"] [-Force]
 ```
 
 ## Что удаляется
@@ -44,4 +45,4 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/remove-form.ps1" -O
 ## Что модифицируется
 
 - `<SrcDir>/<ObjectName>.xml` — убирается `<Form>` из `ChildObjects`
-- Если удаляемая форма была DefaultForm — очищается значение DefaultForm
+- Свойства объекта, указывавшие на удалённую форму — очищаются
