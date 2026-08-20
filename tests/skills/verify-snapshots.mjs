@@ -1456,8 +1456,12 @@ function discoverCases(skillFilter, caseFilter) {
       // Skip error cases
       if (caseName.startsWith('error-')) continue;
 
-      // Skip cases without input AND without preRun AND without params (truly read-only)
-      if (caseData.input === undefined && !caseData.preRun && !caseData.params) continue;
+      // Skip cases without input AND without preRun AND without params (truly read-only).
+      // Кейс на `setup: fixture:` тоже не read-only: навык правит скопированную фикстуру, и
+      // без этой ветки такие кейсы молча выпадали из платформенной проверки — то есть ровно
+      // из той, ради которой этот файл и существует.
+      const hasFixtureSetup = typeof caseData.setup === 'string' && caseData.setup.startsWith('fixture:');
+      if (caseData.input === undefined && !caseData.preRun && !caseData.params && !hasFixtureSetup) continue;
 
       results.push({ skill: skillDir, caseName, caseData, skillConfig });
     }
