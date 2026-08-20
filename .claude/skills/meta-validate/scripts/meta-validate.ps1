@@ -1,4 +1,4 @@
-﻿# meta-validate v1.20 — Validate 1C metadata object structure
+﻿# meta-validate v1.21 — Validate 1C metadata object structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1580,6 +1580,127 @@ if ($mdRefNodes -and $mdRefNodes.Count -gt 0) {
 	}
 	if ($badRefForm.Count -eq 0 -and $unknownRoot.Count -eq 0) {
 		Report-OK "17. MDObjectRef form: $($mdRefNodes.Count) checked"
+	}
+}
+
+# --- Check 20: Default*Form / Auxiliary*Form — ссылка на существующую форму ---
+# Платформа отвергает загрузку: «Неизвестный объект метаданных - Catalog.Товары.Form.НетТакойФормы».
+# Две формы записи: "CommonForm.Имя" и "<Вид>.<Объект>.Form.<Форма>", причём объект может быть чужим
+# (DefaultListForm документа указывает на форму журнала документов). Для СВОЕГО объекта проверяем
+# регистрацию формы в ChildObjects — работает и на одиночном файле; для чужого и общей формы нужна
+# конфигурация. Заимствованные объекты расширения (ObjectBelonging=Adopted) пропускаем: их формы
+# живут в основной конфигурации, в выгрузке расширения их нет.
+
+$formOwnerDirMap = @{
+	"Catalog"="Catalogs"; "Document"="Documents"; "DocumentJournal"="DocumentJournals"
+	"Enum"="Enums"; "Report"="Reports"; "DataProcessor"="DataProcessors"
+	"InformationRegister"="InformationRegisters"; "AccumulationRegister"="AccumulationRegisters"
+	"AccountingRegister"="AccountingRegisters"; "CalculationRegister"="CalculationRegisters"
+	"ChartOfAccounts"="ChartsOfAccounts"; "ChartOfCharacteristicTypes"="ChartsOfCharacteristicTypes"
+	"ChartOfCalculationTypes"="ChartsOfCalculationTypes"; "BusinessProcess"="BusinessProcesses"
+	"Task"="Tasks"; "ExchangePlan"="ExchangePlans"; "SettingsStorage"="SettingsStorages"
+	"FilterCriterion"="FilterCriteria"; "ExternalDataSource"="ExternalDataSources"
+}
+
+$belongingNode = $typeNode.SelectSingleNode("md:Properties/md:ObjectBelonging", $ns)
+$isAdopted = $belongingNode -and $belongingNode.InnerText.Trim() -eq "Adopted"
+
+if (-not $isAdopted) {
+	$isExtension20 = $false
+	if ($script:configDir) {
+		$cfgXmlPath20 = Join-Path $script:configDir "Configuration.xml"
+		if (Test-Path $cfgXmlPath20) {
+			$cfgContent20 = [System.IO.File]::ReadAllText($cfgXmlPath20, [System.Text.Encoding]::UTF8)
+			if ($cfgContent20.Contains("ConfigurationExtensionPurpose")) { $isExtension20 = $true }
+		}
+	}
+
+	# формы своего объекта: имена из ChildObjects (сравнение регистронезависимое — как у платформы)
+	$ownForms = @{}
+	if ($childObjNode) {
+		foreach ($child in $childObjNode.ChildNodes) {
+			if ($child.NodeType -eq 'Element' -and $child.LocalName -eq "Form") {
+				$fn = $child.InnerText.Trim()
+				if ($fn) { $ownForms[$fn.ToLowerInvariant()] = $fn }
+			}
+		}
+	}
+	$ownDir = Join-Path (Split-Path $resolvedPath) $objName
+
+	function Test-FormFile20 {
+		param([string]$baseDir, [string]$formName)
+		$formsDir = Join-Path $baseDir "Forms"
+		if (Test-Path (Join-Path $formsDir "$formName.xml")) { return $true }
+		if (Test-Path (Join-Path (Join-Path $formsDir $formName) "Form.xml")) { return $true }
+		if (Test-Path (Join-Path (Join-Path (Join-Path $formsDir $formName) "Ext") "Form.xml")) { return $true }
+		return $false
+	}
+
+	$formRefNodes = @($xmlDoc.SelectNodes("//*[substring(local-name(), string-length(local-name()) - 3) = 'Form']"))
+	$formRefsChecked = 0
+	$formRefBad = $false
+	foreach ($frn in $formRefNodes) {
+		$tag = $frn.LocalName
+		# ChoiceForm — «форма выбора» реквизита, ссылка того же вида, что и Default*Form.
+		if ($tag -notmatch '^(Default|Auxiliary)[A-Za-z]*Form$' -and $tag -ne 'ChoiceForm') { continue }
+		$ref = $frn.InnerText.Trim()
+		if (-not $ref) { continue }
+		# Значением бывает GUID (erp: Report.СверкаДанныхОУиБУ, DefaultVariantForm) — проверить
+		# его без обхода всех форм нельзя; cf-validate (Check 9) такие тоже пропускает.
+		if ($ref -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$') { continue }
+		$parts = $ref.Split('.')
+		$formRefsChecked++
+
+		if ($parts.Count -eq 2 -and $parts[0] -eq "CommonForm") {
+			if ($isExtension20 -or -not $script:configDir) { continue }
+			$cfDir = Join-Path (Join-Path $script:configDir "CommonForms") $parts[1]
+			$cfOk = (Test-Path "$cfDir.xml") -or (Test-Path (Join-Path (Join-Path $cfDir "Ext") "Form.xml")) -or (Test-Path (Join-Path $cfDir "Form.xml"))
+			if (-not $cfOk) {
+				Report-Error "20. $tag '$ref' — общая форма не найдена в конфигурации (CommonForms/$($parts[1])) — «Неизвестный объект метаданных» при загрузке"
+				$formRefBad = $true
+			}
+			continue
+		}
+
+		if ($parts.Count -ne 4 -or $parts[2] -ne "Form") {
+			Report-Warn "20. $tag '$ref' — неожиданный вид ссылки на форму (ожидается 'CommonForm.Имя' или '<Вид>.<Объект>.Form.<Форма>')"
+			continue
+		}
+
+		$refKind = $parts[0]; $refObj = $parts[1]; $refForm = $parts[3]
+
+		if ($refKind.ToLowerInvariant() -eq $mdType.ToLowerInvariant() -and $refObj.ToLowerInvariant() -eq $objName.ToLowerInvariant()) {
+			if (-not $ownForms.ContainsKey($refForm.ToLowerInvariant())) {
+				$known = if ($ownForms.Count -gt 0) { ($ownForms.Values | Sort-Object) -join ", " } else { "нет форм" }
+				Report-Error "20. $tag '$ref' — форма '$refForm' не зарегистрирована в ChildObjects объекта (есть: $known) — «Неизвестный объект метаданных» при загрузке"
+				$formRefBad = $true
+			} elseif ((Test-Path $ownDir) -and -not (Test-FormFile20 $ownDir $refForm)) {
+				Report-Error "20. $tag '$ref' — форма зарегистрирована в ChildObjects, но файл формы отсутствует ($objName/Forms/$refForm)"
+				$formRefBad = $true
+			}
+			continue
+		}
+
+		# чужой объект (например журнал документов) — нужна конфигурация
+		if ($isExtension20 -or -not $script:configDir) { continue }
+		$refDir20 = $formOwnerDirMap[$refKind]
+		if (-not $refDir20) {
+			Report-Warn "20. $tag '$ref' — неизвестный вид метаданных '$refKind' (опечатка?)"
+			continue
+		}
+		$refObjXml = Join-Path (Join-Path $script:configDir $refDir20) "$refObj.xml"
+		if (-not (Test-Path $refObjXml)) {
+			Report-Warn "20. $tag '$ref' — объект '$refKind.$refObj' не найден в конфигурации ($refDir20/)"
+			continue
+		}
+		if (-not (Test-FormFile20 (Join-Path (Join-Path $script:configDir $refDir20) $refObj) $refForm)) {
+			Report-Error "20. $tag '$ref' — форма '$refForm' не найдена у объекта '$refKind.$refObj' — «Неизвестный объект метаданных» при загрузке"
+			$formRefBad = $true
+		}
+	}
+
+	if ($formRefsChecked -gt 0 -and -not $formRefBad) {
+		Report-OK "20. Form refs: $formRefsChecked resolved"
 	}
 }
 

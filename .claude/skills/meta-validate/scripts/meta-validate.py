@@ -1,4 +1,4 @@
-# meta-validate v1.20 — Validate 1C metadata object structure (Python port)
+# meta-validate v1.21 — Validate 1C metadata object structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1502,6 +1502,131 @@ if md_ref_nodes:
         report_warn(f"17. MDObjectRef '{uk}' — неизвестный вид метаданных '{unknown_root[uk]}' (опечатка?)")
     if not bad_ref_form and not unknown_root:
         report_ok(f"17. MDObjectRef form: {len(md_ref_nodes)} checked")
+
+# ── Check 20: Default*Form / Auxiliary*Form / ChoiceForm — ссылка на существующую форму ──
+# Платформа отвергает загрузку: «Неизвестный объект метаданных - Catalog.Товары.Form.НетТакойФормы».
+# Две формы записи: "CommonForm.Имя" и "<Вид>.<Объект>.Form.<Форма>", причём объект может быть чужим
+# (DefaultChoiceForm документа указывает на форму журнала документов). Для СВОЕГО объекта проверяем
+# регистрацию формы в ChildObjects — работает и на одиночном файле; для чужого и общей формы нужна
+# конфигурация. Заимствованные объекты расширения (ObjectBelonging=Adopted) пропускаем: их формы
+# живут в основной конфигурации, в выгрузке расширения их нет.
+
+form_owner_dir_map = {
+    "Catalog": "Catalogs", "Document": "Documents", "DocumentJournal": "DocumentJournals",
+    "Enum": "Enums", "Report": "Reports", "DataProcessor": "DataProcessors",
+    "InformationRegister": "InformationRegisters", "AccumulationRegister": "AccumulationRegisters",
+    "AccountingRegister": "AccountingRegisters", "CalculationRegister": "CalculationRegisters",
+    "ChartOfAccounts": "ChartsOfAccounts", "ChartOfCharacteristicTypes": "ChartsOfCharacteristicTypes",
+    "ChartOfCalculationTypes": "ChartsOfCalculationTypes", "BusinessProcess": "BusinessProcesses",
+    "Task": "Tasks", "ExchangePlan": "ExchangePlans", "SettingsStorage": "SettingsStorages",
+    "FilterCriterion": "FilterCriteria", "ExternalDataSource": "ExternalDataSources",
+}
+
+_belonging_node = find(type_node, "md:Properties/md:ObjectBelonging")
+is_adopted = _belonging_node is not None and inner_text(_belonging_node).strip() == "Adopted"
+
+GUID_RE_20 = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+TAG_RE_20 = re.compile(r'^(Default|Auxiliary)[A-Za-z]*Form$')
+
+
+def _form_file_exists_20(base_dir, form_name):
+    forms_dir = os.path.join(base_dir, "Forms")
+    return (os.path.exists(os.path.join(forms_dir, form_name + ".xml"))
+            or os.path.exists(os.path.join(forms_dir, form_name, "Form.xml"))
+            or os.path.exists(os.path.join(forms_dir, form_name, "Ext", "Form.xml")))
+
+
+if not is_adopted:
+    is_extension_20 = False
+    if config_dir:
+        cfg_xml_path_20 = os.path.join(config_dir, "Configuration.xml")
+        if os.path.exists(cfg_xml_path_20):
+            try:
+                with open(cfg_xml_path_20, "r", encoding="utf-8") as f:
+                    if "ConfigurationExtensionPurpose" in f.read():
+                        is_extension_20 = True
+            except Exception:
+                pass
+
+    # формы своего объекта: имена из ChildObjects (сравнение регистронезависимое — как у платформы)
+    own_forms = {}
+    if child_obj_node is not None:
+        for child in child_obj_node:
+            if isinstance(child.tag, str) and local_name(child) == "Form":
+                fn = inner_text(child).strip()
+                if fn:
+                    own_forms[fn.lower()] = fn
+    own_dir = os.path.join(os.path.dirname(resolved_path), obj_name)
+
+    form_refs_checked = 0
+    form_ref_bad = False
+    for frn in root.iter():
+        if not isinstance(frn.tag, str):
+            continue
+        tag = local_name(frn)
+        # ChoiceForm — «форма выбора» реквизита, ссылка того же вида, что и Default*Form.
+        if not TAG_RE_20.match(tag) and tag != "ChoiceForm":
+            continue
+        ref = inner_text(frn).strip()
+        if not ref:
+            continue
+        # Значением бывает GUID (erp: Report.СверкаДанныхОУиБУ, DefaultVariantForm) — проверить
+        # его без обхода всех форм нельзя; cf-validate (Check 9) такие тоже пропускает.
+        if GUID_RE_20.match(ref):
+            continue
+        parts = ref.split(".")
+        form_refs_checked += 1
+
+        if len(parts) == 2 and parts[0] == "CommonForm":
+            if is_extension_20 or not config_dir:
+                continue
+            cf_dir = os.path.join(config_dir, "CommonForms", parts[1])
+            cf_ok = (os.path.exists(cf_dir + ".xml")
+                     or os.path.exists(os.path.join(cf_dir, "Ext", "Form.xml"))
+                     or os.path.exists(os.path.join(cf_dir, "Form.xml")))
+            if not cf_ok:
+                report_error(f"20. {tag} '{ref}' — общая форма не найдена в конфигурации "
+                             f"(CommonForms/{parts[1]}) — «Неизвестный объект метаданных» при загрузке")
+                form_ref_bad = True
+            continue
+
+        if len(parts) != 4 or parts[2] != "Form":
+            report_warn(f"20. {tag} '{ref}' — неожиданный вид ссылки на форму "
+                        f"(ожидается 'CommonForm.Имя' или '<Вид>.<Объект>.Form.<Форма>')")
+            continue
+
+        ref_kind, ref_obj, ref_form = parts[0], parts[1], parts[3]
+
+        if ref_kind.lower() == md_type.lower() and ref_obj.lower() == obj_name.lower():
+            if ref_form.lower() not in own_forms:
+                known = ", ".join(sorted(own_forms.values())) if own_forms else "нет форм"
+                report_error(f"20. {tag} '{ref}' — форма '{ref_form}' не зарегистрирована в "
+                             f"ChildObjects объекта (есть: {known}) — «Неизвестный объект метаданных» при загрузке")
+                form_ref_bad = True
+            elif os.path.isdir(own_dir) and not _form_file_exists_20(own_dir, ref_form):
+                report_error(f"20. {tag} '{ref}' — форма зарегистрирована в ChildObjects, но файл "
+                             f"формы отсутствует ({obj_name}/Forms/{ref_form})")
+                form_ref_bad = True
+            continue
+
+        # чужой объект (например журнал документов) — нужна конфигурация
+        if is_extension_20 or not config_dir:
+            continue
+        ref_dir_20 = form_owner_dir_map.get(ref_kind)
+        if not ref_dir_20:
+            report_warn(f"20. {tag} '{ref}' — неизвестный вид метаданных '{ref_kind}' (опечатка?)")
+            continue
+        ref_obj_xml = os.path.join(config_dir, ref_dir_20, ref_obj + ".xml")
+        if not os.path.exists(ref_obj_xml):
+            report_warn(f"20. {tag} '{ref}' — объект '{ref_kind}.{ref_obj}' не найден в конфигурации ({ref_dir_20}/)")
+            continue
+        if not _form_file_exists_20(os.path.join(config_dir, ref_dir_20, ref_obj), ref_form):
+            report_error(f"20. {tag} '{ref}' — форма '{ref_form}' не найдена у объекта "
+                         f"'{ref_kind}.{ref_obj}' — «Неизвестный объект метаданных» при загрузке")
+            form_ref_bad = True
+
+    if form_refs_checked > 0 and not form_ref_bad:
+        report_ok(f"20. Form refs: {form_refs_checked} resolved")
 
 # ── Final output ──────────────────────────────────────────────
 
