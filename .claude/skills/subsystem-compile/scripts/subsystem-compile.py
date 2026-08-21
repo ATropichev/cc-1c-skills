@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-compile v1.27 — Create 1C subsystem from JSON definition
+# subsystem-compile v1.28 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -14,11 +14,12 @@ from lxml import etree
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
 
-def parse_json_input(text, source, expected=None):
+def parse_json_input(text, source, expected=None, inline=False):
     """Разбор пользовательского JSON: одна строка в stderr вместо traceback (issue #80).
 
     expected заполняем только для полиморфного входа: у файла подсказка
-    была бы наполнителем — имя файла и текст парсера самодостаточны.
+    была бы наполнителем — имя файла и текст парсера самодостаточны. inline печатает ещё и то,
+    что доехало: у файла такого вопроса нет, он лежит на диске и его видно целиком.
 
     Импорты внутри тела: копия функции живёт в навыках с разными именами модулей
     (skd-decompile импортирует json локально как _json), а тело обязано быть одинаковым.
@@ -26,15 +27,44 @@ def parse_json_input(text, source, expected=None):
     import json as _pj
     import sys as _psys
     try:
+        if not str(text).strip():
+            raise ValueError("input is empty")
         return _pj.loads(text)
     except ValueError as exc:
         what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
-        got = " ".join(str(text).split())
-        label = "got"
-        if len(got) > 60:
-            label = "got (first 60 chars, whitespace collapsed)"
-            got = got[:60]
-        print("[ERROR] %s, %s: %s (%s)" % (what, label, got, exc), file=_psys.stderr)
+        if inline:
+            got = " ".join(str(text).split())
+            label = "got"
+            if not got:
+                got = "(empty)"
+            elif len(got) > 60:
+                label = "got (first 60 chars)"
+                got = got[:60]
+            what = "%s, %s: %s" % (what, label, got)
+        print("[ERROR] %s (%s)" % (what, exc), file=_psys.stderr)
+        _psys.exit(1)
+
+
+def read_json_file(path):
+    """Чтение входного JSON-файла с кодировкой из BOM (issue #80).
+
+    BOM — объявление самого файла, поэтому ему верим; без BOM ждём строгий UTF-8. Кодовую
+    страницу не подбираем: угаданное имя уехало бы в метаданные молча.
+    """
+    import sys as _psys
+    with open(path, "rb") as _fh:
+        data = _fh.read()
+    if data[:3] == b"\xef\xbb\xbf":
+        return data[3:].decode("utf-8")
+    if data[:2] == b"\xff\xfe":
+        return data[2:].decode("utf-16-le")
+    if data[:2] == b"\xfe\xff":
+        return data[2:].decode("utf-16-be")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        print("[ERROR] %s is not valid UTF-8: %s - save the file as UTF-8, or add a BOM if it is UTF-16"
+              % (path, exc), file=_psys.stderr)
         _psys.exit(1)
 
 
@@ -493,14 +523,15 @@ def main():
         if not os.path.exists(def_file):
             print(f"Definition file not found: {def_file}", file=sys.stderr)
             sys.exit(1)
-        with open(def_file, 'r', encoding='utf-8-sig') as f:
-            json_text = f.read()
+        json_text = read_json_file(def_file)
         json_source = def_file
+        json_inline = False
     else:
         json_text = args.Value
         json_source = "-Value"
+        json_inline = True
 
-    defn = ci_json(parse_json_input(json_text, json_source))
+    defn = ci_json(parse_json_input(json_text, json_source, inline=json_inline))
 
     if not defn.get('name'):
         print("JSON must have 'name' field", file=sys.stderr)

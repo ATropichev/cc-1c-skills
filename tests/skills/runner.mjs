@@ -268,6 +268,34 @@ function cleanupWorkspace(ws) {
 
 // ─── Arg building ───────────────────────────────────────────────────────────
 
+// Байты входного файла в заданной кодировке. Нужно для кейсов про кодировку: writeFileSync
+// пишет только UTF-8, а навык обязан одинаково вести себя на UTF-16 с BOM (принять) и на
+// cp1251 (отвергнуть, а не молча подменить кириллицу на U+FFFD). cp1251 в Node нет — кодируем
+// формулой по диапазонам, которые встречаются в кейсах (ASCII + кириллица); прочее — ошибка кейса.
+function encodeInput(text, encoding) {
+  if (!encoding || encoding === 'utf-8' || encoding === 'utf8') return Buffer.from(text, 'utf8');
+  if (encoding === 'utf-16le') return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+  if (encoding === 'utf-16be') {
+    const le = Buffer.from(text, 'utf16le');
+    const be = Buffer.alloc(le.length);
+    for (let i = 0; i < le.length; i += 2) { be[i] = le[i + 1]; be[i + 1] = le[i]; }
+    return Buffer.concat([Buffer.from([0xfe, 0xff]), be]);
+  }
+  if (encoding === 'cp1251') {
+    const out = Buffer.alloc(text.length);
+    for (let i = 0; i < text.length; i++) {
+      const c = text.codePointAt(i);
+      if (c < 0x80) out[i] = c;
+      else if (c >= 0x410 && c <= 0x44f) out[i] = c - 0x350;
+      else if (c === 0x401) out[i] = 0xa8;
+      else if (c === 0x451) out[i] = 0xb8;
+      else throw new Error(`inputEncoding cp1251: символ U+${c.toString(16)} вне поддержанного набора (ASCII + кириллица)`);
+    }
+    return out;
+  }
+  throw new Error(`inputEncoding: неизвестная кодировка "${encoding}"`);
+}
+
 function buildArgs(skillConfig, caseData, workDir, inputFilePath, runtime) {
   const args = [];
   const scriptPath = resolveScript(skillConfig.script, runtime);
@@ -803,10 +831,10 @@ async function runCaseAsync(testCase, opts) {
     // JSON.stringify всегда даёт валидный документ.
     if (caseData.inputRaw !== undefined) {
       inputFile = join(workDir, '__input.json');
-      writeFileSync(inputFile, caseData.inputRaw, 'utf8');
+      writeFileSync(inputFile, encodeInput(caseData.inputRaw, caseData.inputEncoding));
     } else if (caseData.input !== undefined) {
       inputFile = join(workDir, '__input.json');
-      writeFileSync(inputFile, JSON.stringify(caseData.input, null, 2), 'utf8');
+      writeFileSync(inputFile, encodeInput(JSON.stringify(caseData.input, null, 2), caseData.inputEncoding));
     }
 
     // Execute
@@ -1028,10 +1056,10 @@ function runCase(testCase, opts) {
     // 3. Write input JSON if needed (inputRaw — дословно, см. выше)
     if (caseData.inputRaw !== undefined) {
       inputFile = join(workDir, '__input.json');
-      writeFileSync(inputFile, caseData.inputRaw, 'utf8');
+      writeFileSync(inputFile, encodeInput(caseData.inputRaw, caseData.inputEncoding));
     } else if (caseData.input !== undefined) {
       inputFile = join(workDir, '__input.json');
-      writeFileSync(inputFile, JSON.stringify(caseData.input, null, 2), 'utf8');
+      writeFileSync(inputFile, encodeInput(JSON.stringify(caseData.input, null, 2), caseData.inputEncoding));
     }
 
     // 4. Build CLI args and execute

@@ -1,0 +1,13 @@
+{
+  "name": "Файл в UTF-16 с BOM читается: кодировка объявлена самим файлом",
+  "inputRaw": "{\"type\": \"Catalog\", \"name\": \"Номенклатура\"}",
+  "inputEncoding": "utf-16le",
+  "params": {
+    "validatePath": "Catalogs/Номенклатура.xml"
+  },
+  "expect": {
+    "files": [
+      "Catalogs/Номенклатура.xml"
+    ]
+  }
+}

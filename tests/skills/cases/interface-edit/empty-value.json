@@ -1,0 +1,25 @@
+{
+  "name": "Пустое значение операции: в сообщении (empty), а не висячее двоеточие",
+  "preRun": [
+    {
+      "script": "subsystem-compile/scripts/subsystem-compile",
+      "input": {
+        "name": "Продажи"
+      },
+      "args": {
+        "-DefinitionFile": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "ciPath": "Subsystems/Продажи/CommandInterface"
+  },
+  "input": [
+    {
+      "operation": "place",
+      "value": ""
+    }
+  ],
+  "expectError": "got: (empty)"
+}

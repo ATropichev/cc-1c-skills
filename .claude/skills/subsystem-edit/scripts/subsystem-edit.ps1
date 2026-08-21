@@ -1,4 +1,4 @@
-﻿# subsystem-edit v1.22 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+﻿# subsystem-edit v1.23 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$SubsystemPath,
@@ -14,21 +14,54 @@ $ErrorActionPreference = "Stop"
 # --- Разбор пользовательского JSON ---
 # Одна строка в stderr вместо дампа исключения ConvertFrom-Json (issue #80): агент по стектрейсу
 # идёт чинить скрипт, а не свой вызов. $source — файл или параметр. $expected заполняем только
-# для полиморфного входа: у файла подсказка была бы наполнителем.
+# для полиморфного входа: у файла подсказка была бы наполнителем. -Inline печатает ещё и то,
+# что доехало: у файла такого вопроса нет — путь назван, позицию дал парсер, файл на диске.
 # Возврат через -NoEnumerate: без него одноэлементный
 # JSON-массив разворачивался бы в скаляр вторым анруллингом.
-function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected) {
+function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected, [switch]$Inline) {
 	try {
+		# PS 5.1 на пустой строке отдаёт $null, а не ошибку — навык уходил дальше с $null,
+		# тогда как py-порт падал. Проверяем сами, чтобы порты вели себя одинаково.
+		if ([string]::IsNullOrWhiteSpace($text)) { throw 'input is empty' }
 		$parsed = $text | ConvertFrom-Json
 	} catch {
 		$what = if ($expected) { "$source expects $expected" } else { "Invalid JSON in $source" }
-		$got = ($text -replace '\s+', ' ').Trim()
-		$label = 'got'
-		if ($got.Length -gt 60) { $label = 'got (first 60 chars, whitespace collapsed)'; $got = $got.Substring(0, 60) }
-		[Console]::Error.WriteLine("[ERROR] ${what}, ${label}: ${got} ($($_.Exception.Message))")
+		if ($Inline) {
+			$got = ($text -replace '\s+', ' ').Trim()
+			$label = 'got'
+			if (-not $got) { $got = '(empty)' }
+			elseif ($got.Length -gt 60) { $label = 'got (first 60 chars)'; $got = $got.Substring(0, 60) }
+			$what = "${what}, ${label}: ${got}"
+		}
+		[Console]::Error.WriteLine("[ERROR] ${what} ($($_.Exception.Message))")
 		exit 1
 	}
 	Write-Output -NoEnumerate $parsed
+}
+
+# --- Чтение входного JSON-файла ---
+# Кодировку берём из BOM — это объявление самого файла, а не догадка. Без BOM ждём строгий UTF-8:
+# Get-Content -Encoding UTF8 на файле в cp1251 тихо меняет кириллицу на U+FFFD, JSON после этого
+# разбирается успешно, и в конфигурацию уезжает имя из «замен». Кодовую страницу не подбираем:
+# угаданное имя уйдёт в метаданные так же молча.
+function Read-JsonInputFile([string]$path) {
+	$bytes = [System.IO.File]::ReadAllBytes($path)
+	if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
+		return [System.Text.Encoding]::UTF8.GetString($bytes, 3, $bytes.Length - 3)
+	}
+	if ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFF -and $bytes[1] -eq 0xFE) {
+		return [System.Text.Encoding]::Unicode.GetString($bytes, 2, $bytes.Length - 2)
+	}
+	if ($bytes.Length -ge 2 -and $bytes[0] -eq 0xFE -and $bytes[1] -eq 0xFF) {
+		return [System.Text.Encoding]::BigEndianUnicode.GetString($bytes, 2, $bytes.Length - 2)
+	}
+	try {
+		return (New-Object System.Text.UTF8Encoding($false, $true)).GetString($bytes)
+	} catch {
+		$detail = if ($_.Exception.InnerException) { $_.Exception.InnerException.Message } else { $_.Exception.Message }
+		[Console]::Error.WriteLine("[ERROR] ${path} is not valid UTF-8: ${detail} - save the file as UTF-8, or add a BOM if it is UTF-16")
+		exit 1
+	}
 }
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
@@ -452,7 +485,7 @@ function Expand-SelfClosingElement($container, $parentIndent) {
 function Parse-ValueList([string]$val, [string]$opName) {
 	$val = $val.Trim()
 	if ($val.StartsWith("[")) {
-		$arr = ConvertFrom-JsonInput $val "-Value for operation '$opName'" "a JSON array of object names"
+		$arr = ConvertFrom-JsonInput $val "-Value for operation '$opName'" "a JSON array of object names" -Inline
 		$result = @(); foreach ($item in $arr) { $result += "$item" }
 		return ,$result
 	}
@@ -585,7 +618,7 @@ function Do-RemoveChild([string]$childName) {
 }
 
 function Do-SetProperty([string]$jsonVal) {
-	$propDef = ConvertFrom-JsonInput $jsonVal "-Value for operation 'set-property'" "a JSON object {name, value}"
+	$propDef = ConvertFrom-JsonInput $jsonVal "-Value for operation 'set-property'" "a JSON object {name, value}" -Inline
 	$propName = "$($propDef.name)"
 	$propValue = "$($propDef.value)"
 
@@ -658,7 +691,7 @@ if ($DefinitionFile) {
 	if (-not [System.IO.Path]::IsPathRooted($DefinitionFile)) {
 		$DefinitionFile = Join-Path (Get-Location).Path $DefinitionFile
 	}
-	$jsonText = Get-Content -Raw -Encoding UTF8 $DefinitionFile
+	$jsonText = Read-JsonInputFile $DefinitionFile
 	$ops = ConvertFrom-JsonInput $jsonText $DefinitionFile
 	if ($ops -is [System.Array]) {
 		foreach ($op in $ops) { $operations += $op }

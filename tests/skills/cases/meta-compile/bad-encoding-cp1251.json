@@ -1,0 +1,11 @@
+{
+  "name": "Файл в cp1251 отвергается, а не читается как U+FFFD (issue #80)",
+  "inputRaw": "{\"type\": \"Catalog\", \"name\": \"Номенклатура\"}",
+  "inputEncoding": "cp1251",
+  "expectError": "is not valid UTF-8",
+  "expect": {
+    "filesAbsent": [
+      "Catalogs"
+    ]
+  }
+}

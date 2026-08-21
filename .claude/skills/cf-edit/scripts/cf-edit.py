@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-edit v1.20 — Edit 1C configuration root (Configuration.xml)
+# cf-edit v1.21 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -15,11 +15,12 @@ from lxml import etree
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
 
-def parse_json_input(text, source, expected=None):
+def parse_json_input(text, source, expected=None, inline=False):
     """Разбор пользовательского JSON: одна строка в stderr вместо traceback (issue #80).
 
     expected заполняем только для полиморфного входа: у файла подсказка
-    была бы наполнителем — имя файла и текст парсера самодостаточны.
+    была бы наполнителем — имя файла и текст парсера самодостаточны. inline печатает ещё и то,
+    что доехало: у файла такого вопроса нет, он лежит на диске и его видно целиком.
 
     Импорты внутри тела: копия функции живёт в навыках с разными именами модулей
     (skd-decompile импортирует json локально как _json), а тело обязано быть одинаковым.
@@ -27,15 +28,44 @@ def parse_json_input(text, source, expected=None):
     import json as _pj
     import sys as _psys
     try:
+        if not str(text).strip():
+            raise ValueError("input is empty")
         return _pj.loads(text)
     except ValueError as exc:
         what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
-        got = " ".join(str(text).split())
-        label = "got"
-        if len(got) > 60:
-            label = "got (first 60 chars, whitespace collapsed)"
-            got = got[:60]
-        print("[ERROR] %s, %s: %s (%s)" % (what, label, got, exc), file=_psys.stderr)
+        if inline:
+            got = " ".join(str(text).split())
+            label = "got"
+            if not got:
+                got = "(empty)"
+            elif len(got) > 60:
+                label = "got (first 60 chars)"
+                got = got[:60]
+            what = "%s, %s: %s" % (what, label, got)
+        print("[ERROR] %s (%s)" % (what, exc), file=_psys.stderr)
+        _psys.exit(1)
+
+
+def read_json_file(path):
+    """Чтение входного JSON-файла с кодировкой из BOM (issue #80).
+
+    BOM — объявление самого файла, поэтому ему верим; без BOM ждём строгий UTF-8. Кодовую
+    страницу не подбираем: угаданное имя уехало бы в метаданные молча.
+    """
+    import sys as _psys
+    with open(path, "rb") as _fh:
+        data = _fh.read()
+    if data[:3] == b"\xef\xbb\xbf":
+        return data[3:].decode("utf-8")
+    if data[:2] == b"\xff\xfe":
+        return data[2:].decode("utf-16-le")
+    if data[:2] == b"\xfe\xff":
+        return data[2:].decode("utf-16-be")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        print("[ERROR] %s is not valid UTF-8: %s - save the file as UTF-8, or add a BOM if it is UTF-16"
+              % (path, exc), file=_psys.stderr)
         _psys.exit(1)
 
 
@@ -847,7 +877,7 @@ def main():
         layout = value
         if isinstance(layout, str):
             layout = ci_json(parse_json_input(
-                layout, "-Value for operation 'set-panels'", "a JSON object with panel layout"))
+                layout, "-Value for operation 'set-panels'", "a JSON object with panel layout", inline=True))
         if not isinstance(layout, dict) or not layout:
             print("set-panels value must be non-empty object", file=sys.stderr)
             sys.exit(1)
@@ -999,7 +1029,7 @@ def main():
         layout = value
         if isinstance(layout, str):
             layout = ci_json(parse_json_input(
-                layout, "-Value for operation 'set-home-page'", "a JSON object with home page layout"))
+                layout, "-Value for operation 'set-home-page'", "a JSON object with home page layout", inline=True))
         if not isinstance(layout, dict) or not layout:
             print("set-home-page value must be non-empty object", file=sys.stderr)
             sys.exit(1)
@@ -1063,8 +1093,7 @@ def main():
         def_file = args.DefinitionFile
         if not os.path.isabs(def_file):
             def_file = os.path.join(os.getcwd(), def_file)
-        with open(def_file, "r", encoding="utf-8-sig") as fh:
-            ops = ci_json(parse_json_input(fh.read(), def_file))
+        ops = ci_json(parse_json_input(read_json_file(def_file), def_file))
         if isinstance(ops, list):
             operations = ops
         else:

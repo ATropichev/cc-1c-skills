@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# interface-edit v1.19 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
+# interface-edit v1.20 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -348,11 +348,12 @@ def import_ci_fragment(xml_string):
     return nodes
 
 
-def parse_json_input(text, source, expected=None):
+def parse_json_input(text, source, expected=None, inline=False):
     """Разбор пользовательского JSON: одна строка в stderr вместо traceback (issue #80).
 
     expected заполняем только для полиморфного входа: у файла подсказка
-    была бы наполнителем — имя файла и текст парсера самодостаточны.
+    была бы наполнителем — имя файла и текст парсера самодостаточны. inline печатает ещё и то,
+    что доехало: у файла такого вопроса нет, он лежит на диске и его видно целиком.
 
     Импорты внутри тела: копия функции живёт в навыках с разными именами модулей
     (skd-decompile импортирует json локально как _json), а тело обязано быть одинаковым.
@@ -360,22 +361,51 @@ def parse_json_input(text, source, expected=None):
     import json as _pj
     import sys as _psys
     try:
+        if not str(text).strip():
+            raise ValueError("input is empty")
         return _pj.loads(text)
     except ValueError as exc:
         what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
-        got = " ".join(str(text).split())
-        label = "got"
-        if len(got) > 60:
-            label = "got (first 60 chars, whitespace collapsed)"
-            got = got[:60]
-        print("[ERROR] %s, %s: %s (%s)" % (what, label, got, exc), file=_psys.stderr)
+        if inline:
+            got = " ".join(str(text).split())
+            label = "got"
+            if not got:
+                got = "(empty)"
+            elif len(got) > 60:
+                label = "got (first 60 chars)"
+                got = got[:60]
+            what = "%s, %s: %s" % (what, label, got)
+        print("[ERROR] %s (%s)" % (what, exc), file=_psys.stderr)
+        _psys.exit(1)
+
+
+def read_json_file(path):
+    """Чтение входного JSON-файла с кодировкой из BOM (issue #80).
+
+    BOM — объявление самого файла, поэтому ему верим; без BOM ждём строгий UTF-8. Кодовую
+    страницу не подбираем: угаданное имя уехало бы в метаданные молча.
+    """
+    import sys as _psys
+    with open(path, "rb") as _fh:
+        data = _fh.read()
+    if data[:3] == b"\xef\xbb\xbf":
+        return data[3:].decode("utf-8")
+    if data[:2] == b"\xff\xfe":
+        return data[2:].decode("utf-16-le")
+    if data[:2] == b"\xfe\xff":
+        return data[2:].decode("utf-16-be")
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        print("[ERROR] %s is not valid UTF-8: %s - save the file as UTF-8, or add a BOM if it is UTF-16"
+              % (path, exc), file=_psys.stderr)
         _psys.exit(1)
 
 
 def parse_value_list(val, op_name):
     val = val.strip()
     if val.startswith("["):
-        arr = ci_json(parse_json_input(val, "-Value for operation '%s'" % op_name, "a JSON array of command names"))
+        arr = ci_json(parse_json_input(val, "-Value for operation '%s'" % op_name, "a JSON array of command names", inline=True))
         return [str(item) for item in arr]
     return [val]
 
@@ -672,7 +702,7 @@ def main():
     def do_place(json_val):
         nonlocal add_count, modify_count
         defn = ci_json(json_val if isinstance(json_val, dict) else parse_json_input(
-            json_val, "-Value for operation 'place'", "a JSON object {command, group}"))
+            json_val, "-Value for operation 'place'", "a JSON object {command, group}", inline=True))
         cmd_name = normalize_cmd_name(str(defn["command"]))
         group_name = str(defn["group"])
         if not cmd_name or not group_name:
@@ -701,7 +731,7 @@ def main():
     def do_order(json_val):
         nonlocal add_count, remove_count
         defn = ci_json(json_val if isinstance(json_val, dict) else parse_json_input(
-            json_val, "-Value for operation 'order'", "a JSON object {group, commands:[...]}"))
+            json_val, "-Value for operation 'order'", "a JSON object {group, commands:[...]}", inline=True))
         group_name = str(defn["group"])
         commands = [normalize_cmd_name(str(c)) for c in defn["commands"]]
         if not group_name or not commands:
@@ -736,7 +766,7 @@ def main():
     def do_subsystem_order(json_val):
         nonlocal add_count, remove_count
         parsed = ci_json(json_val if isinstance(json_val, list) else parse_json_input(
-            json_val, "-Value for operation 'subsystem-order'", "a JSON array of subsystem paths"))
+            json_val, "-Value for operation 'subsystem-order'", "a JSON array of subsystem paths", inline=True))
         subsystems = [str(s) for s in parsed]
         if not subsystems:
             print("subsystem-order requires array of subsystem paths", file=sys.stderr)
@@ -762,7 +792,7 @@ def main():
     def do_group_order(json_val):
         nonlocal add_count, remove_count
         parsed = ci_json(json_val if isinstance(json_val, list) else parse_json_input(
-            json_val, "-Value for operation 'group-order'", "a JSON array of group names"))
+            json_val, "-Value for operation 'group-order'", "a JSON array of group names", inline=True))
         groups = [str(g) for g in parsed]
         if not groups:
             print("group-order requires array of group names", file=sys.stderr)
@@ -791,8 +821,7 @@ def main():
         def_file = args.DefinitionFile
         if not os.path.isabs(def_file):
             def_file = os.path.join(os.getcwd(), def_file)
-        with open(def_file, "r", encoding="utf-8-sig") as fh:
-            ops = ci_json(parse_json_input(fh.read(), def_file))
+        ops = ci_json(parse_json_input(read_json_file(def_file), def_file))
         if isinstance(ops, list):
             operations = ops
         else:
