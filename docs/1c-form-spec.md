@@ -144,15 +144,50 @@ CommonForms регистрируются в `Configuration.xml`:
 | Catalog | DefaultObjectForm, DefaultFolderForm, DefaultListForm, DefaultChoiceForm, DefaultFolderChoiceForm |
 | ChartOfCharacteristicTypes | DefaultObjectForm, DefaultFolderForm, DefaultListForm, DefaultChoiceForm, DefaultFolderChoiceForm |
 | ChartOfAccounts | DefaultObjectForm, DefaultListForm, DefaultChoiceForm |
+| ChartOfCalculationTypes | DefaultObjectForm, DefaultListForm, DefaultChoiceForm |
 | DataProcessor | DefaultForm |
 | Report | DefaultForm |
+| ExternalDataProcessor | DefaultForm |
+| ExternalReport | DefaultForm |
 | InformationRegister | DefaultRecordForm, DefaultListForm |
+| AccumulationRegister | DefaultListForm |
+| AccountingRegister | DefaultListForm |
+| CalculationRegister | DefaultListForm |
+| DocumentJournal | DefaultForm |
+| Enum | DefaultListForm, DefaultChoiceForm |
+| FilterCriterion | DefaultForm |
+| SettingsStorage | DefaultSaveForm, DefaultLoadForm |
 | ExchangePlan | DefaultObjectForm, DefaultListForm, DefaultChoiceForm |
 | BusinessProcess | DefaultObjectForm, DefaultListForm, DefaultChoiceForm |
 | Task | DefaultObjectForm, DefaultListForm, DefaultChoiceForm |
+| Constant | DefaultForm — но собственных форм у константы нет, свойство указывает на общую форму |
 | CommonForm | — (регистрируется в Configuration.xml, нет DefaultForm) |
 
 > Report.DefaultForm может указывать на общую форму: `CommonForm.ФормаОтчета`.
+
+#### Главный реквизит формы по назначению
+
+Главный реквизит (`<MainAttribute>true</MainAttribute>`) задаёт вид формы. `{Имя}` — имя объекта.
+
+| Назначение | Свойство объекта | Главный реквизит | Для каких типов |
+|------------|------------------|------------------|-----------------|
+| Форма объекта | DefaultObjectForm | `{Тип}Object.{Имя}` | Catalog, Document, ChartOfAccounts, ChartOfCharacteristicTypes, ChartOfCalculationTypes, ExchangePlan, BusinessProcess, Task |
+| Форма обработки/отчёта | DefaultForm | `{Тип}Object.{Имя}` | DataProcessor, Report, ExternalDataProcessor, ExternalReport |
+| Форма группы | DefaultFolderForm | `{Тип}Object.{Имя}` | Catalog, ChartOfCharacteristicTypes |
+| Форма списка | DefaultListForm (у DocumentJournal и FilterCriterion — DefaultForm) | `DynamicList` + `MainTable` | все типы со списком |
+| Форма выбора | DefaultChoiceForm | `DynamicList` + `MainTable` | Catalog, Document, ChartOf*, ExchangePlan, BusinessProcess, Task, Enum |
+| Форма выбора группы | DefaultFolderChoiceForm | `DynamicList` + `MainTable` | Catalog, ChartOfCharacteristicTypes |
+| Форма записи | DefaultRecordForm | `InformationRegisterRecordManager.{Имя}` | InformationRegister |
+| Форма набора записей | — (свойства нет) | `{Тип}RecordSet.{Имя}` | все регистры |
+| Форма сохранения/загрузки настроек | DefaultSaveForm / DefaultLoadForm | нет | SettingsStorage |
+| Произвольная форма | — (свойства нет) | нет | любой тип с собственными формами |
+
+> Формы без главного реквизита («произвольные») — обычное дело, а не полуфабрикат: на acc+erp это
+> 907 форм справочников, 941 форма документов, 3482 формы отчётов.
+>
+> У формы набора записей нет свойства, которым её можно назначить основной, — сама форма при этом
+> допустима. У регистров накопления и бухгалтерии `{Тип}RecordSet` как главный реквизит в типовых
+> не встречается: их формы — списки.
 
 ---
 
