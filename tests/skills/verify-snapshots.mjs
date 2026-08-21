@@ -730,6 +730,45 @@ function compatibilityGap(configDir, v8path) {
   return null;
 }
 
+// Версия формата выгрузки против платформы: формат 2.21 не загрузится на 8.3.27, даже если
+// режим совместимости платформе подходит. Без этой проверки кейс на 2.21 скипался только на
+// 8.3.24 (по совместимости), а на 8.3.27 доходил до загрузки и падал — постоянный ложный
+// красный на стендах с промежуточной платформой.
+//
+// Эталон — таблица «Лестница версий» из docs/1c-configuration-spec.md (§7.1); разбор — копия
+// такого же в check-format-versions.mjs, держать одинаковыми.
+function formatGap(configDir, v8path) {
+  const cfgFile = join(configDir, 'Configuration.xml');
+  if (!existsSync(cfgFile)) return null;
+  const fm = /<MetaDataObject[^>]*\sversion="(\d+\.\d+)"/.exec(readFileSync(cfgFile, 'utf8'));
+  const pm = /(\d+\.\d+\.\d+)/.exec(v8path || '');
+  if (!fm || !pm) return null;
+
+  const specFile = join(REPO_ROOT, 'docs', '1c-configuration-spec.md');
+  if (!existsSync(specFile)) return null;
+  const section = readFileSync(specFile, 'utf8').split(/^### 7\.1\./m)[1];
+  if (!section) return null;
+  const ladder = new Map();               // версия формата → минимальная платформа
+  for (const line of section.split(/^###? /m)[0].split('\n')) {
+    const m = /^\|\s*([\d.]+)\s*\|\s*`?(\d+\.\d+)`?\s*\|/.exec(line);
+    if (m) ladder.set(m[2], m[1]);
+  }
+  const needPlatform = ladder.get(fm[1]);
+  if (!needPlatform) return null;
+
+  const cmp = (a, b) => {
+    const x = a.split('.').map(Number), y = b.split('.').map(Number);
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+      if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0);
+    }
+    return 0;
+  };
+  if (cmp(pm[1], needPlatform) < 0) {
+    return `формат выгрузки ${fm[1]} требует платформу ${needPlatform}, доступна ${pm[1]} — запустите с --v8path`;
+  }
+  return null;
+}
+
 // Аргументы cf-init для вариантов пустой конфигурации. Копия таблицы EMPTY_CONFIGS из
 // runner.mjs — держать одинаковыми: разойдутся, и верификация пойдёт не на том формате,
 // на котором прогонялся кейс.
@@ -1001,7 +1040,8 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
     // стенда, а не дефект кейса, поэтому пропускаем с причиной: иначе на машине без нужной
     // платформы кейсы с гейтом по версии формата давали бы ложное падение.
     if (opts.v8ctx && configDir) {
-      const compatSkip = compatibilityGap(configDir, opts.v8ctx.v8path);
+      const compatSkip = compatibilityGap(configDir, opts.v8ctx.v8path)
+        || formatGap(configDir, opts.v8ctx.v8path);
       if (compatSkip) {
         result.skipped = true;
         result.skipReason = compatSkip;
