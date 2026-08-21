@@ -1,4 +1,4 @@
-﻿# form-edit v1.16 — Edit 1C managed form elements (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# form-edit v1.17 — Edit 1C managed form elements (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -45,6 +45,17 @@ function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected
 # разбирается успешно, и в конфигурацию уезжает имя из «замен». Кодовую страницу не подбираем:
 # угаданное имя уйдёт в метаданные так же молча.
 function Read-JsonInputFile([string]$path) {
+	# Проверка здесь, а не по навыкам: часть навыков проверяла путь сама, часть — нет, и один и тот
+	# же промах давал то внятную строку, то дамп MethodInvocationException. Навыки со своей
+	# проверкой срабатывают раньше и сохраняют свой текст.
+	if (-not (Test-Path -LiteralPath $path)) {
+		[Console]::Error.WriteLine("[ERROR] File not found: $path")
+		exit 1
+	}
+	if (Test-Path -LiteralPath $path -PathType Container) {
+		[Console]::Error.WriteLine("[ERROR] Expected a JSON file, got a directory: $path")
+		exit 1
+	}
 	$bytes = [System.IO.File]::ReadAllBytes($path)
 	if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {
 		return [System.Text.Encoding]::UTF8.GetString($bytes, 3, $bytes.Length - 3)

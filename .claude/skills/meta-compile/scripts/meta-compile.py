@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.97 — Compile 1C metadata object from JSON
+# meta-compile v1.98 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -61,7 +61,14 @@ def read_json_file(path):
     BOM — объявление самого файла, поэтому ему верим; без BOM ждём строгий UTF-8. Кодовую
     страницу не подбираем: угаданное имя уехало бы в метаданные молча.
     """
+    import os as _pos
     import sys as _psys
+    if not _pos.path.exists(path):
+        print("[ERROR] File not found: %s" % path, file=_psys.stderr)
+        _psys.exit(1)
+    if _pos.path.isdir(path):
+        print("[ERROR] Expected a JSON file, got a directory: %s" % path, file=_psys.stderr)
+        _psys.exit(1)
     with open(path, "rb") as _fh:
         data = _fh.read()
     if data[:3] == b"\xef\xbb\xbf":

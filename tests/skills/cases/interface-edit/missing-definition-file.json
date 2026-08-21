@@ -1,0 +1,20 @@
+{
+  "name": "Несуществующий файл определения: строка вместо дампа исключения",
+  "preRun": [
+    {
+      "script": "subsystem-compile/scripts/subsystem-compile",
+      "input": {
+        "name": "Продажи"
+      },
+      "args": {
+        "-DefinitionFile": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "ciPath": "Subsystems/Продажи/CommandInterface"
+  },
+  "inputFrom": "нет-такого-файла.json",
+  "expectError": "File not found:"
+}
