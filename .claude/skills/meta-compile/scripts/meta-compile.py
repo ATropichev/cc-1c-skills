@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.98 — Compile 1C metadata object from JSON
+# meta-compile v1.99 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse

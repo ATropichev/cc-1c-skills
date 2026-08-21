@@ -1,4 +1,4 @@
-﻿# db-dump-xml v1.15 — Dump 1C configuration to XML files
+﻿# db-dump-xml v1.16 — Dump 1C configuration to XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -61,7 +61,7 @@
     .\db-dump-xml.ps1 -InfoBasePath "C:\Bases\MyDB" -ConfigDir "C:\src" -Mode Partial -Objects "Справочник.Номенклатура,Документ.Заказ"
 #>
 
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding=$false)]
 param(
     [Parameter(Mandatory=$false)]
     [string]$V8Path,

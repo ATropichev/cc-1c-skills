@@ -1,4 +1,4 @@
-﻿# db-dump-cf v1.13 — Dump 1C configuration to CF file
+﻿# db-dump-cf v1.14 — Dump 1C configuration to CF file
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -49,7 +49,7 @@
     .\db-dump-cf.ps1 -InfoBasePath "C:\Bases\MyDB" -OutputFile "ext.cfe" -Extension "МоёРасширение"
 #>
 
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding=$false)]
 param(
     [Parameter(Mandatory=$false)]
     [string]$V8Path,

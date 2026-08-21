@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-patch-method v2.8 — Source-aware method interceptor for 1C extension (CFE)
+# cfe-patch-method v2.9 — Source-aware method interceptor for 1C extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse

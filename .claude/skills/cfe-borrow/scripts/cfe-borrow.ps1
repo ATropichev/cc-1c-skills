@@ -1,5 +1,6 @@
-﻿# cfe-borrow v1.32 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.33 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
 	[Parameter(Mandatory)][string]$ExtensionPath,
 	[Parameter(Mandatory)][string]$ConfigPath,

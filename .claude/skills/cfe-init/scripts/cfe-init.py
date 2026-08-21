@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-init v1.10 — Create 1C configuration extension scaffold (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
+# cfe-init v1.11 — Create 1C configuration extension scaffold (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C configuration extension."""
 import sys, os, re, argparse, uuid

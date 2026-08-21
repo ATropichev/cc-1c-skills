@@ -1,5 +1,6 @@
-﻿# mxl-compile v1.54 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.55 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
 	[Parameter(Mandatory)]
 	[string]$JsonPath,

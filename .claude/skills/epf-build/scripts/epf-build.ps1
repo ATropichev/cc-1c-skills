@@ -1,4 +1,4 @@
-﻿# epf-build v1.13 — Build external data processor or report (EPF/ERF) from XML sources
+﻿# epf-build v1.14 — Build external data processor or report (EPF/ERF) from XML sources
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -46,7 +46,7 @@
     .\epf-build.ps1 -InfoBasePath "C:\Bases\MyDB" -SourceFile "src\МойОтчёт.xml" -OutputFile "build\МойОтчёт.erf"
 #>
 
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding=$false)]
 param(
     [Parameter(Mandatory=$false)]
     [string]$V8Path,

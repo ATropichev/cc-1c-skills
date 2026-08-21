@@ -1,5 +1,6 @@
-﻿# subsystem-compile v1.29 — Create 1C subsystem from JSON definition
+﻿# subsystem-compile v1.30 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
 	[string]$DefinitionFile,
 	[string]$Value,

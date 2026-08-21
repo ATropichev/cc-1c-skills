@@ -1,6 +1,7 @@
-﻿# skd-edit v1.38 — Atomic 1C DCS editor
+﻿# skd-edit v1.39 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: парный .py собирает выражения автодат вне f-string ради совместимости с python 3.9 (PEP 701).
+[CmdletBinding(PositionalBinding=$false)]
 param(
 	[Parameter(Mandatory)]
 	[Alias('Path')]

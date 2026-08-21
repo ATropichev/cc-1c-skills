@@ -1,5 +1,6 @@
-﻿# xdto-compile v1.11 — Build a 1C XDTO package from an XML Schema (XSD) (+support-guard: общая реализация вместо урезанной)
+﻿# xdto-compile v1.12 — Build a 1C XDTO package from an XML Schema (XSD) (+support-guard: общая реализация вместо урезанной)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
 	[Parameter(Mandatory=$true, ParameterSetName='File')]
 	[Alias('Path')]

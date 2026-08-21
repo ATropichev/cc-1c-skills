@@ -1,4 +1,4 @@
-﻿# db-load-cf v1.14 — Load 1C configuration from CF file
+﻿# db-load-cf v1.15 — Load 1C configuration from CF file
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -49,7 +49,7 @@
     .\db-load-cf.ps1 -InfoBasePath "C:\Bases\MyDB" -InputFile "ext.cfe" -Extension "МоёРасширение"
 #>
 
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding=$false)]
 param(
     [Parameter(Mandatory=$false)]
     [string]$V8Path,

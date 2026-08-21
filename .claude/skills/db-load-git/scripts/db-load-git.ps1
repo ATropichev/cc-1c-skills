@@ -1,4 +1,4 @@
-﻿# db-load-git v1.20 — Load Git changes into 1C database
+﻿# db-load-git v1.21 — Load Git changes into 1C database
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -64,7 +64,7 @@
     .\db-load-git.ps1 -InfoBasePath "C:\Bases\MyDB" -ConfigDir "C:\src" -DryRun
 #>
 
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding=$false)]
 param(
     [Parameter(Mandatory=$false)]
     [string]$V8Path,

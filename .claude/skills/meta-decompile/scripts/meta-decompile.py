@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-decompile v0.64 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+# meta-decompile v0.65 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Зеркало meta-decompile.ps1 (КАНОН). Структура 1:1 — те же имена функций, порядок, комментарии.

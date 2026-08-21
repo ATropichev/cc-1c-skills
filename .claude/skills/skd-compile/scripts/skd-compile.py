@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.120 — Compile 1C DCS from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# skd-compile v1.121 — Compile 1C DCS from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json

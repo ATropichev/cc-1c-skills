@@ -1,10 +1,11 @@
-﻿# meta-decompile v0.64 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+﻿# meta-decompile v0.65 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Поддержаны: Catalog, ExchangePlan, ChartOfCharacteristicTypes, ChartOfAccounts, ChartOfCalculationTypes, Document,
 # InformationRegister, AccumulationRegister, AccountingRegister, CalculationRegister, BusinessProcess, Task, Enum. Инверс meta-compile (omit-on-default: ключ эмитим только
 # когда значение в XML отличается от умолчания компилятора). Неподдерживаемый тип / не-MetaDataObject
 # root → exit 3 (ring3, как form-decompile).
+[CmdletBinding(PositionalBinding=$false)]
 param(
 	[Parameter(Mandatory)]
 	[Alias('Path')]

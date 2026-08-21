@@ -1,4 +1,4 @@
-﻿# db-run v1.8 — Launch 1C:Enterprise
+﻿# db-run v1.9 — Launch 1C:Enterprise
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -52,7 +52,7 @@
     .\db-run.ps1 -InfoBasePath "C:\Bases\MyDB" -CParam "ЗапуститьОбновление"
 #>
 
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding=$false)]
 param(
     [Parameter(Mandatory=$false)]
     [string]$V8Path,

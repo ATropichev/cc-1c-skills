@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.31 — Compile 1C role from JSON
+# role-compile v1.32 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json

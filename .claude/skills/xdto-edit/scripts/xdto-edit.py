@@ -1,4 +1,4 @@
-# xdto-edit v1.6 — Point edits of a 1C XDTO package (Python port) (+support-guard: общая реализация вместо урезанной)
+# xdto-edit v1.7 — Point edits of a 1C XDTO package (Python port) (+support-guard: общая реализация вместо урезанной)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json

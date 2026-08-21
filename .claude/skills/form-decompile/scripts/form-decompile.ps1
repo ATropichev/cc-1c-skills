@@ -1,6 +1,7 @@
-﻿# form-decompile v0.149 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.150 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
+[CmdletBinding(PositionalBinding=$false)]
 param(
 	[Parameter(Mandatory)]
 	[Alias('Path')]

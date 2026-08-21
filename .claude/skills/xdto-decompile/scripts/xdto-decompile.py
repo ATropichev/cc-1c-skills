@@ -1,4 +1,4 @@
-# xdto-decompile v1.1 — Convert 1C XDTO package to XML Schema (XSD) (Python port)
+# xdto-decompile v1.2 — Convert 1C XDTO package to XML Schema (XSD) (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os

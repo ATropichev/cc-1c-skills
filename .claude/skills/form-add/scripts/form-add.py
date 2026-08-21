@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-add v1.26 — Add managed form to 1C config object (+write_xml_file/write_utf8_bom: общий эталон записи)
+# form-add v1.27 — Add managed form to 1C config object (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse

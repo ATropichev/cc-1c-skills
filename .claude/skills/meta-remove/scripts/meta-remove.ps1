@@ -1,5 +1,6 @@
-﻿# meta-remove v1.10 — Remove metadata object from 1C configuration dump
+﻿# meta-remove v1.11 — Remove metadata object from 1C configuration dump
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
 	[Parameter(Mandatory)]
 	[string]$ConfigDir,

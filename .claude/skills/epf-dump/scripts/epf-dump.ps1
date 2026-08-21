@@ -1,4 +1,4 @@
-﻿# epf-dump v1.12 — Dump external data processor or report (EPF/ERF) to XML sources
+﻿# epf-dump v1.13 — Dump external data processor or report (EPF/ERF) to XML sources
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -49,7 +49,7 @@
     .\epf-dump.ps1 -InfoBasePath "C:\Bases\MyDB" -InputFile "build\МойОтчёт.erf" -OutputDir "src"
 #>
 
-[CmdletBinding()]
+[CmdletBinding(PositionalBinding=$false)]
 param(
     [Parameter(Mandatory=$false)]
     [string]$V8Path,

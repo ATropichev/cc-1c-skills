@@ -1,5 +1,6 @@
-﻿# cf-edit v1.22 — Edit 1C configuration root (Configuration.xml)
+﻿# cf-edit v1.23 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$ConfigPath,
 	[string]$DefinitionFile,

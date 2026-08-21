@@ -1,5 +1,6 @@
-﻿# form-compile v1.195 — Compile 1C managed form from JSON or object metadata (гвард на группу additionalColumns без ключа columns)
+﻿# form-compile v1.196 — Compile 1C managed form from JSON or object metadata (гвард на группу additionalColumns без ключа columns)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
+[CmdletBinding(PositionalBinding=$false)]
 param(
 	[string]$JsonPath,
 

@@ -10,11 +10,20 @@
 // то есть любая перестановка параметров в param() открывала дыру заново.
 // Снапшот-тесты этого не видят: они сверяют вывод, а не связывание аргументов.
 //
-// Две проверки. Статическая: [CmdletBinding(PositionalBinding=$false)] объявлен, позиционный
-// параметр не более одного и это Position=0; в py-порте все add_argument именованные.
+// Две области. Read-only навыки: позиционным остаётся путь ко входу (Position=0), не более
+// одного. Пишущие навыки: позиционных параметров нет вовсе — «главный» параметр там не
+// выводится механически (у meta-edit первым объявлен -DefinitionFile, а путь к объекту вторым),
+// и ошибка выбора не ловится тестами: раннер передаёт только именованные флаги. Молчаливое
+// растекание там уже стреляло: `-Purpose Форма списка` у form-compile отдавало
+// Purpose=[Форма] ObjectPath=[списка] БЕЗ ошибки, тогда как py-порт тот же вызов отвергал.
+//
+// Статическая проверка: [CmdletBinding(PositionalBinding=$false)] объявлен, число Position
+// не выше нормы области; в py-порте все add_argument именованные.
 // Поведенческая: лишний позиционный аргумент, указывающий на канареечный файл, роняет вызов
 // и файл остаётся байт-в-байт. Валидные фикстуры не нужны — связывание параметров происходит
-// до тела скрипта. Выход 1 при нарушении. Запуск: node tests/skills/check-positional-binding.mjs [--runtime python]
+// до тела скрипта. Только для read-only навыков: у web-stop и db-run все параметры
+// Mandatory=$false, связывание пройдёт и ТЕЛО ВЫПОЛНИТСЯ — гард остановил бы Apache и запустил
+// 1С. Выход 1 при нарушении. Запуск: node tests/skills/check-positional-binding.mjs [--runtime python]
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -55,6 +64,18 @@ if (skills.length === 0) {
   process.exit(1);
 }
 
+// Пишущие навыки — всё остальное со скриптом. Список тоже по имени, чтобы новый навык
+// попадал под гард сам.
+const writeSkills = readdirSync(SKILLS_DIR)
+  .filter(name => !isReadOnly(name))
+  .filter(name => existsSync(join(SKILLS_DIR, name, 'scripts', `${name}.ps1`)))
+  .sort();
+
+if (writeSkills.length === 0) {
+  console.error('Не найдено ни одного пишущего навыка со скриптом — гард потерял цель.');
+  process.exit(1);
+}
+
 const violations = [];
 const fail = (skill, msg) => violations.push(`${skill}: ${msg}`);
 
@@ -67,7 +88,7 @@ function paramBlock(text) {
   return end < 0 ? null : text.slice(start, end);
 }
 
-for (const skill of skills) {
+function checkStatic(skill, allowPositional) {
   const ps1Path = join(SKILLS_DIR, skill, 'scripts', `${skill}.ps1`);
   const ps1 = readFileSync(ps1Path, 'utf8');
 
@@ -80,9 +101,11 @@ for (const skill of skills) {
     fail(skill, '.ps1: не разобран блок param()');
   } else {
     const positions = [...block.matchAll(/Position\s*=\s*(\d+)/g)].map(m => m[1]);
-    if (positions.length > 1) {
+    if (!allowPositional && positions.length > 0) {
+      fail(skill, `.ps1: у пишущего навыка не должно быть позиционных параметров (Position=${positions.join(', ')})`);
+    } else if (allowPositional && positions.length > 1) {
       fail(skill, `.ps1: позиционных параметров больше одного (Position=${positions.join(', ')})`);
-    } else if (positions.length === 1 && positions[0] !== '0') {
+    } else if (allowPositional && positions.length === 1 && positions[0] !== '0') {
       fail(skill, `.ps1: единственный позиционный параметр должен быть Position=0, а не Position=${positions[0]}`);
     }
   }
@@ -98,7 +121,10 @@ for (const skill of skills) {
   }
 }
 
-// --- 2. Поведенческая проверка: лишний позиционный аргумент не трогает файл ---
+for (const skill of skills) checkStatic(skill, true);
+for (const skill of writeSkills) checkStatic(skill, false);
+
+// --- 2. Поведенческая проверка (только read-only, см. шапку): лишний позиционный аргумент не трогает файл ---
 
 const CANARY = 'канарейка: этот файл не должен быть перезаписан отчётом навыка\n';
 const work = mkdtempSync(join(tmpdir(), 'posbind-'));
@@ -148,5 +174,6 @@ if (violations.length) {
   process.exit(1);
 }
 
-console.log(`OK — ${skills.length} read-only навыков, рантаймы: ${runtimes.join(', ')}.`);
-console.log('Позиционным остаётся только путь ко входу; лишний позиционный аргумент падает и файл цел.');
+console.log(`OK — read-only: ${skills.length}, пишущих: ${writeSkills.length}, рантаймы: ${runtimes.join(', ')}.`);
+console.log('У read-only позиционным остаётся только путь ко входу (и лишний аргумент падает, файл цел);');
+console.log('у пишущих позиционных параметров нет вовсе.');

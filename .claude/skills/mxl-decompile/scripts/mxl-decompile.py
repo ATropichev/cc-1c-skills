@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-decompile v1.30 — Decompile 1C spreadsheet to JSON
+# mxl-decompile v1.31 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
