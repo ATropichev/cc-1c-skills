@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // verify-snapshots v0.2 — Platform verification of skill test snapshots
 // Reruns skill scripts from test-case DSL, then loads into 1C platform.
-// Usage: node tests/skills/verify-snapshots.mjs [--skill meta-compile] [--case catalog-basic] [--runtime powershell|python] [--keep] [--verbose]
+// Usage: node tests/skills/verify-snapshots.mjs [--skill meta-compile] [--case catalog-basic] [--runtime powershell|python] [--keep] [--verbose] [--strict]
 // Supports: meta-compile, form-compile, form-add, form-edit, skd-compile, skd-edit,
 //           role-compile, subsystem-compile, subsystem-edit, mxl-compile, template-add,
 //           help-add, cf-init, cf-edit, epf-init, meta-edit, interface-edit,
@@ -43,6 +43,7 @@ Options:
                            Precedence: --v8path > .v8-project.json > auto-detect.
   --keep                   Keep generated work directories on disk after run
   -v, --verbose            Verbose output
+  --strict                 Пропуск считать падением: непроверенных кейсов не остаётся
   -h, --help, /?           Show this help and exit
 `);
 }
@@ -59,6 +60,7 @@ function parseArgs(argv) {
     if (a === '--v8path' && rest[i + 1]) { args.v8path = rest[++i]; continue; }
     if (a === '--keep') { args.keep = true; continue; }
     if (a === '--verbose' || a === '-v') { args.verbose = true; continue; }
+    if (a === '--strict') { args.strict = true; continue; }
   }
   return args;
 }
@@ -1636,9 +1638,17 @@ async function main() {
   for (const r of results.filter(x => x.skipped)) {
     console.log(`  \u25cb ${r.skill}/${r.case} \u2014 ${r.skipReason}`);
   }
+  // Пропуск гасит проверку: кривую фикстуру он тоже спрячет, если её формат объявлен выше
+  // платформы стенда. На стенде, где нужные платформы есть, гоняем со --strict — тогда
+  // непроверенных кейсов не остаётся вовсе.
+  if (skipped && !opts.strict) {
+    console.log(`  (пропуски не проверены — на стенде с нужными платформами прогоните со --strict)`);
+  }
 
   writeReport(results);
-  process.exit(failed > 0 ? 1 : 0);
+  const unverified = opts.strict ? skipped : 0;
+  if (unverified) console.error(`\n--strict: ${unverified} кейс(ов) пропущено — считаем падением`);
+  process.exit(failed + unverified > 0 ? 1 : 0);
 }
 
 main().catch(e => { console.error(e); process.exit(1); });
