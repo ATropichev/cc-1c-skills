@@ -25,9 +25,9 @@ allowed-tools:
 |-------------|:------------:|--------------|----------------------------------------------|
 | ObjectPath  | да           | —            | Путь к XML-файлу объекта (Documents/Док.xml)  |
 | FormName    | да           | —            | Имя формы (ФормаДокумента)                    |
-| Purpose     | нет          | Object       | Назначение: Object, List, Choice, Record      |
+| Purpose     | нет          | Object       | Назначение формы — см. таблицу ниже           |
 | Synonym     | нет          | = FormName   | Синоним формы                                 |
-| --set-default | нет        | авто         | Установить как форму по умолчанию             |
+| --set-default | нет        | авто         | Сделать основной. Без флага основной становится первая форма каждого назначения |
 
 ## Команда
 
@@ -37,12 +37,34 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/form-add.ps1" -Obje
 
 ## Purpose — назначение формы
 
-| Purpose | Допустимые типы объектов | Основной реквизит | DefaultForm-свойство |
-|---------|-------------------------|-------------------|---------------------|
-| Object  | Document, Catalog, DataProcessor, Report, ExternalDataProcessor, ExternalReport, ChartOf*, ExchangePlan, BusinessProcess, Task | Объект (тип: *Object.Имя) | DefaultObjectForm (DefaultForm для DataProcessor/Report/ExternalDataProcessor/ExternalReport) |
-| List    | Все кроме DataProcessor | Список (DynamicList) | DefaultListForm |
-| Choice  | Document, Catalog, ChartOf*, ExchangePlan, BusinessProcess, Task | Список (DynamicList) | DefaultChoiceForm |
-| Record  | InformationRegister | Запись (InformationRegisterRecordManager) | DefaultRecordForm |
+| Purpose | Какая форма | Становится основной |
+|---------|-------------|---------------------|
+| Object | форма объекта (элемента, документа, обработки) | да |
+| List | форма списка | да |
+| Choice | форма выбора | да |
+| Folder | форма группы | да |
+| FolderChoice | форма выбора группы | да |
+| Record | форма записи | да |
+| RecordSet | форма набора записей | нет — в платформе нет такого свойства |
+| Save | форма сохранения настроек | да |
+| Load | форма загрузки настроек | да |
+| Custom | произвольная форма, без привязки к объекту | нет |
+
+### Что доступно типу объекта
+
+| Тип объекта | Назначения |
+|-------------|------------|
+| Catalog, ChartOfCharacteristicTypes | Object, Folder, List, Choice, FolderChoice, Custom |
+| Document, ChartOfAccounts, ChartOfCalculationTypes, ExchangePlan, BusinessProcess, Task | Object, List, Choice, Custom |
+| DataProcessor, Report, ExternalDataProcessor, ExternalReport | Object, Custom |
+| InformationRegister | Record, List, RecordSet, Custom |
+| AccumulationRegister, AccountingRegister, CalculationRegister | List, RecordSet, Custom |
+| DocumentJournal, FilterCriterion | List, Custom |
+| Enum | List, Choice, Custom |
+| SettingsStorage | Save, Load, Custom |
+
+Недопустимое сочетание отклоняется со списком доступных для этого типа. У константы собственных
+форм нет — для неё используется общая форма (`CommonForm`).
 
 ## Примеры
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-add v1.25 — Add managed form to 1C config object (+write_xml_file/write_utf8_bom: общий эталон записи)
+# form-add v1.26 — Add managed form to 1C config object (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -323,7 +323,9 @@ def main():
     parser.add_argument("-ObjectPath", required=True)
     parser.add_argument("-FormName", required=True)
     parser.add_argument("-Synonym", default=None)
-    parser.add_argument("-Purpose", default="Object")
+    # Пусто = основная форма вида (primary в таблице): у справочника это форма объекта,
+    # у регистра сведений — форма записи, у журнала — форма списка.
+    parser.add_argument("-Purpose", default="")
     parser.add_argument("-SetDefault", action="store_true")
     args = ci_parse_args(parser)
 
@@ -415,12 +417,157 @@ def main():
     tree = etree.parse(object_xml_full, parser_xml)
     root = tree.getroot()
 
-    supported_types = [
-        "Document", "Catalog", "DataProcessor", "Report",
-        "ExternalDataProcessor", "ExternalReport",
-        "InformationRegister", "AccumulationRegister", "ChartOfAccounts", "ChartOfCharacteristicTypes",
-        "ExchangePlan", "BusinessProcess", "Task", "DocumentJournal",
-    ]
+    # --- Таблица видов: вид -> допустимые назначения ---
+    #
+    # Зеркало $formKinds из PS-порта. Одна запись на вид вместо разрозненных списков
+    # «поддерживаемые типы», «объектные типы», «обработко-подобные» и «карта типов реквизита»:
+    # раньше они расходились молча, и для DocumentJournal в форму уходило `cfg:.Журнал`.
+    #
+    # main_attr — тип главного реквизита, {0} = вид, {1} = имя объекта;
+    #   "DynamicList" — динамический список (добавляется Settings/MainTable);
+    #   None          — произвольная форма, блока Attributes нет вовсе.
+    # slot — свойство объекта под «основную форму»; None — такого свойства у вида нет.
+    # Эталон таблицы — docs/1c-form-spec.md, сверяется гардом check-form-purposes.mjs.
+
+    form_kinds = {
+        "Catalog": {
+            "Object": {"main_attr": "CatalogObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultObjectForm", "saved_data": True, "primary": True},
+            "Folder": {"main_attr": "CatalogObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultFolderForm", "saved_data": True},
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm"},
+            "Choice": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultChoiceForm"},
+            "FolderChoice": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultFolderChoiceForm"},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "ChartOfCharacteristicTypes": {
+            "Object": {"main_attr": "ChartOfCharacteristicTypesObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultObjectForm", "saved_data": True, "primary": True},
+            "Folder": {"main_attr": "ChartOfCharacteristicTypesObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultFolderForm", "saved_data": True},
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm"},
+            "Choice": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultChoiceForm"},
+            "FolderChoice": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultFolderChoiceForm"},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "Document": {
+            "Object": {"main_attr": "DocumentObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultObjectForm", "saved_data": True, "primary": True},
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm"},
+            "Choice": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultChoiceForm"},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "ChartOfAccounts": {
+            "Object": {"main_attr": "ChartOfAccountsObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultObjectForm", "saved_data": True, "primary": True},
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm"},
+            "Choice": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultChoiceForm"},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "ChartOfCalculationTypes": {
+            "Object": {"main_attr": "ChartOfCalculationTypesObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultObjectForm", "saved_data": True, "primary": True},
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm"},
+            "Choice": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultChoiceForm"},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "ExchangePlan": {
+            "Object": {"main_attr": "ExchangePlanObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultObjectForm", "saved_data": True, "primary": True},
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm"},
+            "Choice": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultChoiceForm"},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "BusinessProcess": {
+            "Object": {"main_attr": "BusinessProcessObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultObjectForm", "saved_data": True, "primary": True},
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm"},
+            "Choice": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultChoiceForm"},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "Task": {
+            "Object": {"main_attr": "TaskObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultObjectForm", "saved_data": True, "primary": True},
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm"},
+            "Choice": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultChoiceForm"},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "DataProcessor": {
+            "Object": {"main_attr": "DataProcessorObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultForm", "primary": True},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "Report": {
+            "Object": {"main_attr": "ReportObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultForm", "primary": True},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "ExternalDataProcessor": {
+            "Object": {"main_attr": "ExternalDataProcessorObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultForm", "primary": True},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "ExternalReport": {
+            "Object": {"main_attr": "ExternalReportObject.{1}", "attr_name": "Объект",
+                "slot": "DefaultForm", "primary": True},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "InformationRegister": {
+            "Record": {"main_attr": "InformationRegisterRecordManager.{1}", "attr_name": "Запись",
+                "slot": "DefaultRecordForm", "saved_data": True, "primary": True},
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm"},
+            "RecordSet": {"main_attr": "InformationRegisterRecordSet.{1}", "attr_name": "Набор",
+                "slot": None, "saved_data": True},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "AccumulationRegister": {
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm", "primary": True},
+            "RecordSet": {"main_attr": "AccumulationRegisterRecordSet.{1}", "attr_name": "Набор",
+                "slot": None, "saved_data": True},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "AccountingRegister": {
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm", "primary": True},
+            "RecordSet": {"main_attr": "AccountingRegisterRecordSet.{1}", "attr_name": "Набор",
+                "slot": None, "saved_data": True},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "CalculationRegister": {
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm", "primary": True},
+            "RecordSet": {"main_attr": "CalculationRegisterRecordSet.{1}", "attr_name": "Набор",
+                "slot": None, "saved_data": True},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "DocumentJournal": {
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultForm", "primary": True},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "FilterCriterion": {
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultForm", "primary": True},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "Enum": {
+            "List": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultListForm", "primary": True},
+            "Choice": {"main_attr": "DynamicList", "attr_name": "Список", "slot": "DefaultChoiceForm"},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+        "SettingsStorage": {
+            "Save": {"main_attr": None, "attr_name": None, "slot": "DefaultSaveForm", "primary": True},
+            "Load": {"main_attr": None, "attr_name": None, "slot": "DefaultLoadForm"},
+            "Custom": {"main_attr": None, "attr_name": None, "slot": None},
+        },
+    }
+
+    # Виды, у которых свойство DefaultForm есть, но собственных форм не бывает.
+    no_own_forms = {
+        "Constant": "у константы нет собственных форм — используйте общую форму (CommonForm)",
+    }
+
+    supported_types = list(form_kinds) + list(no_own_forms)
+
+    # Отдельный факт, не выводимый из таблицы назначений: у форм обработок и отчётов в
+    # метаданных формы есть <ExtendedPresentation>.
+    processor_like_types = ["DataProcessor", "Report", "ExternalDataProcessor", "ExternalReport"]
 
     object_type = None
     object_node = None
@@ -432,7 +579,12 @@ def main():
             break
 
     if object_type is None:
-        print(f"Не удалось определить тип объекта. Поддерживаемые типы: {', '.join(supported_types)}", file=sys.stderr)
+        print(f"Не удалось определить тип объекта. Поддерживаемые типы: {', '.join(sorted(form_kinds))}",
+              file=sys.stderr)
+        sys.exit(1)
+
+    if object_type in no_own_forms:
+        print(f"{object_type} не поддерживается: {no_own_forms[object_type]}", file=sys.stderr)
         sys.exit(1)
 
     # Object name from Properties/Name
@@ -449,32 +601,32 @@ def main():
 
     # --- Phase 2: Validate Purpose ---
 
-    # Normalize: capitalize first letter, lowercase rest
-    purpose = purpose[0].upper() + purpose[1:].lower()
-
-    valid_purposes = ["Object", "List", "Choice", "Record"]
-    if purpose not in valid_purposes:
-        print(f"Недопустимое назначение: {purpose}. Допустимые: Object, List, Choice, Record", file=sys.stderr)
+    # Назначение ищем в таблице регистронезависимо — как принимает PowerShell.
+    kind_purposes = form_kinds[object_type]
+    if not purpose:
+        for k, rule in kind_purposes.items():
+            if rule.get("primary"):
+                purpose = k
+                break
+    purpose_key = None
+    for k in kind_purposes:
+        if k.lower() == purpose.lower():
+            purpose_key = k
+            break
+    if purpose_key is None:
+        print(f"Назначение '{purpose}' недопустимо для {object_type}. "
+              f"Допустимые: {', '.join(sorted(kind_purposes))}", file=sys.stderr)
         sys.exit(1)
+    purpose = purpose_key
+    purpose_rule = kind_purposes[purpose]
 
-    object_like_types = ["Document", "Catalog", "ChartOfAccounts", "ChartOfCharacteristicTypes",
-                         "ExchangePlan", "BusinessProcess", "Task"]
-    processor_like_types = ["DataProcessor", "Report", "ExternalDataProcessor", "ExternalReport"]
-
-    if purpose == "List":
-        if object_type == "DataProcessor":
-            print("Purpose=List недопустим для DataProcessor", file=sys.stderr)
-            sys.exit(1)
-
-    elif purpose == "Choice":
-        if object_type in processor_like_types or object_type == "InformationRegister":
-            print(f"Purpose=Choice недопустим для {object_type}", file=sys.stderr)
-            sys.exit(1)
-
-    elif purpose == "Record":
-        if object_type != "InformationRegister":
-            print("Purpose=Record допустим только для InformationRegister", file=sys.stderr)
-            sys.exit(1)
+    # Гард от повторения дефекта: запись таблицы обязана быть заполненной. Пустой main_attr —
+    # это произвольная форма (законное состояние), а наполовину заполненная запись означала бы,
+    # что таблицу правили невнимательно, и в XML уйдёт мусор вроде `cfg:.Журнал`.
+    if purpose_rule.get("main_attr") and not purpose_rule.get("attr_name"):
+        print(f"Внутренняя ошибка таблицы видов: у {object_type}/{purpose} задан main_attr без attr_name",
+              file=sys.stderr)
+        sys.exit(1)
 
     # --- Phase 3: Create files ---
 
@@ -531,100 +683,47 @@ def main():
 
     form_xml_path = os.path.join(form_ext_dir, "Form.xml")
 
-    if purpose in ("List", "Choice"):
-        # Dynamic list
-        main_table = f"{object_type}.{object_name}"
+    # Одна ветка вместо трёх: что писать, решает запись таблицы видов. Раньше тип главного
+    # реквизита брался из отдельной карты, и отсутствие вида в ней давало `cfg:.Имя` — молча.
+    attributes_block = ''
+    if purpose_rule.get("main_attr"):
+        main_attr_type = purpose_rule["main_attr"].format(object_type, object_name)
+        main_attr_name = purpose_rule["attr_name"]
 
-        form_xml = (
-            f'<?xml version="1.0" encoding="UTF-8"?>\n'
-            f'<Form {form_ns_decl} version="{format_version}">\n'
-            '\t<AutoCommandBar name="\u0424\u043e\u0440\u043c\u0430\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f\u041f\u0430\u043d\u0435\u043b\u044c" id="-1">\n'
-            '\t\t<Autofill>true</Autofill>\n'
-            '\t</AutoCommandBar>\n'
-            '\t<ChildItems/>\n'
-            '\t<Attributes>\n'
-            '\t\t<Attribute name="\u0421\u043f\u0438\u0441\u043e\u043a" id="1">\n'
-            '\t\t\t<Type>\n'
-            '\t\t\t\t<v8:Type>cfg:DynamicList</v8:Type>\n'
-            '\t\t\t</Type>\n'
-            '\t\t\t<MainAttribute>true</MainAttribute>\n'
-            '\t\t\t<Settings xsi:type="DynamicList">\n'
-            f'\t\t\t\t<MainTable>{main_table}</MainTable>\n'
-            '\t\t\t</Settings>\n'
-            '\t\t</Attribute>\n'
-            '\t</Attributes>\n'
-            '</Form>'
-        )
+        # Динамический список несёт MainTable, остальные типы — SavedData по записи таблицы.
+        tail_lines = ''
+        if main_attr_type == "DynamicList":
+            main_table = f"{object_type}.{object_name}"
+            tail_lines = ('\t\t\t<Settings xsi:type="DynamicList">\n'
+                          f'\t\t\t\t<MainTable>{main_table}</MainTable>\n'
+                          '\t\t\t</Settings>\n')
+        elif purpose_rule.get("saved_data"):
+            tail_lines = '\t\t\t<SavedData>true</SavedData>\n'
 
-    elif purpose == "Record":
-        # Information register record
-        main_attr_name = "\u0417\u0430\u043f\u0438\u0441\u044c"
-        main_attr_type = f"InformationRegisterRecordManager.{object_name}"
-
-        form_xml = (
-            f'<?xml version="1.0" encoding="UTF-8"?>\n'
-            f'<Form {form_ns_decl} version="{format_version}">\n'
-            '\t<AutoCommandBar name="\u0424\u043e\u0440\u043c\u0430\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f\u041f\u0430\u043d\u0435\u043b\u044c" id="-1">\n'
-            '\t\t<Autofill>true</Autofill>\n'
-            '\t</AutoCommandBar>\n'
-            '\t<ChildItems/>\n'
+        attributes_block = (
             '\t<Attributes>\n'
             f'\t\t<Attribute name="{main_attr_name}" id="1">\n'
             '\t\t\t<Type>\n'
             f'\t\t\t\t<v8:Type>cfg:{main_attr_type}</v8:Type>\n'
             '\t\t\t</Type>\n'
             '\t\t\t<MainAttribute>true</MainAttribute>\n'
-            '\t\t\t<SavedData>true</SavedData>\n'
+            f'{tail_lines}'
             '\t\t</Attribute>\n'
             '\t</Attributes>\n'
-            '</Form>'
         )
 
-    else:
-        # Object — object form
-        main_attr_name = "\u041e\u0431\u044a\u0435\u043a\u0442"
-
-        attr_type_map = {
-            "Document": "DocumentObject",
-            "Catalog": "CatalogObject",
-            "DataProcessor": "DataProcessorObject",
-            "Report": "ReportObject",
-            "ExternalDataProcessor": "ExternalDataProcessorObject",
-            "ExternalReport": "ExternalReportObject",
-            "ChartOfAccounts": "ChartOfAccountsObject",
-            "ChartOfCharacteristicTypes": "ChartOfCharacteristicTypesObject",
-            "ExchangePlan": "ExchangePlanObject",
-            "BusinessProcess": "BusinessProcessObject",
-            "Task": "TaskObject",
-            "InformationRegister": "InformationRegisterRecordManager",
-            "AccumulationRegister": "AccumulationRegisterRecordSet",
-        }
-
-        main_attr_type = f"{attr_type_map[object_type]}.{object_name}"
-
-        # SavedData: standard for Catalog/Document/etc, but not for processor-like (DataProcessor/Report/External*)
-        saved_data_line = ''
-        if object_type not in processor_like_types:
-            saved_data_line = '\t\t\t<SavedData>true</SavedData>\n'
-
-        form_xml = (
-            f'<?xml version="1.0" encoding="UTF-8"?>\n'
-            f'<Form {form_ns_decl} version="{format_version}">\n'
-            '\t<AutoCommandBar name="\u0424\u043e\u0440\u043c\u0430\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f\u041f\u0430\u043d\u0435\u043b\u044c" id="-1">\n'
-            '\t\t<Autofill>true</Autofill>\n'
-            '\t</AutoCommandBar>\n'
-            '\t<ChildItems/>\n'
-            '\t<Attributes>\n'
-            f'\t\t<Attribute name="{main_attr_name}" id="1">\n'
-            '\t\t\t<Type>\n'
-            f'\t\t\t\t<v8:Type>cfg:{main_attr_type}</v8:Type>\n'
-            '\t\t\t</Type>\n'
-            '\t\t\t<MainAttribute>true</MainAttribute>\n'
-            f'{saved_data_line}'
-            '\t\t</Attribute>\n'
-            '\t</Attributes>\n'
-            '</Form>'
-        )
+    # Произвольная форма (main_attr=None) — без блока Attributes вовсе. В типовых это самая
+    # частая форма после объектной: 907 у справочников, 941 у документов, 3482 у отчётов.
+    form_xml = (
+        f'<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<Form {form_ns_decl} version="{format_version}">\n'
+        '\t<AutoCommandBar name="\u0424\u043e\u0440\u043c\u0430\u041a\u043e\u043c\u0430\u043d\u0434\u043d\u0430\u044f\u041f\u0430\u043d\u0435\u043b\u044c" id="-1">\n'
+        '\t\t<Autofill>true</Autofill>\n'
+        '\t</AutoCommandBar>\n'
+        '\t<ChildItems/>\n'
+        f'{attributes_block}'
+        '</Form>'
+    )
 
     if os.path.exists(form_xml_path):
         print(f"[SKIP] Form.xml already exists: {form_xml_path} — not overwriting")
@@ -721,26 +820,18 @@ def main():
     # --- SetDefault ---
 
     is_first_form_for_purpose = False
-    default_prop_name = None
     default_value = f"{object_type}.{object_name}.Form.{form_name}"
 
-    # Determine property name for DefaultForm
-    if purpose == "Object":
-        if object_type in processor_like_types:
-            default_prop_name = "DefaultForm"
-        else:
-            default_prop_name = "DefaultObjectForm"
-    elif purpose == "List":
-        default_prop_name = "DefaultListForm"
-    elif purpose == "Choice":
-        default_prop_name = "DefaultChoiceForm"
-    elif purpose == "Record":
-        default_prop_name = "DefaultRecordForm"
+    # Свойство «основная форма» — из записи таблицы. Раньше выбиралось по одному purpose без
+    # учёта вида, и для журнала писалось DefaultListForm, которого у журнала нет: слот не
+    # находился, навык молча ничего не делал.
+    default_prop_name = purpose_rule.get("slot")
 
-    # Check if value is already set
-    default_node = root.find(f".//md:{object_type}/md:Properties/md:{default_prop_name}", NSMAP)
-    if default_node is not None:
-        is_first_form_for_purpose = default_node.text is None or default_node.text.strip() == ""
+    default_node = None
+    if default_prop_name:
+        default_node = root.find(f".//md:{object_type}/md:Properties/md:{default_prop_name}", NSMAP)
+        if default_node is not None:
+            is_first_form_for_purpose = not (default_node.text or "").strip()
 
     default_updated = False
     if set_default or is_first_form_for_purpose:
@@ -767,6 +858,10 @@ def main():
         print(f"Registered: <Form>{form_name}</Form> in ChildObjects")
     if default_updated:
         print(f"{default_prop_name}: {default_value}")
+    elif not default_prop_name:
+        # Молчать здесь нельзя: пользователь ждёт, что форма станет основной, а свойства под неё
+        # у платформы нет (форма набора записей, произвольная форма).
+        print(f"Основной не назначена: у {object_type} нет свойства для формы с назначением {purpose}")
     print()
 
 
