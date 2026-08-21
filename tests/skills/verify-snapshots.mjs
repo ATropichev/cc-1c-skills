@@ -633,6 +633,16 @@ function runPreSteps(preRun, workDir, runtime, log) {
       log(`preRun: writeFile ${step.writeFile.path}`, true);
       continue;
     }
+    // deletePath step — как в runner.mjs: состояние «файла нет» выражается удалением.
+    // Без этой ветки шаг проваливался в запуск скрипта и падал на step.script.split.
+    if (step.deletePath) {
+      rmSync(join(workDir, step.deletePath), { recursive: true, force: true });
+      log(`preRun: deletePath ${step.deletePath}`, true);
+      continue;
+    }
+    if (!step.script) {
+      throw new Error(`preRun: шаг без script/writeFile/deletePath — ${JSON.stringify(step).slice(0, 120)}`);
+    }
     const preArgs = [];
     for (const [flag, value] of Object.entries(step.args || {})) {
       preArgs.push(flag);
