@@ -1,0 +1,41 @@
+{
+  "name": "Регистр сведений: форма записи (умолчание вида) и форма набора записей",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "InformationRegister",
+        "name": "ЦеныТест",
+        "dimensions": [
+          "Товар: String(50)"
+        ],
+        "resources": [
+          "Цена: Number(15,2)"
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/InformationRegisters/ЦеныТест.xml",
+        "-FormName": "ФормаЗаписи"
+      }
+    }
+  ],
+  "params": {
+    "objectPath": "InformationRegisters/ЦеныТест.xml",
+    "formName": "ФормаНабора"
+  },
+  "args_extra": [
+    "-Purpose",
+    "RecordSet"
+  ],
+  "validatePath": "InformationRegisters/ЦеныТест/Forms/ФормаНабора",
+  "expect": {
+    "stdoutContains": "Основной не назначена"
+  }
+}

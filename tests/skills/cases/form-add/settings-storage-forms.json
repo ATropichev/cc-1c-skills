@@ -1,0 +1,36 @@
+{
+  "name": "Хранилище настроек: формы сохранения и загрузки",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "SettingsStorage",
+        "name": "ХранилищеТест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/SettingsStorages/ХранилищеТест.xml",
+        "-FormName": "ФормаСохранения",
+        "-Purpose": "Save"
+      }
+    }
+  ],
+  "params": {
+    "objectPath": "SettingsStorages/ХранилищеТест.xml",
+    "formName": "ФормаЗагрузки"
+  },
+  "args_extra": [
+    "-Purpose",
+    "Load"
+  ],
+  "validatePath": "SettingsStorages/ХранилищеТест/Forms/ФормаЗагрузки",
+  "expect": {
+    "stdoutContains": "DefaultLoadForm: SettingsStorage.ХранилищеТест.Form.ФормаЗагрузки"
+  }
+}

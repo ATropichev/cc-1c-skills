@@ -73,15 +73,16 @@ function parseSkillTable(text, port) {
     ? /^	"(\w+)" = @\{\n([\s\S]*?)^	\}/gm
     : /^        "(\w+)": \{\n([\s\S]*?)^        \},/gm;
   const ruleRe = isPs
-    ? /"(\w+)"\s*=\s*@\{ MainAttr = (\$null|"[^"]*"); AttrName = (?:\$null|"[^"]*"); Slot = (\$null|"[^"]*")/g
-    : /"(\w+)": \{"main_attr": (None|"[^"]*"), "attr_name": (?:None|"[^"]*"),\s*"slot": (None|"[^"]*")/g;
+    ? /"(\w+)"\s*=\s*@\{ MainAttr = (\$null|"[^"]*"); AttrName = (?:\$null|"[^"]*"); Slot = (\$null|"[^"]*")([^}]*)/g
+    : /"(\w+)": \{"main_attr": (None|"[^"]*"), "attr_name": (?:None|"[^"]*"),\s*"slot": (None|"[^"]*")([^}]*)/g;
 
   for (const km of tm[1].matchAll(kindRe)) {
     const rules = new Map();
     ruleRe.lastIndex = 0;
     for (const rm of km[2].matchAll(ruleRe)) {
       const unq = (v) => (v === '$null' || v === 'None') ? null : v.slice(1, -1);
-      rules.set(rm[1], { mainAttr: unq(rm[2]), slot: unq(rm[3]) });
+      const primary = /Primary = \$true|"primary": True/.test(rm[4] || '');
+      rules.set(rm[1], { mainAttr: unq(rm[2]), slot: unq(rm[3]), primary });
     }
     if (rules.size === 0) errors.push(`${port}: у вида ${km[1]} не разобрано ни одного назначения`);
     table.set(km[1], rules);
@@ -125,7 +126,16 @@ for (const [kind, rules] of psTable) {
   }
 }
 
-// 3. Паритет портов.
+// 3. Основная форма вида: ровно одна на вид. Ею пользуется умолчание -Purpose; ноль пометок
+// оставит навык с пустым назначением, две — сделают умолчание зависимым от порядка ключей.
+for (const [kind, rules] of psTable) {
+  const primaries = [...rules.entries()].filter(([, r]) => r.primary).map(([p]) => p);
+  if (primaries.length !== 1) {
+    errors.push(`form-add: у ${kind} пометок Primary ${primaries.length} (${primaries.join(', ') || 'нет'}), нужна ровно одна`);
+  }
+}
+
+// 4. Паритет портов.
 for (const kind of new Set([...psTable.keys(), ...pyTable.keys()])) {
   const a = psTable.get(kind);
   const b = pyTable.get(kind);
@@ -141,6 +151,9 @@ for (const kind of new Set([...psTable.keys(), ...pyTable.keys()])) {
     const norm = (v) => (v || '').replace(/\{0\}|\{1\}/g, '');
     if (norm(ra.mainAttr) !== norm(rb.mainAttr)) {
       errors.push(`паритет: ${kind}/${p} главный реквизит PS=${ra.mainAttr} PY=${rb.mainAttr}`);
+    }
+    if (ra.primary !== rb.primary) {
+      errors.push(`паритет: ${kind}/${p} пометка Primary PS=${ra.primary} PY=${rb.primary}`);
     }
   }
 }

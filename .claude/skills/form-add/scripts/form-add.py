@@ -569,14 +569,21 @@ def main():
     # метаданных формы есть <ExtendedPresentation>.
     processor_like_types = ["DataProcessor", "Report", "ExternalDataProcessor", "ExternalReport"]
 
+    # Вид объекта — первый элемент-потомок MetaDataObject, а не первое совпавшее по всему
+    # документу имя. Поиск по документу зависел от порядка перебора видов: у бизнес-процесса
+    # есть свойство <Task>, и он определялся как задача, после чего имя объекта не находилось.
     object_type = None
     object_node = None
-    for t in supported_types:
-        node = root.find(f".//md:{t}", NSMAP)
-        if node is not None:
-            object_type = t
-            object_node = node
+    for child in root:
+        if isinstance(child.tag, str):
+            object_type = etree.QName(child).localname
+            object_node = child
             break
+
+    if object_type is not None and object_type not in form_kinds and object_type not in no_own_forms:
+        print(f"Тип объекта '{object_type}' не поддерживается. "
+              f"Поддерживаемые типы: {', '.join(sorted(form_kinds))}", file=sys.stderr)
+        sys.exit(1)
 
     if object_type is None:
         print(f"Не удалось определить тип объекта. Поддерживаемые типы: {', '.join(sorted(form_kinds))}",

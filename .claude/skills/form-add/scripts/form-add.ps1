@@ -379,15 +379,22 @@ $supportedTypes = @($formKinds.Keys) + @($noOwnForms.Keys)
 # формы есть <ExtendedPresentation>.
 $processorLikeTypes = @("DataProcessor", "Report", "ExternalDataProcessor", "ExternalReport")
 
+# Вид объекта — первый элемент-потомок MetaDataObject, а не первое совпавшее по всему документу
+# имя. Поиск по документу зависел от порядка перебора видов: у бизнес-процесса есть свойство
+# <Task>, и он определялся как задача, после чего имя объекта не находилось вовсе.
 $objectType = $null
 $objectNode = $null
-foreach ($t in $supportedTypes) {
-	$node = $xmlDoc.SelectSingleNode("//md:$t", $nsMgr)
-	if ($node) {
-		$objectType = $t
-		$objectNode = $node
+foreach ($child in $metaDataObject.ChildNodes) {
+	if ($child.NodeType -eq [System.Xml.XmlNodeType]::Element) {
+		$objectType = $child.LocalName
+		$objectNode = $child
 		break
 	}
+}
+
+if ($objectType -and -not ($formKinds.ContainsKey($objectType) -or $noOwnForms.ContainsKey($objectType))) {
+	Write-Error "Тип объекта '$objectType' не поддерживается. Поддерживаемые типы: $(($formKinds.Keys | Sort-Object) -join ', ')"
+	exit 1
 }
 
 if (-not $objectType) {

@@ -1,0 +1,47 @@
+{
+  "name": "Справочник: форма группы, форма выбора группы и произвольная форма",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Catalog",
+        "name": "ТоварыТест",
+        "properties": {
+          "Hierarchical": true
+        }
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Catalogs/ТоварыТест.xml",
+        "-FormName": "ФормаГруппы",
+        "-Purpose": "Folder"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Catalogs/ТоварыТест.xml",
+        "-FormName": "ФормаВыбораГруппы",
+        "-Purpose": "FolderChoice"
+      }
+    }
+  ],
+  "params": {
+    "objectPath": "Catalogs/ТоварыТест.xml",
+    "formName": "ПроизвольнаяФорма"
+  },
+  "args_extra": [
+    "-Purpose",
+    "Custom"
+  ],
+  "validatePath": "Catalogs/ТоварыТест/Forms/ПроизвольнаяФорма",
+  "expect": {
+    "stdoutContains": "Основной не назначена"
+  }
+}
