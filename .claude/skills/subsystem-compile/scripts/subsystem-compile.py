@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-compile v1.26 — Create 1C subsystem from JSON definition
+# subsystem-compile v1.27 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -13,6 +13,29 @@ from lxml import etree
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
+
+def parse_json_input(text, source, expected=None):
+    """Разбор пользовательского JSON: одна строка в stderr вместо traceback (issue #80).
+
+    expected заполняем только для полиморфного входа: у файла подсказка
+    была бы наполнителем — имя файла и текст парсера самодостаточны.
+
+    Импорты внутри тела: копия функции живёт в навыках с разными именами модулей
+    (skd-decompile импортирует json локально как _json), а тело обязано быть одинаковым.
+    """
+    import json as _pj
+    import sys as _psys
+    try:
+        return _pj.loads(text)
+    except ValueError as exc:
+        what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
+        got = " ".join(str(text).split())
+        if len(got) > 60:
+            got = got[:60] + "..."
+        print("[ERROR] %s, got: %s (%s)" % (what, got, exc), file=_psys.stderr)
+        _psys.exit(1)
+
+
 class CIDict(dict):
     # Ключи храним КАК ЕСТЬ: часть из них — имена объектов (табличные части, стандартные
     # реквизиты), они попадают в XML. Регистронезависим только поиск. Порядок вставки
@@ -470,10 +493,12 @@ def main():
             sys.exit(1)
         with open(def_file, 'r', encoding='utf-8-sig') as f:
             json_text = f.read()
+        json_source = def_file
     else:
         json_text = args.Value
+        json_source = "-Value"
 
-    defn = ci_json(json.loads(json_text))
+    defn = ci_json(parse_json_input(json_text, json_source))
 
     if not defn.get('name'):
         print("JSON must have 'name' field", file=sys.stderr)

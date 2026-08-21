@@ -799,7 +799,12 @@ async function runCaseAsync(testCase, opts) {
     }
 
     // Write input
-    if (caseData.input !== undefined) {
+    // inputRaw пишется дословно: негативный кейс про битый JSON через case.input невыразим —
+    // JSON.stringify всегда даёт валидный документ.
+    if (caseData.inputRaw !== undefined) {
+      inputFile = join(workDir, '__input.json');
+      writeFileSync(inputFile, caseData.inputRaw, 'utf8');
+    } else if (caseData.input !== undefined) {
       inputFile = join(workDir, '__input.json');
       writeFileSync(inputFile, JSON.stringify(caseData.input, null, 2), 'utf8');
     }
@@ -1020,8 +1025,11 @@ function runCase(testCase, opts) {
       }
     }
 
-    // 3. Write input JSON if needed
-    if (caseData.input !== undefined) {
+    // 3. Write input JSON if needed (inputRaw — дословно, см. выше)
+    if (caseData.inputRaw !== undefined) {
+      inputFile = join(workDir, '__input.json');
+      writeFileSync(inputFile, caseData.inputRaw, 'utf8');
+    } else if (caseData.input !== undefined) {
       inputFile = join(workDir, '__input.json');
       writeFileSync(inputFile, JSON.stringify(caseData.input, null, 2), 'utf8');
     }

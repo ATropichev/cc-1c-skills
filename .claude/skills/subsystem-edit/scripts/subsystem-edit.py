@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-edit v1.21 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+# subsystem-edit v1.22 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -13,6 +13,29 @@ from lxml import etree
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
+
+def parse_json_input(text, source, expected=None):
+    """Разбор пользовательского JSON: одна строка в stderr вместо traceback (issue #80).
+
+    expected заполняем только для полиморфного входа: у файла подсказка
+    была бы наполнителем — имя файла и текст парсера самодостаточны.
+
+    Импорты внутри тела: копия функции живёт в навыках с разными именами модулей
+    (skd-decompile импортирует json локально как _json), а тело обязано быть одинаковым.
+    """
+    import json as _pj
+    import sys as _psys
+    try:
+        return _pj.loads(text)
+    except ValueError as exc:
+        what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
+        got = " ".join(str(text).split())
+        if len(got) > 60:
+            got = got[:60] + "..."
+        print("[ERROR] %s, got: %s (%s)" % (what, got, exc), file=_psys.stderr)
+        _psys.exit(1)
+
+
 class CIDict(dict):
     # Ключи храним КАК ЕСТЬ: часть из них — имена объектов (табличные части, стандартные
     # реквизиты), они попадают в XML. Регистронезависим только поиск. Порядок вставки
@@ -515,11 +538,11 @@ def import_fragment(xml_string, doc_root):
     return nodes
 
 
-def parse_value_list(val):
+def parse_value_list(val, op_name):
     """Parse a string or JSON array into a list of strings."""
     val = val.strip()
     if val.startswith("["):
-        arr = ci_json(json.loads(val))
+        arr = ci_json(parse_json_input(val, "-Value for operation '%s'" % op_name, "a JSON array of object names"))
         return [str(item) for item in arr]
     return [val]
 
@@ -777,7 +800,8 @@ def main():
 
     def do_set_property(json_val):
         nonlocal modify_count
-        prop_def = ci_json(json.loads(json_val))
+        prop_def = ci_json(parse_json_input(
+            json_val, "-Value for operation 'set-property'", "a JSON object {name, value}"))
         prop_name = str(prop_def["name"])
         prop_value = str(prop_def.get("value", ""))
 
@@ -874,7 +898,7 @@ def main():
         if not os.path.isabs(def_file):
             def_file = os.path.join(os.getcwd(), def_file)
         with open(def_file, "r", encoding="utf-8-sig") as fh:
-            ops = ci_json(json.loads(fh.read()))
+            ops = ci_json(parse_json_input(fh.read(), def_file))
         if isinstance(ops, list):
             operations = ops
         else:
@@ -889,9 +913,9 @@ def main():
         op_value = op.get("value", args.Value or "")
 
         if op_key == "add-content":
-            do_add_content(parse_value_list(op_value))
+            do_add_content(parse_value_list(op_value, op_name))
         elif op_key == "remove-content":
-            do_remove_content(parse_value_list(op_value))
+            do_remove_content(parse_value_list(op_value, op_name))
         elif op_key == "add-child":
             do_add_child(op_value)
         elif op_key == "remove-child":

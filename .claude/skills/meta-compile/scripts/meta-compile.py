@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.95 — Compile 1C metadata object from JSON
+# meta-compile v1.96 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -22,6 +22,29 @@ sys.stderr.reconfigure(encoding="utf-8")
 # -eq/-contains, имена параметров, ValidateSet. В Python совпадение точное, поэтому порт
 # молча терял свойства DSL, написанные в другом регистре. Обёртки ниже выравнивают поведение.
 # ============================================================
+
+
+def parse_json_input(text, source, expected=None):
+    """Разбор пользовательского JSON: одна строка в stderr вместо traceback (issue #80).
+
+    expected заполняем только для полиморфного входа: у файла подсказка
+    была бы наполнителем — имя файла и текст парсера самодостаточны.
+
+    Импорты внутри тела: копия функции живёт в навыках с разными именами модулей
+    (skd-decompile импортирует json локально как _json), а тело обязано быть одинаковым.
+    """
+    import json as _pj
+    import sys as _psys
+    try:
+        return _pj.loads(text)
+    except ValueError as exc:
+        what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
+        got = " ".join(str(text).split())
+        if len(got) > 60:
+            got = got[:60] + "..."
+        print("[ERROR] %s, got: %s (%s)" % (what, got, exc), file=_psys.stderr)
+        _psys.exit(1)
+
 
 class CIDict(dict):
     # Ключи храним КАК ЕСТЬ: часть из них — имена объектов (табличные части, стандартные
@@ -377,7 +400,7 @@ if not os.path.isfile(json_path):
 with open(json_path, 'r', encoding='utf-8-sig') as f:
     json_text = f.read()
 
-defn = ci_json(json.loads(json_text))
+defn = ci_json(parse_json_input(json_text, json_path))
 
 assert_edit_allowed(output_dir, "editable")
 

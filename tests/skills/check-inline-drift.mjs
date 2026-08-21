@@ -394,6 +394,19 @@ const FAMILIES = [
     ],
   },
 
+  // ─── Разбор пользовательского JSON ─────────────────────────────────────
+  // Сообщение об ошибке разбора одинаково во всех навыках (issue #80): стектрейс парсера
+  // агент читает как «скрипт сломан» и идёт чинить не то место. Вся специфика навыка —
+  // в аргументах source/expected на месте вызова, тело функции общее.
+  {
+    name: 'parse_json_input', py: 'parse_json_input', ps1: 'ConvertFrom-JsonInput',
+    variants: [
+      { id: 'base', authority: 'interface-edit',
+        consumers: ['cf-edit', 'form-compile', 'form-edit', 'meta-compile', 'meta-edit', 'mxl-compile',
+          'role-compile', 'skd-compile', 'skd-decompile', 'subsystem-compile', 'subsystem-edit'] },
+    ],
+  },
+
 ];
 
 // ─── Семьи, разъехавшиеся целиком ───────────────────────────────────────────

@@ -1,4 +1,4 @@
-﻿# form-compile v1.192 — Compile 1C managed form from JSON or object metadata (гвард на группу additionalColumns без ключа columns)
+﻿# form-compile v1.193 — Compile 1C managed form from JSON or object metadata (гвард на группу additionalColumns без ключа columns)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$JsonPath,
@@ -14,6 +14,25 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# --- Разбор пользовательского JSON ---
+# Одна строка в stderr вместо дампа исключения ConvertFrom-Json (issue #80): агент по стектрейсу
+# идёт чинить скрипт, а не свой вызов. $source — файл или параметр. $expected заполняем только
+# для полиморфного входа: у файла подсказка была бы наполнителем.
+# Возврат через -NoEnumerate: без него одноэлементный
+# JSON-массив разворачивался бы в скаляр вторым анруллингом.
+function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected) {
+	try {
+		$parsed = $text | ConvertFrom-Json
+	} catch {
+		$what = if ($expected) { "$source expects $expected" } else { "Invalid JSON in $source" }
+		$got = ($text -replace '\s+', ' ').Trim()
+		if ($got.Length -gt 60) { $got = $got.Substring(0, 60) + '...' }
+		[Console]::Error.WriteLine("[ERROR] ${what}, got: ${got} ($($_.Exception.Message))")
+		exit 1
+	}
+	Write-Output -NoEnumerate $parsed
+}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -300,7 +319,7 @@ function Load-Preset([string]$PresetName, [string]$ScriptDir) {
 	$presetDir = Join-Path (Split-Path $ScriptDir -Parent) "presets"
 	$builtInPath = Join-Path $presetDir "$PresetName.json"
 	if (Test-Path $builtInPath) {
-		$presetJson = Get-Content -Raw -Encoding UTF8 $builtInPath | ConvertFrom-Json
+		$presetJson = ConvertFrom-JsonInput (Get-Content -Raw -Encoding UTF8 $builtInPath) $builtInPath
 		# Convert PSCustomObject to hashtable recursively
 		$toHash = {
 			param($obj)
@@ -327,7 +346,7 @@ function Load-Preset([string]$PresetName, [string]$ScriptDir) {
 	while ($scanDir) {
 		$projPreset = Join-Path (Join-Path (Join-Path (Join-Path $scanDir "presets") "skills") "form") "$PresetName.json"
 		if (Test-Path $projPreset) {
-			$projJson = Get-Content -Raw -Encoding UTF8 $projPreset | ConvertFrom-Json
+			$projJson = ConvertFrom-JsonInput (Get-Content -Raw -Encoding UTF8 $projPreset) $projPreset
 			$projHash = & $toHash $projJson
 			foreach ($k in @($projHash.Keys)) {
 				$defaults[$k] = & $deepMerge $defaults[$k] $projHash[$k]
@@ -1656,7 +1675,7 @@ if ($FromObject) {
 	}
 
 	$json = Get-Content -Raw -Encoding UTF8 $JsonPath
-	$def = $json | ConvertFrom-Json
+	$def = ConvertFrom-JsonInput $json $JsonPath
 }
 
 # Базовая директория для @file-ссылок в query динсписка (зеркало skd-compile)

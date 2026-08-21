@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# interface-edit v1.18 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
+# interface-edit v1.19 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -348,10 +348,32 @@ def import_ci_fragment(xml_string):
     return nodes
 
 
-def parse_value_list(val):
+def parse_json_input(text, source, expected=None):
+    """Разбор пользовательского JSON: одна строка в stderr вместо traceback (issue #80).
+
+    expected заполняем только для полиморфного входа: у файла подсказка
+    была бы наполнителем — имя файла и текст парсера самодостаточны.
+
+    Импорты внутри тела: копия функции живёт в навыках с разными именами модулей
+    (skd-decompile импортирует json локально как _json), а тело обязано быть одинаковым.
+    """
+    import json as _pj
+    import sys as _psys
+    try:
+        return _pj.loads(text)
+    except ValueError as exc:
+        what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
+        got = " ".join(str(text).split())
+        if len(got) > 60:
+            got = got[:60] + "..."
+        print("[ERROR] %s, got: %s (%s)" % (what, got, exc), file=_psys.stderr)
+        _psys.exit(1)
+
+
+def parse_value_list(val, op_name):
     val = val.strip()
     if val.startswith("["):
-        arr = ci_json(json.loads(val))
+        arr = ci_json(parse_json_input(val, "-Value for operation '%s'" % op_name, "a JSON array of command names"))
         return [str(item) for item in arr]
     return [val]
 
@@ -647,7 +669,8 @@ def main():
 
     def do_place(json_val):
         nonlocal add_count, modify_count
-        defn = ci_json(json_val if isinstance(json_val, dict) else json.loads(json_val))
+        defn = ci_json(json_val if isinstance(json_val, dict) else parse_json_input(
+            json_val, "-Value for operation 'place'", "a JSON object {command, group}"))
         cmd_name = normalize_cmd_name(str(defn["command"]))
         group_name = str(defn["group"])
         if not cmd_name or not group_name:
@@ -675,7 +698,8 @@ def main():
 
     def do_order(json_val):
         nonlocal add_count, remove_count
-        defn = ci_json(json_val if isinstance(json_val, dict) else json.loads(json_val))
+        defn = ci_json(json_val if isinstance(json_val, dict) else parse_json_input(
+            json_val, "-Value for operation 'order'", "a JSON object {group, commands:[...]}"))
         group_name = str(defn["group"])
         commands = [normalize_cmd_name(str(c)) for c in defn["commands"]]
         if not group_name or not commands:
@@ -709,7 +733,8 @@ def main():
 
     def do_subsystem_order(json_val):
         nonlocal add_count, remove_count
-        parsed = ci_json(json_val if isinstance(json_val, list) else json.loads(json_val))
+        parsed = ci_json(json_val if isinstance(json_val, list) else parse_json_input(
+            json_val, "-Value for operation 'subsystem-order'", "a JSON array of subsystem paths"))
         subsystems = [str(s) for s in parsed]
         if not subsystems:
             print("subsystem-order requires array of subsystem paths", file=sys.stderr)
@@ -734,7 +759,8 @@ def main():
 
     def do_group_order(json_val):
         nonlocal add_count, remove_count
-        parsed = ci_json(json_val if isinstance(json_val, list) else json.loads(json_val))
+        parsed = ci_json(json_val if isinstance(json_val, list) else parse_json_input(
+            json_val, "-Value for operation 'group-order'", "a JSON array of group names"))
         groups = [str(g) for g in parsed]
         if not groups:
             print("group-order requires array of group names", file=sys.stderr)
@@ -764,7 +790,7 @@ def main():
         if not os.path.isabs(def_file):
             def_file = os.path.join(os.getcwd(), def_file)
         with open(def_file, "r", encoding="utf-8-sig") as fh:
-            ops = ci_json(json.loads(fh.read()))
+            ops = ci_json(parse_json_input(fh.read(), def_file))
         if isinstance(ops, list):
             operations = ops
         else:
@@ -779,9 +805,9 @@ def main():
         op_value = op.get("value", args.Value or "")
 
         if op_key == "hide":
-            do_hide(parse_value_list(op_value))
+            do_hide(parse_value_list(op_value, op_name))
         elif op_key == "show":
-            do_show(parse_value_list(op_value))
+            do_show(parse_value_list(op_value, op_name))
         elif op_key == "place":
             do_place(op_value)
         elif op_key == "order":

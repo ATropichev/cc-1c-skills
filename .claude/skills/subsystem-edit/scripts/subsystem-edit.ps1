@@ -1,4 +1,4 @@
-﻿# subsystem-edit v1.21 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+﻿# subsystem-edit v1.22 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$SubsystemPath,
@@ -10,6 +10,25 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# --- Разбор пользовательского JSON ---
+# Одна строка в stderr вместо дампа исключения ConvertFrom-Json (issue #80): агент по стектрейсу
+# идёт чинить скрипт, а не свой вызов. $source — файл или параметр. $expected заполняем только
+# для полиморфного входа: у файла подсказка была бы наполнителем.
+# Возврат через -NoEnumerate: без него одноэлементный
+# JSON-массив разворачивался бы в скаляр вторым анруллингом.
+function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected) {
+	try {
+		$parsed = $text | ConvertFrom-Json
+	} catch {
+		$what = if ($expected) { "$source expects $expected" } else { "Invalid JSON in $source" }
+		$got = ($text -replace '\s+', ' ').Trim()
+		if ($got.Length -gt 60) { $got = $got.Substring(0, 60) + '...' }
+		[Console]::Error.WriteLine("[ERROR] ${what}, got: ${got} ($($_.Exception.Message))")
+		exit 1
+	}
+	Write-Output -NoEnumerate $parsed
+}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # --- Content type normalization (plural→singular, Russian→English) ---
@@ -429,10 +448,10 @@ function Expand-SelfClosingElement($container, $parentIndent) {
 }
 
 # --- Parse value: string or JSON array ---
-function Parse-ValueList([string]$val) {
+function Parse-ValueList([string]$val, [string]$opName) {
 	$val = $val.Trim()
 	if ($val.StartsWith("[")) {
-		$arr = $val | ConvertFrom-Json
+		$arr = ConvertFrom-JsonInput $val "-Value for operation '$opName'" "a JSON array of object names"
 		$result = @(); foreach ($item in $arr) { $result += "$item" }
 		return ,$result
 	}
@@ -565,7 +584,7 @@ function Do-RemoveChild([string]$childName) {
 }
 
 function Do-SetProperty([string]$jsonVal) {
-	$propDef = $jsonVal | ConvertFrom-Json
+	$propDef = ConvertFrom-JsonInput $jsonVal "-Value for operation 'set-property'" "a JSON object {name, value}"
 	$propName = "$($propDef.name)"
 	$propValue = "$($propDef.value)"
 
@@ -639,7 +658,7 @@ if ($DefinitionFile) {
 		$DefinitionFile = Join-Path (Get-Location).Path $DefinitionFile
 	}
 	$jsonText = Get-Content -Raw -Encoding UTF8 $DefinitionFile
-	$ops = $jsonText | ConvertFrom-Json
+	$ops = ConvertFrom-JsonInput $jsonText $DefinitionFile
 	if ($ops -is [System.Array]) {
 		foreach ($op in $ops) { $operations += $op }
 	} else {
@@ -654,8 +673,8 @@ foreach ($op in $operations) {
 	$opValue = if ($op.value) { "$($op.value)" } else { "$Value" }
 
 	switch ($opName) {
-		"add-content"    { Do-AddContent (Parse-ValueList $opValue) }
-		"remove-content" { Do-RemoveContent (Parse-ValueList $opValue) }
+		"add-content"    { Do-AddContent (Parse-ValueList $opValue $opName) }
+		"remove-content" { Do-RemoveContent (Parse-ValueList $opValue $opName) }
 		"add-child"      { Do-AddChild $opValue }
 		"remove-child"   { Do-RemoveChild $opValue }
 		"set-property"   { Do-SetProperty $opValue }

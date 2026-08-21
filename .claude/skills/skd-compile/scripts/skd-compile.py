@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.117 — Compile 1C DCS from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+# skd-compile v1.118 — Compile 1C DCS from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -12,6 +12,29 @@ from lxml import etree
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
+
+def parse_json_input(text, source, expected=None):
+    """Разбор пользовательского JSON: одна строка в stderr вместо traceback (issue #80).
+
+    expected заполняем только для полиморфного входа: у файла подсказка
+    была бы наполнителем — имя файла и текст парсера самодостаточны.
+
+    Импорты внутри тела: копия функции живёт в навыках с разными именами модулей
+    (skd-decompile импортирует json локально как _json), а тело обязано быть одинаковым.
+    """
+    import json as _pj
+    import sys as _psys
+    try:
+        return _pj.loads(text)
+    except ValueError as exc:
+        what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
+        got = " ".join(str(text).split())
+        if len(got) > 60:
+            got = got[:60] + "..."
+        print("[ERROR] %s, got: %s (%s)" % (what, got, exc), file=_psys.stderr)
+        _psys.exit(1)
+
+
 class CIDict(dict):
     # Ключи храним КАК ЕСТЬ: часть из них — имена объектов (табличные части, стандартные
     # реквизиты), они попадают в XML. Регистронезависим только поиск. Порядок вставки
@@ -1629,7 +1652,7 @@ def load_user_styles(base_dir, output_path=None):
     for p in search_paths:
         if os.path.isfile(p):
             with open(p, 'r', encoding='utf-8-sig') as f:
-                user_styles = ci_json(json.load(f))
+                user_styles = ci_json(parse_json_input(f.read(), p))
             for name, overrides in user_styles.items():
                 base = dict(AREA_STYLE_PRESETS.get(name, AREA_STYLE_PRESETS['data']))
                 base.update(overrides)
@@ -3063,10 +3086,12 @@ def main():
             sys.exit(1)
         with open(def_file, 'r', encoding='utf-8-sig') as f:
             json_text = f.read()
+        json_source = def_file
     else:
         json_text = args.Value
+        json_source = "-Value"
 
-    defn = ci_json(json.loads(json_text))
+    defn = ci_json(parse_json_input(json_text, json_source))
 
     if not defn.get('dataSets') or len(defn['dataSets']) == 0:
         print("JSON must have at least one entry in 'dataSets'", file=sys.stderr)

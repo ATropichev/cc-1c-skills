@@ -1,0 +1,23 @@
+{
+  "name": "Битый JSON в файле определения: в сообщении есть имя файла (issue #80)",
+  "preRun": [
+    {
+      "script": "subsystem-compile/scripts/subsystem-compile",
+      "input": {
+        "name": "Продажи"
+      },
+      "args": {
+        "-DefinitionFile": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "ciPath": "Subsystems/Продажи/CommandInterface"
+  },
+  "inputRaw": "{ \"operation\": \"hide\",",
+  "expectError": "Invalid JSON in",
+  "expect": {
+    "stderrContains": "__input.json"
+  }
+}

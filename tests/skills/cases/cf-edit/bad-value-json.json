@@ -1,0 +1,10 @@
+{
+  "name": "Строка вместо JSON у set-panels: ожидаемая форма в сообщении (issue #80)",
+  "input": [
+    {
+      "operation": "set-panels",
+      "value": "Левая панель"
+    }
+  ],
+  "expectError": "-Value for operation 'set-panels' expects a JSON object with panel layout"
+}

@@ -1,4 +1,4 @@
-﻿# skd-compile v1.117 — Compile 1C DCS from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# skd-compile v1.118 — Compile 1C DCS from JSON (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[string]$DefinitionFile,
@@ -8,6 +8,25 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# --- Разбор пользовательского JSON ---
+# Одна строка в stderr вместо дампа исключения ConvertFrom-Json (issue #80): агент по стектрейсу
+# идёт чинить скрипт, а не свой вызов. $source — файл или параметр. $expected заполняем только
+# для полиморфного входа: у файла подсказка была бы наполнителем.
+# Возврат через -NoEnumerate: без него одноэлементный
+# JSON-массив разворачивался бы в скаляр вторым анруллингом.
+function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected) {
+	try {
+		$parsed = $text | ConvertFrom-Json
+	} catch {
+		$what = if ($expected) { "$source expects $expected" } else { "Invalid JSON in $source" }
+		$got = ($text -replace '\s+', ' ').Trim()
+		if ($got.Length -gt 60) { $got = $got.Substring(0, 60) + '...' }
+		[Console]::Error.WriteLine("[ERROR] ${what}, got: ${got} ($($_.Exception.Message))")
+		exit 1
+	}
+	Write-Output -NoEnumerate $parsed
+}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # --- Support guard (Ext/ParentConfigurations.bin) ---
@@ -161,11 +180,13 @@ if ($DefinitionFile) {
 		exit 1
 	}
 	$json = Get-Content -Raw -Encoding UTF8 $DefinitionFile
+	$jsonSource = $DefinitionFile
 } else {
 	$json = $Value
+	$jsonSource = "-Value"
 }
 
-$def = $json | ConvertFrom-Json
+$def = ConvertFrom-JsonInput $json $jsonSource
 
 # --- Sentinel check: refuse to compile if JSON contains skd-decompile sentinels ---
 # These mark places the decompiler couldn't reverse cleanly; user must resolve
@@ -1806,7 +1827,7 @@ while ($scanDir) {
 }
 foreach ($stylesFile in $searchPaths) {
 	if (Test-Path $stylesFile) {
-		$userStyles = Get-Content -Raw -Encoding UTF8 $stylesFile | ConvertFrom-Json
+		$userStyles = ConvertFrom-JsonInput (Get-Content -Raw -Encoding UTF8 $stylesFile) $stylesFile
 		foreach ($prop in $userStyles.PSObject.Properties) {
 			$preset = @{}
 			# Start from 'data' defaults

@@ -1,4 +1,4 @@
-﻿# cf-edit v1.19 — Edit 1C configuration root (Configuration.xml)
+﻿# cf-edit v1.20 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$ConfigPath,
@@ -10,6 +10,25 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# --- Разбор пользовательского JSON ---
+# Одна строка в stderr вместо дампа исключения ConvertFrom-Json (issue #80): агент по стектрейсу
+# идёт чинить скрипт, а не свой вызов. $source — файл или параметр. $expected заполняем только
+# для полиморфного входа: у файла подсказка была бы наполнителем.
+# Возврат через -NoEnumerate: без него одноэлементный
+# JSON-массив разворачивался бы в скаляр вторым анруллингом.
+function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected) {
+	try {
+		$parsed = $text | ConvertFrom-Json
+	} catch {
+		$what = if ($expected) { "$source expects $expected" } else { "Invalid JSON in $source" }
+		$got = ($text -replace '\s+', ' ').Trim()
+		if ($got.Length -gt 60) { $got = $got.Substring(0, 60) + '...' }
+		[Console]::Error.WriteLine("[ERROR] ${what}, got: ${got} ($($_.Exception.Message))")
+		exit 1
+	}
+	Write-Output -NoEnumerate $parsed
+}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # --- Mode validation ---
@@ -639,10 +658,7 @@ function Do-SetPanels($valArg) {
 	# Accept string (JSON), PSCustomObject, or hashtable
 	$layout = $valArg
 	if ($layout -is [string]) {
-		try { $layout = $layout | ConvertFrom-Json } catch {
-			Write-Error "set-panels value must be valid JSON object, got: $valArg"
-			exit 1
-		}
+		$layout = ConvertFrom-JsonInput $layout "-Value for operation 'set-panels'" "a JSON object with panel layout"
 	}
 	if (-not $layout) {
 		Write-Error "set-panels value is empty"
@@ -826,9 +842,7 @@ $indent</Item>
 function Do-SetHomePage($valArg) {
 	$layout = $valArg
 	if ($layout -is [string]) {
-		try { $layout = $layout | ConvertFrom-Json } catch {
-			Write-Error "set-home-page value must be valid JSON object"; exit 1
-		}
+		$layout = ConvertFrom-JsonInput $layout "-Value for operation 'set-home-page'" "a JSON object with home page layout"
 	}
 	if (-not $layout) { Write-Error "set-home-page value is empty"; exit 1 }
 
@@ -943,7 +957,7 @@ if ($DefinitionFile) {
 		$DefinitionFile = Join-Path (Get-Location).Path $DefinitionFile
 	}
 	$jsonText = Get-Content -Raw -Encoding UTF8 $DefinitionFile
-	$ops = $jsonText | ConvertFrom-Json
+	$ops = ConvertFrom-JsonInput $jsonText $DefinitionFile
 	if ($ops -is [System.Array]) {
 		foreach ($op in $ops) { $operations += $op }
 	} else {

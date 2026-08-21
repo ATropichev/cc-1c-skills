@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-decompile v0.92 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+# skd-decompile v0.93 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -9,6 +9,29 @@ import xml.etree.ElementTree as ET
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
+
+def parse_json_input(text, source, expected=None):
+    """Разбор пользовательского JSON: одна строка в stderr вместо traceback (issue #80).
+
+    expected заполняем только для полиморфного входа: у файла подсказка
+    была бы наполнителем — имя файла и текст парсера самодостаточны.
+
+    Импорты внутри тела: копия функции живёт в навыках с разными именами модулей
+    (skd-decompile импортирует json локально как _json), а тело обязано быть одинаковым.
+    """
+    import json as _pj
+    import sys as _psys
+    try:
+        return _pj.loads(text)
+    except ValueError as exc:
+        what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
+        got = " ".join(str(text).split())
+        if len(got) > 60:
+            got = got[:60] + "..."
+        print("[ERROR] %s, got: %s (%s)" % (what, got, exc), file=_psys.stderr)
+        _psys.exit(1)
+
+
 def ci_parse_args(parser, argv=None):
     """parse_args по правилам PS: имена параметров и значения choices регистронезависимы."""
     argv = list(sys.argv[1:] if argv is None else argv)
@@ -1362,9 +1385,8 @@ def load_user_styles(dir_path):
     styles_path = os.path.join(dir_path, 'skd-styles.json')
     if not os.path.exists(styles_path):
         return
-    import json as _json
     with open(styles_path, 'r', encoding='utf-8-sig') as f:
-        raw = _json.load(f)
+        raw = parse_json_input(f.read(), styles_path)
     existing_user_presets_raw = raw
     for prop_name, prop_value in raw.items():
         preset = {}

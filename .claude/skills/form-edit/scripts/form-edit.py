@@ -1,4 +1,4 @@
-# form-edit v1.14 — Edit 1C managed form elements (Python port) (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+# form-edit v1.15 — Edit 1C managed form elements (Python port) (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -13,6 +13,29 @@ sys.stderr.reconfigure(encoding="utf-8")
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
+
+def parse_json_input(text, source, expected=None):
+    """Разбор пользовательского JSON: одна строка в stderr вместо traceback (issue #80).
+
+    expected заполняем только для полиморфного входа: у файла подсказка
+    была бы наполнителем — имя файла и текст парсера самодостаточны.
+
+    Импорты внутри тела: копия функции живёт в навыках с разными именами модулей
+    (skd-decompile импортирует json локально как _json), а тело обязано быть одинаковым.
+    """
+    import json as _pj
+    import sys as _psys
+    try:
+        return _pj.loads(text)
+    except ValueError as exc:
+        what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
+        got = " ".join(str(text).split())
+        if len(got) > 60:
+            got = got[:60] + "..."
+        print("[ERROR] %s, got: %s (%s)" % (what, got, exc), file=_psys.stderr)
+        _psys.exit(1)
+
+
 class CIDict(dict):
     # Ключи храним КАК ЕСТЬ: часть из них — имена объектов (табличные части, стандартные
     # реквизиты), они попадают в XML. Регистронезависим только поиск. Порядок вставки
@@ -318,7 +341,7 @@ root = tree.getroot()
 # ── 2. Load JSON ────────────────────────────────────────────
 
 with open(json_path, "r", encoding="utf-8-sig") as f:
-    defn = ci_json(json.load(f))
+    defn = ci_json(parse_json_input(f.read(), json_path))
 
 # ── 3. Form name + header ───────────────────────────────────
 

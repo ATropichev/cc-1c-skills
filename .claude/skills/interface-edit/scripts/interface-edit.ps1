@@ -1,4 +1,4 @@
-﻿# interface-edit v1.18 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
+﻿# interface-edit v1.19 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$CIPath,
@@ -16,6 +16,25 @@ $ErrorActionPreference = "Stop"
 # --- Mode validation ---
 if ($DefinitionFile -and $Operation) { Write-Error "Cannot use both -DefinitionFile and -Operation"; exit 1 }
 if (-not $DefinitionFile -and -not $Operation) { Write-Error "Either -DefinitionFile or -Operation is required"; exit 1 }
+
+# --- Разбор пользовательского JSON ---
+# Одна строка в stderr вместо дампа исключения ConvertFrom-Json (issue #80): агент по стектрейсу
+# идёт чинить скрипт, а не свой вызов. $source — файл или параметр. $expected заполняем только
+# для полиморфного входа: у файла подсказка была бы наполнителем.
+# Возврат через -NoEnumerate: без него одноэлементный
+# JSON-массив разворачивался бы в скаляр вторым анруллингом.
+function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected) {
+	try {
+		$parsed = $text | ConvertFrom-Json
+	} catch {
+		$what = if ($expected) { "$source expects $expected" } else { "Invalid JSON in $source" }
+		$got = ($text -replace '\s+', ' ').Trim()
+		if ($got.Length -gt 60) { $got = $got.Substring(0, 60) + '...' }
+		[Console]::Error.WriteLine("[ERROR] ${what}, got: ${got} ($($_.Exception.Message))")
+		exit 1
+	}
+	Write-Output -NoEnumerate $parsed
+}
 
 # --- Resolve path ---
 if (-not [System.IO.Path]::IsPathRooted($CIPath)) {
@@ -351,10 +370,10 @@ function Ensure-Section([string]$sectionName) {
 }
 
 # --- Parse value: string or JSON array ---
-function Parse-ValueList([string]$val) {
+function Parse-ValueList([string]$val, [string]$opName) {
 	$val = $val.Trim()
 	if ($val.StartsWith("[")) {
-		$arr = $val | ConvertFrom-Json
+		$arr = ConvertFrom-JsonInput $val "-Value for operation '$opName'" "a JSON array of command names"
 		$result = @(); foreach ($item in $arr) { $result += "$item" }
 		return ,$result
 	}
@@ -519,7 +538,7 @@ function Do-Show([string[]]$commands) {
 }
 
 function Do-Place([string]$jsonVal) {
-	$def = $jsonVal | ConvertFrom-Json
+	$def = ConvertFrom-JsonInput $jsonVal "-Value for operation 'place'" "a JSON object {command, group}"
 	$cmdName = Normalize-CmdName "$($def.command)"
 	$groupName = "$($def.group)"
 	if (-not $cmdName -or -not $groupName) { Write-Error "place requires {command, group}"; exit 1 }
@@ -552,7 +571,7 @@ function Do-Place([string]$jsonVal) {
 }
 
 function Do-Order([string]$jsonVal) {
-	$def = $jsonVal | ConvertFrom-Json
+	$def = ConvertFrom-JsonInput $jsonVal "-Value for operation 'order'" "a JSON object {group, commands:[...]}"
 	$groupName = "$($def.group)"
 	$commands = @($def.commands | ForEach-Object { Normalize-CmdName "$_" })
 	if (-not $groupName -or $commands.Count -eq 0) { Write-Error "order requires {group, commands:[...]}"; exit 1 }
@@ -590,7 +609,7 @@ function Do-Order([string]$jsonVal) {
 }
 
 function Do-SubsystemOrder([string]$jsonVal) {
-	$parsed = $jsonVal | ConvertFrom-Json
+	$parsed = ConvertFrom-JsonInput $jsonVal "-Value for operation 'subsystem-order'" "a JSON array of subsystem paths"
 	$subsystems = @(); foreach ($s in $parsed) { $subsystems += "$s" }
 	if ($subsystems.Count -eq 0) { Write-Error "subsystem-order requires array of subsystem paths"; exit 1 }
 
@@ -618,7 +637,7 @@ function Do-SubsystemOrder([string]$jsonVal) {
 }
 
 function Do-GroupOrder([string]$jsonVal) {
-	$parsed = $jsonVal | ConvertFrom-Json
+	$parsed = ConvertFrom-JsonInput $jsonVal "-Value for operation 'group-order'" "a JSON array of group names"
 	$groups = @(); foreach ($g in $parsed) { $groups += "$g" }
 	if ($groups.Count -eq 0) { Write-Error "group-order requires array of group names"; exit 1 }
 
@@ -652,7 +671,7 @@ if ($DefinitionFile) {
 		$DefinitionFile = Join-Path (Get-Location).Path $DefinitionFile
 	}
 	$jsonText = Get-Content -Raw -Encoding UTF8 $DefinitionFile
-	$ops = $jsonText | ConvertFrom-Json
+	$ops = ConvertFrom-JsonInput $jsonText $DefinitionFile
 	if ($ops -is [System.Array]) {
 		foreach ($op in $ops) { $operations += $op }
 	} else {
@@ -669,8 +688,8 @@ foreach ($op in $operations) {
 	$opValue = if ($opValueRaw -is [string]) { $opValueRaw } else { $opValueRaw | ConvertTo-Json -Compress }
 
 	switch ($opName) {
-		"hide"            { Do-Hide (Parse-ValueList $opValue) }
-		"show"            { Do-Show (Parse-ValueList $opValue) }
+		"hide"            { Do-Hide (Parse-ValueList $opValue $opName) }
+		"show"            { Do-Show (Parse-ValueList $opValue $opName) }
 		"place"           { Do-Place $opValue }
 		"order"           { Do-Order $opValue }
 		"subsystem-order" { Do-SubsystemOrder $opValue }

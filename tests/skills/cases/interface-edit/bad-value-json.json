@@ -1,0 +1,25 @@
+{
+  "name": "Строка вместо JSON у order: сообщение с ожидаемой формой, а не стектрейс (issue #80)",
+  "preRun": [
+    {
+      "script": "subsystem-compile/scripts/subsystem-compile",
+      "input": {
+        "name": "Продажи"
+      },
+      "args": {
+        "-DefinitionFile": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "ciPath": "Subsystems/Продажи/CommandInterface"
+  },
+  "input": [
+    {
+      "operation": "order",
+      "value": "Catalog.Товары"
+    }
+  ],
+  "expectError": "-Value for operation 'order' expects a JSON object {group, commands:[...]}"
+}

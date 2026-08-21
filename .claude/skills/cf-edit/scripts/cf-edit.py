@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-edit v1.19 — Edit 1C configuration root (Configuration.xml)
+# cf-edit v1.20 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -14,6 +14,29 @@ from lxml import etree
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
+
+def parse_json_input(text, source, expected=None):
+    """Разбор пользовательского JSON: одна строка в stderr вместо traceback (issue #80).
+
+    expected заполняем только для полиморфного входа: у файла подсказка
+    была бы наполнителем — имя файла и текст парсера самодостаточны.
+
+    Импорты внутри тела: копия функции живёт в навыках с разными именами модулей
+    (skd-decompile импортирует json локально как _json), а тело обязано быть одинаковым.
+    """
+    import json as _pj
+    import sys as _psys
+    try:
+        return _pj.loads(text)
+    except ValueError as exc:
+        what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
+        got = " ".join(str(text).split())
+        if len(got) > 60:
+            got = got[:60] + "..."
+        print("[ERROR] %s, got: %s (%s)" % (what, got, exc), file=_psys.stderr)
+        _psys.exit(1)
+
+
 class CIDict(dict):
     # Ключи храним КАК ЕСТЬ: часть из них — имена объектов (табличные части, стандартные
     # реквизиты), они попадают в XML. Регистронезависим только поиск. Порядок вставки
@@ -821,11 +844,8 @@ def main():
         nonlocal modify_count
         layout = value
         if isinstance(layout, str):
-            try:
-                layout = ci_json(json.loads(layout))
-            except json.JSONDecodeError:
-                print(f"set-panels value must be valid JSON object", file=sys.stderr)
-                sys.exit(1)
+            layout = ci_json(parse_json_input(
+                layout, "-Value for operation 'set-panels'", "a JSON object with panel layout"))
         if not isinstance(layout, dict) or not layout:
             print("set-panels value must be non-empty object", file=sys.stderr)
             sys.exit(1)
@@ -976,11 +996,8 @@ def main():
         nonlocal modify_count
         layout = value
         if isinstance(layout, str):
-            try:
-                layout = ci_json(json.loads(layout))
-            except json.JSONDecodeError:
-                print("set-home-page value must be valid JSON object", file=sys.stderr)
-                sys.exit(1)
+            layout = ci_json(parse_json_input(
+                layout, "-Value for operation 'set-home-page'", "a JSON object with home page layout"))
         if not isinstance(layout, dict) or not layout:
             print("set-home-page value must be non-empty object", file=sys.stderr)
             sys.exit(1)
@@ -1045,7 +1062,7 @@ def main():
         if not os.path.isabs(def_file):
             def_file = os.path.join(os.getcwd(), def_file)
         with open(def_file, "r", encoding="utf-8-sig") as fh:
-            ops = ci_json(json.loads(fh.read()))
+            ops = ci_json(parse_json_input(fh.read(), def_file))
         if isinstance(ops, list):
             operations = ops
         else:

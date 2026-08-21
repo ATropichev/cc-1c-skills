@@ -1,0 +1,11 @@
+{
+  "name": "Битый JSON в файле определения: сообщение с именем файла, а не стектрейс (issue #80)",
+  "inputRaw": "{ \"name\": \"Сломано\",",
+  "expectError": "Invalid JSON in",
+  "expect": {
+    "stderrContains": "__input.json",
+    "filesAbsent": [
+      "Subsystems"
+    ]
+  }
+}

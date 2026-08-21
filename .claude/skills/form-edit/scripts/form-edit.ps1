@@ -1,4 +1,4 @@
-﻿# form-edit v1.14 — Edit 1C managed form elements (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
+﻿# form-edit v1.15 — Edit 1C managed form elements (+esc_xml/esc_xml_text: разное экранирование атрибута и текста)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -10,6 +10,25 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# --- Разбор пользовательского JSON ---
+# Одна строка в stderr вместо дампа исключения ConvertFrom-Json (issue #80): агент по стектрейсу
+# идёт чинить скрипт, а не свой вызов. $source — файл или параметр. $expected заполняем только
+# для полиморфного входа: у файла подсказка была бы наполнителем.
+# Возврат через -NoEnumerate: без него одноэлементный
+# JSON-массив разворачивался бы в скаляр вторым анруллингом.
+function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected) {
+	try {
+		$parsed = $text | ConvertFrom-Json
+	} catch {
+		$what = if ($expected) { "$source expects $expected" } else { "Invalid JSON in $source" }
+		$got = ($text -replace '\s+', ' ').Trim()
+		if ($got.Length -gt 60) { $got = $got.Substring(0, 60) + '...' }
+		[Console]::Error.WriteLine("[ERROR] ${what}, got: ${got} ($($_.Exception.Message))")
+		exit 1
+	}
+	Write-Output -NoEnumerate $parsed
+}
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # --- Support guard (Ext/ParentConfigurations.bin) ---
@@ -175,7 +194,7 @@ $root = $xmlDoc.DocumentElement
 
 # === 2. Load JSON ===
 
-$def = Get-Content -Raw -Encoding UTF8 $JsonPath | ConvertFrom-Json
+$def = ConvertFrom-JsonInput (Get-Content -Raw -Encoding UTF8 $JsonPath) $JsonPath
 
 # === 3. Form name + header ===
 

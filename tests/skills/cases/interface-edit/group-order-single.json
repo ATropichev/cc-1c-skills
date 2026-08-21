@@ -1,0 +1,27 @@
+{
+  "name": "group-order из одного элемента: массив не разворачивается в скаляр",
+  "preRun": [
+    {
+      "script": "subsystem-compile/scripts/subsystem-compile",
+      "input": {
+        "name": "Продажи"
+      },
+      "args": {
+        "-DefinitionFile": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "ciPath": "Subsystems/Продажи/CommandInterface"
+  },
+  "input": [
+    {
+      "operation": "group-order",
+      "value": "[\"NavigationPanel.Important\"]"
+    }
+  ],
+  "expect": {
+    "stdoutContains": "Set group order: 1 entries"
+  }
+}
