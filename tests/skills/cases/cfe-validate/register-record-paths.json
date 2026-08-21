@@ -4,15 +4,27 @@
     {
       "script": "meta-compile/scripts/meta-compile",
       "input": {
-        "type": "InformationRegister", "name": "Настройка",
-        "dimensions": [ "Организация: String(50) | master" ],
-        "resources": [ "Лимит: Number(15,2)" ]
+        "type": "InformationRegister",
+        "name": "Настройка",
+        "dimensions": [
+          "Организация: String(50) | master"
+        ],
+        "resources": [
+          "Лимит: Number(15,2)"
+        ]
       },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "form-add/scripts/form-add",
-      "args": { "-ObjectPath": "{workDir}/InformationRegisters/Настройка.xml", "-FormName": "ФормаЗаписи" }
+      "args": {
+        "-ObjectPath": "{workDir}/InformationRegisters/Настройка.xml",
+        "-FormName": "ФормаЗаписи",
+        "-Purpose": "Record"
+      }
     },
     {
       "writeFile": {
@@ -22,16 +34,33 @@
     },
     {
       "script": "cfe-init/scripts/cfe-init",
-      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
     },
     {
       "script": "cfe-borrow/scripts/cfe-borrow",
-      "args": { "-ExtensionPath": "{workDir}/cfe", "-ConfigPath": "{workDir}", "-Object": "InformationRegister.Настройка.Form.ФормаЗаписи", "-BorrowMainAttribute": "Form" }
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "InformationRegister.Настройка.Form.ФормаЗаписи",
+        "-BorrowMainAttribute": "Form"
+      }
     }
   ],
-  "params": { "extensionPath": "cfe" },
-  "args_extra": ["-ConfigPath", "{workDir}"],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
   "expect": {
-    "stdoutNotContains": ["Запись.Организация", "Запись.Лимит"]
+    "stdoutNotContains": [
+      "Запись.Организация",
+      "Запись.Лимит"
+    ]
   }
 }

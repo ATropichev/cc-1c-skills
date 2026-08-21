@@ -1,0 +1,42 @@
+{
+  "name": "Форма списка журнала документов: динамический список и свойство DefaultForm",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Document",
+        "name": "ЗаказТест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DocumentJournal",
+        "name": "ЖурналТест",
+        "registeredDocuments": [
+          "Document.ЗаказТест"
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "objectPath": "DocumentJournals/ЖурналТест.xml",
+    "formName": "ФормаСписка"
+  },
+  "args_extra": [
+    "-Purpose",
+    "List"
+  ],
+  "validatePath": "DocumentJournals/ЖурналТест/Forms/ФормаСписка",
+  "expect": {
+    "stdoutContains": "DefaultForm: DocumentJournal.ЖурналТест.Form.ФормаСписка"
+  }
+}

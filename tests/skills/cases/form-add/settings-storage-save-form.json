@@ -1,0 +1,28 @@
+{
+  "name": "Форма сохранения настроек хранилища",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "SettingsStorage",
+        "name": "ХранилищеТест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "objectPath": "SettingsStorages/ХранилищеТест.xml",
+    "formName": "ФормаСохранения"
+  },
+  "args_extra": [
+    "-Purpose",
+    "Save"
+  ],
+  "validatePath": "SettingsStorages/ХранилищеТест/Forms/ФормаСохранения",
+  "expect": {
+    "stdoutContains": "DefaultSaveForm: SettingsStorage.ХранилищеТест.Form.ФормаСохранения"
+  }
+}

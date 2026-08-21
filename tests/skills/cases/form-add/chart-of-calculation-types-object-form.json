@@ -1,0 +1,25 @@
+{
+  "name": "Форма объекта плана видов расчёта — вид, который раньше не поддерживался",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "ChartOfCalculationTypes",
+        "name": "НачисленияТест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "objectPath": "ChartsOfCalculationTypes/НачисленияТест.xml",
+    "formName": "ФормаВидаРасчета"
+  },
+  "args_extra": [
+    "-Purpose",
+    "Object"
+  ],
+  "validatePath": "ChartsOfCalculationTypes/НачисленияТест/Forms/ФормаВидаРасчета"
+}

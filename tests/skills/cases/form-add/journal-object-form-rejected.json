@@ -1,0 +1,39 @@
+{
+  "name": "Форма объекта у журнала документов не бывает — отказ со списком допустимых",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Document",
+        "name": "ЗаказТест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DocumentJournal",
+        "name": "ЖурналТест",
+        "registeredDocuments": [
+          "Document.ЗаказТест"
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "objectPath": "DocumentJournals/ЖурналТест.xml",
+    "formName": "ФормаОбъекта"
+  },
+  "args_extra": [
+    "-Purpose",
+    "Object"
+  ],
+  "expectError": true
+}

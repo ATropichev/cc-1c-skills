@@ -1,0 +1,28 @@
+{
+  "name": "Форма группы справочника: главный реквизит CatalogObject, свойство DefaultFolderForm",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Catalog",
+        "name": "ТоварыТест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "objectPath": "Catalogs/ТоварыТест.xml",
+    "formName": "ФормаГруппы"
+  },
+  "args_extra": [
+    "-Purpose",
+    "Folder"
+  ],
+  "validatePath": "Catalogs/ТоварыТест/Forms/ФормаГруппы",
+  "expect": {
+    "stdoutContains": "DefaultFolderForm: Catalog.ТоварыТест.Form.ФормаГруппы"
+  }
+}

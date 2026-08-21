@@ -9,20 +9,42 @@
         "periodicity": "Day",
         "writeMode": "RecorderSubordinate",
         "dimensions": [
-          { "name": "Номенклатура", "type": "String", "length": 50 },
-          { "name": "ВидЦены", "type": "String", "length": 25 }
+          {
+            "name": "Номенклатура",
+            "type": "String",
+            "length": 50
+          },
+          {
+            "name": "ВидЦены",
+            "type": "String",
+            "length": 25
+          }
         ],
         "resources": [
-          { "name": "Цена", "type": "Number", "length": 15, "precision": 2 }
+          {
+            "name": "Цена",
+            "type": "Number",
+            "length": 15,
+            "precision": 2
+          }
         ]
       },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "form-add/scripts/form-add",
-      "args": { "-ObjectPath": "{workDir}/InformationRegisters/ЦеныНоменклатуры.xml", "-FormName": "ФормаСписка" }
+      "args": {
+        "-ObjectPath": "{workDir}/InformationRegisters/ЦеныНоменклатуры.xml",
+        "-FormName": "ФормаСписка",
+        "-Purpose": "List"
+      }
     }
   ],
-  "params": { "outputPath": "InformationRegisters/ЦеныНоменклатуры/Forms/ФормаСписка/Ext/Form.xml" },
+  "params": {
+    "outputPath": "InformationRegisters/ЦеныНоменклатуры/Forms/ФормаСписка/Ext/Form.xml"
+  },
   "validatePath": "InformationRegisters/ЦеныНоменклатуры/Forms/ФормаСписка/Ext/Form.xml"
 }

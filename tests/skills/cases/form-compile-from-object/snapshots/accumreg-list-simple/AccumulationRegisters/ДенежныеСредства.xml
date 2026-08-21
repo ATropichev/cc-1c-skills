@@ -37,7 +37,7 @@
 			</Synonym>
 			<Comment/>
 			<UseStandardCommands>true</UseStandardCommands>
-			<DefaultListForm/>
+			<DefaultListForm>AccumulationRegister.ДенежныеСредства.Form.ФормаСписка</DefaultListForm>
 			<AuxiliaryListForm/>
 			<RegisterType>Balance</RegisterType>
 			<IncludeHelpInContents>false</IncludeHelpInContents>

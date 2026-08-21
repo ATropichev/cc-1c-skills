@@ -1,0 +1,25 @@
+{
+  "name": "Форма выбора перечисления",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Enum",
+        "name": "СтатусыТест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "objectPath": "Enums/СтатусыТест.xml",
+    "formName": "ФормаВыбора"
+  },
+  "args_extra": [
+    "-Purpose",
+    "Choice"
+  ],
+  "validatePath": "Enums/СтатусыТест/Forms/ФормаВыбора"
+}

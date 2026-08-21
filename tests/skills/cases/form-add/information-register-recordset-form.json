@@ -1,0 +1,31 @@
+{
+  "name": "Форма набора записей регистра сведений",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "InformationRegister",
+        "name": "ЦеныТест",
+        "dimensions": [
+          "Товар: String(50)"
+        ],
+        "resources": [
+          "Цена: Number(15,2)"
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "objectPath": "InformationRegisters/ЦеныТест.xml",
+    "formName": "ФормаНабора"
+  },
+  "args_extra": [
+    "-Purpose",
+    "RecordSet"
+  ],
+  "validatePath": "InformationRegisters/ЦеныТест/Forms/ФормаНабора"
+}

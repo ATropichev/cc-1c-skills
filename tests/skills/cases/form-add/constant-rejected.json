@@ -1,0 +1,25 @@
+{
+  "name": "У константы нет собственных форм — отказ с причиной",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Constant",
+        "name": "ФлагТест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "objectPath": "Constants/ФлагТест.xml",
+    "formName": "ФормаКонстанты"
+  },
+  "args_extra": [
+    "-Purpose",
+    "Custom"
+  ],
+  "expectError": true
+}

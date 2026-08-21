@@ -9,22 +9,43 @@
         "periodicity": "Nonperiodical",
         "writeMode": "Independent",
         "dimensions": [
-          { "name": "Магазин", "type": "String", "length": 50 }
+          {
+            "name": "Магазин",
+            "type": "String",
+            "length": 50
+          }
         ],
         "resources": [
-          { "name": "Адрес", "type": "String", "length": 200 }
+          {
+            "name": "Адрес",
+            "type": "String",
+            "length": 200
+          }
         ],
         "attributes": [
-          { "name": "Комментарий", "type": "String", "length": 500 }
+          {
+            "name": "Комментарий",
+            "type": "String",
+            "length": 500
+          }
         ]
       },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     },
     {
       "script": "form-add/scripts/form-add",
-      "args": { "-ObjectPath": "{workDir}/InformationRegisters/АдресаМагазинов.xml", "-FormName": "ФормаЗаписи" }
+      "args": {
+        "-ObjectPath": "{workDir}/InformationRegisters/АдресаМагазинов.xml",
+        "-FormName": "ФормаЗаписи",
+        "-Purpose": "Record"
+      }
     }
   ],
-  "params": { "outputPath": "InformationRegisters/АдресаМагазинов/Forms/ФормаЗаписи/Ext/Form.xml" },
+  "params": {
+    "outputPath": "InformationRegisters/АдресаМагазинов/Forms/ФормаЗаписи/Ext/Form.xml"
+  },
   "validatePath": "InformationRegisters/АдресаМагазинов/Forms/ФормаЗаписи/Ext/Form.xml"
 }
