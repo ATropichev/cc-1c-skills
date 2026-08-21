@@ -364,9 +364,11 @@ def parse_json_input(text, source, expected=None):
     except ValueError as exc:
         what = "%s expects %s" % (source, expected) if expected else "Invalid JSON in %s" % source
         got = " ".join(str(text).split())
+        label = "got"
         if len(got) > 60:
-            got = got[:60] + "..."
-        print("[ERROR] %s, got: %s (%s)" % (what, got, exc), file=_psys.stderr)
+            label = "got (first 60 chars, whitespace collapsed)"
+            got = got[:60]
+        print("[ERROR] %s, %s: %s (%s)" % (what, label, got, exc), file=_psys.stderr)
         _psys.exit(1)
 
 

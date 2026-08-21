@@ -23,8 +23,9 @@ function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected
 	} catch {
 		$what = if ($expected) { "$source expects $expected" } else { "Invalid JSON in $source" }
 		$got = ($text -replace '\s+', ' ').Trim()
-		if ($got.Length -gt 60) { $got = $got.Substring(0, 60) + '...' }
-		[Console]::Error.WriteLine("[ERROR] ${what}, got: ${got} ($($_.Exception.Message))")
+		$label = 'got'
+		if ($got.Length -gt 60) { $label = 'got (first 60 chars, whitespace collapsed)'; $got = $got.Substring(0, 60) }
+		[Console]::Error.WriteLine("[ERROR] ${what}, ${label}: ${got} ($($_.Exception.Message))")
 		exit 1
 	}
 	Write-Output -NoEnumerate $parsed
