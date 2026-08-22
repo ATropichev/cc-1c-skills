@@ -12,5 +12,6 @@
       "added to ChildObjects",
       "already registered"
     ]
-  }
+  },
+  "skipPlatformVerify": "фикстура намеренно без <ChildObjects>: платформа такую конфигурацию не принимает, кейс проверяет реакцию навыка"
 }
