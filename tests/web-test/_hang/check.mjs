@@ -9,10 +9,13 @@
 //
 // Exit codes: 0 — the abort machinery works; 1 — it regressed; 2 — inconclusive (stand down).
 import { spawn } from 'child_process';
-import { existsSync, readdirSync, readFileSync, rmSync, mkdirSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
+// fs.rmSync/fs.cpSync are never called directly: on Windows they silently do nothing when
+// the path argument contains non-ASCII characters. Build matrix and details live in the module.
+import { removePathSync } from '../../common/fsutil.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(__dirname, '../../..');
@@ -124,6 +127,6 @@ if (failed.length) {
   console.log(out.trim());
   process.exit(1);
 }
-try { rmSync(reportDir, { recursive: true, force: true }); } catch {}
+try { removePathSync(reportDir); } catch {}
 console.log(`OK: ${checks.length}/${checks.length} — таймаут прерывает зависший тест, прогон продолжается, отчёт пишется`);
 process.exit(0);

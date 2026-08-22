@@ -9,9 +9,11 @@ import { getEditMode, getSuggesterMode } from '../common/project.mjs';
 import { processInput as guard } from '../support-guard.mjs';
 import { processInput as suggest } from '../skill-suggester.mjs';
 import { execFileSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+// fs.rmSync/fs.cpSync are never called directly: on Windows they silently do nothing when
+// the path argument contains non-ASCII characters. Build matrix and details live in the module.
+import { removePathSync } from '../../tests/common/fsutil.mjs';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 
 // Repo root derived from this file's own location (<repo>/hooks/test/run.mjs) so the
@@ -206,10 +208,10 @@ console.log('=== skill-suggester: PostToolUse nudge ===');
 {
   const SYNTH = join(REPO, 'test-tmp', 'hooks-synth');
   const THR = join(REPO, 'test-tmp', 'hooks-throttle');
-  rmSync(THR, { recursive: true, force: true });
+  removePathSync(THR);
   mkdirSync(THR, { recursive: true });
   // suggester reads skillSuggester from .v8-project.json; clear synth project file → default on
-  rmSync(join(SYNTH, '.v8-project.json'), { force: true });
+  removePathSync(join(SYNTH, '.v8-project.json'));
 
   // sniff fixtures
   mkdirSync(join(SYNTH, 'Catalogs', 'Obj', 'Forms', 'F', 'Ext'), { recursive: true });
@@ -271,7 +273,7 @@ console.log('=== skill-suggester: PostToolUse nudge ===');
   writeFileSync(join(SYNTH, '.v8-project.json'), JSON.stringify({ skillSuggester: 'off' }));
   const rOff = suggest({ tool_name: 'Read', session_id: 'F', cwd: SYNTH, tool_input: { file_path: join(SYNTH, 'Catalogs', 'Locked.xml') } }, { throttleDir: THR });
   check('suggest skillSuggester=off → silent', rOff.stdout === '', rOff.stdout);
-  rmSync(join(SYNTH, '.v8-project.json'), { force: true });
+  removePathSync(join(SYNTH, '.v8-project.json'));
 }
 
 console.log(`\n${fail === 0 ? 'ALL OK' : 'FAILURES'}: ${pass} passed, ${fail} failed`);

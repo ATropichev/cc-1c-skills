@@ -8,10 +8,13 @@
 //   node tests/web-test/_suite-root/check.mjs
 //
 // Exit codes: 0 — resolver behaves; 1 — a rule regressed.
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
+// fs.rmSync/fs.cpSync are never called directly: on Windows they silently do nothing when
+// the path argument contains non-ASCII characters. Build matrix and details live in the module.
+import { removePathSync } from '../../common/fsutil.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(__dirname, '../../..');
@@ -20,7 +23,7 @@ const { findSuiteRoot } = await import(
 );
 
 const BASE = resolve(tmpdir(), 'web-test-suite-root-check');
-rmSync(BASE, { recursive: true, force: true });
+removePathSync(BASE);
 
 /** Build a tree from a list of relative paths; a path ending in `/` is a dir, otherwise a file. */
 function tree(name, entries) {
@@ -114,6 +117,6 @@ const rootOf = (r) => (r ? r.root : null);
   check('repo: tests/web-test/ → itself', rootOf(findSuiteRoot(suite, { cwd: REPO })), suite);
 }
 
-rmSync(BASE, { recursive: true, force: true });
+removePathSync(BASE);
 console.log(failed ? `\n${failed} check(s) FAILED\n` : '\nall checks passed\n');
 process.exit(failed ? 1 : 0);

@@ -3,11 +3,15 @@
 // Usage: node tests/skills/runner.mjs [filter] [--update-snapshots] [--runtime python] [--json report.json] [--concurrency N] [--with-validation]
 
 import { execFileSync, execFile } from 'child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync,
-         readdirSync, statSync, cpSync, copyFileSync, chmodSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, unlinkSync, readFileSync, writeFileSync,
+         readdirSync, statSync, copyFileSync, chmodSync } from 'fs';
 import { createHash } from 'crypto';
 import { join, resolve, dirname, relative, basename, extname } from 'path';
 import { tmpdir, cpus } from 'os';
+// fs.rmSync/fs.cpSync напрямую не зовём: на Windows они молча ничего не делают, когда в пути
+// есть не-ASCII символы — кириллическое имя пользователя в %TEMP%, кириллическое имя объекта 1С
+// в deletePath. Подробности и таблица сборок — в самом модуле.
+import { removePathSync, copyTreeSync } from '../common/fsutil.mjs';
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 
@@ -158,7 +162,7 @@ function ensureSetup(setupName, runtime, skillCasesDir) {
     const want = fixtureStamp(EMPTY_CONFIGS[setupName]);
     if (existsSync(cached)) {
       if (existsSync(stamp) && readFileSync(stamp, 'utf8') === want) return cached;
-      rmSync(cached, { recursive: true, force: true });
+      removePathSync(cached);
     }
 
     mkdirSync(cached, { recursive: true });
@@ -167,7 +171,9 @@ function ensureSetup(setupName, runtime, skillCasesDir) {
       execSkillRaw(runtime, script, ['-Name', 'TestConfig', '-OutputDir', cached, ...EMPTY_CONFIGS[setupName]]);
       writeFileSync(stamp, want, 'utf8');
     } catch (e) {
-      rmSync(cached, { recursive: true, force: true });
+      // Недоснятая фикстура, оставшаяся на диске, молча уехала бы в следующий прогон.
+      try { removePathSync(cached); }
+      catch (cleanupError) { console.warn(`Warning: failed to remove partial fixture ${cached}: ${cleanupError.message}`); }
       throw new Error(`Failed to create ${setupName} fixture: ${e.message}`);
     }
     return cached;
@@ -249,7 +255,7 @@ function createWorkspace(fixturePath, readOnly) {
   }
   const tmp = mkdtempSync(join(tmpdir(), 'skill-test-'));
   if (fixturePath) {
-    cpSync(fixturePath, tmp, { recursive: true });
+    copyTreeSync(fixturePath, tmp);
   }
   return { path: tmp, readOnly: false };
 }
@@ -257,10 +263,10 @@ function createWorkspace(fixturePath, readOnly) {
 function cleanupWorkspace(ws) {
   if (ws.readOnly) return;
   // On Windows, file handles from db-update (1cv8) may linger briefly after the
-  // process exits — rmSync then throws EBUSY. Retry a few times, then swallow:
+  // process exits — removal then throws EBUSY. Retry a few times, then swallow:
   // a leaked tmp dir is preferable to crashing the entire runner.
   try {
-    rmSync(ws.path, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    removePathSync(ws.path, { maxRetries: 10, retryDelay: 200 });
   } catch (e) {
     console.warn(`Warning: failed to clean workspace ${ws.path}: ${e.message}`);
   }
@@ -664,8 +670,8 @@ function updateSnapshot(workDir, snapshotDir, snapshotConfig, caseData) {
   // дорисовал бы эталон и сам породил противоречие с opt-out.
   if (caseData?.noSnapshot) return;
 
-  // Remove old snapshot
-  if (existsSync(snapshotDir)) rmSync(snapshotDir, { recursive: true, force: true });
+  // Remove old snapshot. Тихий отказ здесь оставил бы в эталоне стейл — и он уехал бы в коммит.
+  if (existsSync(snapshotDir)) removePathSync(snapshotDir);
 
   // Determine which files to snapshot — all files in workDir that were created by the skill
   // For "workDir" root mode, we need to figure out what files the skill added.
@@ -798,7 +804,7 @@ async function runCaseAsync(testCase, opts) {
         // deletePath step — убрать файл или каталог из workDir: так выражается состояние,
         // которое навыки сами не создают (например, пометка свойства без файла модуля).
         if (step.deletePath) {
-          rmSync(join(workDir, step.deletePath), { recursive: true, force: true });
+          removePathSync(join(workDir, step.deletePath));
           continue;
         }
         const preScript = resolveScript(step.script, opts.runtime);
@@ -822,7 +828,7 @@ async function runCaseAsync(testCase, opts) {
         } catch (e) {
           throw new Error(`preRun step "${step.script}" failed: ${e.stderr || e.message}`);
         }
-        if (preInputFile && existsSync(preInputFile)) rmSync(preInputFile);
+        if (preInputFile && existsSync(preInputFile)) unlinkSync(preInputFile);
       }
     }
 
@@ -849,7 +855,7 @@ async function runCaseAsync(testCase, opts) {
       stderr = e.stderr || '';
     }
 
-    if (inputFile && existsSync(inputFile)) rmSync(inputFile);
+    if (inputFile && existsSync(inputFile)) unlinkSync(inputFile);
 
     // Assertions
     const errors = [];
@@ -1049,7 +1055,7 @@ function runCase(testCase, opts) {
         } catch (e) {
           throw new Error(`preRun step "${step.script}" failed: ${e.stderr || e.message}`);
         }
-        if (preInputFile && existsSync(preInputFile)) rmSync(preInputFile);
+        if (preInputFile && existsSync(preInputFile)) unlinkSync(preInputFile);
       }
     }
 
@@ -1076,7 +1082,7 @@ function runCase(testCase, opts) {
     }
 
     // Remove temp input file from workDir before snapshot comparison
-    if (inputFile && existsSync(inputFile)) rmSync(inputFile);
+    if (inputFile && existsSync(inputFile)) unlinkSync(inputFile);
 
     // 4. Assertions
     const errors = [];
@@ -1520,7 +1526,7 @@ async function runIntegrationOnce(test, opts, engine, labelEngine) {
         break; // stop on first failure
       }
 
-      if (inputFile && existsSync(inputFile)) rmSync(inputFile);
+      if (inputFile && existsSync(inputFile)) unlinkSync(inputFile);
 
       // Post-step validation
       if (opts.withValidation && step.validate) {
@@ -1546,8 +1552,8 @@ async function runIntegrationOnce(test, opts, engine, labelEngine) {
     // Cache result if configured
     if (test.cache && stepResults.every(s => s.passed)) {
       const cachePath = join(CACHE, test.cache);
-      if (existsSync(cachePath)) rmSync(cachePath, { recursive: true, force: true });
-      cpSync(workDir, cachePath, { recursive: true });
+      if (existsSync(cachePath)) removePathSync(cachePath);
+      copyTreeSync(workDir, cachePath);
     }
 
     const allPassed = stepResults.every(s => s.passed);

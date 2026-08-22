@@ -14,8 +14,11 @@
 // После завершения база готова к /web-publish + web-test сессии.
 
 import { execFile } from 'child_process';
-import { existsSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, unlinkSync, readFileSync, writeFileSync } from 'fs';
 import { join, resolve, dirname } from 'path';
+// fs.rmSync/fs.cpSync напрямую не зовём: на Windows они молча ничего не делают,
+// когда в пути есть не-ASCII символы. Подробности и таблица сборок — в самом модуле.
+import { removePathSync } from '../common/fsutil.mjs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -135,11 +138,11 @@ export async function runSteps(steps, paths, runtime, log = console.log) {
 
     try {
       await execSkill(script, args, runtime);
-      if (inputFile && existsSync(inputFile)) rmSync(inputFile);
+      if (inputFile && existsSync(inputFile)) unlinkSync(inputFile);
       const ms = Date.now() - stepT0;
       log(`  [${i + 1}/${steps.length}] OK  ${step.name}  (${(ms / 1000).toFixed(1)}s)`);
     } catch (e) {
-      if (inputFile && existsSync(inputFile)) rmSync(inputFile);
+      if (inputFile && existsSync(inputFile)) unlinkSync(inputFile);
       log(`  [${i + 1}/${steps.length}] FAIL ${step.name}`);
       log(`    ${e.message.split('\n').join('\n    ').substring(0, 1500)}`);
       return { ok: false, elapsed: (Date.now() - t0) / 1000, failedAt: i };
@@ -208,13 +211,13 @@ async function runCli() {
 
   if (existsSync(configSrc)) {
     console.log(`Removing existing configSrc...`);
-    rmSync(configSrc, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    removePathSync(configSrc, { maxRetries: 5, retryDelay: 200 });
   }
   mkdirSync(configSrc, { recursive: true });
 
   if (!opts.skipPlatform && existsSync(dbPath)) {
     console.log(`Removing existing IB...`);
-    rmSync(dbPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    removePathSync(dbPath, { maxRetries: 5, retryDelay: 200 });
   }
 
   const buildSteps = await loadBuildSteps();

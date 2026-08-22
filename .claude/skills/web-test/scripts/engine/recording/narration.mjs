@@ -1,9 +1,10 @@
-// web-test recording/narration v1.17 — Post-process: generate TTS audio for captions and merge with recorded video.
+// web-test recording/narration v1.18 — Post-process: generate TTS audio for captions and merge with recorded video.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { execFileSync } from 'child_process';
-import { existsSync as fsExistsSync, mkdirSync, readFileSync, rmSync, statSync } from 'fs';
+import { existsSync as fsExistsSync, mkdirSync, readFileSync, statSync } from 'fs';
 import { extname, join as pathJoin } from 'path';
+import { removePathSync } from '../core/fsutil.mjs';
 import { tmpdir } from 'os';
 import {
   lastCaptions, lastRecordingDuration, resolveProjectPath,
@@ -191,6 +192,6 @@ export async function addNarration(videoPath, opts = {}) {
 
   } finally {
     // Cleanup temp directory
-    try { rmSync(tempDir, { recursive: true, force: true }); } catch {}
+    try { removePathSync(tempDir); } catch {}
   }
 }

@@ -25,10 +25,13 @@
 // Mandatory=$false, связывание пройдёт и ТЕЛО ВЫПОЛНИТСЯ — гард остановил бы Apache и запустил
 // 1С. Выход 1 при нарушении. Запуск: node tests/skills/check-positional-binding.mjs [--runtime python]
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdtempSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+// fs.rmSync/fs.cpSync напрямую не зовём: на Windows они молча ничего не делают,
+// когда в пути есть не-ASCII символы. Подробности и таблица сборок — в самом модуле.
+import { removePathSync } from '../common/fsutil.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SKILLS_DIR = join(ROOT, '.claude', 'skills');
@@ -163,7 +166,7 @@ try {
     }
   }
 } finally {
-  rmSync(work, { recursive: true, force: true });
+  removePathSync(work);
 }
 
 // --- Итог ---

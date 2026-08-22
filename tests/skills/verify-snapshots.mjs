@@ -12,10 +12,13 @@
 // типовой конфигурации (~3 мин на кейс, ноль информации). Такие гонять через --case.
 
 import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, readFileSync, writeFileSync,
-         readdirSync, statSync, cpSync, copyFileSync, chmodSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, unlinkSync, readFileSync, writeFileSync,
+         readdirSync, statSync, copyFileSync, chmodSync } from 'fs';
 import { join, resolve, dirname, basename } from 'path';
 import { tmpdir } from 'os';
+// fs.rmSync/fs.cpSync напрямую не зовём: на Windows они молча ничего не делают, когда в пути
+// есть не-ASCII символы. Подробности и таблица сборок — в самом модуле.
+import { removePathSync, copyTreeSync } from '../common/fsutil.mjs';
 
 // ─── Paths ──────────────────────────────────────────────────────────────────
 
@@ -638,7 +641,7 @@ function runPreSteps(preRun, workDir, runtime, log) {
     // deletePath step — как в runner.mjs: состояние «файла нет» выражается удалением.
     // Без этой ветки шаг проваливался в запуск скрипта и падал на step.script.split.
     if (step.deletePath) {
-      rmSync(join(workDir, step.deletePath), { recursive: true, force: true });
+      removePathSync(join(workDir, step.deletePath));
       log(`preRun: deletePath ${step.deletePath}`, true);
       continue;
     }
@@ -670,7 +673,7 @@ function runPreSteps(preRun, workDir, runtime, log) {
       log(`preRun: ${stepName}`, false, e.stderr || e.message);
       throw new Error(`preRun "${step.script}" failed: ${(e.stderr || e.message).substring(0, 500)}`);
     }
-    if (preInputFile && existsSync(preInputFile)) rmSync(preInputFile);
+    if (preInputFile && existsSync(preInputFile)) unlinkSync(preInputFile);
   }
 }
 
@@ -909,7 +912,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         result.errors.push(`Fixture not found: ${fixturePath}`);
         return result;
       }
-      cpSync(fixturePath, workDir, { recursive: true });
+      copyTreeSync(fixturePath, workDir);
       log(`fixture: ${fixtureName}`, true);
       // Фикстура-конфигурация — такой же вход для платформы, как external-выгрузка. Раньше
       // configDir приходил только из скилл-уровневого setup (empty-config), поэтому у навыков
@@ -926,7 +929,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         result.skipReason = `внешняя выгрузка недоступна на этой машине: ${extPath}`;
         return result;
       }
-      cpSync(extPath, workDir, { recursive: true });
+      copyTreeSync(extPath, workDir);
       log(`external: ${extPath}`, true);
       configDir = workDir;
     }
@@ -1086,7 +1089,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
       result.errors.push(`${skillName} failed: ${detail.substring(0, 500)}`);
       return result;
     }
-    if (inputFile && existsSync(inputFile)) rmSync(inputFile);
+    if (inputFile && existsSync(inputFile)) unlinkSync(inputFile);
 
     // Режим совместимости конфигурации выше платформы — она такую не загрузит. Это свойство
     // стенда, а не дефект кейса, поэтому пропускаем с причиной: иначе на машине без нужной
@@ -1133,7 +1136,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         return result;
       }
       const dcsTpl = join(erfDir, 'TestReport', 'Templates', 'ОсновнаяСхемаКомпоновкиДанных', 'Ext', 'Template.xml');
-      cpSync(tplPath, dcsTpl, { force: true });
+      copyFileSync(tplPath, dcsTpl);
       try {
         execSkill(opts.runtime, 'epf-build/scripts/epf-build', [
           '-V8Path', opts.v8ctx.v8path,
@@ -1186,7 +1189,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         return result;
       }
       const tplDest = join(epfDir, 'TestProc', 'Templates', 'Макет', 'Ext', 'Template.xml');
-      cpSync(tplPath, tplDest, { force: true });
+      copyFileSync(tplPath, tplDest);
       try {
         execSkill(opts.runtime, 'epf-build/scripts/epf-build', [
           '-V8Path', opts.v8ctx.v8path,
@@ -1531,8 +1534,8 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
     result.errors.push(`Unexpected error: ${e.message}`);
   } finally {
     if (!opts.keep) {
-      try { rmSync(workDir, { recursive: true, force: true }); } catch {}
-      result.workDir = '(cleaned)';
+      // При неудаче оставляем в result реальный путь: остаток каталога виден в отчёте.
+      try { removePathSync(workDir); result.workDir = '(cleaned)'; } catch {}
     }
   }
 

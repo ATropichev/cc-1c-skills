@@ -8,10 +8,13 @@
 // свойства+свойства объекта+ТЧ+add+remove), сверяет что uuid существующих сущностей целы.
 // Прогоняет оба рантайма. Выход 1 при нарушении. Запуск: node tests/skills/check-uuid-invariant.mjs [--runtime python]
 import { execFileSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+// fs.rmSync/fs.cpSync напрямую не зовём: на Windows они молча ничего не делают,
+// когда в пути есть не-ASCII символы. Подробности и таблица сборок — в самом модуле.
+import { removePathSync } from '../common/fsutil.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const IS_WIN = process.platform === 'win32';
@@ -132,7 +135,7 @@ for (const runtime of runtimes) {
     }
     runErrors++;
   } finally {
-    if (work) try { rmSync(work, { recursive: true, force: true }); } catch {}
+    if (work) try { removePathSync(work); } catch {}
   }
 }
 

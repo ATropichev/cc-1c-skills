@@ -23,10 +23,13 @@
 // Cross-platform: на не-Windows можно задать env WEBTEST_HOOKS_RUNTIME=python,
 // тогда зеркальные py-порты скиллов будут вызваны вместо ps1.
 
-import { existsSync, mkdirSync, rmSync, readFileSync, writeFileSync, statSync } from 'fs';
+import { existsSync, mkdirSync, unlinkSync, readFileSync, writeFileSync, statSync } from 'fs';
 import { join, resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { createHash } from 'crypto';
+// fs.rmSync/fs.cpSync напрямую не зовём: на Windows они молча ничего не делают,
+// когда в пути есть не-ASCII символы. Подробности и таблица сборок — в самом модуле.
+import { removePathSync } from '../common/fsutil.mjs';
 import {
   getProjectInfo,
   loadBuildSteps,
@@ -162,8 +165,8 @@ async function buildEpf(spec, log) {
   const formXml  = join(formDir, 'Ext/Form.xml');
 
   // Полный rebuild: чистим и собираем заново.
-  if (existsSync(srcDir))   rmSync(srcDir,   { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
-  if (existsSync(buildDir)) rmSync(buildDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  if (existsSync(srcDir))   removePathSync(srcDir,   { maxRetries: 5, retryDelay: 200 });
+  if (existsSync(buildDir)) removePathSync(buildDir, { maxRetries: 5, retryDelay: 200 });
   mkdirSync(srcDir, { recursive: true });
   mkdirSync(buildDir, { recursive: true });
 
@@ -191,7 +194,7 @@ async function buildEpf(spec, log) {
     ['-JsonPath', formJsonPath, '-OutputPath', formXml],
     RUNTIME,
   );
-  rmSync(formJsonPath);
+  unlinkSync(formJsonPath);
   log('form-compile OK');
 
   // 4. epf-build
@@ -246,7 +249,7 @@ export async function prepare({ hookArgs, log, config }) {
   // 2. Config rebuild
   if (needConfig) {
     log(`rebuild config XML → ${configSrc}`);
-    if (existsSync(configSrc)) rmSync(configSrc, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    if (existsSync(configSrc)) removePathSync(configSrc, { maxRetries: 5, retryDelay: 200 });
     mkdirSync(configSrc, { recursive: true });
     const paths = { workDir: configSrc, v8path, dbPath };
     const r = await runSteps(buildSteps, paths, RUNTIME, log);
@@ -257,7 +260,7 @@ export async function prepare({ hookArgs, log, config }) {
   // 3. DB reload
   if (needData) {
     log(`reload DB → ${dbPath}`);
-    if (existsSync(dbPath)) rmSync(dbPath, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    if (existsSync(dbPath)) removePathSync(dbPath, { maxRetries: 5, retryDelay: 200 });
     const paths = { workDir: configSrc, v8path, dbPath };
     const r = await runSteps(platformLoadSteps(), paths, RUNTIME, log);
     if (!r.ok) throw new Error(`DB reload failed at step #${r.failedAt + 1}`);
