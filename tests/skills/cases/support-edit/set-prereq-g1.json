@@ -8,5 +8,6 @@
     "-Set",
     "editable"
   ],
-  "expectError": "Capability on"
+  "expectError": "Capability on",
+  "skipPlatformVerify": "фикстура синтетическая: рукотворный Ext/ParentConfigurations.bin платформа не принимает"
 }

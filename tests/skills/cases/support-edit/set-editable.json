@@ -14,5 +14,6 @@
       "file": "Ext/ParentConfigurations.bin",
       "bom": true
     }
-  }
+  },
+  "skipPlatformVerify": "фикстура синтетическая: рукотворный Ext/ParentConfigurations.bin платформа не принимает"
 }

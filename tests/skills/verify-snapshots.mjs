@@ -680,7 +680,7 @@ function runPreSteps(preRun, workDir, runtime, log) {
 
 // Standalone file skills — produce files (not configs), platform load = just run script
 const STANDALONE_SKILLS = new Set([
-  'skd-compile', 'skd-edit', 'skd-info', 'skd-validate',
+  'skd-compile', 'skd-edit', 'skd-info', 'skd-validate', 'skd-decompile',
   'mxl-decompile', 'mxl-info', 'mxl-validate',
 ]);
 
@@ -871,6 +871,10 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
       }
       cpSync(fixturePath, workDir, { recursive: true });
       log(`fixture: ${fixtureName}`, true);
+      // Фикстура-конфигурация — такой же вход для платформы, как external-выгрузка. Раньше
+      // configDir приходил только из скилл-уровневого setup (empty-config), поэтому у навыков
+      // с setup: none фикстура до платформы не доезжала, а кейс всё равно получал PASS.
+      if (existsSync(join(workDir, 'Configuration.xml'))) configDir = workDir;
     } else if (typeof caseData.setup === 'string' && caseData.setup.startsWith('external:')) {
       const extPath = resolve(REPO_ROOT, caseData.setup.slice('external:'.length));
       // Недоступная внешняя выгрузка — СКИП, как в runner.mjs (`ensureSetup`, ветка
@@ -1029,6 +1033,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
           return result;
         }
         log(skillName, true, `(expected error) ${detail.substring(0, 100)}`);
+        result.noPlatformReason = 'навык ожидаемо отказал — своего выхода нет, грузить нечего';
         result.passed = true;
         return result;
       }
@@ -1057,6 +1062,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
       // Wrap produced Template.xml in an external report (ERF) and try to build —
       // platform either accepts the schema or rejects it with an error.
       if (!opts.v8ctx) {
+        result.noPlatformReason = 'платформа недоступна в этом окружении';
         result.passed = true;
         log('platform-load', true, 'skipped (no v8 context)');
         return result;
@@ -1090,6 +1096,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
           '-OutputFile', join(erfOutDir, 'TestReport.erf'),
         ], 120_000);
         log('erf-build', true, 'platform accepted schema');
+        result.platformChecked = true;
         result.passed = true;
       } catch (e) {
         const detail = errDetail(e);
@@ -1142,6 +1149,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
           '-OutputFile', join(epfOutDir, 'TestProc.epf'),
         ], 180_000);
         log('epf-build', true, 'platform accepted MXL');
+        result.platformChecked = true;
         result.passed = true;
       } catch (e) {
         const detail = errDetail(e);
@@ -1152,6 +1160,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
     }
 
     if (isStandalone) {
+      result.noPlatformReason = 'standalone-навык: выход не конфигурация';
       result.passed = true;
       log('platform-load', true, 'skipped (standalone file, not a config)');
       return result;
@@ -1199,6 +1208,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
           '-OutputFile', outFile,
         ], 180_000);
         log('epf-build', true, `platform built ${epfExt}`);
+        result.platformChecked = true;
         result.passed = true;
       } catch (e) {
         const detail = errDetail(e);
@@ -1314,6 +1324,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
         }
       }
 
+      result.platformChecked = true;
       result.passed = true;
       return result;
     }
@@ -1326,8 +1337,13 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
     }
 
     if (!configDir) {
-      // No config to load — setup was 'none' and not EPF/standalone
-      result.passed = true;
+      // Грузить нечего, и спец-маршрута (MXL/SKD/EPF/CFE/standalone) для навыка нет. Раньше здесь
+      // стоял PASS — кейс выглядел проверенным, ни разу не обратившись к платформе. Пропуск
+      // допустим, но только объявленный: причина должна быть в кейсе и видна в отчёте.
+      result.errors.push(
+        'Платформенной проверки не было: конфигурации для загрузки нет, спец-маршрут не подошёл. '
+        + 'Если для этого кейса проверка невозможна или вырождается — объявите в кейсе '
+        + '"skipPlatformVerify": "<причина>"');
       return result;
     }
 
@@ -1418,6 +1434,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
     // to exercise the skill script against real-world XML, not to validate
     // that an entire vendor config loads into a fresh DB.
     if (caseProvidedConfig && caseData.setup.startsWith('external:')) {
+      result.noPlatformReason = 'external: грузилась бы собственная выгрузка типовой (~3 мин, ноль информации о навыке)';
       result.passed = true;
       log('platform-load', true, 'skipped (external setup)');
       return result;
@@ -1456,6 +1473,7 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
       return result;
     }
 
+    result.platformChecked = true;
     result.passed = true;
   } catch (e) {
     result.errors.push(`Unexpected error: ${e.message}`);
@@ -1533,18 +1551,21 @@ function writeReport(results) {
     `Total: ${results.length} | Passed: ${results.filter(r => r.passed && !r.skipped).length}`
       + ` | Failed: ${results.filter(r => !r.passed && !r.skipped).length}`
       + ` | Skipped: ${results.filter(r => r.skipped).length}`,
+    `Проверено платформой: ${results.filter(r => r.platformChecked).length}`
+      + ` | Прошло без обращения к платформе: ${results.filter(r => r.passed && !r.skipped && !r.platformChecked).length}`,
     ``,
   ];
 
-  lines.push('| Skill | Case | Status | Error |');
-  lines.push('|-------|------|--------|-------|');
+  lines.push('| Skill | Case | Status | Платформа | Error |');
+  lines.push('|-------|------|--------|-----------|-------|');
   for (const r of results) {
     // Пропуск — не падение: в консольной сводке они уже различались, а в файле отчёта пропуск
     // выглядел как FAIL и попадал в счётчик падений. Отчёт читают глазами и по нему решают,
     // есть ли проблема, — расхождение с консолью здесь дороже всего.
     const status = r.skipped ? 'SKIP' : (r.passed ? 'OK' : 'FAIL');
     const error = r.errors.length > 0 ? r.errors[0].substring(0, 100).replace(/\|/g, '\\|').replace(/\n/g, ' ') : '';
-    lines.push(`| ${r.skill} | ${r.case} | ${status} | ${error} |`);
+    const plat = r.platformChecked ? 'да' : (r.skipped ? '—' : (r.noPlatformReason || 'нет'));
+    lines.push(`| ${r.skill} | ${r.case} | ${status} | ${plat.substring(0, 60)} | ${error} |`);
   }
 
   const failures = results.filter(r => !r.passed && !r.skipped);
@@ -1635,6 +1656,22 @@ async function main() {
   console.log(`\n${'='.repeat(60)}`);
   console.log(`Results: ${passed} passed, ${failed} failed`
     + (skipped ? `, ${skipped} skipped` : '') + ` out of ${results.length}`);
+  // «Прошло» и «проверено платформой» — разные вещи: часть кейсов законно идёт мимо неё
+  // (навык отказал, выход не конфигурация, external). Пока эта доля не названа, отчёт читается
+  // как «всё проверено», хотя платформу спрашивали не у всех.
+  const onPlatform = results.filter(r => r.platformChecked).length;
+  // Только успешные: у падения обращение к платформе было — оно и не удалось, мешать их
+  // с «мимо платформы» значит завышать долю непроверенного.
+  const offPlatform = results.filter(r => r.passed && !r.skipped && !r.platformChecked);
+  console.log(`  из них проверено платформой: ${onPlatform}; без обращения к платформе: ${offPlatform.length}`);
+  const byReason = {};
+  for (const r of offPlatform) {
+    const key = r.noPlatformReason || 'причина не указана';
+    (byReason[key] = byReason[key] || []).push(`${r.skill}/${r.case}`);
+  }
+  for (const [reason, list] of Object.entries(byReason)) {
+    console.log(`    • ${list.length} — ${reason}`);
+  }
   for (const r of results.filter(x => x.skipped)) {
     console.log(`  \u25cb ${r.skill}/${r.case} \u2014 ${r.skipReason}`);
   }

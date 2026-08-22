@@ -10,5 +10,6 @@
   ],
   "expect": {
     "stdoutContains": "ВЫКЛЮЧЕНА"
-  }
+  },
+  "skipPlatformVerify": "фикстура синтетическая: рукотворный Ext/ParentConfigurations.bin платформа не принимает"
 }

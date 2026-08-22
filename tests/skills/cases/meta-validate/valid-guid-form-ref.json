@@ -4,5 +4,6 @@
   "params": { "objectPath": "Catalogs/Товары.xml" },
   "expect": {
     "stdoutNotContains": "20."
-  }
+  },
+  "skipPlatformVerify": "фикстура — одиночный объект без Configuration.xml: загружать нечего"
 }
