@@ -732,6 +732,39 @@ function compatibilityGap(configDir, v8path) {
   return null;
 }
 
+// ── Вход кейса: те же ключи, что понимает runner.mjs ────────────────────────
+// DSL один, реализации две, и ключ, известный лишь одному раннеру, даёт тихую дыру: кейс зелёный
+// в функциональном прогоне и не доезжает до платформы в верификации. Так и вышло с inputRaw —
+// verify писал вход только из caseData.input и только UTF-8, поэтому навык оставался без входного
+// файла. Копия encodeInput из runner.mjs (общего модуля у раннеров нет) — держать одинаковыми.
+// Байты входного файла в заданной кодировке. Нужно для кейсов про кодировку: writeFileSync
+// пишет только UTF-8, а навык обязан одинаково вести себя на UTF-16 с BOM (принять) и на
+// cp1251 (отвергнуть, а не молча подменить кириллицу на U+FFFD). cp1251 в Node нет — кодируем
+// формулой по диапазонам, которые встречаются в кейсах (ASCII + кириллица); прочее — ошибка кейса.
+function encodeInput(text, encoding) {
+  if (!encoding || encoding === 'utf-8' || encoding === 'utf8') return Buffer.from(text, 'utf8');
+  if (encoding === 'utf-16le') return Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(text, 'utf16le')]);
+  if (encoding === 'utf-16be') {
+    const le = Buffer.from(text, 'utf16le');
+    const be = Buffer.alloc(le.length);
+    for (let i = 0; i < le.length; i += 2) { be[i] = le[i + 1]; be[i + 1] = le[i]; }
+    return Buffer.concat([Buffer.from([0xfe, 0xff]), be]);
+  }
+  if (encoding === 'cp1251') {
+    const out = Buffer.alloc(text.length);
+    for (let i = 0; i < text.length; i++) {
+      const c = text.codePointAt(i);
+      if (c < 0x80) out[i] = c;
+      else if (c >= 0x410 && c <= 0x44f) out[i] = c - 0x350;
+      else if (c === 0x401) out[i] = 0xa8;
+      else if (c === 0x451) out[i] = 0xb8;
+      else throw new Error(`inputEncoding cp1251: символ U+${c.toString(16)} вне поддержанного набора (ASCII + кириллица)`);
+    }
+    return out;
+  }
+  throw new Error(`inputEncoding: неизвестная кодировка "${encoding}"`);
+}
+
 // Версия формата выгрузки против платформы: формат 2.21 не загрузится на 8.3.27, даже если
 // режим совместимости платформе подходит. Без этой проверки кейс на 2.21 скипался только на
 // 8.3.24 (по совместимости), а на 8.3.27 доходил до загрузки и падал — постоянный ложный
@@ -740,9 +773,16 @@ function compatibilityGap(configDir, v8path) {
 // Эталон — таблица «Лестница версий» из docs/1c-configuration-spec.md (§7.1); разбор — копия
 // такого же в check-format-versions.mjs, держать одинаковыми.
 function formatGap(configDir, v8path) {
-  const cfgFile = join(configDir, 'Configuration.xml');
-  if (!existsSync(cfgFile)) return null;
-  const fm = /<MetaDataObject[^>]*\sversion="(\d+\.\d+)"/.exec(readFileSync(cfgFile, 'utf8'));
+  return formatGapForXml(join(configDir, 'Configuration.xml'), v8path);
+}
+
+// Ядро гейта: версия формата берётся из шапки любого MetaDataObject — Configuration.xml для
+// конфигурации, исходник обработки/отчёта для EPF/ERF. Раньше проверка вызывалась только при
+// наличии каталога конфигурации, поэтому кейсы epf-init/erf-init на формате 2.21 доходили до
+// сборки и падали на стенде без 8.5 — красным, хотя это свойство стенда.
+function formatGapForXml(xmlFile, v8path) {
+  if (!existsSync(xmlFile)) return null;
+  const fm = /<MetaDataObject[^>]*\sversion="(\d+\.\d+)"/.exec(readFileSync(xmlFile, 'utf8'));
   const pm = /(\d+\.\d+\.\d+)/.exec(v8path || '');
   if (!fm || !pm) return null;
 
@@ -1008,9 +1048,14 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
 
     // ── Step 4: Main skill script ──
     let inputFile = null;
-    if (caseData.input !== undefined) {
+    if (caseData.inputRaw !== undefined) {
+      // inputRaw пишется дословно: негативный кейс про битый JSON через input невыразим —
+      // JSON.stringify всегда даёт валидный документ.
       inputFile = join(workDir, '__input.json');
-      writeFileSync(inputFile, JSON.stringify(caseData.input, null, 2), 'utf8');
+      writeFileSync(inputFile, encodeInput(caseData.inputRaw, caseData.inputEncoding));
+    } else if (caseData.input !== undefined) {
+      inputFile = join(workDir, '__input.json');
+      writeFileSync(inputFile, encodeInput(JSON.stringify(caseData.input, null, 2), caseData.inputEncoding));
     }
 
     try {
@@ -1196,6 +1241,13 @@ async function verifyCase(skillName, caseName, skillConfig, caseData, opts) {
       const sourceFile = join(workDir, `${name}.xml`);
       if (!existsSync(sourceFile)) {
         result.errors.push(`EPF/ERF source not found: ${sourceFile}`);
+        return result;
+      }
+      const versionSkip = formatGapForXml(sourceFile, opts.v8ctx.v8path);
+      if (versionSkip) {
+        result.skipped = true;
+        result.skipReason = versionSkip;
+        log('epf-build', true, `skipped (${versionSkip})`);
         return result;
       }
       const outDir = join(workDir, '__build');
@@ -1531,7 +1583,10 @@ function discoverCases(skillFilter, caseFilter) {
       // без этой ветки такие кейсы молча выпадали из платформенной проверки — то есть ровно
       // из той, ради которой этот файл и существует.
       const hasFixtureSetup = typeof caseData.setup === 'string' && caseData.setup.startsWith('fixture:');
-      if (caseData.input === undefined && !caseData.preRun && !caseData.params && !hasFixtureSetup) continue;
+      // inputRaw — такой же вход, как input: кейс, подающий навыку сырую строку, отбрасывался
+      // здесь как «ничего не подаёт» и в верификацию не попадал вовсе.
+      const hasInput = caseData.input !== undefined || caseData.inputRaw !== undefined;
+      if (!hasInput && !caseData.preRun && !caseData.params && !hasFixtureSetup) continue;
 
       results.push({ skill: skillDir, caseName, caseData, skillConfig });
     }
@@ -1653,25 +1708,6 @@ async function main() {
   const passed = results.filter(r => r.passed).length;
   const skipped = results.filter(r => r.skipped).length;
   const failed = results.filter(r => !r.passed && !r.skipped).length;
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`Results: ${passed} passed, ${failed} failed`
-    + (skipped ? `, ${skipped} skipped` : '') + ` out of ${results.length}`);
-  // «Прошло» и «проверено платформой» — разные вещи: часть кейсов законно идёт мимо неё
-  // (навык отказал, выход не конфигурация, external). Пока эта доля не названа, отчёт читается
-  // как «всё проверено», хотя платформу спрашивали не у всех.
-  const onPlatform = results.filter(r => r.platformChecked).length;
-  // Только успешные: у падения обращение к платформе было — оно и не удалось, мешать их
-  // с «мимо платформы» значит завышать долю непроверенного.
-  const offPlatform = results.filter(r => r.passed && !r.skipped && !r.platformChecked);
-  console.log(`  из них проверено платформой: ${onPlatform}; без обращения к платформе: ${offPlatform.length}`);
-  const byReason = {};
-  for (const r of offPlatform) {
-    const key = r.noPlatformReason || 'причина не указана';
-    (byReason[key] = byReason[key] || []).push(`${r.skill}/${r.case}`);
-  }
-  for (const [reason, list] of Object.entries(byReason)) {
-    console.log(`    • ${list.length} — ${reason}`);
-  }
   for (const r of results.filter(x => x.skipped)) {
     console.log(`  \u25cb ${r.skill}/${r.case} \u2014 ${r.skipReason}`);
   }
@@ -1683,6 +1719,26 @@ async function main() {
   }
 
   writeReport(results);
+
+  console.log(`\n${'='.repeat(60)}`);
+  console.log(`Results: ${passed} passed, ${failed} failed`
+    + (skipped ? `, ${skipped} skipped` : '') + ` out of ${results.length}`);
+  // «Прошло» и «проверено платформой» — разные вещи: часть кейсов законно идёт мимо неё
+  // (навык отказал, выход не конфигурация, external). Пока эта доля не названа, отчёт читается
+  // как «всё проверено», хотя платформу спрашивали не у всех.
+  const onPlatform = results.filter(r => r.platformChecked).length;
+  // Только успешные: у падения обращение к платформе было — оно и не удалось, мешать его
+  // с «мимо платформы» значит завышать долю непроверенного.
+  const offPlatform = results.filter(r => r.passed && !r.skipped && !r.platformChecked);
+  const byReason = {};
+  for (const r of offPlatform) {
+    const key = r.noPlatformReason || 'причина не указана';
+    (byReason[key] = byReason[key] || []).push(`${r.skill}/${r.case}`);
+  }
+  console.log(`  из них проверено платформой: ${onPlatform}; прошло без обращения к платформе: ${offPlatform.length}`);
+  for (const [reason, list] of Object.entries(byReason)) {
+    console.log(`    • ${list.length} — ${reason}`);
+  }
   const unverified = opts.strict ? skipped : 0;
   if (unverified) console.error(`\n--strict: ${unverified} кейс(ов) пропущено — считаем падением`);
   process.exit(failed + unverified > 0 ? 1 : 0);
