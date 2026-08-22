@@ -4,13 +4,16 @@
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": {
-        "type": "InformationRegister",
-        "name": "КурсыВалют",
-        "periodicity": "Day",
-        "dimensions": ["Валюта: CatalogRef.Валюты"],
-        "resources": ["Курс: Number(15,4)"]
-      },
+      "input": [
+        { "type": "Catalog", "name": "Валюты" },
+        {
+          "type": "InformationRegister",
+          "name": "КурсыВалют",
+          "periodicity": "Day",
+          "dimensions": ["Валюта: CatalogRef.Валюты"],
+          "resources": ["Курс: Number(15,4)"]
+        }
+      ],
       "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
     }
   ],

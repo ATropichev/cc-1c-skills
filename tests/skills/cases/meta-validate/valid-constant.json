@@ -4,7 +4,10 @@
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "Constant", "name": "ОсновнаяВалюта", "valueType": "CatalogRef.Валюты" },
+      "input": [
+        { "type": "Catalog", "name": "Валюты" },
+        { "type": "Constant", "name": "ОсновнаяВалюта", "valueType": "CatalogRef.Валюты" }
+      ],
       "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
     }
   ],
