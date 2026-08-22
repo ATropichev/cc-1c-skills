@@ -1,0 +1,15 @@
+{
+  "name": "Состав журнала перечислен через xr:Item — не повод для предупреждения (Check 10)",
+  "setup": "fixture:journal-with-documents",
+  "params": {
+    "objectPath": "DocumentJournals/ТестЖурнал.xml"
+  },
+  "noSnapshot": "фикстура статична, meta-validate только читает и печатает — эталон зафиксировал бы саму фикстуру; проверяется stdout",
+  "skipPlatformVerify": "фикстура — журнал без документов, на которые он ссылается; полная загрузка такого дерева невозможна",
+  "expect": {
+    "stdoutNotContains": [
+      "[ERROR]",
+      "регистрируемые документы не заданы"
+    ]
+  }
+}

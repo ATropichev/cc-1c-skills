@@ -1,0 +1,15 @@
+{
+  "name": "Сервис интеграции — известный вид метаданных (Check 1)",
+  "setup": "fixture:integration-service",
+  "params": {
+    "objectPath": "IntegrationServices/ОбменСообщениями.xml"
+  },
+  "noSnapshot": "фикстура статична, meta-validate только читает и печатает — эталон зафиксировал бы саму фикстуру; проверяется stdout",
+  "skipPlatformVerify": "фикстура — один объект из типовой конфигурации без её остальной части; полная загрузка такого дерева невозможна",
+  "expect": {
+    "stdoutNotContains": [
+      "[ERROR]",
+      "Unrecognized metadata type"
+    ]
+  }
+}

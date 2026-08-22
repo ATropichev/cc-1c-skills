@@ -1,0 +1,11 @@
+{
+  "name": "Пустой источник подписки — платформа отвергает загрузку (Check 10)",
+  "setup": "fixture:subscription-empty-source",
+  "params": {
+    "objectPath": "EventSubscriptions/ТестПодписка.xml"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "источник событий не задан"
+  }
+}

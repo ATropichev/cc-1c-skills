@@ -1,0 +1,15 @@
+{
+  "name": "Пустой блок типа — тип «Произвольный», не ошибка (Check 7)",
+  "setup": "fixture:catalog-empty-type-block",
+  "params": {
+    "objectPath": "Catalogs/Товары.xml"
+  },
+  "noSnapshot": "фикстура статична, meta-validate только читает и печатает — эталон зафиксировал бы саму фикстуру; проверяется stdout",
+  "skipPlatformVerify": "фикстура — один объект без каталога форм; полная загрузка такого дерева невозможна",
+  "expect": {
+    "stdoutNotContains": [
+      "[ERROR]",
+      "Type block has no"
+    ]
+  }
+}
