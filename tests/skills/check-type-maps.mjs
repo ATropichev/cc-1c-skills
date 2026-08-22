@@ -84,7 +84,7 @@ const MAPS = [
     skill: 'meta-compile', file: 'meta-compile', kind: 'gentypes',
     py: 'generated_types', ps1: '$script:generatedTypes',
     exclude: {
-      IntegrationService: '',
+      IntegrationService: 'навык не создаёт объекты этого вида — генерируемых типов для него нет',
     },
   },
   {
@@ -95,7 +95,7 @@ const MAPS = [
     skill: 'meta-validate', file: 'meta-validate', kind: 'gencats',
     py: 'generated_type_categories', ps1: '$generatedTypeCategories',
     exclude: {
-      IntegrationService: '',
+      IntegrationService: 'в $structuralOnlyTypes — только структурная проверка',
       Sequence: 'в $structuralOnlyTypes — навык проверяет такие объекты только структурно (root/uuid/Name)',
       FilterCriterion: 'в $structuralOnlyTypes — только структурная проверка',
       SettingsStorage: 'в $structuralOnlyTypes — только структурная проверка',
