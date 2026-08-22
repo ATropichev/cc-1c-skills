@@ -3,13 +3,17 @@
 import argparse
 import os
 import re
-import subprocess
 import sys
 
 from lxml import etree
 
-sys.stdout.reconfigure(encoding="utf-8")
-sys.stderr.reconfigure(encoding="utf-8")
+# В batch скрипт выполняется повторно в том же процессе, и поток может оказаться подменённым
+# (у StringIO нет reconfigure) — кодировка к этому моменту уже выставлена первым прогоном.
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except AttributeError:
+    pass
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
 # регистр не различают, в argparse совпадение точное.
@@ -50,17 +54,36 @@ out_file = args.OutFile
 
 path_list = [p.strip() for p in args.ObjectPath.split('|') if p.strip()]
 if len(path_list) > 1:
+    # Каждый объект проверяется этим же скриптом в СВЕЖЕМ globals() — так же, как PS-порт вызывает
+    # себя через & (тот же процесс, новая область видимости). Отдельный процесс на объект стоил бы
+    # старта интерпретатора с импортом lxml (~146 мс) при разборе в единицы миллисекунд; здесь и
+    # старт, и компиляция файла платятся один раз на весь батч.
     batch_ok = 0
     batch_fail = 0
+    with open(__file__, encoding="utf-8") as _f:
+        _code = compile(_f.read(), __file__, "exec")
+    _saved_argv = sys.argv
     for single_path in path_list:
-        cmd = [sys.executable, __file__, "-ObjectPath", single_path, "-MaxErrors", str(max_errors)]
+        argv = ["meta-validate.py", "-ObjectPath", single_path, "-MaxErrors", str(max_errors)]
         if detailed:
-            cmd.append("-Detailed")
+            argv.append("-Detailed")
         if out_file:
             base, ext = os.path.splitext(out_file)
             obj_leaf = os.path.splitext(os.path.basename(single_path))[0]
-            cmd += ["-OutFile", f"{base}_{obj_leaf}{ext}"]
-        rc = subprocess.call(cmd)
+            argv += ["-OutFile", f"{base}_{obj_leaf}{ext}"]
+        sys.argv = argv
+        rc = 0
+        try:
+            exec(_code, {"__name__": "__main__", "__file__": __file__})
+        except SystemExit as e:
+            rc = e.code if isinstance(e.code, int) else 0
+        except Exception as e:
+            # Падение одного объекта не должно рвать батч — в варианте с отдельным процессом
+            # это обеспечивалось изоляцией процессов.
+            print(f"[ERROR] {single_path}: {type(e).__name__}: {e}", file=sys.stderr)
+            rc = 1
+        finally:
+            sys.argv = _saved_argv
         if rc == 0:
             batch_ok += 1
         else:
@@ -1417,8 +1440,9 @@ if child_obj_node is not None:
 #   нет в составе        -> платформа отвергнет загрузку всегда -> ERROR
 #   в составе, файла нет -> полная загрузка упадёт, частичная пройдёт -> WARN
 # ChildObjects конфигурации — плоский список <Вид>Имя</Вид>, поэтому ищем подстроку в границах секции
-# без копирования и без разбора XML: batch-режим порождает процесс на объект, и полная карта (~100 мс)
-# оплачивалась бы каждым объектом.
+# без копирования и без разбора XML. Кэш живёт только в пределах одного объекта: в batch-режиме
+# каждый следующий разбирается заново (в py — новый процесс, в PS — новая область видимости скрипта),
+# так что полная карта (~100 мс) оплачивалась бы каждым объектом.
 
 _cfg_text = None
 _cfg_child_lower = None
