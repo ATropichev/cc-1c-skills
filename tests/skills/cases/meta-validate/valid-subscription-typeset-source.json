@@ -1,0 +1,15 @@
+{
+  "name": "Источник подписки задан набором типов — не повод для предупреждения (Check 10)",
+  "setup": "fixture:subscription-typeset-source",
+  "params": {
+    "objectPath": "EventSubscriptions/ТестПодписка.xml"
+  },
+  "noSnapshot": "фикстура статична, meta-validate только читает и печатает — эталон зафиксировал бы саму фикстуру; проверяется stdout",
+  "skipPlatformVerify": "фикстура — подписка с общим модулем без остальной конфигурации; полная загрузка такого дерева невозможна",
+  "expect": {
+    "stdoutNotContains": [
+      "[ERROR]",
+      "источник событий не задан"
+    ]
+  }
+}

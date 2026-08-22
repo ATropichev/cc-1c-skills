@@ -1,4 +1,4 @@
-# meta-validate v1.22 — Validate 1C metadata object structure (Python port)
+# meta-validate v1.23 — Validate 1C metadata object structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -210,6 +210,7 @@ valid_types = (
 structural_only_types = (
     "Subsystem", "Role", "CommonForm", "CommonCommand", "CommandGroup", "CommonAttribute",
     "CommonTemplate", "CommonPicture", "SessionParameter", "SettingsStorage", "FilterCriterion",
+    "IntegrationService", "Bot",
     "FunctionalOption", "FunctionalOptionsParameter", "Language", "Style", "StyleItem",
     "WSReference", "XDTOPackage", "DocumentNumerator", "Sequence",
 )
@@ -253,7 +254,7 @@ standard_attributes_by_type = {
     "ChartOfCalculationTypes":    ["PredefinedDataName", "Predefined", "Ref", "DeletionMark", "Description", "Code", "ActionPeriodIsBasic"],
     "BusinessProcess":            ["Ref", "DeletionMark", "Date", "Number", "Started", "Completed", "HeadTask"],
     "Task":                       ["Ref", "DeletionMark", "Date", "Number", "Executed", "Description", "RoutePoint", "BusinessProcess"],
-    "ExchangePlan":               ["Ref", "DeletionMark", "Code", "Description", "ThisNode", "SentNo", "ReceivedNo"],
+    "ExchangePlan":               ["Ref", "DeletionMark", "Code", "Description", "ThisNode", "SentNo", "ReceivedNo", "ExchangeDate"],
     "DocumentJournal":            ["Type", "Ref", "Date", "Posted", "DeletionMark", "Number"],
 }
 
@@ -263,6 +264,8 @@ standard_attributes_by_type = {
 std_attr_conditional_names = {
     "AccountingRegister":   ("PeriodAdjustment", "RecordType"),
     "AccumulationRegister": ("RecordType",),
+    # ExchangeDate — легаси-реквизит, объявлен лишь у части планов обмена: допустим, но не обязателен.
+    "ExchangePlan":         ("ExchangeDate",),
 }
 
 # Types that have StandardAttributes block
@@ -732,14 +735,13 @@ def check_child_element(node, kind, require_type):
 
     if require_type:
         type_el = find(el_props, "md:Type")
+        # Пустой <Type/> — это тип «Произвольный», штатная конструкция: в типовых так описаны
+        # служебные реквизиты обработок, платформа принимает и сохраняет её без изменений
+        # (проверено round-trip). Ошибкой здесь был бы отказ там, где платформа не отказывает.
         if type_el is None:
-            report_error(f"7. {kind} '{name_val}' missing Type block")
-            return False
-        v8_types = find_all(type_el, "v8:Type")
-        v8_type_sets = find_all(type_el, "v8:TypeSet")
-        if len(v8_types) == 0 and len(v8_type_sets) == 0:
-            report_error(f"7. {kind} '{name_val}' Type block has no v8:Type or v8:TypeSet")
-            return False
+            # Блока Type нет вовсе: загрузка проходит, но платформа молча подставляет тип нового
+            # реквизита — Строка(10). Загрузку это не рвёт, а замысел теряет, отсюда WARN.
+            report_warn(f"7. {kind} '{name_val}' — блок Type не задан; при загрузке платформа подставит Строка(10)")
 
     return True
 
@@ -977,8 +979,13 @@ if props_node is not None:
     # HierarchyType set but Hierarchical = false
     hierarchical = find(props_node, "md:Hierarchical")
     hierarchy_type = find(props_node, "md:HierarchyType")
+    # HierarchyType платформа пишет всегда, независимо от Hierarchical, и при выключенной иерархии
+    # просто его игнорирует (проверено: значение переживает round-trip). Дефолтное значение поэтому
+    # ни о чём не говорит — предупреждаем только о явно заданном другом типе иерархии: это похоже
+    # на "тип иерархии выбрали, а саму иерархию включить забыли".
     if (hierarchical is not None and hierarchy_type is not None and
-            inner_text(hierarchical) == "false" and inner_text(hierarchy_type)):
+            inner_text(hierarchical) == "false" and inner_text(hierarchy_type)
+            and inner_text(hierarchy_type) != "HierarchyFoldersAndItems"):
         report_warn(f"10. HierarchyType='{inner_text(hierarchy_type)}' but Hierarchical=false")
         check10_issues += 1
 
@@ -1006,13 +1013,17 @@ if props_node is not None:
 
         # Empty Source
         source = find(props_node, "md:Source")
+        # Источник задают и наборами типов (<v8:TypeSet>cfg:CatalogObject</v8:TypeSet>) — в типовых
+        # так описана каждая четвёртая подписка. Реально пустой источник платформа отвергает:
+        # «ПодпискаНаСобытие.X - Источник событий должен быть задан», поэтому это ошибка.
         has_source = False
         if source is not None:
             source_types = find_all(source, "v8:Type")
-            if len(source_types) > 0:
+            source_type_sets = find_all(source, "v8:TypeSet")
+            if len(source_types) > 0 or len(source_type_sets) > 0:
                 has_source = True
         if not has_source:
-            report_warn("10. EventSubscription: no Source types specified")
+            report_error("10. EventSubscription: источник событий не задан — платформа отвергнет загрузку")
             check10_issues += 1
 
     # ScheduledJob: empty MethodName
@@ -1061,13 +1072,17 @@ if props_node is not None:
     # DocumentJournal: RegisteredDocuments should not be empty
     if md_type == 'DocumentJournal':
         reg_docs = find(props_node, 'md:RegisteredDocuments')
+        # Регистрируемые документы платформа перечисляет как <xr:Item xsi:type="xr:MDObjectRef">,
+        # так же их пишет meta-compile; форма с <v8:Type> сохранена на случай иных выгрузок.
+        # Пустой состав платформа отвергает: «Для журнала не заданы регистрируемые документы».
         has_reg_docs = False
         if reg_docs is not None:
             items = find_all(reg_docs, 'v8:Type')
-            if len(items) > 0:
+            ref_items = find_all(reg_docs, 'xr:Item')
+            if len(items) > 0 or len(ref_items) > 0:
                 has_reg_docs = True
         if not has_reg_docs:
-            report_warn('10. DocumentJournal: no RegisteredDocuments specified')
+            report_error('10. DocumentJournal: регистрируемые документы не заданы — платформа отвергнет загрузку')
             check10_issues += 1
 
     # ChartOfAccounts: ExtDimensionTypes should be set if MaxExtDimensionCount > 0
@@ -1301,10 +1316,17 @@ if props_node is not None and md_type in ("EventSubscription", "ScheduledJob") a
                 if os.path.exists(bsl_path):
                     with open(bsl_path, "r", encoding="utf-8-sig") as f:
                         bsl_content = f.read()
-                    export_pattern = rf"(?mi)^\s*(Procedure|Function|Процедура|Функция)\s+{re.escape(proc_name)}\s*\(.*\)\s+(Export|Экспорт)"
+                    # Список параметров переносится на следующие строки, и Экспорт оказывается не на
+                    # строке с именем — в типовых так объявлена каждая обработчик-процедура с длинной
+                    # сигнатурой. Отсюда (?s) для содержимого скобок и \s (а не пробел) перед Экспорт.
+                    export_pattern = rf"(?smi)^[ 	]*(Procedure|Function|Процедура|Функция)[ 	]+{re.escape(proc_name)}[ 	]*\([^)]*\)\s+(Export|Экспорт)"
                     if not re.search(export_pattern, bsl_content):
                         report_warn(f"13. {md_type}.{prop_label}: procedure '{proc_name}' not found as exported in CommonModule '{cm_name}'")
                         check13_ok = False
+                elif os.path.exists(os.path.splitext(bsl_path)[0] + ".bin"):
+                    # Модуль поставщика выгружен в двоичном виде (Module.bin) — текста нет by design,
+                    # проверять нечего. Предупреждать здесь значило бы шуметь о норме.
+                    pass
                 else:
                     report_warn(f"13. {md_type}.{prop_label}: BSL file not found ({bsl_path}), cannot verify procedure")
 

@@ -1,4 +1,4 @@
-﻿# meta-validate v1.22 — Validate 1C metadata object structure
+﻿# meta-validate v1.23 — Validate 1C metadata object structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -187,6 +187,7 @@ $validTypes = @(
 $structuralOnlyTypes = @(
 	"Subsystem","Role","CommonForm","CommonCommand","CommandGroup","CommonAttribute",
 	"CommonTemplate","CommonPicture","SessionParameter","SettingsStorage","FilterCriterion",
+	"IntegrationService","Bot",
 	"FunctionalOption","FunctionalOptionsParameter","Language","Style","StyleItem",
 	"WSReference","XDTOPackage","DocumentNumerator","Sequence"
 )
@@ -230,7 +231,7 @@ $standardAttributesByType = @{
 	"ChartOfCalculationTypes"    = @("PredefinedDataName","Predefined","Ref","DeletionMark","Description","Code","ActionPeriodIsBasic")
 	"BusinessProcess"            = @("Ref","DeletionMark","Date","Number","Started","Completed","HeadTask")
 	"Task"                       = @("Ref","DeletionMark","Date","Number","Executed","Description","RoutePoint","BusinessProcess")
-	"ExchangePlan"               = @("Ref","DeletionMark","Code","Description","ThisNode","SentNo","ReceivedNo")
+	"ExchangePlan"               = @("Ref","DeletionMark","Code","Description","ThisNode","SentNo","ReceivedNo","ExchangeDate")
 	"DocumentJournal"            = @("Type","Ref","Date","Posted","DeletionMark","Number")
 }
 
@@ -240,6 +241,8 @@ $standardAttributesByType = @{
 $stdAttrConditionalNames = @{
 	"AccountingRegister"   = @("PeriodAdjustment","RecordType")
 	"AccumulationRegister" = @("RecordType")
+	# ExchangeDate — легаси-реквизит, объявлен лишь у части планов обмена: допустим, но не обязателен.
+	"ExchangePlan"         = @("ExchangeDate")
 }
 
 # Types that have StandardAttributes block
@@ -738,16 +741,14 @@ function Check-ChildElement {
 	}
 
 	if ($requireType) {
+		# Пустой <Type/> — это тип «Произвольный», штатная конструкция: в типовых так описаны
+		# служебные реквизиты обработок, платформа принимает и сохраняет её без изменений
+		# (проверено round-trip). Ошибкой здесь был бы отказ там, где платформа не отказывает.
 		$typeEl = $elProps.SelectSingleNode("md:Type", $ns)
 		if (-not $typeEl) {
-			Report-Error "7. $kind '$nameVal' missing Type block"
-			return $false
-		}
-		$v8Types = $typeEl.SelectNodes("v8:Type", $ns)
-		$v8TypeSets = $typeEl.SelectNodes("v8:TypeSet", $ns)
-		if ($v8Types.Count -eq 0 -and $v8TypeSets.Count -eq 0) {
-			Report-Error "7. $kind '$nameVal' Type block has no v8:Type or v8:TypeSet"
-			return $false
+			# Блока Type нет вовсе: загрузка проходит, но платформа молча подставляет тип нового
+			# реквизита — Строка(10). Загрузку это не рвёт, а замысел теряет, отсюда WARN.
+			Report-Warn "7. $kind '$nameVal' — блок Type не задан; при загрузке платформа подставит Строка(10)"
 		}
 	}
 
@@ -1009,7 +1010,12 @@ if ($propsNode) {
 	# HierarchyType set but Hierarchical = false
 	$hierarchical = $propsNode.SelectSingleNode("md:Hierarchical", $ns)
 	$hierarchyType = $propsNode.SelectSingleNode("md:HierarchyType", $ns)
-	if ($hierarchical -and $hierarchyType -and $hierarchical.InnerText -eq "false" -and $hierarchyType.InnerText) {
+	# HierarchyType платформа пишет всегда, независимо от Hierarchical, и при выключенной иерархии
+	# просто его игнорирует (проверено: значение переживает round-trip). Дефолтное значение поэтому
+	# ни о чём не говорит — предупреждаем только о явно заданном другом типе иерархии: это похоже
+	# на "тип иерархии выбрали, а саму иерархию включить забыли".
+	if ($hierarchical -and $hierarchyType -and $hierarchical.InnerText -eq "false" -and
+		$hierarchyType.InnerText -and $hierarchyType.InnerText -ne "HierarchyFoldersAndItems") {
 		Report-Warn "10. HierarchyType='$($hierarchyType.InnerText)' but Hierarchical=false"
 		$check10Issues++
 	}
@@ -1042,13 +1048,17 @@ if ($propsNode) {
 
 		# Empty Source
 		$source = $propsNode.SelectSingleNode("md:Source", $ns)
+		# Источник задают и наборами типов (<v8:TypeSet>cfg:CatalogObject</v8:TypeSet>) — в типовых
+		# так описана каждая четвёртая подписка. Реально пустой источник платформа отвергает:
+		# «ПодпискаНаСобытие.X - Источник событий должен быть задан», поэтому это ошибка.
 		$hasSource = $false
 		if ($source) {
 			$sourceTypes = $source.SelectNodes("v8:Type", $ns)
-			if ($sourceTypes.Count -gt 0) { $hasSource = $true }
+			$sourceTypeSets = $source.SelectNodes("v8:TypeSet", $ns)
+			if ($sourceTypes.Count -gt 0 -or $sourceTypeSets.Count -gt 0) { $hasSource = $true }
 		}
 		if (-not $hasSource) {
-			Report-Warn "10. EventSubscription: no Source types specified"
+			Report-Error "10. EventSubscription: источник событий не задан — платформа отвергнет загрузку"
 			$check10Issues++
 		}
 	}
@@ -1110,13 +1120,17 @@ if ($propsNode) {
 	# DocumentJournal: RegisteredDocuments should not be empty
 	if ($mdType -eq "DocumentJournal") {
 		$regDocs = $propsNode.SelectSingleNode("md:RegisteredDocuments", $ns)
+		# Регистрируемые документы платформа перечисляет как <xr:Item xsi:type="xr:MDObjectRef">,
+		# так же их пишет meta-compile; форма с <v8:Type> сохранена на случай иных выгрузок.
+		# Пустой состав платформа отвергает: «Для журнала не заданы регистрируемые документы».
 		$hasRegDocs = $false
 		if ($regDocs) {
 			$items = $regDocs.SelectNodes("v8:Type", $ns)
-			if ($items.Count -gt 0) { $hasRegDocs = $true }
+			$refItems = $regDocs.SelectNodes("xr:Item", $ns)
+			if ($items.Count -gt 0 -or $refItems.Count -gt 0) { $hasRegDocs = $true }
 		}
 		if (-not $hasRegDocs) {
-			Report-Warn "10. DocumentJournal: no RegisteredDocuments specified"
+			Report-Error "10. DocumentJournal: регистрируемые документы не заданы — платформа отвергнет загрузку"
 			$check10Issues++
 		}
 	}
@@ -1373,11 +1387,17 @@ if ($propsNode -and $mdType -in @("EventSubscription","ScheduledJob") -and $scri
 				if (Test-Path $bslPath) {
 					$bslContent = [System.IO.File]::ReadAllText($bslPath, [System.Text.Encoding]::UTF8)
 					# Match: Procedure/Function ProcName(...) Export or Процедура/Функция ProcName(...) Экспорт
-					$exportPattern = "(?mi)^[\s]*(Procedure|Function|Процедура|Функция)\s+$([regex]::Escape($procName))\s*\(.*\)\s+(Export|Экспорт)"
+					# Список параметров переносится на следующие строки, и Экспорт оказывается не на
+					# строке с именем — в типовых так объявлена каждая обработчик-процедура с длинной
+					# сигнатурой. Отсюда (?s) для содержимого скобок и \s (а не пробел) перед Экспорт.
+					$exportPattern = "(?smi)^[ 	]*(Procedure|Function|Процедура|Функция)[ 	]+$([regex]::Escape($procName))[ 	]*\([^)]*\)\s+(Export|Экспорт)"
 					if (-not [regex]::IsMatch($bslContent, $exportPattern)) {
 						Report-Warn "13. ${mdType}.${propLabel}: procedure '$procName' not found as exported in CommonModule '$cmName'"
 						$check13Ok = $false
 					}
+				} elseif (Test-Path ([System.IO.Path]::ChangeExtension($bslPath, "bin"))) {
+					# Модуль поставщика выгружен в двоичном виде (Module.bin) — текста нет by design,
+					# проверять нечего. Предупреждать здесь значило бы шуметь о норме.
 				} else {
 					Report-Warn "13. ${mdType}.${propLabel}: BSL file not found ($bslPath), cannot verify procedure"
 				}

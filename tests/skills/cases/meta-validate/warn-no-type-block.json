@@ -1,0 +1,13 @@
+{
+  "name": "Блок типа отсутствует — платформа подставит Строка(10), это предупреждение (Check 7)",
+  "setup": "fixture:catalog-no-type-block",
+  "params": {
+    "objectPath": "Catalogs/Товары.xml"
+  },
+  "noSnapshot": "фикстура статична, meta-validate только читает и печатает — эталон зафиксировал бы саму фикстуру; проверяется stdout",
+  "skipPlatformVerify": "фикстура — один объект без каталога форм; полная загрузка такого дерева невозможна",
+  "expect": {
+    "stdoutContains": "блок Type не задан",
+    "stdoutNotContains": "[ERROR]"
+  }
+}

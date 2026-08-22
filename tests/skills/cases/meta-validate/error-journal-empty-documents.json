@@ -1,0 +1,11 @@
+{
+  "name": "Пустой состав журнала — платформа отвергает загрузку (Check 10)",
+  "setup": "fixture:journal-empty-documents",
+  "params": {
+    "objectPath": "DocumentJournals/ТестЖурнал.xml"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "регистрируемые документы не заданы"
+  }
+}

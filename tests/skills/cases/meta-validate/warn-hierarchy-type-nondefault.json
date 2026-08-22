@@ -1,0 +1,13 @@
+{
+  "name": "Недефолтный тип иерархии при выключенной иерархии — предупреждение (Check 10)",
+  "setup": "fixture:catalog-hierarchy-type-nondefault",
+  "params": {
+    "objectPath": "Catalogs/Прочие.xml"
+  },
+  "noSnapshot": "фикстура статична, meta-validate только читает и печатает — эталон зафиксировал бы саму фикстуру; проверяется stdout",
+  "skipPlatformVerify": "фикстура — один объект без остальной конфигурации; полная загрузка такого дерева невозможна",
+  "expect": {
+    "stdoutContains": "HierarchyType='HierarchyOfItems'",
+    "stdoutNotContains": "[ERROR]"
+  }
+}
