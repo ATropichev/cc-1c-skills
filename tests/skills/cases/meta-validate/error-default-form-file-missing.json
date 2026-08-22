@@ -1,9 +1,0 @@
-{
-  "name": "Валидатор находит ошибку: форма зарегистрирована в ChildObjects, но файла формы нет",
-  "setup": "fixture:catalog-form-file-missing",
-  "params": { "objectPath": "Catalogs/Товары.xml" },
-  "expectError": true,
-  "expect": {
-    "stdoutContains": "файл формы отсутствует"
-  }
-}

@@ -1,0 +1,9 @@
+{
+  "name": "Ссылка на общую форму, которой нет в составе конфигурации — ошибка",
+  "setup": "fixture:catalog-commonform-absent",
+  "params": { "objectPath": "Catalogs/Товары.xml" },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "общей формы нет в составе конфигурации"
+  }
+}
