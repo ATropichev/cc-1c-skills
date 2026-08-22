@@ -1,0 +1,9 @@
+{
+  "name": "Полная выгрузка: форма в ChildObjects, а файла формы нет — ошибка целостности",
+  "setup": "fixture:catalog-form-file-missing-full-tree",
+  "params": { "objectPath": "Catalogs/Товары.xml" },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "но файл формы отсутствует"
+  }
+}

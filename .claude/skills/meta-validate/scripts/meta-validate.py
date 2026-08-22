@@ -1,4 +1,4 @@
-# meta-validate v1.21 — Validate 1C metadata object structure (Python port)
+# meta-validate v1.22 — Validate 1C metadata object structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1388,21 +1388,77 @@ if child_obj_node is not None:
     if check15_ok and cmd_count > 0:
         report_ok(f"15. Commands: {cmd_count} command(s), groups valid")
 
+# ── Состав конфигурации (ChildObjects из Configuration.xml) ──
+# Платформа судит о существовании объекта по СОСТАВУ, а не по наличию файла. Файла может не быть
+# в частичной выгрузке: такой фрагмент грузится через /LoadConfigFromFiles -listFile слиянием с базой,
+# и ссылка на невыгруженный объект остаётся рабочей. Отсюда два разных исхода:
+#   нет в составе        -> платформа отвергнет загрузку всегда -> ERROR
+#   в составе, файла нет -> полная загрузка упадёт, частичная пройдёт -> WARN
+# ChildObjects конфигурации — плоский список <Вид>Имя</Вид>, поэтому ищем подстроку в границах секции
+# без копирования и без разбора XML: batch-режим порождает процесс на объект, и полная карта (~100 мс)
+# оплачивалась бы каждым объектом.
+
+_cfg_text = None
+_cfg_child_lower = None
+_cfg_child_start = -1
+_cfg_child_end = -1
+_cfg_text_loaded = False
+
+
+def _init_config_text():
+    global _cfg_text, _cfg_child_start, _cfg_child_end, _cfg_text_loaded
+    if _cfg_text_loaded:
+        return
+    _cfg_text_loaded = True
+    if not config_dir:
+        return
+    cfg_path = os.path.join(config_dir, "Configuration.xml")
+    if not os.path.exists(cfg_path):
+        return
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            _cfg_text = f.read()
+    except Exception:
+        _cfg_text = None
+        return
+    s = _cfg_text.find("<ChildObjects>")
+    e = _cfg_text.rfind("</ChildObjects>")
+    if s >= 0 and e > s:
+        _cfg_child_start = s
+        _cfg_child_end = e
+
+
+def config_is_extension():
+    _init_config_text()
+    return bool(_cfg_text) and "ConfigurationExtensionPurpose" in _cfg_text
+
+
+def in_config_composition(kind, name):
+    """True — объект есть в составе; False — нет; None — состав неизвестен
+    (нет Configuration.xml или в нём нет ChildObjects), тогда вызывающий оставляет мягкий уровень."""
+    global _cfg_child_lower
+    _init_config_text()
+    if _cfg_child_start < 0:
+        return None
+    needle = "<{0}>{1}</{0}>".format(kind, name)
+    if _cfg_text.find(needle, _cfg_child_start, _cfg_child_end) >= 0:
+        return True
+    # Промах по точному совпадению — сверяем без учёта регистра, как это делает платформа.
+    # Порядок именно такой: точный поиск на порядок дешевле, а промахи редки. Нижний регистр
+    # берём от СРЕЗА и проверяем факт вхождения: смещения в lower() совпадать с оригиналом не обязаны.
+    if _cfg_child_lower is None:
+        _cfg_child_lower = _cfg_text[_cfg_child_start:_cfg_child_end].lower()
+    return needle.lower() in _cfg_child_lower
+
+
 # ── Check 16: Reference type existence — типы вида CatalogRef.X должны разрешаться в объекты конфигурации ──
-# WARN-уровень: ложное срабатывание на частичных выгрузках хуже пропуска. Расширения (CFE) пропускаем —
-# их типы ссылаются на объекты базовой конфигурации, которых нет в выгрузке расширения.
+# Уровень выбирается по составу конфигурации: типа нет в ChildObjects — «Неизвестное имя типа» при
+# загрузке (ERROR); объект в составе есть, а файла в выгрузке нет — частичная выгрузка (WARN).
+# Расширения (CFE) пропускаем — их типы ссылаются на объекты базовой конфигурации, которых в выгрузке
+# расширения нет.
 
 if config_dir:
-    is_extension = False
-    cfg_xml_path = os.path.join(config_dir, "Configuration.xml")
-    if os.path.exists(cfg_xml_path):
-        try:
-            with open(cfg_xml_path, "r", encoding="utf-8") as f:
-                cfg_content = f.read()
-            if "ConfigurationExtensionPurpose" in cfg_content:
-                is_extension = True
-        except Exception:
-            pass
+    is_extension = config_is_extension()
     if not is_extension:
         ref_dir_map = {
             "CatalogRef": "Catalogs", "DocumentRef": "Documents", "EnumRef": "Enums",
@@ -1411,7 +1467,9 @@ if config_dir:
             "ExchangePlanRef": "ExchangePlans", "TaskRef": "Tasks", "DefinedType": "DefinedTypes",
         }
         checked_refs = {}   # ref_key -> найден ли; для условия OK
-        missing_refs = {}   # ref_key -> ref_dir
+        missing_refs = {}   # ref_key -> ref_dir; объект есть в составе, файла в выгрузке нет
+        absent_refs = {}    # ref_key -> ref_dir; объекта нет в составе конфигурации
+        unknown_refs = {}   # ref_key -> ref_dir; состав неизвестен (Configuration.xml без ChildObjects)
         for tn in find_all(root, ".//v8:Type"):
             tv = inner_text(tn).strip()
             if not tv:
@@ -1436,11 +1494,23 @@ if config_dir:
                 checked_refs[ref_key] = True
             else:
                 checked_refs[ref_key] = False
-                missing_refs[ref_key] = ref_dir
-        if missing_refs:
-            for mk in sorted(missing_refs):
-                report_warn(f"16. Ссылочный тип '{mk}' не найден в конфигурации ({missing_refs[mk]}/) — при загрузке будет ошибка неизвестного типа")
-        elif checked_refs:
+                # Вид метаданных в ChildObjects — это тип без суффикса Ref (CatalogRef -> Catalog);
+                # DefinedType суффикса не имеет и пишется в состав как есть.
+                ref_kind_tag = ref_cat[:-3] if ref_cat.endswith("Ref") else ref_cat
+                in_composition = in_config_composition(ref_kind_tag, ref_name)
+                if in_composition is False:
+                    absent_refs[ref_key] = ref_dir
+                elif in_composition is True:
+                    missing_refs[ref_key] = ref_dir
+                else:
+                    unknown_refs[ref_key] = ref_dir
+        for ak in sorted(absent_refs):
+            report_error(f"16. Ссылочный тип '{ak}' — объекта нет в составе конфигурации ({absent_refs[ak]}/) — «Неизвестное имя типа» при загрузке")
+        for mk in sorted(missing_refs):
+            report_warn(f"16. Ссылочный тип '{mk}' — объект есть в составе конфигурации, файла объекта в выгрузке нет ({missing_refs[mk]}/)")
+        for uk in sorted(unknown_refs):
+            report_warn(f"16. Ссылочный тип '{uk}' не найден в конфигурации ({unknown_refs[uk]}/)")
+        if not absent_refs and not missing_refs and not unknown_refs and checked_refs:
             report_ok(f"16. Reference types: {len(checked_refs)} resolved")
 
 # ── Check 18: свойства, появившиеся в новых версиях формата ──
@@ -1510,6 +1580,11 @@ if md_ref_nodes:
 # регистрацию формы в ChildObjects — работает и на одиночном файле; для чужого и общей формы нужна
 # конфигурация. Заимствованные объекты расширения (ObjectBelonging=Adopted) пропускаем: их формы
 # живут в основной конфигурации, в выгрузке расширения их нет.
+#
+# Уровень везде выбирается по составу, а не по наличию файла (см. in_config_composition):
+# нет в ChildObjects — платформа откажет и при полной, и при частичной загрузке (ERROR);
+# в составе есть, а файла в выгрузке нет — это фрагмент частичной выгрузки, и загрузится он или нет,
+# зависит от состояния конфигурации БД, которого валидатору не видно (WARN).
 
 form_owner_dir_map = {
     "Catalog": "Catalogs", "Document": "Documents", "DocumentJournal": "DocumentJournals",
@@ -1537,16 +1612,7 @@ def _form_file_exists_20(base_dir, form_name):
 
 
 if not is_adopted:
-    is_extension_20 = False
-    if config_dir:
-        cfg_xml_path_20 = os.path.join(config_dir, "Configuration.xml")
-        if os.path.exists(cfg_xml_path_20):
-            try:
-                with open(cfg_xml_path_20, "r", encoding="utf-8") as f:
-                    if "ConfigurationExtensionPurpose" in f.read():
-                        is_extension_20 = True
-            except Exception:
-                pass
+    is_extension_20 = config_is_extension()
 
     # формы своего объекта: имена из ChildObjects (сравнение регистронезависимое — как у платформы)
     own_forms = {}
@@ -1585,9 +1651,13 @@ if not is_adopted:
                      or os.path.exists(os.path.join(cf_dir, "Ext", "Form.xml"))
                      or os.path.exists(os.path.join(cf_dir, "Form.xml")))
             if not cf_ok:
-                report_error(f"20. {tag} '{ref}' — общая форма не найдена в конфигурации "
-                             f"(CommonForms/{parts[1]}) — «Неизвестный объект метаданных» при загрузке")
-                form_ref_bad = True
+                if in_config_composition("CommonForm", parts[1]) is True:
+                    report_warn(f"20. {tag} '{ref}' — общая форма есть в составе конфигурации, "
+                                f"файла формы в выгрузке нет (CommonForms/{parts[1]})")
+                else:
+                    report_error(f"20. {tag} '{ref}' — общей формы нет в составе конфигурации "
+                                 f"(CommonForms/{parts[1]}) — «Неизвестный объект метаданных» при загрузке")
+                    form_ref_bad = True
             continue
 
         if len(parts) != 4 or parts[2] != "Form":
@@ -1604,9 +1674,17 @@ if not is_adopted:
                              f"ChildObjects объекта (есть: {known}) — «Неизвестный объект метаданных» при загрузке")
                 form_ref_bad = True
             elif os.path.isdir(own_dir) and not _form_file_exists_20(own_dir, ref_form):
-                report_error(f"20. {tag} '{ref}' — форма зарегистрирована в ChildObjects, но файл "
-                             f"формы отсутствует ({obj_name}/Forms/{ref_form})")
-                form_ref_bad = True
+                # Форма в составе объекта есть, файла нет. Для дерева, претендующего на полноту
+                # (рядом лежит Configuration.xml), это ошибка целостности — полная загрузка упадёт
+                # на «Файл объекта не существует». Для фрагмента частичной выгрузки — норма:
+                # такой файл грузится через -listFile слиянием с конфигурацией БД.
+                if config_dir:
+                    report_error(f"20. {tag} '{ref}' — форма зарегистрирована в ChildObjects, но файл "
+                                 f"формы отсутствует ({obj_name}/Forms/{ref_form})")
+                    form_ref_bad = True
+                else:
+                    report_warn(f"20. {tag} '{ref}' — форма есть в ChildObjects, файла формы "
+                                f"в выгрузке нет ({obj_name}/Forms/{ref_form})")
             continue
 
         # чужой объект (например журнал документов) — нужна конфигурация
@@ -1618,7 +1696,16 @@ if not is_adopted:
             continue
         ref_obj_xml = os.path.join(config_dir, ref_dir_20, ref_obj + ".xml")
         if not os.path.exists(ref_obj_xml):
-            report_warn(f"20. {tag} '{ref}' — объект '{ref_kind}.{ref_obj}' не найден в конфигурации ({ref_dir_20}/)")
+            obj_in_composition = in_config_composition(ref_kind, ref_obj)
+            if obj_in_composition is False:
+                report_error(f"20. {tag} '{ref}' — объекта '{ref_kind}.{ref_obj}' нет в составе "
+                             f"конфигурации ({ref_dir_20}/) — «Неизвестный объект метаданных» при загрузке")
+                form_ref_bad = True
+            elif obj_in_composition is True:
+                report_warn(f"20. {tag} '{ref}' — объект '{ref_kind}.{ref_obj}' есть в составе "
+                            f"конфигурации, файла объекта в выгрузке нет ({ref_dir_20}/)")
+            else:
+                report_warn(f"20. {tag} '{ref}' — объект '{ref_kind}.{ref_obj}' не найден в конфигурации ({ref_dir_20}/)")
             continue
         if not _form_file_exists_20(os.path.join(config_dir, ref_dir_20, ref_obj), ref_form):
             report_error(f"20. {tag} '{ref}' — форма '{ref_form}' не найдена у объекта "

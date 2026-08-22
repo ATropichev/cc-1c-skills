@@ -1,4 +1,4 @@
-﻿# meta-validate v1.21 — Validate 1C metadata object structure
+﻿# meta-validate v1.22 — Validate 1C metadata object structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1466,17 +1466,69 @@ if ($childObjNode) {
 	}
 }
 
+# --- Состав конфигурации (ChildObjects из Configuration.xml) ---
+# Платформа судит о существовании объекта по СОСТАВУ, а не по наличию файла. Файла может не быть
+# в частичной выгрузке: такой фрагмент грузится через /LoadConfigFromFiles -listFile слиянием с базой,
+# и ссылка на невыгруженный объект остаётся рабочей. Отсюда два разных исхода:
+#   нет в составе        -> платформа отвергнет загрузку всегда -> ERROR
+#   в составе, файла нет -> полная загрузка упадёт, частичная пройдёт -> WARN
+# ChildObjects конфигурации — плоский список <Вид>Имя</Вид>, поэтому ищем подстроку в границах секции
+# без копирования и без разбора XML: batch-режим порождает процесс на объект, и полная карта (~100 мс)
+# оплачивалась бы каждым объектом.
+
+$script:cfgText = $null
+$script:cfgChildStart = -1
+$script:cfgChildLen = 0
+$script:cfgTextLoaded = $false
+
+function Initialize-ConfigText {
+	if ($script:cfgTextLoaded) { return }
+	$script:cfgTextLoaded = $true
+	if (-not $script:configDir) { return }
+	$cfgPath = Join-Path $script:configDir "Configuration.xml"
+	if (-not (Test-Path $cfgPath)) { return }
+	try {
+		$script:cfgText = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
+	} catch {
+		$script:cfgText = $null
+		return
+	}
+	$s = $script:cfgText.IndexOf('<ChildObjects>', [System.StringComparison]::Ordinal)
+	$e = $script:cfgText.LastIndexOf('</ChildObjects>', [System.StringComparison]::Ordinal)
+	if ($s -ge 0 -and $e -gt $s) {
+		$script:cfgChildStart = $s
+		$script:cfgChildLen = $e - $s
+	}
+}
+
+function Test-ConfigIsExtension {
+	Initialize-ConfigText
+	if (-not $script:cfgText) { return $false }
+	return $script:cfgText.Contains("ConfigurationExtensionPurpose")
+}
+
+# $true — объект есть в составе; $false — нет; $null — состав неизвестен (нет Configuration.xml
+# или в нём нет ChildObjects), тогда вызывающий оставляет мягкий уровень.
+function Test-InConfigComposition([string]$kind, [string]$name) {
+	Initialize-ConfigText
+	if ($script:cfgChildStart -lt 0) { return $null }
+	$needle = "<$kind>$name</$kind>"
+	if ($script:cfgText.IndexOf($needle, $script:cfgChildStart, $script:cfgChildLen, [System.StringComparison]::Ordinal) -ge 0) {
+		return $true
+	}
+	# Промах по точному совпадению — сверяем без учёта регистра, как это делает платформа.
+	# Порядок именно такой: Ordinal на порядок дешевле, а промахи редки.
+	return ($script:cfgText.IndexOf($needle, $script:cfgChildStart, $script:cfgChildLen, [System.StringComparison]::OrdinalIgnoreCase) -ge 0)
+}
+
 # --- Check 16: Reference type existence — типы вида CatalogRef.X должны разрешаться в объекты конфигурации ---
-# WARN-уровень: ложное срабатывание на частичных выгрузках хуже пропуска. Расширения (CFE) пропускаем —
-# их типы ссылаются на объекты базовой конфигурации, которых нет в выгрузке расширения.
+# Уровень выбирается по составу конфигурации: типа нет в ChildObjects — «Неизвестное имя типа» при
+# загрузке (ERROR); объект в составе есть, а файла в выгрузке нет — частичная выгрузка (WARN).
+# Расширения (CFE) пропускаем — их типы ссылаются на объекты базовой конфигурации, которых в выгрузке
+# расширения нет.
 
 if ($script:configDir) {
-	$isExtension = $false
-	$cfgXmlPath = Join-Path $script:configDir "Configuration.xml"
-	if (Test-Path $cfgXmlPath) {
-		$cfgContent = [System.IO.File]::ReadAllText($cfgXmlPath, [System.Text.Encoding]::UTF8)
-		if ($cfgContent.Contains("ConfigurationExtensionPurpose")) { $isExtension = $true }
-	}
+	$isExtension = Test-ConfigIsExtension
 	if (-not $isExtension) {
 		$refDirMap = @{
 			"CatalogRef"="Catalogs"; "DocumentRef"="Documents"; "EnumRef"="Enums"
@@ -1486,7 +1538,9 @@ if ($script:configDir) {
 		}
 		$typeNodes = $xmlDoc.SelectNodes("//v8:Type", $ns)
 		$checkedRefs = @{}   # refKey -> $true если найден; для OK-условия
-		$missingRefs = @{}   # refKey -> refDir
+		$missingRefs = @{}   # refKey -> refDir; объект есть в составе, файла в выгрузке нет
+		$absentRefs = @{}    # refKey -> refDir; объекта нет в составе конфигурации
+		$unknownRefs = @{}   # refKey -> refDir; состав неизвестен (Configuration.xml без ChildObjects)
 		foreach ($tn in $typeNodes) {
 			$tv = $tn.InnerText.Trim()
 			if (-not $tv) { continue }
@@ -1506,14 +1560,35 @@ if ($script:configDir) {
 				$checkedRefs[$refKey] = $true
 			} else {
 				$checkedRefs[$refKey] = $false
-				$missingRefs[$refKey] = $refDir
+				# Вид метаданных в ChildObjects — это тип без суффикса Ref (CatalogRef -> Catalog);
+				# DefinedType суффикса не имеет и пишется в состав как есть.
+				$refKindTag = if ($refCat.EndsWith("Ref")) { $refCat.Substring(0, $refCat.Length - 3) } else { $refCat }
+				$inComposition = Test-InConfigComposition $refKindTag $refName
+				if ($inComposition -eq $false) {
+					$absentRefs[$refKey] = $refDir
+				} elseif ($inComposition -eq $true) {
+					$missingRefs[$refKey] = $refDir
+				} else {
+					$unknownRefs[$refKey] = $refDir
+				}
+			}
+		}
+		if ($absentRefs.Count -gt 0) {
+			foreach ($ak in ($absentRefs.Keys | Sort-Object)) {
+				Report-Error "16. Ссылочный тип '$ak' — объекта нет в составе конфигурации ($($absentRefs[$ak])/) — «Неизвестное имя типа» при загрузке"
 			}
 		}
 		if ($missingRefs.Count -gt 0) {
 			foreach ($mk in ($missingRefs.Keys | Sort-Object)) {
-				Report-Warn "16. Ссылочный тип '$mk' не найден в конфигурации ($($missingRefs[$mk])/) — при загрузке будет ошибка неизвестного типа"
+				Report-Warn "16. Ссылочный тип '$mk' — объект есть в составе конфигурации, файла объекта в выгрузке нет ($($missingRefs[$mk])/)"
 			}
-		} elseif ($checkedRefs.Count -gt 0) {
+		}
+		if ($unknownRefs.Count -gt 0) {
+			foreach ($uk in ($unknownRefs.Keys | Sort-Object)) {
+				Report-Warn "16. Ссылочный тип '$uk' не найден в конфигурации ($($unknownRefs[$uk])/)"
+			}
+		}
+		if ($absentRefs.Count -eq 0 -and $missingRefs.Count -eq 0 -and $unknownRefs.Count -eq 0 -and $checkedRefs.Count -gt 0) {
 			Report-OK "16. Reference types: $($checkedRefs.Count) resolved"
 		}
 	}
@@ -1590,6 +1665,11 @@ if ($mdRefNodes -and $mdRefNodes.Count -gt 0) {
 # регистрацию формы в ChildObjects — работает и на одиночном файле; для чужого и общей формы нужна
 # конфигурация. Заимствованные объекты расширения (ObjectBelonging=Adopted) пропускаем: их формы
 # живут в основной конфигурации, в выгрузке расширения их нет.
+#
+# Уровень везде выбирается по составу, а не по наличию файла (см. Test-InConfigComposition):
+# нет в ChildObjects — платформа откажет и при полной, и при частичной загрузке (ERROR);
+# в составе есть, а файла в выгрузке нет — это фрагмент частичной выгрузки, и загрузится он или нет,
+# зависит от состояния конфигурации БД, которого валидатору не видно (WARN).
 
 $formOwnerDirMap = @{
 	"Catalog"="Catalogs"; "Document"="Documents"; "DocumentJournal"="DocumentJournals"
@@ -1606,14 +1686,7 @@ $belongingNode = $typeNode.SelectSingleNode("md:Properties/md:ObjectBelonging", 
 $isAdopted = $belongingNode -and $belongingNode.InnerText.Trim() -eq "Adopted"
 
 if (-not $isAdopted) {
-	$isExtension20 = $false
-	if ($script:configDir) {
-		$cfgXmlPath20 = Join-Path $script:configDir "Configuration.xml"
-		if (Test-Path $cfgXmlPath20) {
-			$cfgContent20 = [System.IO.File]::ReadAllText($cfgXmlPath20, [System.Text.Encoding]::UTF8)
-			if ($cfgContent20.Contains("ConfigurationExtensionPurpose")) { $isExtension20 = $true }
-		}
-	}
+	$isExtension20 = Test-ConfigIsExtension
 
 	# формы своего объекта: имена из ChildObjects (сравнение регистронезависимое — как у платформы)
 	$ownForms = @{}
@@ -1656,8 +1729,13 @@ if (-not $isAdopted) {
 			$cfDir = Join-Path (Join-Path $script:configDir "CommonForms") $parts[1]
 			$cfOk = (Test-Path "$cfDir.xml") -or (Test-Path (Join-Path (Join-Path $cfDir "Ext") "Form.xml")) -or (Test-Path (Join-Path $cfDir "Form.xml"))
 			if (-not $cfOk) {
-				Report-Error "20. $tag '$ref' — общая форма не найдена в конфигурации (CommonForms/$($parts[1])) — «Неизвестный объект метаданных» при загрузке"
-				$formRefBad = $true
+				$cfInComposition = Test-InConfigComposition "CommonForm" $parts[1]
+				if ($cfInComposition -eq $true) {
+					Report-Warn "20. $tag '$ref' — общая форма есть в составе конфигурации, файла формы в выгрузке нет (CommonForms/$($parts[1]))"
+				} else {
+					Report-Error "20. $tag '$ref' — общей формы нет в составе конфигурации (CommonForms/$($parts[1])) — «Неизвестный объект метаданных» при загрузке"
+					$formRefBad = $true
+				}
 			}
 			continue
 		}
@@ -1675,8 +1753,16 @@ if (-not $isAdopted) {
 				Report-Error "20. $tag '$ref' — форма '$refForm' не зарегистрирована в ChildObjects объекта (есть: $known) — «Неизвестный объект метаданных» при загрузке"
 				$formRefBad = $true
 			} elseif ((Test-Path $ownDir) -and -not (Test-FormFile20 $ownDir $refForm)) {
-				Report-Error "20. $tag '$ref' — форма зарегистрирована в ChildObjects, но файл формы отсутствует ($objName/Forms/$refForm)"
-				$formRefBad = $true
+				# Форма в составе объекта есть, файла нет. Для дерева, претендующего на полноту
+				# (рядом лежит Configuration.xml), это ошибка целостности — полная загрузка упадёт
+				# на «Файл объекта не существует». Для фрагмента частичной выгрузки — норма:
+				# такой файл грузится через -listFile слиянием с конфигурацией БД.
+				if ($script:configDir) {
+					Report-Error "20. $tag '$ref' — форма зарегистрирована в ChildObjects, но файл формы отсутствует ($objName/Forms/$refForm)"
+					$formRefBad = $true
+				} else {
+					Report-Warn "20. $tag '$ref' — форма есть в ChildObjects, файла формы в выгрузке нет ($objName/Forms/$refForm)"
+				}
 			}
 			continue
 		}
@@ -1690,7 +1776,15 @@ if (-not $isAdopted) {
 		}
 		$refObjXml = Join-Path (Join-Path $script:configDir $refDir20) "$refObj.xml"
 		if (-not (Test-Path $refObjXml)) {
-			Report-Warn "20. $tag '$ref' — объект '$refKind.$refObj' не найден в конфигурации ($refDir20/)"
+			$objInComposition = Test-InConfigComposition $refKind $refObj
+			if ($objInComposition -eq $false) {
+				Report-Error "20. $tag '$ref' — объекта '$refKind.$refObj' нет в составе конфигурации ($refDir20/) — «Неизвестный объект метаданных» при загрузке"
+				$formRefBad = $true
+			} elseif ($objInComposition -eq $true) {
+				Report-Warn "20. $tag '$ref' — объект '$refKind.$refObj' есть в составе конфигурации, файла объекта в выгрузке нет ($refDir20/)"
+			} else {
+				Report-Warn "20. $tag '$ref' — объект '$refKind.$refObj' не найден в конфигурации ($refDir20/)"
+			}
 			continue
 		}
 		if (-not (Test-FormFile20 (Join-Path (Join-Path $script:configDir $refDir20) $refObj) $refForm)) {

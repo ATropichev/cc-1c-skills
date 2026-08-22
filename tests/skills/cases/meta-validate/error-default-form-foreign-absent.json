@@ -1,0 +1,9 @@
+{
+  "name": "Ссылка на форму чужого объекта, которого нет в составе конфигурации — ошибка (#84)",
+  "setup": "fixture:catalog-foreign-form-absent",
+  "params": { "objectPath": "Catalogs/Товары.xml" },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "объекта 'Document.НетТакого' нет в составе конфигурации"
+  }
+}
