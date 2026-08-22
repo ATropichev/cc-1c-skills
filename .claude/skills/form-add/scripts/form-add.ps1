@@ -1,4 +1,4 @@
-﻿# form-add v1.27 — Add managed form to 1C config object (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# form-add v1.28 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -15,6 +15,10 @@ param(
 	# по умолчанию было бы неверным для видов, у которых формы объекта не бывает.
 	[string]$Purpose = "",
 
+	# Алиас с дефисом внутри имени: вызов вида --set-default PowerShell разбирает как имя
+	# параметра "set-default" и без алиаса отвечает отказом биндинга. Написания -SetDefault,
+	# --SetDefault и --setdefault совпадают с именем параметра и так.
+	[Alias('set-default')]
 	[switch]$SetDefault
 )
 
@@ -424,6 +428,34 @@ Write-Host "Object: $objectType.$objectName"
 
 # Назначение ищем в таблице регистронезависимо — как принимает PowerShell (в py-порту .lower()).
 $kindPurposes = $formKinds[$objectType]
+
+# Обиходные написания назначения приводим к канону молча: русское название вида формы и
+# английское с суффиксом Form. Ключ нормализуем — регистр, пробелы и разделители не значимы.
+# Канон в документации один; здесь только приём ошибочного ввода, чтобы вызов не падал на форме
+# записи вместо назначения. Применимость назначения к виду объекта проверяется ниже как обычно.
+$purposeSynonyms = @{
+	"формаобъекта"="Object"; "формаэлемента"="Object"; "формадокумента"="Object"
+	"объект"="Object"; "элемент"="Object"; "документ"="Object"; "objectform"="Object"
+	"формасписка"="List"; "список"="List"; "listform"="List"
+	"формавыбора"="Choice"; "выбор"="Choice"; "choiceform"="Choice"
+	"формагруппы"="Folder"; "группа"="Folder"; "folderform"="Folder"
+	"формавыборагруппы"="FolderChoice"; "выборгруппы"="FolderChoice"; "folderchoiceform"="FolderChoice"
+	"формазаписи"="Record"; "запись"="Record"; "recordform"="Record"
+	"форманаборазаписей"="RecordSet"; "наборзаписей"="RecordSet"; "recordsetform"="RecordSet"
+	"формасохранения"="Save"; "формасохранениянастроек"="Save"; "сохранение"="Save"; "saveform"="Save"
+	"формазагрузки"="Load"; "формазагрузкинастроек"="Load"; "загрузка"="Load"; "loadform"="Load"
+	"произвольная"="Custom"; "произвольнаяформа"="Custom"; "customform"="Custom"
+}
+if ($Purpose) {
+	$purposeProbe = ($Purpose -replace '[\s_-]', '').ToLowerInvariant()
+	$isKnownPurpose = $false
+	foreach ($p in $kindPurposes.Keys) {
+		if ($p.ToLowerInvariant() -eq $Purpose.ToLowerInvariant()) { $isKnownPurpose = $true; break }
+	}
+	if (-not $isKnownPurpose -and $purposeSynonyms.ContainsKey($purposeProbe)) {
+		$Purpose = $purposeSynonyms[$purposeProbe]
+	}
+}
 if (-not $Purpose) {
 	foreach ($p in $kindPurposes.Keys) {
 		if ($kindPurposes[$p].Primary) { $Purpose = $p; break }

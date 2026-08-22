@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-add v1.27 — Add managed form to 1C config object (+write_xml_file/write_utf8_bom: общий эталон записи)
+# form-add v1.28 — Add managed form to 1C config object (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -326,7 +326,10 @@ def main():
     # Пусто = основная форма вида (primary в таблице): у справочника это форма объекта,
     # у регистра сведений — форма записи, у журнала — форма списка.
     parser.add_argument("-Purpose", default="")
-    parser.add_argument("-SetDefault", action="store_true")
+    # Написания с дефисом внутри имени и с двойным дефисом: в PS-порте их принимает алиас
+    # set-default, здесь — перечисление опций, чтобы порты принимали ровно одно и то же.
+    parser.add_argument("-SetDefault", "--SetDefault", "--set-default", "-set-default",
+                        dest="SetDefault", action="store_true")
     args = ci_parse_args(parser)
 
     object_path = args.ObjectPath
@@ -610,6 +613,33 @@ def main():
 
     # Назначение ищем в таблице регистронезависимо — как принимает PowerShell.
     kind_purposes = form_kinds[object_type]
+
+    # Обиходные написания назначения приводим к канону молча: русское название вида формы и
+    # английское с суффиксом Form. Ключ нормализуем — регистр, пробелы и разделители не значимы.
+    # Канон в документации один; здесь только приём ошибочного ввода, чтобы вызов не падал на форме
+    # записи вместо назначения. Применимость назначения к виду объекта проверяется ниже как обычно.
+    purpose_synonyms = {
+        "формаобъекта": "Object", "формаэлемента": "Object", "формадокумента": "Object",
+        "объект": "Object", "элемент": "Object", "документ": "Object", "objectform": "Object",
+        "формасписка": "List", "список": "List", "listform": "List",
+        "формавыбора": "Choice", "выбор": "Choice", "choiceform": "Choice",
+        "формагруппы": "Folder", "группа": "Folder", "folderform": "Folder",
+        "формавыборагруппы": "FolderChoice", "выборгруппы": "FolderChoice",
+        "folderchoiceform": "FolderChoice",
+        "формазаписи": "Record", "запись": "Record", "recordform": "Record",
+        "форманаборазаписей": "RecordSet", "наборзаписей": "RecordSet", "recordsetform": "RecordSet",
+        "формасохранения": "Save", "формасохранениянастроек": "Save", "сохранение": "Save",
+        "saveform": "Save",
+        "формазагрузки": "Load", "формазагрузкинастроек": "Load", "загрузка": "Load",
+        "loadform": "Load",
+        "произвольная": "Custom", "произвольнаяформа": "Custom", "customform": "Custom",
+    }
+    if purpose:
+        purpose_probe = re.sub(r"[\s_-]", "", purpose).lower()
+        is_known_purpose = any(k.lower() == purpose.lower() for k in kind_purposes)
+        if not is_known_purpose and purpose_probe in purpose_synonyms:
+            purpose = purpose_synonyms[purpose_probe]
+
     if not purpose:
         for k, rule in kind_purposes.items():
             if rule.get("primary"):

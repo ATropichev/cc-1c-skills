@@ -1,7 +1,7 @@
 ---
 name: form-add
 description: Добавить пустую управляемую форму к объекту 1С. Используй когда нужно создать у объекта новую форму
-argument-hint: <ObjectPath> <FormName> [Purpose] [--set-default]
+argument-hint: <ObjectPath> <FormName> [-Purpose <Purpose>] [-Synonym <Synonym>] [-SetDefault]
 allowed-tools:
   - Bash
   - Read
@@ -18,7 +18,7 @@ allowed-tools:
 ## Usage
 
 ```
-/form-add <ObjectPath> <FormName> [Purpose] [Synonym] [--set-default]
+/form-add <ObjectPath> <FormName> [-Purpose <Purpose>] [-Synonym <Synonym>] [-SetDefault]
 ```
 
 | Параметр    | Обязательный | По умолчанию | Описание                                     |
@@ -27,7 +27,7 @@ allowed-tools:
 | FormName    | да           | —            | Имя формы (ФормаДокумента)                    |
 | Purpose     | нет          | основная форма вида | Назначение формы — см. таблицу ниже: у справочника это форма объекта, у регистра сведений — форма записи, у журнала — форма списка |
 | Synonym     | нет          | = FormName   | Синоним формы                                 |
-| --set-default | нет        | авто         | Сделать основной. Без флага основной становится первая форма каждого назначения |
+| -SetDefault | нет          | авто         | Сделать основной. Без флага основной становится первая форма каждого назначения |
 
 ## Команда
 
@@ -70,19 +70,19 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/form-add.ps1" -Obje
 
 ```
 # Форма документа
-/form-add Documents/АвансовыйОтчет.xml ФормаДокумента --purpose Object
+/form-add Documents/АвансовыйОтчет.xml ФормаДокумента -Purpose Object
 
 # Форма списка каталога
-/form-add Catalogs/Контрагенты.xml ФормаСписка --purpose List
+/form-add Catalogs/Контрагенты.xml ФормаСписка -Purpose List
 
 # Форма записи регистра сведений
-/form-add InformationRegisters/КурсыВалют.xml ФормаЗаписи --purpose Record
+/form-add InformationRegisters/КурсыВалют.xml ФормаЗаписи -Purpose Record
 
 # Форма выбора с синонимом
-/form-add Catalogs/Номенклатура.xml ФормаВыбора --purpose Choice --synonym "Выбор номенклатуры"
+/form-add Catalogs/Номенклатура.xml ФормаВыбора -Purpose Choice -Synonym "Выбор номенклатуры"
 
 # Установить как форму по умолчанию
-/form-add Documents/Заказ.xml ФормаДокументаНовая --purpose Object --set-default
+/form-add Documents/Заказ.xml ФормаДокументаНовая -Purpose Object -SetDefault
 ```
 
 ## Workflow

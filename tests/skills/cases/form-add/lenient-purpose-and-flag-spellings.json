@@ -1,0 +1,22 @@
+{
+  "name": "Обиходные написания параметров принимаются: русское назначение и флаг через двойной дефис",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "ТестПрощающийВвод" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    }
+  ],
+  "params": {
+    "objectPath": "Catalogs/ТестПрощающийВвод.xml",
+    "formName": "ФормаСпискаТест"
+  },
+  "args_extra": ["-Purpose", "ФормаСписка", "--set-default"],
+  "validatePath": "Catalogs/ТестПрощающийВвод/Forms/ФормаСпискаТест",
+  "expect": {
+    "fileContains": {
+      "file": "Catalogs/ТестПрощающийВвод.xml",
+      "text": "<DefaultListForm>Catalog.ТестПрощающийВвод.Form.ФормаСпискаТест</DefaultListForm>"
+    }
+  }
+}
