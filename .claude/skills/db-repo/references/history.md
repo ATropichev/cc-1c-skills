@@ -29,12 +29,3 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Comma
 ```
 
 Без `-Version` (или при `-1`) выгружается последняя версия.
-
-## Сравнить версию с текущей конфигурацией
-
-```
-/db-repo dump-cfg … -OutputFile v120.cf -Version 120
-/db-create <временная база>
-/db-load-cf v120.cf <временная база>
-/db-dump-xml <временная база> <каталог> → diff с рабочими исходниками
-```
