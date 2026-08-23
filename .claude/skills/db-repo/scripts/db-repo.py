@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-repo v1.8 — 1C configuration repository operations
+# db-repo v1.9 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 """Работа с хранилищем конфигурации 1С.
@@ -1175,6 +1175,16 @@ def main():
             print("--- End ---")
         # Реестр — не формальность: без repository реквизиты придётся передавать в каждом вызове,
         # а update откажется работать вовсе. Модель об этом не вспомнит, поэтому даём готовый блок.
+        # «Соединение не установлено» у сетевого хранилища означает не отсутствие реквизитов,
+        # а недоступный сервер — трактовка «добавьте repository» увела бы не туда.
+        if verdict != 0 and "Соединение с хранилищем конфигурации не установлено" in log_text:
+            if re.match(r"^(tcp|http)s?://", repo["path"] or ""):
+                print("[hint] сервер хранилища недоступен по адресу %s." % repo["path"])
+                print("       Проверьте, запущен ли crserver и верен ли порт (по умолчанию 1542).")
+            else:
+                print("[hint] хранилище недоступно по пути %s — проверьте путь и реквизиты."
+                      % repo["path"])
+
         # Признак — что путь задали аргументом: значит в реестре его нет (или он другой).
         if verdict == 0 and cmd in ("create", "connect") and args.RepositoryPath:
             json_path = repo["path"].replace("\\", "\\\\")

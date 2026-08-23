@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-git v1.23 — Load Git changes into 1C database
+# db-load-git v1.24 — Load Git changes into 1C database
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -177,8 +177,9 @@ def write_repository_hints(log_text):
         else:
             print('[hint] объект не захвачен в хранилище: /db-repo lock <база> -Objects "%s"' % obj)
     if "Соединение с хранилищем конфигурации не установлено" in log_text:
-        print("[hint] база подключена к хранилищу, но его реквизиты неизвестны.")
-        print('       Добавьте "repository" в запись базы в .v8-project.json (см. /db-list).')
+        print("[hint] соединение с хранилищем не установлено. Две причины:")
+        print('       реквизиты неизвестны — добавьте "repository" в запись базы в .v8-project.json (см. /db-list);')
+        print("       либо хранилище недоступно — для сетевого проверьте сервер хранилища и порт.")
 
 
 def arg_key_match(token, key):

@@ -1,4 +1,4 @@
-﻿# db-load-xml v1.24 — Load 1C configuration from XML files
+﻿# db-load-xml v1.25 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -232,8 +232,9 @@ function Write-RepositoryHints {
         }
     }
     if ($LogText -match 'Соединение с хранилищем конфигурации не установлено') {
-        Write-Host "[hint] база подключена к хранилищу, но его реквизиты неизвестны." -ForegroundColor Yellow
-        Write-Host "       Добавьте `"repository`" в запись базы в .v8-project.json (см. /db-list)." -ForegroundColor Yellow
+        Write-Host "[hint] соединение с хранилищем не установлено. Две причины:" -ForegroundColor Yellow
+        Write-Host "       реквизиты неизвестны — добавьте `"repository`" в запись базы в .v8-project.json (см. /db-list);" -ForegroundColor Yellow
+        Write-Host "       либо хранилище недоступно — для сетевого проверьте сервер хранилища и порт." -ForegroundColor Yellow
     }
 }
 
