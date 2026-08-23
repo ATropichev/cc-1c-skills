@@ -1,25 +1,9 @@
 {
   "name": "Тот же лог под -StrictLog: код возврата поднимается до 1 (fake platform)",
-  "osOnly": "win32",
+  "fakePlatform": {
+    "log": "﻿Загрузка конфигурации из файлов.\r\nНеверное свойство объекта метаданных. Свойство LineNumberLength не входит в состав объекта метаданных TabularSection. - LineNumberLength\r\nЗагрузка завершена.\r\n"
+  },
   "preRun": [
-    {
-      "writeFile": {
-        "path": "fake.cmd",
-        "content": "@echo off\r\nrem SELF запоминаем ДО цикла: shift сдвигает и %0, после него %~dp0 указывает не на скрипт\r\nset SELF=%~dp0\r\n:loop\r\nif \"%~1\"==\"\" goto done\r\nif /i \"%~1\"==\"/Out\" set OUT=%~2\r\nshift\r\ngoto loop\r\n:done\r\ncopy /y \"%SELF%log.txt\" \"%OUT%\" >nul\r\nexit /b 0\r\n"
-      }
-    },
-    {
-      "writeFile": {
-        "path": "log.txt",
-        "content": "﻿Загрузка конфигурации из файлов.\r\nНеверное свойство объекта метаданных. Свойство LineNumberLength не входит в состав объекта метаданных TabularSection. - LineNumberLength\r\nЗагрузка завершена.\r\n"
-      }
-    },
-    {
-      "writeFile": {
-        "path": "ib/1Cv8.1CD",
-        "content": "stub"
-      }
-    },
     {
       "writeFile": {
         "path": "src/Configuration.xml",
@@ -29,11 +13,11 @@
   ],
   "args_extra": [
     "-V8Path",
-    "{workDir}\\fake.cmd",
+    "{fakePlatform}",
     "-InfoBasePath",
-    "{workDir}\\ib",
+    "{workDir}/ib",
     "-ConfigDir",
-    "{workDir}\\src",
+    "{workDir}/src",
     "-StrictLog"
   ],
   "expect": {

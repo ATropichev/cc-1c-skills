@@ -1,33 +1,15 @@
 {
   "name": "Реквизит не объект хранилища: подставляется владелец, подмена проговаривается",
-  "osOnly": "win32",
-  "preRun": [
-    {
-      "writeFile": {
-        "path": "fake.cmd",
-        "content": "@echo off\r\nrem SELF запоминаем ДО цикла: shift сдвигает и %0, после него %~dp0 указывает не на скрипт\r\nset SELF=%~dp0\r\n:loop\r\nif \"%~1\"==\"\" goto done\r\nif /i \"%~1\"==\"/Out\" set OUT=%~2\r\nshift\r\ngoto loop\r\n:done\r\ncopy /y \"%SELF%log.txt\" \"%OUT%\" >nul\r\nexit /b 0\r\n"
-      }
-    },
-    {
-      "writeFile": {
-        "path": "log.txt",
-        "content": "﻿---- Начало операции с хранилищем конфигурации ----\r\nОбъект захвачен для редактирования: Справочник.Контрагенты\r\n---- Операция с хранилищем конфигурации завершена ----\r\nЗахват объектов в хранилище успешно завершен\r\n"
-      }
-    },
-    {
-      "writeFile": {
-        "path": "ib/1Cv8.1CD",
-        "content": "stub"
-      }
-    }
-  ],
+  "fakePlatform": {
+    "log": "﻿---- Начало операции с хранилищем конфигурации ----\r\nОбъект захвачен для редактирования: Справочник.Контрагенты\r\n---- Операция с хранилищем конфигурации завершена ----\r\nЗахват объектов в хранилище успешно завершен\r\n"
+  },
   "args_extra": [
     "-V8Path",
-    "{workDir}\\fake.cmd",
+    "{fakePlatform}",
     "-InfoBasePath",
-    "{workDir}\\ib",
+    "{workDir}/ib",
     "-RepositoryPath",
-    "{workDir}\\repo",
+    "{workDir}/repo",
     "-RepositoryUser",
     "Admin",
     "-Command",

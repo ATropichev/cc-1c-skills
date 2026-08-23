@@ -355,12 +355,46 @@ function buildArgs(skillConfig, caseData, workDir, inputFilePath, runtime) {
   }
 
   // Append extra args from case (for optional params like -Vendor, -Version).
-  // Supports {workDir} substitution for tests that need absolute paths inside the workspace.
+  // Supports {workDir} substitution for tests that need absolute paths inside the workspace,
+  // and {fakePlatform} — путь к фейковой платформе, которую раскладывает writeFakePlatform.
   if (caseData.args_extra) {
-    args.push(...caseData.args_extra.map(a => typeof a === 'string' ? a.replace('{workDir}', workDir) : a));
+    const fakePath = join(workDir, process.platform === 'win32' ? 'fake.cmd' : 'fake.sh');
+    args.push(...caseData.args_extra.map(a => typeof a === 'string'
+      ? a.replace('{workDir}', workDir).replace('{fakePlatform}', fakePath)
+      : a));
   }
 
   return { scriptPath, args };
+}
+
+
+// ─── Фейковая платформа ─────────────────────────────────────────────────────
+// Кейс объявляет ЛОГ и код возврата, а не механику запуска. Раннер сам кладёт .cmd или .sh
+// под текущую ОС, поэтому один кейс проверяется на обеих. Раньше каждый такой сценарий
+// приходилось дублировать -posix двойником, и забытый двойник означал дыру: у db-repo на
+// маке выполнялся 1 кейс из 12, и заметили это случайно.
+const FAKE_PLATFORM_CMD = "@echo off\r\nrem SELF запоминаем ДО цикла: shift сдвигает и %0, после него %~dp0 указывает не на скрипт\r\nset SELF=%~dp0\r\n:loop\r\nif \"%~1\"==\"\" goto done\r\nif /i \"%~1\"==\"/Out\" set OUT=%~2\r\nshift\r\ngoto loop\r\n:done\r\ncopy /y \"%SELF%log.txt\" \"%OUT%\" >nul\r\nexit /b 0\r\n";
+const FAKE_PLATFORM_SH = "#!/bin/sh\n# Фейк платформы для *nix: вычитывает путь из /Out и кладёт туда готовый лог.\n# Значение /Out несёт кавычки ВНУТРИ токена (соглашение 1С, см. run_v8) — в batch их\n# снимает %~2, в sh их надо снять руками, иначе cp целится в имя с кавычками.\nSELF=$(dirname \"$0\")\nOUT=\"\"\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = \"/Out\" ]; then\n    OUT=\"$2\"\n    OUT=\"${OUT#\\\"}\"\n    OUT=\"${OUT%\\\"}\"\n  fi\n  shift\ndone\ncp \"$SELF/log.txt\" \"$OUT\"\nexit 0\n";
+
+function writeFakePlatform(workDir, spec) {
+  const isWin = process.platform === 'win32';
+  const code = Number.isInteger(spec.exit) ? spec.exit : 0;
+  const body = isWin
+    ? FAKE_PLATFORM_CMD.replace('exit /b 0', `exit /b ${code}`)
+    : FAKE_PLATFORM_SH.replace('exit 0', `exit ${code}`);
+  const exe = join(workDir, isWin ? 'fake.cmd' : 'fake.sh');
+  writeFileSync(exe, body, 'utf8');
+  // Бит исполнения: на *nix навык запускает платформу через exec, без +x фейк не стартует.
+  if (!isWin) chmodSync(exe, 0o755);
+  // Лог пишется как есть — вместе с BOM и CRLF, если кейс их объявил: /Out платформы
+  // выглядит именно так, и разбор должен проверяться на настоящей форме.
+  writeFileSync(join(workDir, 'log.txt'), spec.log ?? '', 'utf8');
+  // Заглушка базы: навыки отказываются работать, не найдя 1Cv8.1CD, и это правильно.
+  if (spec.baseStub !== false) {
+    const ib = join(workDir, 'ib');
+    mkdirSync(ib, { recursive: true });
+    writeFileSync(join(ib, '1Cv8.1CD'), 'stub', 'utf8');
+  }
 }
 
 // ─── Snapshot normalization ─────────────────────────────────────────────────
@@ -783,6 +817,11 @@ async function runCaseAsync(testCase, opts) {
           + `  На регистронезависимой ФС это один каталог — эталон зафиксирует слипшееся дерево.\n`
           + `  Назовите каталог иначе (в кейсах cfe-* принято "cfe").`);
       }
+    }
+
+    // Фейковая платформа раскладывается ДО preRun: шаги preRun могут на неё опираться.
+    if (caseData.fakePlatform) {
+      writeFakePlatform(workDir, caseData.fakePlatform);
     }
 
     // Pre-run steps
