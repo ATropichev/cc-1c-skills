@@ -300,10 +300,21 @@ def run_v8(v8path, arguments):
     if os.name == "nt":
         cmd = '"' + v8path + '" ' + " ".join(arguments)
     else:
-        cmd = [v8path] + [
-            a[1:-1] if len(a) > 1 and a[0] == '"' and a[-1] == '"' else a
-            for a in arguments
-        ]
+        def strip_framing_quotes(a):
+            # Кавычки, которыми мы обрамляем значения ради склейки на Windows, на POSIX
+            # становятся ЧАСТЬЮ значения. Проверено на darwin: путь с пробелом отдельным
+            # токеном даёт «Неопределена информационная база», а склеенный
+            # /ConfigurationRepositoryF"путь с пробелом" — «завершилось с ошибкой»;
+            # без кавычек обе формы работают.
+            if len(a) > 1 and a[0] == '"' and a[-1] == '"':
+                return a[1:-1]                       # "значение" отдельным токеном
+            if a[0:1] == "/" and a[-1:] == '"' and '"' in a[:-1]:
+                i = a.index('"')
+                return a[:i] + a[i + 1:-1]           # /N"имя" -> /Nимя
+            return a                                 # File="…" не трогаем: там кавычки —
+                                                     # часть синтаксиса строки соединения,
+                                                     # и с ними на POSIX всё работает
+        cmd = [v8path] + [strip_framing_quotes(a) for a in arguments]
     r = subprocess.run(cmd, input=b"", capture_output=True)
     r.stdout = decode_platform_bytes(r.stdout)
     r.stderr = decode_platform_bytes(r.stderr)
