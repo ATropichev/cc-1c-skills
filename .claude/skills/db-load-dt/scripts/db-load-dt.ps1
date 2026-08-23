@@ -1,4 +1,4 @@
-﻿# db-load-dt v1.14 — Load 1C information base from DT file
+﻿# db-load-dt v1.16 — Load 1C information base from DT file
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#

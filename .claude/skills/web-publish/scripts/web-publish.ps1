@@ -1,4 +1,4 @@
-﻿# web-publish v1.8 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
+﻿# web-publish v1.9 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS

@@ -1,4 +1,4 @@
-﻿# role-info v1.5 — Analyze 1C role rights
+﻿# role-info v1.6 — Analyze 1C role rights
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(

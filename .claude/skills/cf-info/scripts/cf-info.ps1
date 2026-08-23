@@ -1,4 +1,4 @@
-﻿# cf-info v1.6 — Compact summary of 1C configuration root
+﻿# cf-info v1.7 — Compact summary of 1C configuration root
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(

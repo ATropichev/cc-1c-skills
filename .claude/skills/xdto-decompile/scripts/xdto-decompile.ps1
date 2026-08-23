@@ -1,4 +1,4 @@
-﻿# xdto-decompile v1.2 — Convert 1C XDTO package to XML Schema (XSD)
+﻿# xdto-decompile v1.3 — Convert 1C XDTO package to XML Schema (XSD)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(

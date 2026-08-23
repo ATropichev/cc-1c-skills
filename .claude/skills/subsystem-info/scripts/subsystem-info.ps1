@@ -1,4 +1,4 @@
-﻿# subsystem-info v1.5 — Compact summary of 1C subsystem structure
+﻿# subsystem-info v1.6 — Compact summary of 1C subsystem structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(

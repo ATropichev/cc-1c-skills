@@ -1,4 +1,4 @@
-﻿# db-update v1.17 — Update 1C database configuration
+﻿# db-update v1.19 — Update 1C database configuration
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
