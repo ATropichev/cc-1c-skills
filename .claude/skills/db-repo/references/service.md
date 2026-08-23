@@ -3,7 +3,7 @@
 ## set-label — метка на версию
 
 ```powershell
-... db-repo.ps1 -Command set-label -InfoBasePath "C:\Bases\MyDB" -Label "Релиз 1.2" -Version 120 -Comment "Передано в тест"
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command set-label -InfoBasePath "C:\Bases\MyDB" -Label "Релиз 1.2" -Version 120 -Comment "Передано в тест"
 ```
 
 Без `-Version` метка ставится на последнюю версию. Несуществующая версия — ошибка.
@@ -11,7 +11,7 @@
 ## optimize — оптимизация хранения
 
 ```powershell
-... db-repo.ps1 -Command optimize -InfoBasePath "C:\Bases\MyDB"
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command optimize -InfoBasePath "C:\Bases\MyDB"
 ```
 
 Оптимизирует хранение данных в хранилище. Операция долгая.
@@ -19,7 +19,7 @@
 ## clear-cache — очистка кеша
 
 ```powershell
-... db-repo.ps1 -Command clear-cache -InfoBasePath "C:\Bases\MyDB" -CacheScope local
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command clear-cache -InfoBasePath "C:\Bases\MyDB" -CacheScope local
 ```
 
 | `-CacheScope` | Что чистит |

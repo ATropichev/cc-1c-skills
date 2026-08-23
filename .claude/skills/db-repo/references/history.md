@@ -3,7 +3,7 @@
 ## report — отчёт по версиям
 
 ```powershell
-... db-repo.ps1 -Command report -InfoBasePath "C:\Bases\MyDB" -OutputFile "C:\tmp\repo.txt"
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command report -InfoBasePath "C:\Bases\MyDB" -OutputFile "C:\tmp\repo.txt"
 ```
 
 | Параметр | Описание |
@@ -35,7 +35,7 @@
 ## dump-cfg — выгрузить версию в CF
 
 ```powershell
-... db-repo.ps1 -Command dump-cfg -InfoBasePath "C:\Bases\MyDB" -OutputFile "C:\tmp\v120.cf" -Version 120
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command dump-cfg -InfoBasePath "C:\Bases\MyDB" -OutputFile "C:\tmp\v120.cf" -Version 120
 ```
 
 Без `-Version` (или при `-1`) выгружается последняя версия.
