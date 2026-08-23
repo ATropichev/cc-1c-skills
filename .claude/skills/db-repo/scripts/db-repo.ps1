@@ -1,4 +1,4 @@
-﻿# db-repo v1.6 — 1C configuration repository operations
+﻿# db-repo v1.7 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 <#
@@ -977,6 +977,7 @@ function Write-RepoVerdict {
                 if ($Log.Raw -match 'Конфигурация не пустая') {
                     Write-Host "[hint] в базе уже есть конфигурация. Замена её конфигурацией из хранилища —" -ForegroundColor Yellow
                     Write-Host "       -ForceReplaceCfg. Операция необратима: спросите подтверждение у пользователя." -ForegroundColor Yellow
+                    Write-Host "       Если база уже была подключена, понадобится ещё -ForceBindAlreadyBindedUser." -ForegroundColor Yellow
                 }
                 return 1
             }
@@ -1066,7 +1067,10 @@ if ($WithChildren) {
 }
 
 switch ($cmd) {
-    'report'     { if (-not $OutputFile) { Write-Host "Error: -OutputFile is required for report" -ForegroundColor Red; exit 1 } }
+    'report'     {
+        # Отчёт печатается в вывод, поэтому путь нужен только если его хотят сохранить.
+        if (-not $OutputFile) { $OutputFile = Join-Path $env:TEMP "db-repo-report.$ReportFormat" }
+    }
     'dump-cfg'   { if (-not $OutputFile) { Write-Host "Error: -OutputFile (path to the .cf file) is required for dump-cfg" -ForegroundColor Red; exit 1 } }
     'add-user'   { if (-not $NewUser -or -not $Rights) { Write-Host "Error: -NewUser and -Rights are required for add-user" -ForegroundColor Red; exit 1 } }
     'copy-users' { if (-not $SourcePath -or -not $SourceUser) { Write-Host "Error: -SourcePath and -SourceUser are required for copy-users" -ForegroundColor Red; exit 1 } }
@@ -1210,6 +1214,20 @@ try {
         }
         Write-Host ($logLines -join [Environment]::NewLine)
         Write-Host "--- End ---"
+    }
+    # Реестр — не формальность: без repository реквизиты придётся передавать в каждом вызове,
+    # а update откажется работать вовсе. Модель об этом не вспомнит, поэтому даём готовый блок.
+    # Признак — что путь задали аргументом: значит в реестре его нет (или он другой).
+    if ($verdict -eq 0 -and @('create', 'connect') -contains $cmd -and $RepositoryPath) {
+        # В строке замены -replace обратный слэш не спецсимвол: два символа дают два слэша.
+        $jsonPath = $repo.Path -replace '\\', '\\'
+        Write-Host ""
+        Write-Host "[note] допишите хранилище в запись базы в .v8-project.json (см. /db-list):" -ForegroundColor Yellow
+        if ($Extension) {
+            Write-Host "  `"extensions`": [ { `"name`": `"$Extension`", `"repository`": { `"path`": `"$jsonPath`", `"user`": `"$($repo.User)`", `"password`": `"<пароль>`" } } ]"
+        } else {
+            Write-Host "  `"repository`": { `"path`": `"$jsonPath`", `"user`": `"$($repo.User)`", `"password`": `"<пароль>`" }"
+        }
     }
     Write-PlatformOutput $proc.Output
     exit $verdict

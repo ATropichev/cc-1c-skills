@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-repo v1.6 — 1C configuration repository operations
+# db-repo v1.7 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 """Работа с хранилищем конфигурации 1С.
@@ -860,6 +860,7 @@ def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", out
         if "Конфигурация не пустая" in (log.get("raw") or ""):
             print("[hint] в базе уже есть конфигурация. Замена её конфигурацией из хранилища —")
             print("       -ForceReplaceCfg. Операция необратима: спросите подтверждение у пользователя.")
+            print("       Если база уже была подключена, понадобится ещё -ForceBindAlreadyBindedUser.")
         return 1
     print("Команда '%s' выполнена." % cmd)
     if cmd == "report" and report_format == "txt" and os.path.exists(output_file):
@@ -1000,8 +1001,8 @@ def main():
             sys.exit(1)
 
     if cmd == "report" and not args.OutputFile:
-        print("Error: -OutputFile is required for report")
-        sys.exit(1)
+        # Отчёт печатается в вывод, поэтому путь нужен только если его хотят сохранить.
+        args.OutputFile = os.path.join(tempfile.gettempdir(), "db-repo-report.%s" % args.ReportFormat)
     if cmd == "dump-cfg" and not args.OutputFile:
         print("Error: -OutputFile (path to the .cf file) is required for dump-cfg")
         sys.exit(1)
@@ -1167,6 +1168,19 @@ def main():
                 log_lines = log_lines[-log_limit:]
             print("\n".join(log_lines))
             print("--- End ---")
+        # Реестр — не формальность: без repository реквизиты придётся передавать в каждом вызове,
+        # а update откажется работать вовсе. Модель об этом не вспомнит, поэтому даём готовый блок.
+        # Признак — что путь задали аргументом: значит в реестре его нет (или он другой).
+        if verdict == 0 and cmd in ("create", "connect") and args.RepositoryPath:
+            json_path = repo["path"].replace("\\", "\\\\")
+            print("")
+            print("[note] допишите хранилище в запись базы в .v8-project.json (см. /db-list):")
+            if args.Extension:
+                print('  "extensions": [ { "name": "%s", "repository": { "path": "%s", "user": "%s", '
+                      '"password": "<пароль>" } } ]' % (args.Extension, json_path, repo["user"] or ""))
+            else:
+                print('  "repository": { "path": "%s", "user": "%s", "password": "<пароль>" }'
+                      % (json_path, repo["user"] or ""))
         print_platform_output(result)
         sys.exit(verdict)
     finally:
