@@ -1,4 +1,4 @@
-﻿# db-repo v1.1 — 1C configuration repository operations
+﻿# db-repo v1.2 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 <#
@@ -554,7 +554,7 @@ function Get-RepositoryArgs {
     $a += "/ConfigurationRepositoryF`"$($Repo.Path)`""
     if ($Repo.User) { $a += "/ConfigurationRepositoryN`"$($Repo.User)`"" }
     if ($Repo.Password) { $a += "/ConfigurationRepositoryP`"$($Repo.Password)`"" }
-    return ,$a
+    return $a
 }
 
 # --- Список объектов ---
@@ -585,6 +585,45 @@ function Get-RequestedObjects {
         $list += @($lines | ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
     }
     return @($list | Select-Object -Unique)
+}
+
+# Подчинённые сущности, которые НЕ являются объектами хранилища: в XML владельца они записаны
+# вложенным определением, своего файла и UUID у них нет — захватывать нечего. Отдельными объектами
+# регистрируются только те, кто записан ССЫЛКОЙ по имени: форма, макет, команда.
+# Платформа на такой запрос отвечает «Загруженный список объектов пуст» — без имени и без причины.
+$script:InlineChildKinds = @(
+    'Реквизит', 'Attribute',
+    'СтандартныйРеквизит', 'StandardAttribute',
+    'РеквизитАдресации', 'AddressingAttribute',
+    'ТабличнаяЧасть', 'TabularSection',
+    'Измерение', 'Dimension',
+    'Ресурс', 'Resource',
+    'Графа', 'Column',
+    'ЗначениеПеречисления', 'EnumValue',
+    'ПризнакУчета', 'ПризнакУчёта', 'AccountingFlag',
+    'ПризнакУчетаСубконто', 'ПризнакУчётаСубконто', 'ExtDimensionAccountingFlag'
+)
+
+function Resolve-LockableObjects {
+    # Заменяет части объекта на сам объект. Это не сужение и не расширение запроса: владелец —
+    # минимально возможная единица захвата для того, что просили.
+    param([string[]]$Names)
+    $out = New-Object System.Collections.Generic.List[string]
+    $notes = New-Object System.Collections.Generic.List[string]
+    foreach ($n in $Names) {
+        $segs = $n -split '\.'
+        $resolved = $n
+        if ($segs.Count -ge 3 -and $script:InlineChildKinds -contains $segs[2]) {
+            $resolved = "$($segs[0]).$($segs[1])"
+            $notes.Add("$n -> $resolved")
+        }
+        if (-not $out.Contains($resolved)) { $out.Add($resolved) }
+    }
+    if ($notes.Count -gt 0) {
+        Write-Host "[note] части объекта отдельно не захватываются — взят объект-владелец:" -ForegroundColor Yellow
+        foreach ($x in $notes) { Write-Host "  $x" -ForegroundColor Yellow }
+    }
+    return $out.ToArray()
 }
 
 function New-ObjectsListXml {
@@ -932,7 +971,7 @@ if ($cmd -eq 'update' -and -not $repo.FromRegistry -and -not $RepositoryPath) {
 }
 
 $objectAware = @('lock', 'unlock', 'commit', 'update')
-$requested = @(Get-RequestedObjects)
+$requested = @(Resolve-LockableObjects (Get-RequestedObjects))
 if ($requested.Count -gt 0 -and $objectAware -notcontains $cmd) {
     Write-Host "Error: -Objects/-ObjectsFile does not apply to '$cmd'" -ForegroundColor Red
     exit 1
