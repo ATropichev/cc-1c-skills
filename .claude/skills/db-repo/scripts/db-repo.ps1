@@ -1,4 +1,4 @@
-﻿# db-repo v1.2 — 1C configuration repository operations
+﻿# db-repo v1.3 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 <#
@@ -72,6 +72,11 @@ param(
 
     [Parameter(Mandatory=$false)]
     [switch]$WithChildren,
+
+    # Операция над ВСЕЙ конфигурацией. Отдельный флаг, а не умолчание при забытом -Objects:
+    # захват всей конфигурации на большой базе идёт долго и блокирует работу всей команде.
+    [Parameter(Mandatory=$false)]
+    [switch]$All,
 
     [Parameter(Mandatory=$false)]
     [string]$Comment,
@@ -977,14 +982,27 @@ if ($requested.Count -gt 0 -and $objectAware -notcontains $cmd) {
     exit 1
 }
 
-# Корень с подчинёнными — это ВСЯ конфигурация, а выглядит как «захвачу корень». Для всей
-# конфигурации есть однозначная форма (вызов без -Objects), поэтому двусмысленную отклоняем.
+# Операции над всей конфигурацией требуют явного -All. Умолчанием это быть не может: захват
+# всей конфигурации на большой базе идёт долго и блокирует работу всей команде, а получается
+# такой вызов от одного забытого -Objects.
+$wholeConfigAware = @('lock', 'unlock', 'commit')
+if ($All -and $requested.Count -gt 0) {
+    Write-Host "Error: -All (whole configuration) contradicts -Objects/-ObjectsFile — pick one" -ForegroundColor Red
+    exit 1
+}
+if ($wholeConfigAware -contains $cmd -and $requested.Count -eq 0 -and -not $All) {
+    Write-Host "Error: '$cmd' without -Objects would affect the WHOLE configuration." -ForegroundColor Red
+    Write-Host "       Укажите объекты: -Objects `"Справочник.Номенклатура`"" -ForegroundColor Yellow
+    Write-Host "       Это и нужно — подтвердите явно: -All" -ForegroundColor Yellow
+    exit 1
+}
+# Корень с подчинёнными — это тоже вся конфигурация, хотя выглядит как «захвачу корень».
 if ($WithChildren) {
     $rootAsked = @($requested | Where-Object { $script:ConfigRootAliases -contains $_ })
     if ($rootAsked.Count -gt 0) {
         Write-Host "Error: '$($rootAsked[0])' with -WithChildren means the WHOLE configuration, not just its root." -ForegroundColor Red
         Write-Host "       Нужен только корень (чтобы добавить или удалить объект) — уберите -WithChildren." -ForegroundColor Yellow
-        Write-Host "       Нужна вся конфигурация — вызовите без -Objects." -ForegroundColor Yellow
+        Write-Host "       Нужна вся конфигурация — вызовите с -All вместо -Objects." -ForegroundColor Yellow
         exit 1
     }
 }
