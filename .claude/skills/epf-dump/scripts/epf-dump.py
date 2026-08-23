@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# epf-dump v1.13 — Dump external data processor or report (EPF/ERF) to XML sources
+# epf-dump v1.14 — Dump external data processor or report (EPF/ERF) to XML sources
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -319,11 +319,20 @@ def run_v8(v8path, arguments):
     The arguments carry their own quotes inside the value (File="C:\\a b") — that is where
     1C's parser expects them, on Windows and on *nix alike. Windows list2cmdline would
     escape those quotes, so there the command line is handed over ready-made.
+
+    На POSIX аргументы уходят СПИСКОМ, и кавычки, нужные для склейки на Windows, стали бы
+    частью значения: путь с пробелом платформа не находит («Неопределена информационная
+    база»), многословный -comment теряет молча. Поэтому здесь снимается ОДИН слой
+    обрамляющих кавычек. Склеенные ключи (/N"user", /ConfigurationRepositoryF"путь",
+    File="…") не задеты: у них кавычки внутри токена, а не по краям.
     """
     if os.name == "nt":
         cmd = '"' + v8path + '" ' + " ".join(arguments)
     else:
-        cmd = [v8path] + arguments
+        cmd = [v8path] + [
+            a[1:-1] if len(a) > 1 and a[0] == '"' and a[-1] == '"' else a
+            for a in arguments
+        ]
     r = subprocess.run(cmd, input=b"", capture_output=True)
     r.stdout = decode_platform_bytes(r.stdout)
     r.stderr = decode_platform_bytes(r.stderr)

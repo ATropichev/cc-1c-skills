@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-repo v1.11 — 1C configuration repository operations
+# db-repo v1.12 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 """Работа с хранилищем конфигурации 1С.
@@ -290,11 +290,20 @@ def run_v8(v8path, arguments):
     The arguments carry their own quotes inside the value (File="C:\\a b") — that is where
     1C's parser expects them, on Windows and on *nix alike. Windows list2cmdline would
     escape those quotes, so there the command line is handed over ready-made.
+
+    На POSIX аргументы уходят СПИСКОМ, и кавычки, нужные для склейки на Windows, стали бы
+    частью значения: путь с пробелом платформа не находит («Неопределена информационная
+    база»), многословный -comment теряет молча. Поэтому здесь снимается ОДИН слой
+    обрамляющих кавычек. Склеенные ключи (/N"user", /ConfigurationRepositoryF"путь",
+    File="…") не задеты: у них кавычки внутри токена, а не по краям.
     """
     if os.name == "nt":
         cmd = '"' + v8path + '" ' + " ".join(arguments)
     else:
-        cmd = [v8path] + arguments
+        cmd = [v8path] + [
+            a[1:-1] if len(a) > 1 and a[0] == '"' and a[-1] == '"' else a
+            for a in arguments
+        ]
     r = subprocess.run(cmd, input=b"", capture_output=True)
     r.stdout = decode_platform_bytes(r.stdout)
     r.stderr = decode_platform_bytes(r.stderr)
@@ -673,20 +682,6 @@ COMMAND_ALIASES = {
 }
 
 
-def arg_value(value):
-    """Значение отдельного аргумента.
-
-    На Windows команда склеивается в одну строку (см. run_v8), поэтому значение с пробелом
-    обязано нести собственные кавычки. На POSIX аргументы уходят списком — там кавычки стали бы
-    ЧАСТЬЮ значения. Проверено на darwin: многословный -comment с кавычками платформа теряет
-    целиком, однословный без кавычек доходит.
-
-    Ключи вида /F"путь" и /N"имя" собираются отдельно: там кавычки внутри токена требует сам
-    разборщик 1С, и они нужны на обеих ОС.
-    """
-    return '"%s"' % value if os.name == "nt" else "%s" % value
-
-
 def resolve_command(raw):
     c = raw.strip().lower()
     # unbind отличается от unlock одной буквой, а последствия разные: отмена захвата против
@@ -1049,9 +1044,9 @@ def main():
         # --- Соединение ---
         arguments = ["DESIGNER"]
         if args.InfoBaseServer and args.InfoBaseRef:
-            arguments += ["/S", arg_value("%s/%s" % (args.InfoBaseServer, args.InfoBaseRef))]
+            arguments += ["/S", '"%s/%s"' % (args.InfoBaseServer, args.InfoBaseRef)]
         else:
-            arguments += ["/F", arg_value(args.InfoBasePath)]
+            arguments += ["/F", '"%s"' % args.InfoBasePath]
         if args.UserName:
             arguments.append('/N"%s"' % args.UserName)
         if args.Password:
@@ -1067,12 +1062,12 @@ def main():
         arguments.append(key)
 
         if cmd in ("dump-cfg", "report"):
-            arguments.append(arg_value(args.OutputFile))
+            arguments.append('"%s"' % args.OutputFile)
 
         if cmd in object_aware and requested:
             objects_xml = write_objects_list_xml(
                 requested, os.path.join(temp_dir, "objects.xml"), args.WithChildren)
-            arguments += ["-Objects", arg_value(objects_xml)]
+            arguments += ["-Objects", '"%s"' % objects_xml]
 
         if cmd == "lock":
             if args.Revised:
@@ -1084,7 +1079,7 @@ def main():
             if args.Comment:
                 # Многострочный комментарий задаётся своим -comment на каждую строку.
                 for line in args.Comment.splitlines():
-                    arguments += ["-comment", arg_value(line)]
+                    arguments += ["-comment", '"%s"' % line]
             if args.KeepLocked:
                 arguments.append("-keepLocked")
             if args.Force:
@@ -1113,9 +1108,9 @@ def main():
             if args.NEnd:
                 arguments += ["-NEnd", args.NEnd]
             if args.DateBegin:
-                arguments += ["-DateBegin", arg_value(args.DateBegin)]
+                arguments += ["-DateBegin", '"%s"' % args.DateBegin]
             if args.DateEnd:
-                arguments += ["-DateEnd", arg_value(args.DateEnd)]
+                arguments += ["-DateEnd", '"%s"' % args.DateEnd]
             if args.GroupByObject:
                 arguments.append("-GroupByObject")
             if args.GroupByComment:
@@ -1131,32 +1126,32 @@ def main():
             if args.NoBind:
                 arguments.append("-NoBind")
         elif cmd == "add-user":
-            arguments += ["-User", arg_value(args.NewUser)]
+            arguments += ["-User", '"%s"' % args.NewUser]
             if args.NewUserPassword:
-                arguments += ["-Pwd", arg_value(args.NewUserPassword)]
+                arguments += ["-Pwd", '"%s"' % args.NewUserPassword]
             arguments += ["-Rights", args.Rights]
             if args.RestoreDeletedUser:
                 arguments.append("-RestoreDeletedUser")
         elif cmd == "copy-users":
-            arguments += ["-Path", arg_value(args.SourcePath)]
-            arguments += ["-User", arg_value(args.SourceUser)]
+            arguments += ["-Path", '"%s"' % args.SourcePath]
+            arguments += ["-User", '"%s"' % args.SourceUser]
             if args.SourcePassword:
-                arguments += ["-Pwd", arg_value(args.SourcePassword)]
+                arguments += ["-Pwd", '"%s"' % args.SourcePassword]
             if args.RestoreDeletedUser:
                 arguments.append("-RestoreDeletedUser")
         elif cmd == "set-label":
             if args.Version:
                 arguments += ["-v", args.Version]
-            arguments += ["-name", arg_value(args.Label)]
+            arguments += ["-name", '"%s"' % args.Label]
             if args.Comment:
                 for line in args.Comment.splitlines():
-                    arguments += ["-comment", arg_value(line)]
+                    arguments += ["-comment", '"%s"' % line]
 
         if args.Extension:
-            arguments += ["-Extension", arg_value(args.Extension)]
+            arguments += ["-Extension", '"%s"' % args.Extension]
 
         log_file = os.path.join(temp_dir, "repo_log.txt")
-        arguments += ["/Out", arg_value(log_file)]
+        arguments += ["/Out", '"%s"' % log_file]
         arguments.append("/DisableStartupDialogs")
         arguments.append("/DisableStartupMessages")
         arguments += extra_args
