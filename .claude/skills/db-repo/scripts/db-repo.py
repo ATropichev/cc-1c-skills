@@ -621,7 +621,7 @@ def print_received_warning(received):
     if not received:
         return
     print("")
-    print("[warning] локальная конфигурация изменена: из хранилища получено %d объект(ов):" % len(received))
+    print("[warning] локальная конфигурация изменена, получено объектов из хранилища: %d" % len(received))
     for n in received:
         print("  %s" % n)
     owners = owner_objects(received)
@@ -726,12 +726,13 @@ def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", out
         return 1
 
     if cmd == "lock":
+        # Порядок вывода: факты, затем вердикт, и только потом совет. Совет длинный, и
+        # между фактами и вердиктом он прятал бы главную строку.
         print_repo_objects("Захвачено", log["locked"])
         if log["locked_by_other"]:
             print("Не удалось захватить (%d):" % len(log["locked_by_other"]))
             for o in log["locked_by_other"]:
                 print("  %s — держит %s" % (o["name"], o["holder"]))
-        print_received_warning(log["received"])
         if not log["locked"] and log["locked_by_other"]:
             # «Уже захвачено мной» платформа не печатает вовсе, поэтому отличить его от
             # «не захвачено» по логу нельзя — сверяем с тем, что просили. Заняты ВСЕ
@@ -741,21 +742,27 @@ def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", out
             all_blocked = (not asked) or all(k in blocked for k in asked)
             if all_blocked:
                 print("Захват не выполнен: все запрошенные объекты заняты.")
+                print_received_warning(log["received"])
                 return 1
             print("[warning] часть запрошенного занята другими; остальное уже было захвачено вами.")
             print("          Захваченное можно править: код возврата 0 именно поэтому.")
+            print_received_warning(log["received"])
             return 0
         if not log["locked"] and platform_exit == 0:
             # Захват уже захваченного СОБОЙ: платформа не печатает ни блока операции, ни строк.
             print("Объекты уже захвачены вами — изменений не потребовалось.")
+            print_received_warning(log["received"])
             return 0
         if not log["locked"]:
             print("Захват не выполнен (код %s)%s" % (platform_exit, describe_exit(platform_exit)))
+            print_received_warning(log["received"])
             return 1
         if log["locked_by_other"]:
             print("[warning] захват выполнен частично — перечисленные выше объекты остались у других пользователей.")
             print("          Захваченное можно править: код возврата 0 именно поэтому.")
+            print_received_warning(log["received"])
             return 0
+        print_received_warning(log["received"])
         return platform_exit
 
     if cmd == "unlock":
@@ -771,10 +778,10 @@ def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", out
                 print("Отмена захвата не выполнена (код %s)%s" % (platform_exit, describe_exit(platform_exit)))
             return 1
         print_repo_objects("Захват отменён", log["unlocked"])
-        print_repo_objects("Не были захвачены", log["not_locked"])
-        print_received_warning(log["received"])
+        print_repo_objects("Не были захвачены — снимать нечего", log["not_locked"])
         if not log["unlocked"]:
             print("Изменений не потребовалось.")
+        print_received_warning(log["received"])
         return 0
 
     if cmd == "commit":
@@ -782,10 +789,10 @@ def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", out
             # Платформа отдаёт голую «Ошибка помещения изменений объектов в хранилище» —
             # ни объекта, ни причины, одинаково для всех причин. Диагностику даём свою.
             print("Помещение не выполнено (код %s)%s" % (platform_exit, describe_exit(platform_exit)))
-            print("Платформа не называет причину. Обычные причины, по убыванию частоты:")
-            print("  - объект не захвачен вами (проверьте: /db-repo lock)")
-            print("  - объект захвачен другим пользователем")
-            print("  - у пользователя хранилища нет права на помещение")
+            print("Платформа не называет причину. Проверьте:")
+            print("  - захвачен ли объект вами: /db-repo lock")
+            print("  - не держит ли его другой пользователь")
+            print("  - есть ли у пользователя хранилища право на помещение")
             return 1
         print_repo_objects("Помещено в хранилище", log["committed"])
         print_repo_objects("Без изменений — не помещались", log["unchanged"])

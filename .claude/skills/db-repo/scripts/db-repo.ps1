@@ -23,10 +23,10 @@
     Захватывать объект вместе с подчинёнными (формы, макеты, команды)
 
 .EXAMPLE
-    .\db-repo.ps1 lock -InfoBasePath "C:\Bases\MyDB" -Objects "Справочник.Номенклатура"
+    .\db-repo.ps1 -Command lock -InfoBasePath "C:\Bases\MyDB" -Objects "Справочник.Номенклатура"
 
 .EXAMPLE
-    .\db-repo.ps1 commit -InfoBasePath "C:\Bases\MyDB" -Objects "Справочник.Номенклатура" -Comment "Артикул"
+    .\db-repo.ps1 -Command commit -InfoBasePath "C:\Bases\MyDB" -Objects "Справочник.Номенклатура" -Comment "Артикул"
 #>
 
 [CmdletBinding(PositionalBinding=$false)]
@@ -717,7 +717,7 @@ function Write-ReceivedWarning {
     param([string[]]$Received)
     if (-not $Received -or $Received.Count -eq 0) { return }
     Write-Host ""
-    Write-Host "[warning] локальная конфигурация изменена: из хранилища получено $($Received.Count) объект(ов):" -ForegroundColor Yellow
+    Write-Host "[warning] локальная конфигурация изменена, получено объектов из хранилища: $($Received.Count)" -ForegroundColor Yellow
     foreach ($n in $Received) { Write-Host "  $n" -ForegroundColor Yellow }
     $owners = Get-OwnerObjects $Received
     $hasRoot = @($Received | Where-Object { ($_ -split '\.').Count -eq 1 }).Count -gt 0
@@ -827,12 +827,13 @@ function Write-RepoVerdict {
 
     switch ($Cmd) {
         'lock' {
+            # Порядок вывода: факты, затем вердикт, и только потом совет. Совет длинный, и
+            # между фактами и вердиктом он прятал бы главную строку.
             Write-RepoObjects "Захвачено" $Log.Locked
             if ($Log.LockedByOther.Count -gt 0) {
                 Write-Host "Не удалось захватить ($($Log.LockedByOther.Count)):" -ForegroundColor Yellow
                 foreach ($o in $Log.LockedByOther) { Write-Host "  $($o.Name) — держит $($o.Holder)" -ForegroundColor Yellow }
             }
-            Write-ReceivedWarning $Log.Received
             if ($Log.Locked.Count -eq 0 -and $Log.LockedByOther.Count -gt 0) {
                 # «Уже захвачено мной» платформа не печатает вовсе, поэтому отличить его от
                 # «не захвачено» по логу нельзя — сверяем с тем, что просили. Заняты ВСЕ
@@ -843,26 +844,32 @@ function Write-RepoVerdict {
                     (@($requestedKeys | Where-Object { $blockedKeys -notcontains $_ }).Count -eq 0)
                 if ($allBlocked) {
                     Write-Host "Захват не выполнен: все запрошенные объекты заняты." -ForegroundColor Red
+                    Write-ReceivedWarning $Log.Received
                     return 1
                 }
                 Write-Host "[warning] часть запрошенного занята другими; остальное уже было захвачено вами." -ForegroundColor Yellow
                 Write-Host "          Захваченное можно править: код возврата 0 именно поэтому." -ForegroundColor Yellow
+                Write-ReceivedWarning $Log.Received
                 return 0
             }
             if ($Log.Locked.Count -eq 0 -and $PlatformExit -eq 0) {
                 # Захват уже захваченного СОБОЙ: платформа не печатает ни блока операции, ни строк.
                 Write-Host "Объекты уже захвачены вами — изменений не потребовалось." -ForegroundColor Green
+                Write-ReceivedWarning $Log.Received
                 return 0
             }
             if ($Log.Locked.Count -eq 0) {
                 Write-Host "Захват не выполнен (код $PlatformExit)$(Get-ExitAnnotation $PlatformExit)" -ForegroundColor Red
+                Write-ReceivedWarning $Log.Received
                 return 1
             }
             if ($Log.LockedByOther.Count -gt 0) {
                 Write-Host "[warning] захват выполнен частично — перечисленные выше объекты остались у других пользователей." -ForegroundColor Yellow
                 Write-Host "          Захваченное можно править: код возврата 0 именно поэтому." -ForegroundColor Yellow
+                Write-ReceivedWarning $Log.Received
                 return 0
             }
+            Write-ReceivedWarning $Log.Received
             return $PlatformExit
         }
         'unlock' {
@@ -871,16 +878,16 @@ function Write-RepoVerdict {
                 if ($Log.Modified.Count -gt 0) {
                     Write-Host "Отмена захвата не выполнена: у объектов есть локальные изменения ($($Log.Modified.Count)):" -ForegroundColor Red
                     foreach ($n in $Log.Modified) { Write-Host "  $n" -ForegroundColor Red }
-                    Write-Host "Поместите их (/db-repo commit) либо откажитесь от них: -Force -Yes перезапишет объекты версией из хранилища." -ForegroundColor Yellow
+                    Write-Host "Поместите их (/db-repo commit) либо откажитесь от них: -Force перезапишет объекты версией из хранилища." -ForegroundColor Yellow
                 } else {
                     Write-Host "Отмена захвата не выполнена (код $PlatformExit)$(Get-ExitAnnotation $PlatformExit)" -ForegroundColor Red
                 }
                 return 1
             }
             Write-RepoObjects "Захват отменён" $Log.Unlocked
-            Write-RepoObjects "Не были захвачены" $Log.NotLocked 'Yellow'
-            Write-ReceivedWarning $Log.Received
+            Write-RepoObjects "Не были захвачены — снимать нечего" $Log.NotLocked 'Yellow'
             if ($Log.Unlocked.Count -eq 0) { Write-Host "Изменений не потребовалось." -ForegroundColor Green }
+            Write-ReceivedWarning $Log.Received
             return 0
         }
         'commit' {
@@ -888,10 +895,10 @@ function Write-RepoVerdict {
                 # Платформа отдаёт голую «Ошибка помещения изменений объектов в хранилище» —
                 # ни объекта, ни причины, одинаково для всех причин. Диагностику даём свою.
                 Write-Host "Помещение не выполнено (код $PlatformExit)$(Get-ExitAnnotation $PlatformExit)" -ForegroundColor Red
-                Write-Host "Платформа не называет причину. Обычные причины, по убыванию частоты:" -ForegroundColor Yellow
-                Write-Host "  - объект не захвачен вами (проверьте: /db-repo lock)" -ForegroundColor Yellow
-                Write-Host "  - объект захвачен другим пользователем" -ForegroundColor Yellow
-                Write-Host "  - у пользователя хранилища нет права на помещение" -ForegroundColor Yellow
+                Write-Host "Платформа не называет причину. Проверьте:" -ForegroundColor Yellow
+                Write-Host "  - захвачен ли объект вами: /db-repo lock" -ForegroundColor Yellow
+                Write-Host "  - не держит ли его другой пользователь" -ForegroundColor Yellow
+                Write-Host "  - есть ли у пользователя хранилища право на помещение" -ForegroundColor Yellow
                 return 1
             }
             Write-RepoObjects "Помещено в хранилище" $Log.Committed
