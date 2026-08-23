@@ -56,7 +56,7 @@ allowed-tools:
 | Реквизит, табличную часть, измерение, ресурс, модуль объекта | сам объект: `Справочник.Контрагенты` |
 | Существующую форму, макет, команду | её саму: `Справочник.Контрагенты.Форма.ФормаЭлемента` |
 | Добавляешь новую форму, макет, команду | объект-владельца; при помещении назови и новый объект |
-| Добавляешь новый объект конфигурации | объект и корень: `Конфигурация,Справочник.Склады` |
+| Добавляешь новый объект конфигурации | только корень: `Конфигурация`. Самого объекта ещё нет — захватить его нельзя; при помещении назови и его |
 
 Захватывай минимум того, что правишь: чем шире захват, тем больше конфликтов с коллегами.
 Захват объекта его формы и макеты не захватывает — для этого есть `-WithChildren`.
@@ -176,8 +176,11 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Comma
 # Захватить справочник вместе с подчинёнными объектами
 powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command lock -InfoBasePath "C:\Bases\MyDB" -Objects "Справочник.Номенклатура" -WithChildren
 
-# Захватить корень вместе с новым объектом
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command lock -InfoBasePath "C:\Bases\MyDB" -Objects "Конфигурация,Справочник.Склады"
+# Захватить корень — он нужен, чтобы добавить или удалить объект конфигурации
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command lock -InfoBasePath "C:\Bases\MyDB" -Objects "Конфигурация"
+
+# Поместить новый объект: он уже существует, поэтому называется вместе с корнем
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command commit -InfoBasePath "C:\Bases\MyDB" -Objects "Конфигурация,Справочник.Склады" -Comment "Добавлен справочник Склады"
 
 # Поместить с комментарием, оставив захват
 powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command commit -InfoBasePath "C:\Bases\MyDB" -Objects "Справочник.Номенклатура" -Comment "Добавлен реквизит Артикул" -KeepLocked
