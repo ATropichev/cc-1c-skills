@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# web-unpublish v1.2 — Remove 1C web publication
+# web-unpublish v1.3 — Remove 1C web publication
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 """
@@ -75,13 +75,13 @@ def main():
 
     # --- Validate params ---
     if not args.All and not args.AppName:
-        print('Error: укажите -AppName или -All', file=sys.stderr)
+        print('Error: укажите -AppName или -All')
         sys.exit(1)
 
     # --- Read httpd.conf ---
     conf_file = os.path.join(apache_path, 'conf', 'httpd.conf')
     if not os.path.exists(conf_file):
-        print(f'Error: httpd.conf не найден: {conf_file}', file=sys.stderr)
+        print(f'Error: httpd.conf не найден: {conf_file}')
         sys.exit(1)
 
     with open(conf_file, 'r', encoding='utf-8-sig') as f:
@@ -161,7 +161,7 @@ def main():
             if check:
                 print('Apache перезапущен')
             else:
-                print('Error: Apache не удалось перезапустить', file=sys.stderr)
+                print('Error: Apache не удалось перезапустить')
                 sys.exit(1)
         else:
             print('Публикаций не осталось — останавливаю Apache...')

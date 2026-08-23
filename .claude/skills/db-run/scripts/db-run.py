@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-run v1.9 — Launch 1C:Enterprise
+# db-run v1.10 — Launch 1C:Enterprise
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -117,7 +117,6 @@ def assert_extra_args(extra, engine, hints):
             print(
                 f"Error: '{tok}' is a positional token — pass values as --key=value "
                 f"({param} cannot extend the ibcmd command)",
-                file=sys.stderr,
             )
             sys.exit(1)
         for k in owned:
@@ -125,7 +124,6 @@ def assert_extra_args(extra, engine, hints):
                 hint = f" (use {hints[k]})" if hints and k in hints else ""
                 print(
                     f"Error: {k} is controlled by the skill and cannot be passed via {param}{hint}",
-                    file=sys.stderr,
                 )
                 sys.exit(1)
 
@@ -193,14 +191,12 @@ def resolve_extra_args(engine, v8_extra, ibcmd_extra, hints):
         print(
             "Error: -AdditionalV8Arguments applies to 1cv8 only; the selected engine is ibcmd "
             "(use -AdditionalIbcmdArguments)",
-            file=sys.stderr,
         )
         sys.exit(1)
     if engine != "ibcmd" and ibcmd_extra:
         print(
             "Error: -AdditionalIbcmdArguments applies to ibcmd only; the selected engine is 1cv8 "
             "(use -AdditionalV8Arguments)",
-            file=sys.stderr,
         )
         sys.exit(1)
     if engine == "ibcmd":
@@ -225,7 +221,7 @@ def clean_path(value, param=""):
     if len(v) > 3 and v[-1] in "\\/":
         v = v[:-1]
     if '"' in v:
-        print(f"Error: {param or 'path'} contains a quote character: {value}", file=sys.stderr)
+        print(f"Error: {param or 'path'} contains a quote character: {value}")
         sys.exit(1)
     return v
 
@@ -260,14 +256,14 @@ def resolve_v8path(v8path):
             v8path = max(candidates, key=_version_key)
             print(f"Auto-selected platform {_version_dir(v8path)}: {v8path}")
         else:
-            print("Error: 1C executable not found. Specify -V8Path", file=sys.stderr)
+            print("Error: 1C executable not found. Specify -V8Path")
             sys.exit(1)
     if os.path.isdir(v8path):
         # PY-only: на *nix исполняемый называется "1cv8" (без .exe); ibcmd — только явным путём.
         exe = "1cv8.exe" if os.name == "nt" else "1cv8"
         v8path = os.path.join(v8path, exe)
     if not os.path.isfile(v8path):
-        print(f"Error: 1C executable not found at {v8path}", file=sys.stderr)
+        print(f"Error: 1C executable not found at {v8path}")
         sys.exit(1)
     return v8path
 
@@ -327,7 +323,7 @@ def main():
 
     # --- Validate connection ---
     if not args.InfoBasePath and (not args.InfoBaseServer or not args.InfoBaseRef):
-        print("Error: specify -InfoBasePath or -InfoBaseServer + -InfoBaseRef", file=sys.stderr)
+        print("Error: specify -InfoBasePath or -InfoBaseServer + -InfoBaseRef")
         sys.exit(1)
 
     # --- Build arguments ---
@@ -377,7 +373,7 @@ def main():
         time.sleep(0.2)
     rc = proc.poll()
     if rc is not None:
-        print(f"Error: 1C:Enterprise exited immediately (code: {rc})", file=sys.stderr)
+        print(f"Error: 1C:Enterprise exited immediately (code: {rc})")
         sys.exit(rc if rc and rc > 0 else 1)
     print(f"PID: {proc.pid}")
     print("1C:Enterprise launched")

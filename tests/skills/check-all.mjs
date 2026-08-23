@@ -17,6 +17,7 @@ const GUARDS = [
   ['check-form-purposes.mjs', 'назначения форм в form-add: согласованы со спецификацией и между портами'],
   ['check-positional-binding.mjs', 'read-only навыки: позиционным остаётся только путь ко входу'],
   ['check-agent-portability.mjs', 'исходники навыков: без привязки к конкретному AI-агенту'],
+  ['check-error-streams.mjs', 'сообщения об ошибках: один и тот же поток в обоих портах'],
   ['check-nonascii-fs.mjs', 'fsutil: удаление и копирование держат не-ASCII пути, копии не разошлись'],
 ];
 

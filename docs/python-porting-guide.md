@@ -105,6 +105,11 @@ Switch-параметры (`-NoValidate`) → `action='store_true'`.
 | `Write-Host "text"` | `print("text")` |
 | `Write-Error "text"` | `print("text", file=sys.stderr)` |
 
+> Поток обязателен к соблюдению, а не рекомендателен: харнесс не чередует stdout и stderr,
+> а группирует их — вердикт, ушедший не в тот поток, печатается ПЕРЕД строками, которые его
+> объясняют, и причинный порядок вывода переворачивается. Держит инвариант
+> `tests/skills/check-error-streams.mjs`.
+
 ## lxml vs stdlib
 
 - **Compile/init скрипты** (строковая сборка): только stdlib

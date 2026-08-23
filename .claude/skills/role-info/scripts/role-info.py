@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-info v1.5 — Analyze 1C role rights
+# role-info v1.6 — Analyze 1C role rights
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -55,7 +55,7 @@ if not os.path.isabs(rights_path):
     rights_path = os.path.join(os.getcwd(), rights_path)
 
 if not os.path.isfile(rights_path):
-    print(f"[ERROR] File not found: {rights_path}", file=sys.stderr)
+    print(f"[ERROR] File not found: {rights_path}")
     sys.exit(1)
 
 # --- Try to find metadata file for role name/synonym ---

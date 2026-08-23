@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-dump-xml v1.20 — Dump 1C configuration to XML files
+# db-dump-xml v1.21 — Dump 1C configuration to XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -205,7 +205,6 @@ def assert_extra_args(extra, engine, hints):
             print(
                 f"Error: '{tok}' is a positional token — pass values as --key=value "
                 f"({param} cannot extend the ibcmd command)",
-                file=sys.stderr,
             )
             sys.exit(1)
         for k in owned:
@@ -213,7 +212,6 @@ def assert_extra_args(extra, engine, hints):
                 hint = f" (use {hints[k]})" if hints and k in hints else ""
                 print(
                     f"Error: {k} is controlled by the skill and cannot be passed via {param}{hint}",
-                    file=sys.stderr,
                 )
                 sys.exit(1)
 
@@ -281,14 +279,12 @@ def resolve_extra_args(engine, v8_extra, ibcmd_extra, hints):
         print(
             "Error: -AdditionalV8Arguments applies to 1cv8 only; the selected engine is ibcmd "
             "(use -AdditionalIbcmdArguments)",
-            file=sys.stderr,
         )
         sys.exit(1)
     if engine != "ibcmd" and ibcmd_extra:
         print(
             "Error: -AdditionalIbcmdArguments applies to ibcmd only; the selected engine is 1cv8 "
             "(use -AdditionalV8Arguments)",
-            file=sys.stderr,
         )
         sys.exit(1)
     if engine == "ibcmd":
@@ -330,14 +326,14 @@ def resolve_v8path(v8path):
             v8path = max(candidates, key=_version_key)
             print(f"Auto-selected platform {_version_dir(v8path)}: {v8path}")
         else:
-            print("Error: 1C executable not found. Specify -V8Path", file=sys.stderr)
+            print("Error: 1C executable not found. Specify -V8Path")
             sys.exit(1)
     if os.path.isdir(v8path):
         # PY-only: на *nix исполняемый называется "1cv8" (без .exe); ibcmd — только явным путём.
         exe = "1cv8.exe" if os.name == "nt" else "1cv8"
         v8path = os.path.join(v8path, exe)
     if not os.path.isfile(v8path):
-        print(f"Error: 1C executable not found at {v8path}", file=sys.stderr)
+        print(f"Error: 1C executable not found at {v8path}")
         sys.exit(1)
     return v8path
 
@@ -368,7 +364,7 @@ def assert_infobase_exists(path):
     if not path:
         return
     if not os.path.isfile(os.path.join(path, "1Cv8.1CD")):
-        print(f"Error: information base not found at {path} (no 1Cv8.1CD)", file=sys.stderr)
+        print(f"Error: information base not found at {path} (no 1Cv8.1CD)")
         sys.exit(1)
 
 
@@ -385,7 +381,7 @@ def clean_path(value, param=""):
     if len(v) > 3 and v[-1] in "\\/":
         v = v[:-1]
     if '"' in v:
-        print(f"Error: {param or 'path'} contains a quote character: {value}", file=sys.stderr)
+        print(f"Error: {param or 'path'} contains a quote character: {value}")
         sys.exit(1)
     return v
 
@@ -457,7 +453,7 @@ def run_ibcmd(cmd, has_username=False, warn_no_user=True):
     that residual case is flagged via IBCMD_NOUSER_HINT (model-facing).
     """
     if warn_no_user and os.name == "nt" and not has_username:
-        sys.stderr.write(IBCMD_NOUSER_HINT)
+        sys.stdout.write(IBCMD_NOUSER_HINT)
         sys.stderr.flush()
     r = subprocess.run(cmd, input=b"", capture_output=True)
     r.stdout = decode_platform_bytes(r.stdout)
@@ -545,10 +541,10 @@ def main():
     # --- Validate connection ---
     if engine == "ibcmd":
         if not args.InfoBasePath:
-            print("Error: ibcmd supports file infobases only (use -InfoBasePath)", file=sys.stderr)
+            print("Error: ibcmd supports file infobases only (use -InfoBasePath)")
             sys.exit(1)
     elif not args.InfoBasePath and (not args.InfoBaseServer or not args.InfoBaseRef):
-        print("Error: specify -InfoBasePath or -InfoBaseServer + -InfoBaseRef", file=sys.stderr)
+        print("Error: specify -InfoBasePath or -InfoBaseServer + -InfoBaseRef")
         sys.exit(1)
 
     # --- Validate Partial mode ---
@@ -556,7 +552,7 @@ def main():
     # то, что уже напечатал другой навык (например /db-repo update со списком полученных объектов).
     if args.ObjectsFile:
         if not os.path.exists(args.ObjectsFile):
-            print("Error: -ObjectsFile not found: %s" % args.ObjectsFile, file=sys.stderr)
+            print("Error: -ObjectsFile not found: %s" % args.ObjectsFile)
             sys.exit(1)
         with open(args.ObjectsFile, encoding="utf-8-sig") as f:
             from_file = [s.strip() for s in f.read().splitlines()
@@ -569,7 +565,7 @@ def main():
         if args.Mode == "UpdateInfo":
             # Не «шире/уже», а другая операция: обновление ConfigDumpInfo без выгрузки файлов.
             print("Error: -Mode UpdateInfo does not take an object list — it only refreshes "
-                  "ConfigDumpInfo.xml", file=sys.stderr)
+                  "ConfigDumpInfo.xml")
             sys.exit(1)
         if args.Mode in ("Full", "Changes"):
             print("[note] перечислены объекты — выгружаются только они; -Mode %s не применён"
@@ -578,7 +574,7 @@ def main():
     if not args.Mode:
         args.Mode = "Changes"
     if args.Mode == "Partial" and not args.Objects:
-        print("Error: -Objects or -ObjectsFile required for Partial mode", file=sys.stderr)
+        print("Error: -Objects or -ObjectsFile required for Partial mode")
         sys.exit(1)
 
     # --- Create output dir if needed ---
@@ -589,12 +585,12 @@ def main():
     # --- ibcmd branch (file infobase only; hierarchical Full/Changes) ---
     if engine == "ibcmd":
         if args.Format == "Plain":
-            print("Error: ibcmd config export supports hierarchical format only (use -Format Hierarchical or 1cv8)", file=sys.stderr)
+            print("Error: ibcmd config export supports hierarchical format only (use -Format Hierarchical or 1cv8)")
             sys.exit(1)
         if args.AllExtensions:
             arguments = ["infobase", "config", "export", "all-extensions", args.ConfigDir, f"--db-path={args.InfoBasePath}"]
         elif args.Mode == "UpdateInfo":
-            print("Error: ibcmd config export does not support Mode UpdateInfo; use 1cv8", file=sys.stderr)
+            print("Error: ibcmd config export does not support Mode UpdateInfo; use 1cv8")
             sys.exit(1)
         elif args.Mode == "Partial":
             obj_list = [o.strip() for o in args.Objects.split(",") if o.strip()]
@@ -624,9 +620,9 @@ def main():
         if exit_code == 0:
             print(f"Configuration exported successfully to: {args.ConfigDir}")
         elif out_missing:
-            print(f"Error: exit code 0 but no files under {args.ConfigDir} — configuration was not exported", file=sys.stderr)
+            print(f"Error: exit code 0 but no files under {args.ConfigDir} — configuration was not exported")
         else:
-            print(f"Error exporting configuration (code: {exit_code})", file=sys.stderr)
+            print(f"Error exporting configuration (code: {exit_code})")
         sys.exit(exit_code)
 
     # --- Temp dir ---
@@ -703,9 +699,9 @@ def main():
             print("Dump completed successfully")
             print(f"Configuration dumped to: {args.ConfigDir}")
         elif out_missing:
-            print(f"Error: exit code 0 but no files under {args.ConfigDir} — configuration was not dumped", file=sys.stderr)
+            print(f"Error: exit code 0 but no files under {args.ConfigDir} — configuration was not dumped")
         else:
-            print(f"Error dumping configuration (code: {exit_code})", file=sys.stderr)
+            print(f"Error dumping configuration (code: {exit_code})")
 
         if os.path.isfile(out_file):
             try:

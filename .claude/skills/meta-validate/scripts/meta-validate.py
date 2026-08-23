@@ -1,4 +1,4 @@
-# meta-validate v1.23 — Validate 1C metadata object structure (Python port)
+# meta-validate v1.24 — Validate 1C metadata object structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -80,7 +80,7 @@ if len(path_list) > 1:
         except Exception as e:
             # Падение одного объекта не должно рвать батч — в варианте с отдельным процессом
             # это обеспечивалось изоляцией процессов.
-            print(f"[ERROR] {single_path}: {type(e).__name__}: {e}", file=sys.stderr)
+            print(f"[ERROR] {single_path}: {type(e).__name__}: {e}")
             rc = 1
         finally:
             sys.argv = _saved_argv

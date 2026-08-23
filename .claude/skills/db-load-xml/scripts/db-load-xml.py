@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-xml v1.27 — Load 1C configuration from XML files
+# db-load-xml v1.28 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -226,7 +226,6 @@ def assert_extra_args(extra, engine, hints):
             print(
                 f"Error: '{tok}' is a positional token — pass values as --key=value "
                 f"({param} cannot extend the ibcmd command)",
-                file=sys.stderr,
             )
             sys.exit(1)
         for k in owned:
@@ -234,7 +233,6 @@ def assert_extra_args(extra, engine, hints):
                 hint = f" (use {hints[k]})" if hints and k in hints else ""
                 print(
                     f"Error: {k} is controlled by the skill and cannot be passed via {param}{hint}",
-                    file=sys.stderr,
                 )
                 sys.exit(1)
 
@@ -302,14 +300,12 @@ def resolve_extra_args(engine, v8_extra, ibcmd_extra, hints):
         print(
             "Error: -AdditionalV8Arguments applies to 1cv8 only; the selected engine is ibcmd "
             "(use -AdditionalIbcmdArguments)",
-            file=sys.stderr,
         )
         sys.exit(1)
     if engine != "ibcmd" and ibcmd_extra:
         print(
             "Error: -AdditionalIbcmdArguments applies to ibcmd only; the selected engine is 1cv8 "
             "(use -AdditionalV8Arguments)",
-            file=sys.stderr,
         )
         sys.exit(1)
     if engine == "ibcmd":
@@ -351,14 +347,14 @@ def resolve_v8path(v8path):
             v8path = max(candidates, key=_version_key)
             print(f"Auto-selected platform {_version_dir(v8path)}: {v8path}")
         else:
-            print("Error: 1C executable not found. Specify -V8Path", file=sys.stderr)
+            print("Error: 1C executable not found. Specify -V8Path")
             sys.exit(1)
     if os.path.isdir(v8path):
         # PY-only: на *nix исполняемый называется "1cv8" (без .exe); ibcmd — только явным путём.
         exe = "1cv8.exe" if os.name == "nt" else "1cv8"
         v8path = os.path.join(v8path, exe)
     if not os.path.isfile(v8path):
-        print(f"Error: 1C executable not found at {v8path}", file=sys.stderr)
+        print(f"Error: 1C executable not found at {v8path}")
         sys.exit(1)
     return v8path
 
@@ -389,7 +385,7 @@ def assert_infobase_exists(path):
     if not path:
         return
     if not os.path.isfile(os.path.join(path, "1Cv8.1CD")):
-        print(f"Error: information base not found at {path} (no 1Cv8.1CD)", file=sys.stderr)
+        print(f"Error: information base not found at {path} (no 1Cv8.1CD)")
         sys.exit(1)
 
 
@@ -406,7 +402,7 @@ def clean_path(value, param=""):
     if len(v) > 3 and v[-1] in "\\/":
         v = v[:-1]
     if '"' in v:
-        print(f"Error: {param or 'path'} contains a quote character: {value}", file=sys.stderr)
+        print(f"Error: {param or 'path'} contains a quote character: {value}")
         sys.exit(1)
     return v
 
@@ -510,7 +506,7 @@ def run_ibcmd(cmd, has_username=False, warn_no_user=True):
     that residual case is flagged via IBCMD_NOUSER_HINT (model-facing).
     """
     if warn_no_user and os.name == "nt" and not has_username:
-        sys.stderr.write(IBCMD_NOUSER_HINT)
+        sys.stdout.write(IBCMD_NOUSER_HINT)
         sys.stderr.flush()
     r = subprocess.run(cmd, input=b"", capture_output=True)
     r.stdout = decode_platform_bytes(r.stdout)
@@ -624,15 +620,15 @@ def main():
     # --- Validate connection ---
     if engine == "ibcmd":
         if not args.InfoBasePath:
-            print("Error: ibcmd supports file infobases only (use -InfoBasePath)", file=sys.stderr)
+            print("Error: ibcmd supports file infobases only (use -InfoBasePath)")
             sys.exit(1)
     elif not args.InfoBasePath and (not args.InfoBaseServer or not args.InfoBaseRef):
-        print("Error: specify -InfoBasePath or -InfoBaseServer + -InfoBaseRef", file=sys.stderr)
+        print("Error: specify -InfoBasePath or -InfoBaseServer + -InfoBaseRef")
         sys.exit(1)
 
     # --- Validate config dir ---
     if not os.path.exists(args.ConfigDir):
-        print(f"Error: config directory not found: {args.ConfigDir}", file=sys.stderr)
+        print(f"Error: config directory not found: {args.ConfigDir}")
         sys.exit(1)
 
     # --- Validate Partial mode ---
@@ -645,13 +641,13 @@ def main():
     if not args.Mode:
         args.Mode = "Full"
     if args.Mode == "Partial" and not args.Files and not args.ListFile:
-        print("Error: -Files or -ListFile required for Partial mode", file=sys.stderr)
+        print("Error: -Files or -ListFile required for Partial mode")
         sys.exit(1)
 
     # --- ibcmd branch (file infobase only; hierarchical full-directory import) ---
     if engine == "ibcmd":
         if args.Format == "Plain":
-            print("Error: ibcmd config import supports hierarchical format only (use -Format Hierarchical or 1cv8)", file=sys.stderr)
+            print("Error: ibcmd config import supports hierarchical format only (use -Format Hierarchical or 1cv8)")
             sys.exit(1)
         if args.AllExtensions:
             arguments = ["infobase", "config", "import", "all-extensions", args.ConfigDir, f"--db-path={args.InfoBasePath}"]
@@ -659,7 +655,7 @@ def main():
             # partial: import specific files (relative to ConfigDir)
             if args.ListFile:
                 if not os.path.isfile(args.ListFile):
-                    print(f"Error: list file not found: {args.ListFile}", file=sys.stderr)
+                    print(f"Error: list file not found: {args.ListFile}")
                     sys.exit(1)
                 with open(args.ListFile, encoding="utf-8-sig") as f:
                     file_list = [ln.strip() for ln in f if ln.strip()]
@@ -668,7 +664,7 @@ def main():
             else:
                 file_list = []
             if not file_list:
-                print("Error: -Files or -ListFile required for partial import", file=sys.stderr)
+                print("Error: -Files or -ListFile required for partial import")
                 sys.exit(1)
             arguments = ["infobase", "config", "import", "files"] + file_list
             arguments += [f"--base-dir={args.ConfigDir}", f"--db-path={args.InfoBasePath}"]
@@ -690,7 +686,7 @@ def main():
         print(f"Running: ibcmd {_redact(' '.join(format_args_for_display(arguments, engine)), args.Password, args.UserName)}")
         result = run_ibcmd([v8path] + arguments, bool(args.UserName))
         if result.returncode != 0:
-            print(f"Error loading configuration from files (code: {result.returncode}){describe_exit(result.returncode)}", file=sys.stderr)
+            print(f"Error loading configuration from files (code: {result.returncode}){describe_exit(result.returncode)}")
             sys.exit(result.returncode)
         print(f"Configuration loaded successfully from: {args.ConfigDir}")
         exit_code = 0
@@ -708,7 +704,7 @@ def main():
             if exit_code == 0:
                 print("Database configuration updated successfully")
             else:
-                print(f"Error updating database configuration (code: {exit_code}){describe_exit(exit_code)}", file=sys.stderr)
+                print(f"Error updating database configuration (code: {exit_code}){describe_exit(exit_code)}")
             print_platform_output(ar)
         sys.exit(exit_code)
 
@@ -745,7 +741,7 @@ def main():
             # Build list file
             if args.ListFile:
                 if not os.path.isfile(args.ListFile):
-                    print(f"Error: list file not found: {args.ListFile}", file=sys.stderr)
+                    print(f"Error: list file not found: {args.ListFile}")
                     sys.exit(1)
                 with open(args.ListFile, encoding="utf-8-sig") as f:
                     raw_list = [ln.strip() for ln in f if ln.strip()]
@@ -757,12 +753,12 @@ def main():
             support_files = [x for x in raw_list if support_re.search(x)]
             file_list = [x for x in raw_list if not support_re.search(x)]
             if support_files:
-                print("[ВНИМАНИЕ] Служебные файлы состояния поддержки исключены из частичной загрузки (частично не грузятся):", file=sys.stderr)
+                print("[ВНИМАНИЕ] Служебные файлы состояния поддержки исключены из частичной загрузки (частично не грузятся):")
                 for sf in support_files:
-                    print(f"  - {sf}", file=sys.stderr)
-                print("  Смена состояния поддержки применяется только полной загрузкой: -Mode Full.", file=sys.stderr)
+                    print(f"  - {sf}")
+                print("  Смена состояния поддержки применяется только полной загрузкой: -Mode Full.")
             if not file_list:
-                print("Error: после исключения служебных файлов поддержки загружать нечего. Для смены поддержки используйте -Mode Full.", file=sys.stderr)
+                print("Error: после исключения служебных файлов поддержки загружать нечего. Для смены поддержки используйте -Mode Full.")
                 sys.exit(1)
             generated_list_file = os.path.join(temp_dir, "load_list.txt")
             with open(generated_list_file, "w", encoding="utf-8-sig") as f:
@@ -819,7 +815,7 @@ def main():
         if exit_code == 0:
             print("Load completed successfully")
         else:
-            print(f"Error loading configuration (code: {exit_code}){describe_exit(exit_code)}", file=sys.stderr)
+            print(f"Error loading configuration (code: {exit_code}){describe_exit(exit_code)}")
 
         if log_content:
             print("--- Log ---")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# web-publish v1.8 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
+# web-publish v1.9 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 """
@@ -147,7 +147,7 @@ def main():
             ver = os.path.basename(os.path.dirname(v8_path))
             print(f'Auto-selected platform {ver}: {v8_path}')
         else:
-            print('Error: платформа 1С не найдена. Укажите -V8Path', file=sys.stderr)
+            print('Error: платформа 1С не найдена. Укажите -V8Path')
             sys.exit(1)
     elif os.path.isfile(v8_path):
         v8_path = os.path.dirname(v8_path)
@@ -155,12 +155,12 @@ def main():
     # Validate wsap24.dll
     wsap_dll = os.path.join(v8_path, 'wsap24.dll')
     if not os.path.exists(wsap_dll):
-        print(f'Error: wsap24.dll не найден в {v8_path}', file=sys.stderr)
+        print(f'Error: wsap24.dll не найден в {v8_path}')
         sys.exit(1)
 
     # --- Validate connection ---
     if not args.InfoBasePath and (not args.InfoBaseServer or not args.InfoBaseRef):
-        print('Error: укажите -InfoBasePath или -InfoBaseServer + -InfoBaseRef', file=sys.stderr)
+        print('Error: укажите -InfoBasePath или -InfoBaseServer + -InfoBaseRef')
         sys.exit(1)
 
     # --- Resolve ApachePath ---
@@ -213,7 +213,7 @@ def main():
                     zip_url = f'https://www.apachelounge.com{zip_url}'
                 print(f'Найдено: {zip_url}')
             else:
-                print('Не удалось определить ссылку автоматически.', file=sys.stderr)
+                print('Не удалось определить ссылку автоматически.')
                 print(f'Скачайте вручную: {download_page}')
                 sys.exit(1)
 
@@ -221,7 +221,7 @@ def main():
         except SystemExit:
             raise
         except Exception as e:
-            print(f'Error: не удалось скачать Apache: {e}', file=sys.stderr)
+            print(f'Error: не удалось скачать Apache: {e}')
             print('Скачайте вручную: https://www.apachelounge.com/download/')
             sys.exit(1)
 
@@ -244,7 +244,7 @@ def main():
             if found_inner:
                 inner_dir = found_inner
             else:
-                print('Error: каталог Apache24 не найден в архиве', file=sys.stderr)
+                print('Error: каталог Apache24 не найден в архиве')
                 sys.exit(1)
 
         os.makedirs(apache_path, exist_ok=True)
@@ -297,7 +297,7 @@ def main():
     app_name = app_name.lower()
 
     if not app_name:
-        print('Error: не удалось определить имя публикации. Укажите -AppName', file=sys.stderr)
+        print('Error: не удалось определить имя публикации. Укажите -AppName')
         sys.exit(1)
 
     print(f'Публикация: {app_name}')
@@ -340,7 +340,7 @@ def main():
     # --- Update httpd.conf ---
     conf_file = os.path.join(apache_path, 'conf', 'httpd.conf')
     if not os.path.exists(conf_file):
-        print(f'Error: httpd.conf не найден: {conf_file}', file=sys.stderr)
+        print(f'Error: httpd.conf не найден: {conf_file}')
         sys.exit(1)
 
     with open(conf_file, 'r', encoding='utf-8-sig') as f:
@@ -415,7 +415,7 @@ def main():
                 holder_name = f'{holder_proc.name()} (PID: {holder_pid})'
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 holder_name = f'PID {holder_pid}'
-            print(f'Error: порт {port} занят процессом {holder_name}', file=sys.stderr)
+            print(f'Error: порт {port} занят процессом {holder_name}')
             print('Укажите другой порт: -Port 9090')
             sys.exit(1)
 
@@ -451,7 +451,7 @@ def main():
     if httpd_check:
         print(f'Apache запущен (PID: {httpd_check[0].pid})')
     else:
-        print('Apache не удалось запустить', file=sys.stderr)
+        print('Apache не удалось запустить')
         # Run config test for diagnostics
         try:
             result = subprocess.run(

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-info v1.5 — Compact summary of 1C subsystem structure
+# subsystem-info v1.6 — Compact summary of 1C subsystem structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -105,7 +105,7 @@ def load_subsystem_xml(xml_path):
     doc_root = tree.getroot()
     sub = doc_root.find("md:Subsystem", NS)
     if sub is None:
-        print(f"[ERROR] Not a valid subsystem XML: {xml_path}", file=sys.stderr)
+        print(f"[ERROR] Not a valid subsystem XML: {xml_path}")
         sys.exit(1)
     return {"Doc": doc_root, "Sub": sub}
 
@@ -408,7 +408,7 @@ if args.Mode == "tree":
         root_dir = subsystem_path
     else:
         if not os.path.isfile(subsystem_path):
-            print(f"[ERROR] File not found: {subsystem_path}", file=sys.stderr)
+            print(f"[ERROR] File not found: {subsystem_path}")
             sys.exit(1)
         root_xml = subsystem_path
 
@@ -488,7 +488,7 @@ if args.Mode == "tree":
         if args.Name:
             xml_files = [f for f in xml_files if os.path.splitext(f)[0] == args.Name]
             if not xml_files:
-                print(f"[ERROR] Subsystem '{args.Name}' not found in {root_dir}", file=sys.stderr)
+                print(f"[ERROR] Subsystem '{args.Name}' not found in {root_dir}")
                 sys.exit(1)
         for i, fname in enumerate(xml_files):
             build_tree_entry(os.path.join(root_dir, fname), "", i == len(xml_files) - 1, True)
@@ -500,7 +500,7 @@ elif args.Mode == "ci":
     # Mode: ci -- CommandInterface.xml
     # ============================================================
     if os.path.isdir(subsystem_path):
-        print("[ERROR] ci mode requires a subsystem .xml file, not a directory", file=sys.stderr)
+        print("[ERROR] ci mode requires a subsystem .xml file, not a directory")
         sys.exit(1)
     # File not found -- check Dir/Name/Name.xml -> Dir/Name.xml
     if not os.path.isfile(subsystem_path):
@@ -511,7 +511,7 @@ elif args.Mode == "ci":
             if os.path.isfile(c):
                 subsystem_path = c
     if not os.path.isfile(subsystem_path):
-        print(f"[ERROR] File not found: {subsystem_path}", file=sys.stderr)
+        print(f"[ERROR] File not found: {subsystem_path}")
         sys.exit(1)
 
     parsed = load_subsystem_xml(subsystem_path)
@@ -535,7 +535,7 @@ else:
         elif os.path.isfile(sibling):
             subsystem_path = sibling
         else:
-            print(f"[ERROR] No {dir_name}.xml found in directory. Use -Mode tree for directory listing.", file=sys.stderr)
+            print(f"[ERROR] No {dir_name}.xml found in directory. Use -Mode tree for directory listing.")
             sys.exit(1)
 
     # File not found -- check Dir/Name/Name.xml -> Dir/Name.xml
@@ -547,7 +547,7 @@ else:
             if os.path.isfile(c):
                 subsystem_path = c
     if not os.path.isfile(subsystem_path):
-        print(f"[ERROR] File not found: {subsystem_path}", file=sys.stderr)
+        print(f"[ERROR] File not found: {subsystem_path}")
         sys.exit(1)
 
     parsed = load_subsystem_xml(subsystem_path)

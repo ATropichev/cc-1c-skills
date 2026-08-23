@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# web-stop v1.2 — Stop Apache HTTP Server
+# web-stop v1.3 — Stop Apache HTTP Server
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 """
@@ -130,7 +130,7 @@ def main():
         time.sleep(1)
         final = get_our_httpd(httpd_exe_norm)
         if final:
-            print('Error: не удалось остановить Apache', file=sys.stderr)
+            print('Error: не удалось остановить Apache')
             sys.exit(1)
 
     print('Apache остановлен')

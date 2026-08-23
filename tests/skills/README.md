@@ -111,6 +111,7 @@ node tests/skills/check-inline-drift.mjs --list # реестр: семья → �
 | `check-form-purposes.mjs` | таблица назначений форм в `form-add`: состав видов, свойство «основная форма» и оба порта сходятся с `docs/1c-form-spec.md` |
 | `check-positional-binding.mjs` | read-only навыки (`*-info` / `*-validate` / `cfe-diff`): позиционным остаётся только путь ко входу, лишний позиционный аргумент не перезаписывает указанный файл |
 | `check-agent-portability.mjs` | исходники навыков не привязаны к конкретному AI-агенту: единственная разрешённая форма — плейсхолдер `${CLAUDE_SKILL_DIR}/`, который разворачивает `scripts/switch.py` |
+| `check-error-streams.mjs` | сообщения об ошибках идут в один и тот же поток в обоих портах навыка (соответствие из `docs/python-porting-guide.md`) |
 | `check-nonascii-fs.mjs` | `fsutil`: удаление и копирование держат не-ASCII пути (кириллический `%TEMP%`, кириллические имена объектов 1С), обе копии модуля не разошлись |
 
 `check-inline-drift.mjs` держит реестр семей внутри себя: у каждой семьи перечислены варианты, у

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# epf-build v1.15 — Build external data processor or report (EPF/ERF) from XML sources
+# epf-build v1.16 — Build external data processor or report (EPF/ERF) from XML sources
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -120,7 +120,6 @@ def assert_extra_args(extra, engine, hints):
             print(
                 f"Error: '{tok}' is a positional token — pass values as --key=value "
                 f"({param} cannot extend the ibcmd command)",
-                file=sys.stderr,
             )
             sys.exit(1)
         for k in owned:
@@ -128,7 +127,6 @@ def assert_extra_args(extra, engine, hints):
                 hint = f" (use {hints[k]})" if hints and k in hints else ""
                 print(
                     f"Error: {k} is controlled by the skill and cannot be passed via {param}{hint}",
-                    file=sys.stderr,
                 )
                 sys.exit(1)
 
@@ -196,14 +194,12 @@ def resolve_extra_args(engine, v8_extra, ibcmd_extra, hints):
         print(
             "Error: -AdditionalV8Arguments applies to 1cv8 only; the selected engine is ibcmd "
             "(use -AdditionalIbcmdArguments)",
-            file=sys.stderr,
         )
         sys.exit(1)
     if engine != "ibcmd" and ibcmd_extra:
         print(
             "Error: -AdditionalIbcmdArguments applies to ibcmd only; the selected engine is 1cv8 "
             "(use -AdditionalV8Arguments)",
-            file=sys.stderr,
         )
         sys.exit(1)
     if engine == "ibcmd":
@@ -245,14 +241,14 @@ def resolve_v8path(v8path):
             v8path = max(candidates, key=_version_key)
             print(f"Auto-selected platform {_version_dir(v8path)}: {v8path}")
         else:
-            print("Error: 1C executable not found. Specify -V8Path", file=sys.stderr)
+            print("Error: 1C executable not found. Specify -V8Path")
             sys.exit(1)
     if os.path.isdir(v8path):
         # PY-only: на *nix исполняемый называется "1cv8" (без .exe); ibcmd — только явным путём.
         exe = "1cv8.exe" if os.name == "nt" else "1cv8"
         v8path = os.path.join(v8path, exe)
     if not os.path.isfile(v8path):
-        print(f"Error: 1C executable not found at {v8path}", file=sys.stderr)
+        print(f"Error: 1C executable not found at {v8path}")
         sys.exit(1)
     return v8path
 
@@ -283,7 +279,7 @@ def assert_infobase_exists(path):
     if not path:
         return
     if not os.path.isfile(os.path.join(path, "1Cv8.1CD")):
-        print(f"Error: information base not found at {path} (no 1Cv8.1CD)", file=sys.stderr)
+        print(f"Error: information base not found at {path} (no 1Cv8.1CD)")
         sys.exit(1)
 
 
@@ -300,7 +296,7 @@ def clean_path(value, param=""):
     if len(v) > 3 and v[-1] in "\\/":
         v = v[:-1]
     if '"' in v:
-        print(f"Error: {param or 'path'} contains a quote character: {value}", file=sys.stderr)
+        print(f"Error: {param or 'path'} contains a quote character: {value}")
         sys.exit(1)
     return v
 
@@ -372,7 +368,7 @@ def run_ibcmd(cmd, has_username=False, warn_no_user=True):
     that residual case is flagged via IBCMD_NOUSER_HINT (model-facing).
     """
     if warn_no_user and os.name == "nt" and not has_username:
-        sys.stderr.write(IBCMD_NOUSER_HINT)
+        sys.stdout.write(IBCMD_NOUSER_HINT)
         sys.stderr.flush()
     r = subprocess.run(cmd, input=b"", capture_output=True)
     r.stdout = decode_platform_bytes(r.stdout)
@@ -440,7 +436,7 @@ def main():
     }
     extra_args = resolve_extra_args(engine, v8_extra, ibcmd_extra, arg_hints)
     if engine == "ibcmd" and args.InfoBaseServer and args.InfoBaseRef:
-        print("Error: ibcmd supports file infobases only (use -InfoBasePath or omit for stub)", file=sys.stderr)
+        print("Error: ibcmd supports file infobases only (use -InfoBasePath or omit for stub)")
         sys.exit(1)
 
     # --- Auto-create stub database if no connection specified ---
@@ -461,14 +457,14 @@ def main():
             stub_cmd += ["-AdditionalIbcmdArguments"] + list(ibcmd_extra)
         result = subprocess.run(stub_cmd, capture_output=False)
         if result.returncode != 0:
-            print("Error: failed to create stub database", file=sys.stderr)
+            print("Error: failed to create stub database")
             sys.exit(1)
         args.InfoBasePath = auto_base_path
         auto_created_base = auto_base_path
 
     # --- Validate source file ---
     if not os.path.isfile(args.SourceFile):
-        print(f"Error: source file not found: {args.SourceFile}", file=sys.stderr)
+        print(f"Error: source file not found: {args.SourceFile}")
         sys.exit(1)
 
     # --- Ensure output directory exists ---
@@ -502,9 +498,9 @@ def main():
             if exit_code == 0:
                 print(f"External data processor/report built successfully: {args.OutputFile}")
             elif out_missing:
-                print(f"Error: exit code 0 but no non-empty file at {args.OutputFile} — build produced no output", file=sys.stderr)
+                print(f"Error: exit code 0 but no non-empty file at {args.OutputFile} — build produced no output")
             else:
-                print(f"Error building external data processor/report (code: {exit_code})", file=sys.stderr)
+                print(f"Error building external data processor/report (code: {exit_code})")
             sys.exit(exit_code)
 
         # --- Build arguments ---
@@ -541,9 +537,9 @@ def main():
         if exit_code == 0:
             print(f"Build completed successfully: {args.OutputFile}")
         elif out_missing:
-            print(f"Error: exit code 0 but no non-empty file at {args.OutputFile} — build produced no output", file=sys.stderr)
+            print(f"Error: exit code 0 but no non-empty file at {args.OutputFile} — build produced no output")
         else:
-            print(f"Error building (code: {exit_code})", file=sys.stderr)
+            print(f"Error building (code: {exit_code})")
 
         if os.path.isfile(out_file):
             try:

@@ -1,4 +1,4 @@
-# xdto-decompile v1.2 — Convert 1C XDTO package to XML Schema (XSD) (Python port)
+# xdto-decompile v1.3 — Convert 1C XDTO package to XML Schema (XSD) (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -89,7 +89,7 @@ elif os.path.isdir(package_path):
             md_path = m
 
 if not bin_path:
-    print(f"Не найден Ext/Package.bin для пути: {package_path}", file=sys.stderr)
+    print(f"Не найден Ext/Package.bin для пути: {package_path}")
     sys.exit(1)
 
 doc = _parse_xml(bin_path)
@@ -101,7 +101,7 @@ def local(el):
 
 
 if local(pkg) != "package":
-    print(f"Ожидался корневой <package>, получен <{local(pkg)}>", file=sys.stderr)
+    print(f"Ожидался корневой <package>, получен <{local(pkg)}>")
     sys.exit(1)
 
 target_ns = pkg.get("targetNamespace")

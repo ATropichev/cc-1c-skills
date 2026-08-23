@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-info v1.6 — Compact summary of 1C configuration root
+# cf-info v1.7 — Compact summary of 1C configuration root
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -61,11 +61,11 @@ if os.path.isdir(config_path):
     if os.path.isfile(candidate):
         config_path = candidate
     else:
-        print(f"[ERROR] No Configuration.xml found in directory: {config_path}", file=sys.stderr)
+        print(f"[ERROR] No Configuration.xml found in directory: {config_path}")
         sys.exit(1)
 
 if not os.path.isfile(config_path):
-    print(f"[ERROR] File not found: {config_path}", file=sys.stderr)
+    print(f"[ERROR] File not found: {config_path}")
     sys.exit(1)
 
 # --- Load XML ---
@@ -82,12 +82,12 @@ NS = {
 
 md_root = xml_root  # root is MetaDataObject itself
 if etree.QName(md_root.tag).localname != "MetaDataObject":
-    print("[ERROR] Not a valid 1C metadata XML file (no MetaDataObject root)", file=sys.stderr)
+    print("[ERROR] Not a valid 1C metadata XML file (no MetaDataObject root)")
     sys.exit(1)
 
 cfg_node = md_root.find("md:Configuration", NS)
 if cfg_node is None:
-    print("[ERROR] No <Configuration> element found", file=sys.stderr)
+    print("[ERROR] No <Configuration> element found")
     sys.exit(1)
 
 version = md_root.get("version", "")
