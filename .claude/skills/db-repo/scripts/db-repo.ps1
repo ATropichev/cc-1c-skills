@@ -1,4 +1,4 @@
-﻿# db-repo v1.9 — 1C configuration repository operations
+﻿# db-repo v1.10 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 <#
@@ -1225,9 +1225,12 @@ try {
     # «Соединение не установлено» у сетевого хранилища означает не отсутствие реквизитов,
     # а недоступный сервер — трактовка «добавьте repository» увела бы не туда.
     if ($verdict -ne 0 -and $logText -match 'Соединение с хранилищем конфигурации не установлено') {
-        if ($repo.Path -match '^(tcp|http)s?://') {
+        if ($repo.Path -match '^tcp://') {
             Write-Host "[hint] сервер хранилища недоступен по адресу $($repo.Path)." -ForegroundColor Yellow
-            Write-Host "       Проверьте, запущен ли crserver и верен ли порт (по умолчанию 1542)." -ForegroundColor Yellow
+            Write-Host "       Проверьте, запущен ли сервер хранилища и верен ли порт (по умолчанию 1542)." -ForegroundColor Yellow
+        } elseif ($repo.Path -match '^https?://') {
+            Write-Host "[hint] хранилище недоступно по адресу $($repo.Path)." -ForegroundColor Yellow
+            Write-Host "       Проверьте веб-сервер и публикацию хранилища." -ForegroundColor Yellow
         } else {
             Write-Host "[hint] хранилище недоступно по пути $($repo.Path) — проверьте путь и реквизиты." -ForegroundColor Yellow
         }

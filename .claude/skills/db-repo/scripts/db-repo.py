@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-repo v1.9 — 1C configuration repository operations
+# db-repo v1.10 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 """Работа с хранилищем конфигурации 1С.
@@ -1178,9 +1178,12 @@ def main():
         # «Соединение не установлено» у сетевого хранилища означает не отсутствие реквизитов,
         # а недоступный сервер — трактовка «добавьте repository» увела бы не туда.
         if verdict != 0 and "Соединение с хранилищем конфигурации не установлено" in log_text:
-            if re.match(r"^(tcp|http)s?://", repo["path"] or ""):
+            if re.match(r"^tcp://", repo["path"] or ""):
                 print("[hint] сервер хранилища недоступен по адресу %s." % repo["path"])
-                print("       Проверьте, запущен ли crserver и верен ли порт (по умолчанию 1542).")
+                print("       Проверьте, запущен ли сервер хранилища и верен ли порт (по умолчанию 1542).")
+            elif re.match(r"^https?://", repo["path"] or ""):
+                print("[hint] хранилище недоступно по адресу %s." % repo["path"])
+                print("       Проверьте веб-сервер и публикацию хранилища.")
             else:
                 print("[hint] хранилище недоступно по пути %s — проверьте путь и реквизиты."
                       % repo["path"])
