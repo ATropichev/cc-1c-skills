@@ -1,4 +1,4 @@
-﻿# db-repo v1.7 — 1C configuration repository operations
+﻿# db-repo v1.8 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 <#
@@ -985,14 +985,19 @@ function Write-RepoVerdict {
             if ($Cmd -eq 'report' -and $ReportFormat -eq 'txt' -and (Test-Path $OutputFile)) {
                 $txt = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($OutputFile))
                 if ($txt.Length -gt 0 -and $txt[0] -eq [char]0xFEFF) { $txt = $txt.Substring(1) }
-                $lines = @($txt -split "`r?`n")
-                $limit = 200
-                Write-Host "--- $OutputFile ---"
-                Write-Host (($lines | Select-Object -First $limit) -join [Environment]::NewLine)
-                if ($lines.Count -gt $limit) {
-                    Write-Host "[... показаны первые $limit строк из $($lines.Count); полный отчёт в файле ...]" -ForegroundColor Yellow
+                $lines = @($txt.TrimEnd() -split "`r?`n")
+                # Короткий отчёт печатаем целиком, длинный — не печатаем ВОВСЕ. Обрезанный отчёт
+                # по версиям опаснее длинного: он читается как полный ответ, и по куску легко
+                # заключить «объект не менялся». Список объектов при обрезке хотя бы очевидно неполон.
+                if ($lines.Count -le 100) {
+                    Write-Host "--- $OutputFile ---"
+                    Write-Host ($lines -join [Environment]::NewLine)
+                    Write-Host "--- End ---"
+                } else {
+                    Write-Host "Отчёт не печатается целиком (строк: $($lines.Count)): $OutputFile" -ForegroundColor Yellow
+                    Write-Host "Сузьте выборку: -NBegin -1 (только последняя версия), -NBegin/-NEnd (диапазон)," -ForegroundColor Yellow
+                    Write-Host "-DateBegin/-DateEnd (период), -GroupByObject (сводка по объектам)." -ForegroundColor Yellow
                 }
-                Write-Host "--- End ---"
             }
             return 0
         }

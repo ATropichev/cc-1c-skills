@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-repo v1.7 — 1C configuration repository operations
+# db-repo v1.8 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 """Работа с хранилищем конфигурации 1С.
@@ -865,13 +865,18 @@ def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", out
     print("Команда '%s' выполнена." % cmd)
     if cmd == "report" and report_format == "txt" and os.path.exists(output_file):
         with open(output_file, encoding="utf-8-sig") as f:
-            lines = f.read().splitlines()
-        limit = 200
-        print("--- %s ---" % output_file)
-        print("\n".join(lines[:limit]))
-        if len(lines) > limit:
-            print("[... показаны первые %d строк из %d; полный отчёт в файле ...]" % (limit, len(lines)))
-        print("--- End ---")
+            lines = f.read().rstrip().splitlines()
+        # Короткий отчёт печатаем целиком, длинный — не печатаем ВОВСЕ. Обрезанный отчёт
+        # по версиям опаснее длинного: он читается как полный ответ, и по куску легко
+        # заключить «объект не менялся». Список объектов при обрезке хотя бы очевидно неполон.
+        if len(lines) <= 100:
+            print("--- %s ---" % output_file)
+            print(chr(10).join(lines))
+            print("--- End ---")
+        else:
+            print("Отчёт не печатается целиком (строк: %d): %s" % (len(lines), output_file))
+            print("Сузьте выборку: -NBegin -1 (только последняя версия), -NBegin/-NEnd (диапазон),")
+            print("-DateBegin/-DateEnd (период), -GroupByObject (сводка по объектам).")
     return 0
 
 def main():
