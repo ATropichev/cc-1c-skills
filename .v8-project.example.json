@@ -8,10 +8,33 @@
       "path": "C:\\Bases\\MyApp_Dev",
       "user": "Администратор",
       "password": "",
-      "aliases": ["dev", "разработка"],
-      "branches": ["dev", "develop", "feature/*"],
+      "aliases": [
+        "dev",
+        "разработка"
+      ],
+      "branches": [
+        "dev",
+        "develop",
+        "feature/*"
+      ],
       "configSrc": "src\\cf",
-      "webUrl": "http://localhost:8081/dev"
+      "webUrl": "http://localhost:8081/dev",
+      "repository": {
+        "path": "\\\\srv01\\repo\\MyApp",
+        "user": "",
+        "password": ""
+      },
+      "extensions": [
+        {
+          "name": "",
+          "src": "src\\cfe",
+          "repository": {
+            "path": "",
+            "user": "",
+            "password": ""
+          }
+        }
+      ]
     },
     {
       "id": "test",
@@ -21,8 +44,15 @@
       "ref": "MyApp_Test",
       "user": "Администратор",
       "password": "",
-      "aliases": ["test", "тест", "тестовая"],
-      "branches": ["main", "release/*"]
+      "aliases": [
+        "test",
+        "тест",
+        "тестовая"
+      ],
+      "branches": [
+        "main",
+        "release/*"
+      ]
     }
   ],
   "default": "dev",

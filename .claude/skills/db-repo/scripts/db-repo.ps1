@@ -1,4 +1,4 @@
-﻿# db-repo v1.0 — 1C configuration repository operations
+﻿# db-repo v1.1 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 <#
@@ -771,7 +771,11 @@ function Write-RepoVerdict {
     if ($Log.Missing.Count -gt 0) {
         Write-Host "Error: objects not found in the configuration:" -ForegroundColor Red
         foreach ($n in $Log.Missing) { Write-Host "  $n" -ForegroundColor Red }
-        Write-Host "Проверьте написание. Принимаются обе формы: Справочник.Номенклатура и Catalog.Номенклатура." -ForegroundColor Yellow
+        Write-Host "Возможные причины:" -ForegroundColor Yellow
+        Write-Host "  - опечатка в имени. Принимаются обе формы: Справочник.Номенклатура и Catalog.Номенклатура" -ForegroundColor Yellow
+        Write-Host "  - база отстала от хранилища, объект появился позже — выполните /db-repo update" -ForegroundColor Yellow
+        Write-Host "  - это не объект хранилища: реквизиты, табличные части, измерения и ресурсы" -ForegroundColor Yellow
+        Write-Host "    отдельно не захватываются — указывайте объект-владельца" -ForegroundColor Yellow
         return 1
     }
 
@@ -879,6 +883,18 @@ function Write-RepoVerdict {
                 return 1
             }
             Write-Host "Команда '$Cmd' выполнена." -ForegroundColor Green
+            if ($Cmd -eq 'report' -and $ReportFormat -eq 'txt' -and (Test-Path $OutputFile)) {
+                $txt = [System.Text.Encoding]::UTF8.GetString([System.IO.File]::ReadAllBytes($OutputFile))
+                if ($txt.Length -gt 0 -and $txt[0] -eq [char]0xFEFF) { $txt = $txt.Substring(1) }
+                $lines = @($txt -split "`r?`n")
+                $limit = 200
+                Write-Host "--- $OutputFile ---"
+                Write-Host (($lines | Select-Object -First $limit) -join [Environment]::NewLine)
+                if ($lines.Count -gt $limit) {
+                    Write-Host "[... показаны первые $limit строк из $($lines.Count); полный отчёт в файле ...]" -ForegroundColor Yellow
+                }
+                Write-Host "--- End ---"
+            }
             return 0
         }
     }
@@ -920,6 +936,18 @@ $requested = @(Get-RequestedObjects)
 if ($requested.Count -gt 0 -and $objectAware -notcontains $cmd) {
     Write-Host "Error: -Objects/-ObjectsFile does not apply to '$cmd'" -ForegroundColor Red
     exit 1
+}
+
+# Корень с подчинёнными — это ВСЯ конфигурация, а выглядит как «захвачу корень». Для всей
+# конфигурации есть однозначная форма (вызов без -Objects), поэтому двусмысленную отклоняем.
+if ($WithChildren) {
+    $rootAsked = @($requested | Where-Object { $script:ConfigRootAliases -contains $_ })
+    if ($rootAsked.Count -gt 0) {
+        Write-Host "Error: '$($rootAsked[0])' with -WithChildren means the WHOLE configuration, not just its root." -ForegroundColor Red
+        Write-Host "       Нужен только корень (чтобы добавить или удалить объект) — уберите -WithChildren." -ForegroundColor Yellow
+        Write-Host "       Нужна вся конфигурация — вызовите без -Objects." -ForegroundColor Yellow
+        exit 1
+    }
 }
 
 switch ($cmd) {
