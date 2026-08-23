@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-repo v1.5 — 1C configuration repository operations
+# db-repo v1.6 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 """Работа с хранилищем конфигурации 1С.
@@ -558,7 +558,7 @@ def read_repo_log(log_text):
     r = {
         "locked": [], "locked_by_other": [], "received": [], "committed": [],
         "unchanged": [], "unlocked": [], "not_locked": [], "modified": [], "missing": [],
-        "has_operation_block": False,
+        "has_operation_block": False, "raw": log_text,
     }
     if not log_text:
         return r
@@ -852,6 +852,14 @@ def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", out
     if platform_exit != 0:
         print("Команда '%s' завершилась с ошибкой (код %s)%s"
               % (cmd, platform_exit, describe_exit(platform_exit)))
+        # Подключение базы, у которой конфигурация уже есть, платформа отклоняет без
+        # подсказки — а действие ровно одно, и оно необратимо.
+        if "связанная с данным хранилищем" in (log.get("raw") or ""):
+            print("[hint] за этим пользователем хранилища уже числится другая база.")
+            print("       Подключить всё равно — -ForceBindAlreadyBindedUser.")
+        if "Конфигурация не пустая" in (log.get("raw") or ""):
+            print("[hint] в базе уже есть конфигурация. Замена её конфигурацией из хранилища —")
+            print("       -ForceReplaceCfg. Операция необратима: спросите подтверждение у пользователя.")
         return 1
     print("Команда '%s' выполнена." % cmd)
     if cmd == "report" and report_format == "txt" and os.path.exists(output_file):

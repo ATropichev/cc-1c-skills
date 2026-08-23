@@ -1,4 +1,4 @@
-﻿# db-repo v1.5 — 1C configuration repository operations
+﻿# db-repo v1.6 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 <#
@@ -968,6 +968,16 @@ function Write-RepoVerdict {
         default {
             if ($PlatformExit -ne 0) {
                 Write-Host "Команда '$Cmd' завершилась с ошибкой (код $PlatformExit)$(Get-ExitAnnotation $PlatformExit)" -ForegroundColor Red
+                # Подключение базы, у которой конфигурация уже есть, платформа отклоняет без
+                # подсказки — а действие ровно одно, и оно необратимо.
+                if ($Log.Raw -match 'связанная с данным хранилищем') {
+                    Write-Host "[hint] за этим пользователем хранилища уже числится другая база." -ForegroundColor Yellow
+                    Write-Host "       Подключить всё равно — -ForceBindAlreadyBindedUser." -ForegroundColor Yellow
+                }
+                if ($Log.Raw -match 'Конфигурация не пустая') {
+                    Write-Host "[hint] в базе уже есть конфигурация. Замена её конфигурацией из хранилища —" -ForegroundColor Yellow
+                    Write-Host "       -ForceReplaceCfg. Операция необратима: спросите подтверждение у пользователя." -ForegroundColor Yellow
+                }
                 return 1
             }
             Write-Host "Команда '$Cmd' выполнена." -ForegroundColor Green
