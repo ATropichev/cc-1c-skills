@@ -1,4 +1,4 @@
-﻿# db-repo v1.4 — 1C configuration repository operations
+﻿# db-repo v1.5 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 <#
@@ -718,7 +718,11 @@ function Write-ReceivedWarning {
     if (-not $Received -or $Received.Count -eq 0) { return }
     Write-Host ""
     Write-Host "[warning] локальная конфигурация изменена, получено объектов из хранилища: $($Received.Count)" -ForegroundColor Yellow
-    foreach ($n in $Received) { Write-Host "  $n" -ForegroundColor Yellow }
+    $recvLimit = [Math]::Min($Received.Count, $script:ListLimit)
+    foreach ($n in $Received[0..($recvLimit - 1)]) { Write-Host "  $n" -ForegroundColor Yellow }
+    if ($Received.Count -gt $script:ListLimit) {
+        Write-Host "  … и ещё $($Received.Count - $script:ListLimit)" -ForegroundColor Yellow
+    }
     $owners = Get-OwnerObjects $Received
     $hasRoot = @($Received | Where-Object { ($_ -split '\.').Count -eq 1 }).Count -gt 0
     if ($owners.Count -gt 0) {
@@ -804,11 +808,29 @@ function Get-ObjectKey {
     return ($own -join '.').ToLowerInvariant()
 }
 
+# Операция над всей конфигурацией перечисляет тысячи объектов. Печатаем начало списка,
+# остальное кладём в файл: модели нужен факт и путь, а не простыня.
+$script:ListLimit = 20
+
+function Save-ObjectList {
+    param([string[]]$Names, [string]$Key)
+    if (-not $Key) { $Key = 'objects' }
+    $path = Join-Path $env:TEMP "db-repo-$Key.txt"
+    $utf8Bom = New-Object System.Text.UTF8Encoding($true)
+    [System.IO.File]::WriteAllLines($path, $Names, $utf8Bom)
+    return $path
+}
+
 function Write-RepoObjects {
-    param([string]$Title, [string[]]$Names, [string]$Color = 'Green')
+    param([string]$Title, [string[]]$Names, [string]$Color = 'Green', [string]$FileKey = 'objects')
     if (-not $Names -or $Names.Count -eq 0) { return }
     Write-Host "$Title ($($Names.Count)):" -ForegroundColor $Color
-    foreach ($n in $Names) { Write-Host "  $n" }
+    $limit = [Math]::Min($Names.Count, $script:ListLimit)
+    foreach ($n in $Names[0..($limit - 1)]) { Write-Host "  $n" }
+    if ($Names.Count -gt $script:ListLimit) {
+        $path = Save-ObjectList $Names $FileKey
+        Write-Host "  … и ещё $($Names.Count - $script:ListLimit); полный список: $path" -ForegroundColor Yellow
+    }
 }
 
 function Write-RepoVerdict {
@@ -816,7 +838,11 @@ function Write-RepoVerdict {
 
     if ($Log.Missing.Count -gt 0) {
         Write-Host "Error: objects not found in the configuration:" -ForegroundColor Red
-        foreach ($n in $Log.Missing) { Write-Host "  $n" -ForegroundColor Red }
+        $missLimit = [Math]::Min($Log.Missing.Count, $script:ListLimit)
+        foreach ($n in $Log.Missing[0..($missLimit - 1)]) { Write-Host "  $n" -ForegroundColor Red }
+        if ($Log.Missing.Count -gt $script:ListLimit) {
+            Write-Host "  … и ещё $($Log.Missing.Count - $script:ListLimit); полный список: $(Save-ObjectList $Log.Missing 'missing')" -ForegroundColor Red
+        }
         Write-Host "Возможные причины:" -ForegroundColor Yellow
         Write-Host "  - опечатка в имени. Принимаются обе формы: Справочник.Номенклатура и Catalog.Номенклатура" -ForegroundColor Yellow
         Write-Host "  - база отстала от хранилища, объект появился позже — выполните /db-repo update" -ForegroundColor Yellow
@@ -829,10 +855,15 @@ function Write-RepoVerdict {
         'lock' {
             # Порядок вывода: факты, затем вердикт, и только потом совет. Совет длинный, и
             # между фактами и вердиктом он прятал бы главную строку.
-            Write-RepoObjects "Захвачено" $Log.Locked
+            Write-RepoObjects "Захвачено" $Log.Locked 'Green' 'locked'
             if ($Log.LockedByOther.Count -gt 0) {
                 Write-Host "Не удалось захватить ($($Log.LockedByOther.Count)):" -ForegroundColor Yellow
-                foreach ($o in $Log.LockedByOther) { Write-Host "  $($o.Name) — держит $($o.Holder)" -ForegroundColor Yellow }
+                $blockedLimit = [Math]::Min($Log.LockedByOther.Count, $script:ListLimit)
+                foreach ($o in $Log.LockedByOther[0..($blockedLimit - 1)]) { Write-Host "  $($o.Name) — держит $($o.Holder)" -ForegroundColor Yellow }
+                if ($Log.LockedByOther.Count -gt $script:ListLimit) {
+                    $blockedPath = Save-ObjectList @($Log.LockedByOther | ForEach-Object { "$($_.Name) — $($_.Holder)" }) 'blocked'
+                    Write-Host "  … и ещё $($Log.LockedByOther.Count - $script:ListLimit); полный список: $blockedPath" -ForegroundColor Yellow
+                }
             }
             if ($Log.Locked.Count -eq 0 -and $Log.LockedByOther.Count -gt 0) {
                 # «Уже захвачено мной» платформа не печатает вовсе, поэтому отличить его от
@@ -877,15 +908,19 @@ function Write-RepoVerdict {
             if ($PlatformExit -ne 0) {
                 if ($Log.Modified.Count -gt 0) {
                     Write-Host "Отмена захвата не выполнена: у объектов есть локальные изменения ($($Log.Modified.Count)):" -ForegroundColor Red
-                    foreach ($n in $Log.Modified) { Write-Host "  $n" -ForegroundColor Red }
+                    $modLimit = [Math]::Min($Log.Modified.Count, $script:ListLimit)
+                    foreach ($n in $Log.Modified[0..($modLimit - 1)]) { Write-Host "  $n" -ForegroundColor Red }
+                    if ($Log.Modified.Count -gt $script:ListLimit) {
+                        Write-Host "  … и ещё $($Log.Modified.Count - $script:ListLimit); полный список: $(Save-ObjectList $Log.Modified 'modified')" -ForegroundColor Red
+                    }
                     Write-Host "Поместите их (/db-repo commit) либо откажитесь от них: -Force перезапишет объекты версией из хранилища." -ForegroundColor Yellow
                 } else {
                     Write-Host "Отмена захвата не выполнена (код $PlatformExit)$(Get-ExitAnnotation $PlatformExit)" -ForegroundColor Red
                 }
                 return 1
             }
-            Write-RepoObjects "Захват отменён" $Log.Unlocked
-            Write-RepoObjects "Не были захвачены — снимать нечего" $Log.NotLocked 'Yellow'
+            Write-RepoObjects "Захват отменён" $Log.Unlocked 'Green' 'unlocked'
+            Write-RepoObjects "Не были захвачены — снимать нечего" $Log.NotLocked 'Yellow' 'not-locked'
             if ($Log.Unlocked.Count -eq 0) { Write-Host "Изменений не потребовалось." -ForegroundColor Green }
             Write-ReceivedWarning $Log.Received
             return 0
@@ -901,8 +936,8 @@ function Write-RepoVerdict {
                 Write-Host "  - есть ли у пользователя хранилища право на помещение" -ForegroundColor Yellow
                 return 1
             }
-            Write-RepoObjects "Помещено в хранилище" $Log.Committed
-            Write-RepoObjects "Без изменений — не помещались" $Log.Unchanged 'Yellow'
+            Write-RepoObjects "Помещено в хранилище" $Log.Committed 'Green' 'committed'
+            Write-RepoObjects "Без изменений — не помещались" $Log.Unchanged 'Yellow' 'unchanged'
             if ($Log.Committed.Count -eq 0) {
                 Write-Host "Новая версия в хранилище НЕ создана: помещать было нечего." -ForegroundColor Yellow
             }
@@ -922,7 +957,7 @@ function Write-RepoVerdict {
                 Write-Host "       всю конфигурацию базы содержимым хранилища. Проверьте состояние базы." -ForegroundColor Red
                 return 1
             }
-            Write-RepoObjects "Получено из хранилища" $Log.Received
+            Write-RepoObjects "Получено из хранилища" $Log.Received 'Green' 'received'
             if ($Log.Received.Count -eq 0) {
                 Write-Host "Изменений в хранилище нет — конфигурация уже актуальна." -ForegroundColor Green
                 return 0
@@ -1154,8 +1189,16 @@ try {
     $verdict = Write-RepoVerdict $cmd $log $exitCode $requested
     # Разбор мог не покрыть причину (у commit её вовсе нет в логе) — при отказе показываем сырой лог.
     if ($verdict -ne 0 -and $logText.Trim()) {
+        # Лог операции над всей конфигурацией — тысячи строк. Показываем хвост: итог и причина
+        # отказа платформа пишет в конце.
+        $logLines = @($logText.TrimEnd() -split "`r?`n")
+        $logLimit = 200
         Write-Host "--- Log ---"
-        Write-Host $logText.TrimEnd()
+        if ($logLines.Count -gt $logLimit) {
+            Write-Host "[... показаны последние $logLimit строк из $($logLines.Count) ...]"
+            $logLines = $logLines[($logLines.Count - $logLimit)..($logLines.Count - 1)]
+        }
+        Write-Host ($logLines -join [Environment]::NewLine)
         Write-Host "--- End ---"
     }
     Write-PlatformOutput $proc.Output

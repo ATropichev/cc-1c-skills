@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-repo v1.4 — 1C configuration repository operations
+# db-repo v1.5 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 """Работа с хранилищем конфигурации 1С.
@@ -622,8 +622,10 @@ def print_received_warning(received):
         return
     print("")
     print("[warning] локальная конфигурация изменена, получено объектов из хранилища: %d" % len(received))
-    for n in received:
+    for n in received[:LIST_LIMIT]:
         print("  %s" % n)
+    if len(received) > LIST_LIMIT:
+        print("  … и ещё %d" % (len(received) - LIST_LIMIT))
     owners = owner_objects(received)
     has_root = any(len(n.split(".")) == 1 for n in received)
     if owners:
@@ -705,19 +707,39 @@ def object_key(name):
     return ".".join(own).lower()
 
 
-def print_repo_objects(title, names):
+# Операция над всей конфигурацией перечисляет тысячи объектов. Печатаем начало списка,
+# остальное кладём в файл: модели нужен факт и путь, а не простыня.
+LIST_LIMIT = 20
+
+
+def save_object_list(names, key):
+    if not key:
+        key = "objects"
+    path = os.path.join(tempfile.gettempdir(), "db-repo-%s.txt" % key)
+    with open(path, "w", encoding="utf-8-sig", newline="\n") as f:
+        f.write("\n".join(names) + "\n")
+    return path
+
+
+def print_repo_objects(title, names, file_key="objects"):
     if not names:
         return
     print("%s (%d):" % (title, len(names)))
-    for n in names:
+    for n in names[:LIST_LIMIT]:
         print("  %s" % n)
+    if len(names) > LIST_LIMIT:
+        path = save_object_list(names, file_key)
+        print("  … и ещё %d; полный список: %s" % (len(names) - LIST_LIMIT, path))
 
 
 def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", output_file=""):
     if log["missing"]:
         print("Error: objects not found in the configuration:")
-        for n in log["missing"]:
+        for n in log["missing"][:LIST_LIMIT]:
             print("  %s" % n)
+        if len(log["missing"]) > LIST_LIMIT:
+            print("  … и ещё %d; полный список: %s"
+                  % (len(log["missing"]) - LIST_LIMIT, save_object_list(log["missing"], "missing")))
         print("Возможные причины:")
         print("  - опечатка в имени. Принимаются обе формы: Справочник.Номенклатура и Catalog.Номенклатура")
         print("  - база отстала от хранилища, объект появился позже — выполните /db-repo update")
@@ -728,11 +750,16 @@ def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", out
     if cmd == "lock":
         # Порядок вывода: факты, затем вердикт, и только потом совет. Совет длинный, и
         # между фактами и вердиктом он прятал бы главную строку.
-        print_repo_objects("Захвачено", log["locked"])
+        print_repo_objects("Захвачено", log["locked"], "locked")
         if log["locked_by_other"]:
             print("Не удалось захватить (%d):" % len(log["locked_by_other"]))
-            for o in log["locked_by_other"]:
+            for o in log["locked_by_other"][:LIST_LIMIT]:
                 print("  %s — держит %s" % (o["name"], o["holder"]))
+            if len(log["locked_by_other"]) > LIST_LIMIT:
+                path = save_object_list(
+                    ["%s — %s" % (o["name"], o["holder"]) for o in log["locked_by_other"]], "blocked")
+                print("  … и ещё %d; полный список: %s"
+                      % (len(log["locked_by_other"]) - LIST_LIMIT, path))
         if not log["locked"] and log["locked_by_other"]:
             # «Уже захвачено мной» платформа не печатает вовсе, поэтому отличить его от
             # «не захвачено» по логу нельзя — сверяем с тем, что просили. Заняты ВСЕ
@@ -770,15 +797,18 @@ def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", out
         if platform_exit != 0:
             if log["modified"]:
                 print("Отмена захвата не выполнена: у объектов есть локальные изменения (%d):" % len(log["modified"]))
-                for n in log["modified"]:
+                for n in log["modified"][:LIST_LIMIT]:
                     print("  %s" % n)
+                if len(log["modified"]) > LIST_LIMIT:
+                    print("  … и ещё %d; полный список: %s"
+                          % (len(log["modified"]) - LIST_LIMIT, save_object_list(log["modified"], "modified")))
                 print("Поместите их (/db-repo commit) либо откажитесь от них: -Force перезапишет "
                       "объекты версией из хранилища.")
             else:
                 print("Отмена захвата не выполнена (код %s)%s" % (platform_exit, describe_exit(platform_exit)))
             return 1
-        print_repo_objects("Захват отменён", log["unlocked"])
-        print_repo_objects("Не были захвачены — снимать нечего", log["not_locked"])
+        print_repo_objects("Захват отменён", log["unlocked"], "unlocked")
+        print_repo_objects("Не были захвачены — снимать нечего", log["not_locked"], "not-locked")
         if not log["unlocked"]:
             print("Изменений не потребовалось.")
         print_received_warning(log["received"])
@@ -794,8 +824,8 @@ def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", out
             print("  - не держит ли его другой пользователь")
             print("  - есть ли у пользователя хранилища право на помещение")
             return 1
-        print_repo_objects("Помещено в хранилище", log["committed"])
-        print_repo_objects("Без изменений — не помещались", log["unchanged"])
+        print_repo_objects("Помещено в хранилище", log["committed"], "committed")
+        print_repo_objects("Без изменений — не помещались", log["unchanged"], "unchanged")
         if not log["committed"]:
             print("Новая версия в хранилище НЕ создана: помещать было нечего.")
         return 0
@@ -812,7 +842,7 @@ def write_repo_verdict(cmd, log, platform_exit, requested, report_format="", out
             print("       Похоже, база НЕ подключена к хранилищу — в этом случае команда заменяет")
             print("       всю конфигурацию базы содержимым хранилища. Проверьте состояние базы.")
             return 1
-        print_repo_objects("Получено из хранилища", log["received"])
+        print_repo_objects("Получено из хранилища", log["received"], "received")
         if not log["received"]:
             print("Изменений в хранилище нет — конфигурация уже актуальна.")
             return 0
@@ -1119,8 +1149,15 @@ def main():
                                      args.ReportFormat, args.OutputFile)
         # Разбор мог не покрыть причину (у commit её вовсе нет в логе) — при отказе показываем сырой лог.
         if verdict != 0 and log_text.strip():
+            # Лог операции над всей конфигурацией — тысячи строк. Показываем хвост: итог и причина
+            # отказа платформа пишет в конце.
+            log_lines = log_text.rstrip().splitlines()
+            log_limit = 200
             print("--- Log ---")
-            print(log_text.rstrip())
+            if len(log_lines) > log_limit:
+                print("[... показаны последние %d строк из %d ...]" % (log_limit, len(log_lines)))
+                log_lines = log_lines[-log_limit:]
+            print("\n".join(log_lines))
             print("--- End ---")
         print_platform_output(result)
         sys.exit(verdict)

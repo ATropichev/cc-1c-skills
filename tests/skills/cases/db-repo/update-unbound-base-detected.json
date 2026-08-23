@@ -1,0 +1,44 @@
+{
+  "name": "update: платформа отчиталась об успехе без блока операции — база не подключена",
+  "osOnly": "win32",
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "fake.cmd",
+        "content": "@echo off\r\nrem SELF запоминаем ДО цикла: shift сдвигает и %0, после него %~dp0 указывает не на скрипт\r\nset SELF=%~dp0\r\n:loop\r\nif \"%~1\"==\"\" goto done\r\nif /i \"%~1\"==\"/Out\" set OUT=%~2\r\nshift\r\ngoto loop\r\n:done\r\ncopy /y \"%SELF%log.txt\" \"%OUT%\" >nul\r\nexit /b 0\r\n"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "log.txt",
+        "content": "﻿Обновление конфигурации из хранилища успешно завершено\r\n"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "ib/1Cv8.1CD",
+        "content": "stub"
+      }
+    }
+  ],
+  "args_extra": [
+    "-V8Path",
+    "{workDir}\\fake.cmd",
+    "-InfoBasePath",
+    "{workDir}\\ib",
+    "-RepositoryPath",
+    "{workDir}\\repo",
+    "-RepositoryUser",
+    "Admin",
+    "-Command",
+    "update"
+  ],
+  "expect": {
+    "stdoutContains": [
+      "printed no repository operation block",
+      "НЕ подключена к хранилищу"
+    ]
+  },
+  "noSnapshot": "навык ничего не пишет в рабочий каталог — проверяется разбор лога платформы",
+  "expectError": true
+}

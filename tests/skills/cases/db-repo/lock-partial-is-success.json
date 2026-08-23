@@ -1,0 +1,49 @@
+{
+  "name": "Частичный захват: платформа вернула 1, навык — 0 с поимённым предупреждением",
+  "osOnly": "win32",
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "fake.cmd",
+        "content": "@echo off\r\nrem SELF запоминаем ДО цикла: shift сдвигает и %0, после него %~dp0 указывает не на скрипт\r\nset SELF=%~dp0\r\n:loop\r\nif \"%~1\"==\"\" goto done\r\nif /i \"%~1\"==\"/Out\" set OUT=%~2\r\nshift\r\ngoto loop\r\n:done\r\ncopy /y \"%SELF%log.txt\" \"%OUT%\" >nul\r\nexit /b 1\r\n"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "log.txt",
+        "content": "﻿---- Начало операции с хранилищем конфигурации ----\r\nОбъект захвачен для редактирования: Справочник.Номенклатура\r\nОбъект захвачен для редактирования другим пользователем: Справочник.Номенклатура.Форма.ФормаЭлемента (Ivanov) \r\n---- Операция с хранилищем конфигурации завершена ----\r\nОшибка захвата объектов в хранилище\r\n"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "ib/1Cv8.1CD",
+        "content": "stub"
+      }
+    }
+  ],
+  "args_extra": [
+    "-V8Path",
+    "{workDir}\\fake.cmd",
+    "-InfoBasePath",
+    "{workDir}\\ib",
+    "-RepositoryPath",
+    "{workDir}\\repo",
+    "-RepositoryUser",
+    "Admin",
+    "-Command",
+    "lock",
+    "-Objects",
+    "Справочник.Номенклатура",
+    "-WithChildren"
+  ],
+  "expect": {
+    "stdoutContains": [
+      "Захвачено (1):",
+      "Справочник.Номенклатура",
+      "Не удалось захватить (1):",
+      "держит Ivanov",
+      "захват выполнен частично"
+    ]
+  },
+  "noSnapshot": "навык ничего не пишет в рабочий каталог — проверяется разбор лога платформы"
+}

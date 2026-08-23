@@ -1,0 +1,5 @@
+{
+  "script": "db-repo/scripts/db-repo",
+  "setup": "none",
+  "args": []
+}
