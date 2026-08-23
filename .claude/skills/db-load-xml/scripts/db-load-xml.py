@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-xml v1.22 — Load 1C configuration from XML files
+# db-load-xml v1.23 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -72,8 +72,113 @@ IBCMD_OWNED_KEYS = [
     "--import", "--export", "--apply", "--force", "--create-database",
     "--user", "--password",
 ]
-V8_SECRET_KEYS = ["/P", "/UC", "/WSP", "/AWSP"]
+V8_SECRET_KEYS = ["/P", "/UC", "/WSP", "/AWSP", "/ConfigurationRepositoryP"]
 IBCMD_SECRET_KEYS = ["--password", "--token", "--db-pwd"]
+
+
+# --- Реквизиты хранилища из .v8-project.json ---
+# Модель их не передаёт: скрипт сопоставляет параметры соединения с записью в databases[]
+# и берёт repository оттуда. Тот же приём, что в cf-edit.py (сопоставление по configSrc).
+def _sg_find_v8project(start_dir):
+    d = start_dir
+    for _ in range(20):
+        if not d:
+            break
+        pj = os.path.join(d, ".v8-project.json")
+        if os.path.isfile(pj):
+            return pj
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return None
+
+def same_path(a, b):
+    if not a or not b:
+        return False
+    try:
+        return os.path.abspath(a).rstrip("\\/").lower() == os.path.abspath(b).rstrip("\\/").lower()
+    except Exception:
+        return False
+
+
+def find_project_database(args):
+    """Запись базы в реестре, соответствующая переданному соединению. None, если не найдена."""
+    pf = _sg_find_v8project(os.getcwd())
+    if not pf:
+        return None
+    try:
+        with open(pf, encoding="utf-8-sig") as f:
+            proj = json.load(f)
+    except Exception:
+        return None
+    for db in proj.get("databases") or []:
+        if args.InfoBasePath and db.get("path") and same_path(db["path"], args.InfoBasePath):
+            return db
+        if args.InfoBaseServer and args.InfoBaseRef and db.get("server") and db.get("ref"):
+            if (db["server"].lower() == args.InfoBaseServer.lower()
+                    and db["ref"].lower() == args.InfoBaseRef.lower()):
+                return db
+    return None
+
+
+def resolve_repository_settings(args):
+    """Возвращает dict path/user/password/from_registry. Явные -Repository* сильнее реестра."""
+    db_rec = find_project_database(args)
+    rec = None
+    if db_rec:
+        if args.Extension:
+            # У расширения СВОЁ хранилище со своим путём (проверено): выбирается парой
+            # /ConfigurationRepositoryF"<путь расширения>" + -Extension "<Имя>".
+            for ext in db_rec.get("extensions") or []:
+                if (ext.get("name") or "").lower() == args.Extension.lower():
+                    rec = ext.get("repository")
+                    break
+        else:
+            rec = db_rec.get("repository")
+    path = args.RepositoryPath or ((rec or {}).get("path") or None)
+    user = args.RepositoryUser or ((rec or {}).get("user") or None)
+    # Пустой пароль = отсутствующий: 1С требует опускать ключ целиком, а не передавать пустое значение.
+    pwd = args.RepositoryPassword or ((rec or {}).get("password") or None)
+    return {
+        "path": path.strip().strip('"') if path else None,
+        "user": user,
+        "password": pwd,
+        "from_registry": bool(rec and rec.get("path")),
+    }
+
+
+def repository_args(repo):
+    """Ключи доступа к хранилищу. Форма — кавычки ВНУТРИ токена, как у /N и /P."""
+    a = []
+    if not repo or not repo.get("path"):
+        return a
+    a.append('/ConfigurationRepositoryF"%s"' % repo["path"])
+    if repo.get("user"):
+        a.append('/ConfigurationRepositoryN"%s"' % repo["user"])
+    if repo.get("password"):
+        a.append('/ConfigurationRepositoryP"%s"' % repo["password"])
+    return a
+
+
+# Сообщения платформы про хранилище конфигурации называют причину, но не действие. Действие
+# дописываем сами: без него модель упирается в отказ и не знает, чем его лечить.
+def write_repository_hints(log_text):
+    if not log_text:
+        return
+    if "текущая конфигурация помещена в хранилище" in log_text:
+        print("[hint] полная загрузка в базу, подключённую к хранилищу, невозможна.")
+        print("       Используйте -Mode Partial, предварительно захватив объекты: /db-repo lock")
+    for m in re.finditer(r"объект метаданных (\S+) не захвачен в хранилище", log_text):
+        obj = m.group(1)
+        if obj == "Configuration":
+            print("[hint] не захвачен корень конфигурации — он нужен, чтобы добавить или удалить объект:")
+            print('       /db-repo lock <база> -Objects "Конфигурация"')
+        else:
+            print('[hint] объект не захвачен в хранилище: /db-repo lock <база> -Objects "%s"' % obj)
+    if "Соединение с хранилищем конфигурации не установлено" in log_text:
+        print("[hint] база подключена к хранилищу, но его реквизиты неизвестны.")
+        print('       Добавьте "repository" в запись базы в .v8-project.json (см. /db-list).')
 
 
 def arg_key_match(token, key):
@@ -438,6 +543,9 @@ def main():
     parser.add_argument("-InfoBaseRef", default="", help="Infobase name on server")
     parser.add_argument("-UserName", default="", help="1C user name")
     parser.add_argument("-Password", default="", help="1C user password")
+    parser.add_argument("-RepositoryPath", default="")
+    parser.add_argument("-RepositoryUser", default="")
+    parser.add_argument("-RepositoryPassword", default="")
     parser.add_argument("-ConfigDir", required=True, help="Directory with XML configuration sources")
     parser.add_argument(
         "-Mode",
@@ -593,6 +701,11 @@ def main():
         if args.Password:
             arguments.append(f'/P"{args.Password}"')
 
+        # База под хранилищем не примет НИ ОДНОЙ операции конфигуратора без этих реквизитов, а для
+        # базы вне хранилища они безвредны — поэтому подставляем всегда, когда они известны.
+        repo = resolve_repository_settings(args)
+        arguments.extend(repository_args(repo))
+
         arguments += ["/LoadConfigFromFiles", f'"{args.ConfigDir}"']
 
         if args.Mode == "Full":
@@ -652,7 +765,7 @@ def main():
         arguments.extend(quote_if_needed(a) for a in extra_args)
 
         # --- Execute ---
-        print(f"Running: 1cv8.exe {_redact(' '.join(format_args_for_display(arguments, engine)), args.Password, args.UserName)}")
+        print(f"Running: 1cv8.exe {_redact(' '.join(format_args_for_display(arguments, engine)), args.Password, args.UserName, repo['password'])}")
         result = run_v8(v8path, arguments)
         exit_code = result.returncode
 
@@ -685,6 +798,7 @@ def main():
             print("--- End ---")
 
         print_platform_output(result)
+        write_repository_hints(log_content)
         # Причину не называем: строки лога печатаются следом и говорят за себя, а класс проблемы
         # разный — от отброшенного свойства до нерабочей на этой платформе конфигурации. Подсказку
         # про -StrictLog не даём: загрузка уже выполнена, повторять её ради того же текста незачем.

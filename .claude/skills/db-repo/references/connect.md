@@ -3,7 +3,7 @@
 ## connect — подключить
 
 ```powershell
-... db-repo.ps1 connect -InfoBasePath "C:\Bases\MyDB" -RepositoryPath "\\srv01\repo\MyApp" -RepositoryUser "Ivanov" -RepositoryPassword "…"
+... db-repo.ps1 -Command connect -InfoBasePath "C:\Bases\MyDB" -RepositoryPath "\\srv01\repo\MyApp" -RepositoryUser "Ivanov" -RepositoryPassword "…"
 ```
 
 | Параметр | Описание |
@@ -19,7 +19,7 @@
 ## disconnect — отключить
 
 ```powershell
-... db-repo.ps1 disconnect -InfoBasePath "C:\Bases\MyDB"
+... db-repo.ps1 -Command disconnect -InfoBasePath "C:\Bases\MyDB"
 ```
 
 **Спроси подтверждение у пользователя.** Операция необратима. Если пользователь аутентифицируется в хранилище, отключение отражается и

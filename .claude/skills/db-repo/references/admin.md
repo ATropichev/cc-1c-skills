@@ -3,7 +3,7 @@
 ## create — создать хранилище
 
 ```powershell
-... db-repo.ps1 create -InfoBasePath "C:\Bases\MyDB" -RepositoryPath "C:\Repo\MyApp" -RepositoryUser "Admin" -RepositoryPassword "…"
+... db-repo.ps1 -Command create -InfoBasePath "C:\Bases\MyDB" -RepositoryPath "C:\Repo\MyApp" -RepositoryUser "Admin" -RepositoryPassword "…"
 ```
 
 | Параметр | Описание |
@@ -22,7 +22,7 @@
 ## add-user — создать пользователя
 
 ```powershell
-... db-repo.ps1 add-user -InfoBasePath "C:\Bases\MyDB" -NewUser "Ivanov" -NewUserPassword "…" -Rights LockObjects
+... db-repo.ps1 -Command add-user -InfoBasePath "C:\Bases\MyDB" -NewUser "Ivanov" -NewUserPassword "…" -Rights LockObjects
 ```
 
 | Право | Что даёт |
@@ -38,7 +38,7 @@
 ## copy-users — скопировать пользователей из другого хранилища
 
 ```powershell
-... db-repo.ps1 copy-users -InfoBasePath "C:\Bases\MyDB" -SourcePath "\\srv01\repo\Other" -SourceUser "Admin" -SourcePassword "…"
+... db-repo.ps1 -Command copy-users -InfoBasePath "C:\Bases\MyDB" -SourcePath "\\srv01\repo\Other" -SourceUser "Admin" -SourcePassword "…"
 ```
 
 `-SourcePath`, `-SourceUser`, `-SourcePassword` описывают хранилище-**источник**. Удалённые пользователи

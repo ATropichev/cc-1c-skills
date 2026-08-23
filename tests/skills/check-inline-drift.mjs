@@ -67,8 +67,12 @@ const FAMILIES = [
   {
     name: 'support-guard: find_v8project', py: '_sg_find_v8project', ps1: 'Find-V8Project',
     variants: [
+      // Имя с префиксом _sg_ историческое: функция просто ищет .v8-project.json обходом
+      // вверх. Группа db-* использует её же, чтобы найти запись базы и взять реквизиты
+      // хранилища — задача одна, поэтому семья общая, а не вторая с тем же телом.
       { id: 'full', authority: 'cf-edit',
-        consumers: ['form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
+        consumers: ['db-dump-xml', 'db-load-git', 'db-load-xml', 'db-repo', 'db-update',
+          'form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
           'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
           'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile', 'xdto-edit'] },
     ],
@@ -246,6 +250,8 @@ const FAMILIES = [
       { id: 'base', authority: 'db-create',
         consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
           'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump'] },
+      { id: 'v8-only', authority: 'db-repo', consumers: [],
+        why: 'хранилище конфигурации ibcmd не поддерживает вовсе — нет такого режима, поэтому ветки ibcmd нет; вместо неё проверка усечённых ключей /ConfigurationRepository*, которые платформа не считает ошибкой, а запускает конфигуратор интерактивно' },
     ],
   },
   {
@@ -254,7 +260,7 @@ const FAMILIES = [
       // db-run запускает Предприятие и не ждёт процесс — общей обвязки запуска не использует.
       { id: 'base', authority: 'db-create',
         consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
-          'db-load-xml', 'db-update', 'epf-build', 'epf-dump'] },
+          'db-load-xml', 'db-repo', 'db-update', 'epf-build', 'epf-dump'] },
     ],
   },
   {
@@ -262,7 +268,7 @@ const FAMILIES = [
     variants: [
       { id: 'base', authority: 'db-create',
         consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
-          'db-load-xml', 'db-update', 'epf-build', 'epf-dump'] },
+          'db-load-xml', 'db-repo', 'db-update', 'epf-build', 'epf-dump'] },
     ],
   },
   {
@@ -270,7 +276,7 @@ const FAMILIES = [
     variants: [
       { id: 'base', authority: 'db-dump-cf',
         consumers: ['db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
-          'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump'] },
+          'db-load-xml', 'db-repo', 'db-run', 'db-update', 'epf-build', 'epf-dump'] },
     ],
   },
   {
@@ -278,7 +284,7 @@ const FAMILIES = [
     variants: [
       { id: 'base', authority: 'db-create',
         consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
-          'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump', 'web-publish'] },
+          'db-load-xml', 'db-repo', 'db-run', 'db-update', 'epf-build', 'epf-dump', 'web-publish'] },
     ],
   },
   {
@@ -286,7 +292,7 @@ const FAMILIES = [
     variants: [
       { id: 'base', authority: 'db-create',
         consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
-          'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump', 'web-publish'] },
+          'db-load-xml', 'db-repo', 'db-run', 'db-update', 'epf-build', 'epf-dump', 'web-publish'] },
     ],
   },
   {
@@ -294,8 +300,34 @@ const FAMILIES = [
     variants: [
       { id: 'base', authority: 'db-create',
         consumers: ['db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt', 'db-load-git',
-          'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump', 'web-publish'] },
+          'db-load-xml', 'db-repo', 'db-run', 'db-update', 'epf-build', 'epf-dump', 'web-publish'] },
     ],
+  },
+
+  {
+    name: 'repository: load hints', py: 'write_repository_hints', ps1: 'Write-RepositoryHints',
+    variants: [{ id: 'base', authority: 'db-load-xml', consumers: ['db-load-git'] }],
+  },
+  // ─── Реквизиты хранилища конфигурации ────────────────────────────────────
+  // База под хранилищем не принимает ни одной операции конфигуратора без реквизитов
+  // доступа, и модель их не передаёт: скрипт сам сопоставляет параметры соединения с
+  // записью в databases[]. Блок копируется во все навыки группы, работающие с
+  // конфигурацией базы.
+  {
+    name: 'repository: same_path', py: 'same_path', ps1: 'Test-SamePath',
+    variants: [{ id: 'base', authority: 'db-repo', consumers: ['db-dump-xml', 'db-load-git', 'db-load-xml', 'db-update'] }],
+  },
+  {
+    name: 'repository: find_project_database', py: 'find_project_database', ps1: 'Find-ProjectDatabase',
+    variants: [{ id: 'base', authority: 'db-repo', consumers: ['db-dump-xml', 'db-load-git', 'db-load-xml', 'db-update'] }],
+  },
+  {
+    name: 'repository: resolve_settings', py: 'resolve_repository_settings', ps1: 'Resolve-RepositorySettings',
+    variants: [{ id: 'base', authority: 'db-repo', consumers: ['db-dump-xml', 'db-load-git', 'db-load-xml', 'db-update'] }],
+  },
+  {
+    name: 'repository: args', py: 'repository_args', ps1: 'Get-RepositoryArgs',
+    variants: [{ id: 'base', authority: 'db-repo', consumers: ['db-dump-xml', 'db-load-git', 'db-load-xml', 'db-update'] }],
   },
 
   // ─── Значения свойств-перечислений ───────────────────────────────────────
@@ -334,7 +366,7 @@ const FAMILIES = [
         consumers: [
           'cf-edit', 'cf-info', 'cf-init', 'cf-validate', 'cfe-borrow', 'cfe-diff', 'cfe-init',
           'cfe-patch-method', 'cfe-validate', 'db-create', 'db-dump-cf', 'db-dump-dt', 'db-dump-xml',
-          'db-load-cf', 'db-load-dt', 'db-load-git', 'db-load-xml', 'db-run', 'db-update', 'epf-build',
+          'db-load-cf', 'db-load-dt', 'db-load-git', 'db-load-xml', 'db-repo', 'db-run', 'db-update', 'epf-build',
           'epf-dump', 'epf-init', 'epf-validate', 'erf-init', 'form-add', 'form-compile',
           'form-decompile', 'form-edit', 'form-info', 'form-remove', 'form-validate', 'help-add',
           'img-grid', 'interface-edit', 'interface-validate', 'meta-decompile', 'meta-edit', 'meta-info',

@@ -1,4 +1,4 @@
-﻿# db-load-git v1.22 — Load Git changes into 1C database
+﻿# db-load-git v1.23 — Load Git changes into 1C database
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -216,7 +216,31 @@ function Get-RepositoryArgs {
     $a += "/ConfigurationRepositoryF`"$($Repo.Path)`""
     if ($Repo.User) { $a += "/ConfigurationRepositoryN`"$($Repo.User)`"" }
     if ($Repo.Password) { $a += "/ConfigurationRepositoryP`"$($Repo.Password)`"" }
-    return ,$a
+    return $a
+}
+
+# Сообщения платформы про хранилище конфигурации называют причину, но не действие. Действие
+# дописываем сами: без него модель упирается в отказ и не знает, чем его лечить.
+function Write-RepositoryHints {
+    param([string]$LogText)
+    if (-not $LogText) { return }
+    if ($LogText -match 'текущая конфигурация помещена в хранилище') {
+        Write-Host "[hint] полная загрузка в базу, подключённую к хранилищу, невозможна." -ForegroundColor Yellow
+        Write-Host "       Используйте -Mode Partial, предварительно захватив объекты: /db-repo lock" -ForegroundColor Yellow
+    }
+    foreach ($m in [regex]::Matches($LogText, 'объект метаданных ([^\s]+) не захвачен в хранилище')) {
+        $obj = $m.Groups[1].Value
+        if ($obj -eq 'Configuration') {
+            Write-Host "[hint] не захвачен корень конфигурации — он нужен, чтобы добавить или удалить объект:" -ForegroundColor Yellow
+            Write-Host "       /db-repo lock <база> -Objects `"Конфигурация`"" -ForegroundColor Yellow
+        } else {
+            Write-Host "[hint] объект не захвачен в хранилище: /db-repo lock <база> -Objects `"$obj`"" -ForegroundColor Yellow
+        }
+    }
+    if ($LogText -match 'Соединение с хранилищем конфигурации не установлено') {
+        Write-Host "[hint] база подключена к хранилищу, но его реквизиты неизвестны." -ForegroundColor Yellow
+        Write-Host "       Добавьте `"repository`" в запись базы в .v8-project.json (см. /db-list)." -ForegroundColor Yellow
+    }
 }
 
 function Protect-Secrets {
@@ -816,6 +840,7 @@ try {
         }
     }
     Write-PlatformOutput $__v8.Output
+    Write-RepositoryHints $logContent
 
     # Причину не называем: строки лога печатаются следом и говорят за себя, а класс проблемы
     # разный — от отброшенного свойства до нерабочей на этой платформе конфигурации. Подсказку

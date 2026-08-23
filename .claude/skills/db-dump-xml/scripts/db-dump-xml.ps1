@@ -204,7 +204,7 @@ function Get-RepositoryArgs {
     $a += "/ConfigurationRepositoryF`"$($Repo.Path)`""
     if ($Repo.User) { $a += "/ConfigurationRepositoryN`"$($Repo.User)`"" }
     if ($Repo.Password) { $a += "/ConfigurationRepositoryP`"$($Repo.Password)`"" }
-    return ,$a
+    return $a
 }
 
 function Protect-Secrets {

@@ -1,4 +1,4 @@
-﻿# db-repo v1.3 — 1C configuration repository operations
+﻿# db-repo v1.4 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 <#
@@ -31,7 +31,9 @@
 
 [CmdletBinding(PositionalBinding=$false)]
 param(
-    [Parameter(Mandatory=$true, Position=0)]
+    # Не Mandatory: обязательный параметр PowerShell запрашивает интерактивно, а в пакетном
+    # запуске это зависание. Пустое значение проверяем сами.
+    [Parameter(Mandatory=$false)]
     [string]$Command,
 
     [Parameter(Mandatory=$false)]
@@ -946,6 +948,10 @@ function Write-RepoVerdict {
 
 # =============================== main ===============================
 
+if (-not $Command) {
+    Write-Host "Error: -Command is required. Known: $(($script:CommandKeys.Keys | Sort-Object) -join ', ')" -ForegroundColor Red
+    exit 1
+}
 $cmd = Resolve-Command $Command
 
 if (-not $InfoBasePath -and -not ($InfoBaseServer -and $InfoBaseRef)) {

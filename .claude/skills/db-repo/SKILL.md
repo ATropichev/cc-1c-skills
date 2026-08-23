@@ -76,7 +76,7 @@ allowed-tools:
 ## Команда
 
 ```powershell
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" <подкоманда> <параметры>
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command <подкоманда> <параметры>
 ```
 
 ### Рабочий цикл
@@ -175,19 +175,19 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" <по�
 
 ```powershell
 # Захватить справочник вместе с подчинёнными объектами
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" lock -InfoBasePath "C:\Bases\MyDB" -Objects "Справочник.Номенклатура" -WithChildren
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command lock -InfoBasePath "C:\Bases\MyDB" -Objects "Справочник.Номенклатура" -WithChildren
 
 # Захватить корень вместе с новым объектом
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" lock -InfoBasePath "C:\Bases\MyDB" -Objects "Конфигурация,Справочник.Склады"
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command lock -InfoBasePath "C:\Bases\MyDB" -Objects "Конфигурация,Справочник.Склады"
 
 # Поместить с комментарием, оставив захват
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" commit -InfoBasePath "C:\Bases\MyDB" -Objects "Справочник.Номенклатура" -Comment "Добавлен реквизит Артикул" -KeepLocked
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command commit -InfoBasePath "C:\Bases\MyDB" -Objects "Справочник.Номенклатура" -Comment "Добавлен реквизит Артикул" -KeepLocked
 
 # Получить изменения из хранилища
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" update -InfoBasePath "C:\Bases\MyDB"
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command update -InfoBasePath "C:\Bases\MyDB"
 
 # Серверная база, расширение
-powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" lock -InfoBaseServer "srv01" -InfoBaseRef "MyApp_Dev" -UserName "Admin" -Extension "МоёРасширение" -Objects "Справочник.Номенклатура"
+powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/db-repo.ps1" -Command lock -InfoBaseServer "srv01" -InfoBaseRef "MyApp_Dev" -UserName "Admin" -Extension "МоёРасширение" -Objects "Справочник.Номенклатура"
 ```
 
 ## После выполнения
