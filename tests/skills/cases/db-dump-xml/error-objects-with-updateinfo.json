@@ -16,8 +16,5 @@
     "UpdateInfo"
   ],
   "expectError": true,
-  "expect": {
-    "stdoutContains": "UpdateInfo does not take an object list"
-  },
-  "noSnapshot": "навык ничего не пишет в рабочий каталог — проверяется, какие ключи ушли платформе"
+  "noSnapshot": "текст ошибки не сверяем: PS пишет её в stdout, py — в stderr; это общее для группы расхождение портов, поэтому соседний error-partial-no-objects тоже проверяет только код возврата"
 }
