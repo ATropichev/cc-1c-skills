@@ -1,4 +1,4 @@
-﻿# db-load-xml v1.22 — Load 1C configuration from XML files
+﻿# db-load-xml v1.23 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -111,6 +111,15 @@ param(
     [switch]$StrictLog,
 
     [Parameter(Mandatory=$false)]
+    [string]$RepositoryPath,
+
+    [Parameter(Mandatory=$false)]
+    [string]$RepositoryUser,
+
+    [Parameter(Mandatory=$false)]
+    [string]$RepositoryPassword,
+
+    [Parameter(Mandatory=$false)]
     [string[]]$AdditionalV8Arguments = @(),
 
     [Parameter(Mandatory=$false)]
@@ -119,6 +128,114 @@ param(
 
 $OutputEncoding = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# --- Реквизиты хранилища из .v8-project.json ---
+# Модель их не передаёт: скрипт сопоставляет параметры соединения с записью в databases[]
+# и берёт repository оттуда. Тот же приём, что в cf-edit.ps1 (сопоставление по configSrc).
+function Find-V8Project([string]$startDir) {
+	$d = $startDir
+	for ($i = 0; $i -lt 20 -and $d; $i++) {
+		$pj = Join-Path $d ".v8-project.json"
+		if (Test-Path $pj) { return $pj }
+		$parent = [System.IO.Path]::GetDirectoryName($d)
+		if ($parent -eq $d) { break }
+		$d = $parent
+	}
+	return $null
+}
+function Test-SamePath {
+    param([string]$A, [string]$B)
+    if (-not $A -or -not $B) { return $false }
+    try {
+        $na = [System.IO.Path]::GetFullPath($A).TrimEnd('\', '/')
+        $nb = [System.IO.Path]::GetFullPath($B).TrimEnd('\', '/')
+        return $na.Equals($nb, [System.StringComparison]::OrdinalIgnoreCase)
+    } catch { return $false }
+}
+
+function Find-ProjectDatabase {
+    # Запись базы в реестре, соответствующая переданному соединению. $null, если не найдена.
+    $pf = Find-V8Project (Get-Location).Path
+    if (-not $pf) { return $null }
+    try { $proj = Get-Content $pf -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $null }
+    if (-not $proj.databases) { return $null }
+    foreach ($db in $proj.databases) {
+        if ($InfoBasePath -and $db.path -and (Test-SamePath $db.path $InfoBasePath)) { return $db }
+        if ($InfoBaseServer -and $InfoBaseRef -and $db.server -and $db.ref) {
+            if ($db.server.Equals($InfoBaseServer, [System.StringComparison]::OrdinalIgnoreCase) -and
+                $db.ref.Equals($InfoBaseRef, [System.StringComparison]::OrdinalIgnoreCase)) { return $db }
+        }
+    }
+    return $null
+}
+
+function Resolve-RepositorySettings {
+    # Возвращает @{ Path; User; Password; FromRegistry }. Явные -Repository* всегда сильнее реестра.
+    $dbRec = Find-ProjectDatabase
+    $rec = $null
+    if ($dbRec) {
+        if ($Extension) {
+            # У расширения СВОЁ хранилище со своим путём (проверено): выбирается парой
+            # /ConfigurationRepositoryF"<путь расширения>" + -Extension "<Имя>".
+            if ($dbRec.extensions) {
+                foreach ($ext in $dbRec.extensions) {
+                    if ($ext.name -and $ext.name.Equals($Extension, [System.StringComparison]::OrdinalIgnoreCase)) {
+                        $rec = $ext.repository
+                        break
+                    }
+                }
+            }
+        } else {
+            $rec = $dbRec.repository
+        }
+    }
+    $path = if ($RepositoryPath) { $RepositoryPath } elseif ($rec -and $rec.path) { [string]$rec.path } else { $null }
+    $user = if ($RepositoryUser) { $RepositoryUser } elseif ($rec -and $rec.user) { [string]$rec.user } else { $null }
+    # Пустой пароль = отсутствующий: 1С требует опускать ключ целиком, а не передавать пустое значение.
+    $pwd  = if ($RepositoryPassword) { $RepositoryPassword } elseif ($rec -and $rec.password) { [string]$rec.password } else { $null }
+    return @{
+        Path         = if ($path) { $path.Trim().Trim('"') } else { $null }
+        User         = $user
+        Password     = $pwd
+        FromRegistry = [bool]($rec -and $rec.path)
+        DbRecord     = $dbRec
+    }
+}
+
+function Get-RepositoryArgs {
+    # Ключи доступа к хранилищу. Форма — кавычки ВНУТРИ токена, как у /N и /P.
+    param([hashtable]$Repo)
+    $a = @()
+    if (-not $Repo -or -not $Repo.Path) { return $a }
+    $a += "/ConfigurationRepositoryF`"$($Repo.Path)`""
+    if ($Repo.User) { $a += "/ConfigurationRepositoryN`"$($Repo.User)`"" }
+    if ($Repo.Password) { $a += "/ConfigurationRepositoryP`"$($Repo.Password)`"" }
+    return ,$a
+}
+
+# Сообщения платформы про хранилище конфигурации называют причину, но не действие. Действие
+# дописываем сами: без него модель упирается в отказ и не знает, чем его лечить.
+function Write-RepositoryHints {
+    param([string]$LogText)
+    if (-not $LogText) { return }
+    if ($LogText -match 'текущая конфигурация помещена в хранилище') {
+        Write-Host "[hint] полная загрузка в базу, подключённую к хранилищу, невозможна." -ForegroundColor Yellow
+        Write-Host "       Используйте -Mode Partial, предварительно захватив объекты: /db-repo lock" -ForegroundColor Yellow
+    }
+    foreach ($m in [regex]::Matches($LogText, 'объект метаданных ([^\s]+) не захвачен в хранилище')) {
+        $obj = $m.Groups[1].Value
+        if ($obj -eq 'Configuration') {
+            Write-Host "[hint] не захвачен корень конфигурации — он нужен, чтобы добавить или удалить объект:" -ForegroundColor Yellow
+            Write-Host "       /db-repo lock <база> -Objects `"Конфигурация`"" -ForegroundColor Yellow
+        } else {
+            Write-Host "[hint] объект не захвачен в хранилище: /db-repo lock <база> -Objects `"$obj`"" -ForegroundColor Yellow
+        }
+    }
+    if ($LogText -match 'Соединение с хранилищем конфигурации не установлено') {
+        Write-Host "[hint] база подключена к хранилищу, но его реквизиты неизвестны." -ForegroundColor Yellow
+        Write-Host "       Добавьте `"repository`" в запись базы в .v8-project.json (см. /db-list)." -ForegroundColor Yellow
+    }
+}
 
 function Protect-Secrets {
     # Redact literal secret values from a display string (String.Replace is literal, not regex).
@@ -158,7 +275,7 @@ $script:IbcmdOwnedKeys = @(
     '--import', '--export', '--apply', '--force', '--create-database',
     '--user', '--password'
 )
-$script:V8SecretKeys = @('/P', '/UC', '/WSP', '/AWSP')
+$script:V8SecretKeys = @('/P', '/UC', '/WSP', '/AWSP', '/ConfigurationRepositoryP')
 $script:IbcmdSecretKeys = @('--password', '--token', '--db-pwd')
 
 function Test-ArgKeyMatch {
@@ -567,6 +684,11 @@ try {
     if ($UserName) { $arguments += "/N`"$UserName`"" }
     if ($Password) { $arguments += "/P`"$Password`"" }
 
+    # База под хранилищем не примет НИ ОДНОЙ операции конфигуратора без этих реквизитов, а для
+    # базы вне хранилища они безвредны — поэтому подставляем всегда, когда они известны.
+    $__repo = Resolve-RepositorySettings
+    $arguments += Get-RepositoryArgs $__repo
+
     $arguments += "/LoadConfigFromFiles", "`"$ConfigDir`""
 
     if ($Mode -eq "Full") {
@@ -631,7 +753,7 @@ try {
     $arguments += $extraArgs
 
     # --- Execute ---
-    Write-Host "Running: 1cv8.exe $(Protect-Secrets ((Format-ArgsForDisplay $arguments $engine) -join ' ') @($Password, $UserName))"
+    Write-Host "Running: 1cv8.exe $(Protect-Secrets ((Format-ArgsForDisplay $arguments $engine) -join ' ') @($Password, $UserName, $__repo.Password))"
     $__v8 = Invoke-PlatformProcess $V8Path $arguments -PreQuoted
     $exitCode = $__v8.ExitCode
 
@@ -660,6 +782,7 @@ try {
         Write-Host "--- End ---"
     }
     Write-PlatformOutput $__v8.Output
+    Write-RepositoryHints $logContent
 
     # Причину не называем: строки лога печатаются следом и говорят за себя, а класс проблемы
     # разный — от отброшенного свойства до нерабочей на этой платформе конфигурации. Подсказку
