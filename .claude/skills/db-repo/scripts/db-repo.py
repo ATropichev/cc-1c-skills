@@ -673,6 +673,20 @@ COMMAND_ALIASES = {
 }
 
 
+def arg_value(value):
+    """Значение отдельного аргумента.
+
+    На Windows команда склеивается в одну строку (см. run_v8), поэтому значение с пробелом
+    обязано нести собственные кавычки. На POSIX аргументы уходят списком — там кавычки стали бы
+    ЧАСТЬЮ значения. Проверено на darwin: многословный -comment с кавычками платформа теряет
+    целиком, однословный без кавычек доходит.
+
+    Ключи вида /F"путь" и /N"имя" собираются отдельно: там кавычки внутри токена требует сам
+    разборщик 1С, и они нужны на обеих ОС.
+    """
+    return '"%s"' % value if os.name == "nt" else "%s" % value
+
+
 def resolve_command(raw):
     c = raw.strip().lower()
     # unbind отличается от unlock одной буквой, а последствия разные: отмена захвата против
@@ -1035,9 +1049,9 @@ def main():
         # --- Соединение ---
         arguments = ["DESIGNER"]
         if args.InfoBaseServer and args.InfoBaseRef:
-            arguments += ["/S", '"%s/%s"' % (args.InfoBaseServer, args.InfoBaseRef)]
+            arguments += ["/S", arg_value("%s/%s" % (args.InfoBaseServer, args.InfoBaseRef))]
         else:
-            arguments += ["/F", '"%s"' % args.InfoBasePath]
+            arguments += ["/F", arg_value(args.InfoBasePath)]
         if args.UserName:
             arguments.append('/N"%s"' % args.UserName)
         if args.Password:
@@ -1053,12 +1067,12 @@ def main():
         arguments.append(key)
 
         if cmd in ("dump-cfg", "report"):
-            arguments.append('"%s"' % args.OutputFile)
+            arguments.append(arg_value(args.OutputFile))
 
         if cmd in object_aware and requested:
             objects_xml = write_objects_list_xml(
                 requested, os.path.join(temp_dir, "objects.xml"), args.WithChildren)
-            arguments += ["-Objects", '"%s"' % objects_xml]
+            arguments += ["-Objects", arg_value(objects_xml)]
 
         if cmd == "lock":
             if args.Revised:
@@ -1070,7 +1084,7 @@ def main():
             if args.Comment:
                 # Многострочный комментарий задаётся своим -comment на каждую строку.
                 for line in args.Comment.splitlines():
-                    arguments += ["-comment", '"%s"' % line]
+                    arguments += ["-comment", arg_value(line)]
             if args.KeepLocked:
                 arguments.append("-keepLocked")
             if args.Force:
@@ -1099,9 +1113,9 @@ def main():
             if args.NEnd:
                 arguments += ["-NEnd", args.NEnd]
             if args.DateBegin:
-                arguments += ["-DateBegin", '"%s"' % args.DateBegin]
+                arguments += ["-DateBegin", arg_value(args.DateBegin)]
             if args.DateEnd:
-                arguments += ["-DateEnd", '"%s"' % args.DateEnd]
+                arguments += ["-DateEnd", arg_value(args.DateEnd)]
             if args.GroupByObject:
                 arguments.append("-GroupByObject")
             if args.GroupByComment:
@@ -1117,32 +1131,32 @@ def main():
             if args.NoBind:
                 arguments.append("-NoBind")
         elif cmd == "add-user":
-            arguments += ["-User", '"%s"' % args.NewUser]
+            arguments += ["-User", arg_value(args.NewUser)]
             if args.NewUserPassword:
-                arguments += ["-Pwd", '"%s"' % args.NewUserPassword]
+                arguments += ["-Pwd", arg_value(args.NewUserPassword)]
             arguments += ["-Rights", args.Rights]
             if args.RestoreDeletedUser:
                 arguments.append("-RestoreDeletedUser")
         elif cmd == "copy-users":
-            arguments += ["-Path", '"%s"' % args.SourcePath]
-            arguments += ["-User", '"%s"' % args.SourceUser]
+            arguments += ["-Path", arg_value(args.SourcePath)]
+            arguments += ["-User", arg_value(args.SourceUser)]
             if args.SourcePassword:
-                arguments += ["-Pwd", '"%s"' % args.SourcePassword]
+                arguments += ["-Pwd", arg_value(args.SourcePassword)]
             if args.RestoreDeletedUser:
                 arguments.append("-RestoreDeletedUser")
         elif cmd == "set-label":
             if args.Version:
                 arguments += ["-v", args.Version]
-            arguments += ["-name", '"%s"' % args.Label]
+            arguments += ["-name", arg_value(args.Label)]
             if args.Comment:
                 for line in args.Comment.splitlines():
-                    arguments += ["-comment", '"%s"' % line]
+                    arguments += ["-comment", arg_value(line)]
 
         if args.Extension:
-            arguments += ["-Extension", '"%s"' % args.Extension]
+            arguments += ["-Extension", arg_value(args.Extension)]
 
         log_file = os.path.join(temp_dir, "repo_log.txt")
-        arguments += ["/Out", '"%s"' % log_file]
+        arguments += ["/Out", arg_value(log_file)]
         arguments.append("/DisableStartupDialogs")
         arguments.append("/DisableStartupMessages")
         arguments += extra_args
