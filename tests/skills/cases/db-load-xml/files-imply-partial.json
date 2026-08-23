@@ -1,0 +1,32 @@
+{
+  "name": "Перечислены файлы без -Mode: загрузка частичная, а не полная",
+  "fakePlatform": {
+    "log": ""
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "src/Configuration.xml",
+        "content": "<?xml version=\"1.0\"?><MetaDataObject/>"
+      }
+    }
+  ],
+  "args_extra": [
+    "-V8Path",
+    "{fakePlatform}",
+    "-InfoBasePath",
+    "{workDir}/ib",
+    "-ConfigDir",
+    "{workDir}/src",
+    "-Files",
+    "Catalogs/Номенклатура.xml"
+  ],
+  "expect": {
+    "stdoutContains": [
+      "Executing partial configuration load...",
+      "-partial"
+    ],
+    "stdoutNotContains": "Executing full configuration load"
+  },
+  "noSnapshot": "навык ничего не пишет в рабочий каталог — проверяется, какие ключи ушли платформе"
+}

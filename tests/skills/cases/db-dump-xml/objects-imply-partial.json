@@ -1,0 +1,25 @@
+{
+  "name": "Перечислены объекты без -Mode: выгрузка частичная, а не инкрементальная",
+  "fakePlatform": {
+    "log": ""
+  },
+  "args_extra": [
+    "-V8Path",
+    "{fakePlatform}",
+    "-InfoBasePath",
+    "{workDir}/ib",
+    "-ConfigDir",
+    "{workDir}/out",
+    "-Objects",
+    "Справочник.Номенклатура"
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "Executing partial configuration dump...",
+      "-listFile"
+    ],
+    "stdoutNotContains": "incremental"
+  },
+  "noSnapshot": "навык ничего не пишет в рабочий каталог — проверяется, какие ключи ушли платформе; фейк файлов не выгружает, поэтому постусловие навыка справедливо даёт отказ"
+}

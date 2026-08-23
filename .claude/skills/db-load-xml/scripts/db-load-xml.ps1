@@ -1,4 +1,4 @@
-﻿# db-load-xml v1.25 — Load 1C configuration from XML files
+﻿# db-load-xml v1.26 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -85,8 +85,10 @@ param(
     [string]$ConfigDir,
 
     [Parameter(Mandatory=$false)]
-    [ValidateSet("Full", "Partial")]
-    [string]$Mode = "Full",
+    # Пустое значение = режим не задан. Прежнее умолчание Full подставляется ниже, после того
+    # как станет видно, перечислены ли файлы.
+    [ValidateSet("", "Full", "Partial")]
+    [string]$Mode = "",
 
     [Parameter(Mandatory=$false)]
     [string]$Files,
@@ -593,6 +595,16 @@ if (-not (Test-Path $ConfigDir)) {
     exit 1
 }
 
+# Перечислены файлы — загрузка частичная. Иначе список молча игнорировался бы, а умолчание Full
+# заменило бы всю конфигурацию базы.
+if ($Files -or $ListFile) {
+    if ($Mode -eq "Full") {
+        Write-Host "[note] перечислены файлы — загружаются только они; -Mode Full не применён" -ForegroundColor Yellow
+    }
+    $Mode = "Partial"
+}
+if (-not $Mode) { $Mode = "Full" }
+
 # --- Validate Partial mode ---
 if ($Mode -eq "Partial" -and -not $Files -and -not $ListFile) {
     Write-Host "Error: -Files or -ListFile required for Partial mode" -ForegroundColor Red
@@ -612,7 +624,7 @@ try {
         }
         if ($AllExtensions) {
             $arguments = @("infobase", "config", "import", "all-extensions", "$ConfigDir", "--db-path=$InfoBasePath")
-        } elseif ($Mode -eq "Partial" -or $Files -or $ListFile) {
+        } elseif ($Mode -eq "Partial") {
             # partial: import specific files (relative to ConfigDir)
             $fileList = @()
             if ($ListFile) {

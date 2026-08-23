@@ -1,4 +1,4 @@
-﻿# db-dump-xml v1.18 — Dump 1C configuration to XML files
+﻿# db-dump-xml v1.19 — Dump 1C configuration to XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -85,8 +85,10 @@ param(
     [string]$ConfigDir,
 
     [Parameter(Mandatory=$false)]
-    [ValidateSet("Full", "Changes", "Partial", "UpdateInfo")]
-    [string]$Mode = "Changes",
+    # Пустое значение = режим не задан. Прежнее умолчание Changes подставляется ниже, после
+    # того как станет видно, перечислены ли объекты.
+    [ValidateSet("", "Full", "Changes", "Partial", "UpdateInfo")]
+    [string]$Mode = "",
 
     [Parameter(Mandatory=$false)]
     [string]$Objects,
@@ -522,6 +524,20 @@ if ($ObjectsFile) {
         ForEach-Object { $_.Trim() } | Where-Object { $_ -and -not $_.StartsWith('#') })
     $Objects = (@(@($Objects -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) + $fromFile) -join ',')
 }
+# Перечислены объекты — операция частичная. Иначе список молча игнорировался бы: умолчание
+# Changes выгружает «изменённое с прошлой выгрузки», а не то, что просили.
+if ($Objects) {
+    if ($Mode -eq "UpdateInfo") {
+        # Не «шире/уже», а другая операция: обновление ConfigDumpInfo без выгрузки файлов.
+        Write-Host "Error: -Mode UpdateInfo does not take an object list — it only refreshes ConfigDumpInfo.xml" -ForegroundColor Red
+        exit 1
+    }
+    if ($Mode -eq "Full" -or $Mode -eq "Changes") {
+        Write-Host "[note] перечислены объекты — выгружаются только они; -Mode $Mode не применён" -ForegroundColor Yellow
+    }
+    $Mode = "Partial"
+}
+if (-not $Mode) { $Mode = "Changes" }
 if ($Mode -eq "Partial" -and -not $Objects) {
     Write-Host "Error: -Objects or -ObjectsFile required for Partial mode" -ForegroundColor Red
     exit 1

@@ -1,0 +1,34 @@
+{
+  "name": "Файлы вместе с -Mode Full: загружаются только они, режим назван неприменённым",
+  "fakePlatform": {
+    "log": ""
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "src/Configuration.xml",
+        "content": "<?xml version=\"1.0\"?><MetaDataObject/>"
+      }
+    }
+  ],
+  "args_extra": [
+    "-V8Path",
+    "{fakePlatform}",
+    "-InfoBasePath",
+    "{workDir}/ib",
+    "-ConfigDir",
+    "{workDir}/src",
+    "-Files",
+    "Catalogs/Номенклатура.xml",
+    "-Mode",
+    "Full"
+  ],
+  "expect": {
+    "stdoutContains": [
+      "[note] перечислены файлы",
+      "-Mode Full не применён",
+      "Executing partial configuration load..."
+    ]
+  },
+  "noSnapshot": "навык ничего не пишет в рабочий каталог — проверяется, какие ключи ушли платформе"
+}

@@ -1,0 +1,23 @@
+{
+  "name": "Ошибка: список объектов с -Mode UpdateInfo — это другая операция",
+  "fakePlatform": {
+    "log": ""
+  },
+  "args_extra": [
+    "-V8Path",
+    "{fakePlatform}",
+    "-InfoBasePath",
+    "{workDir}/ib",
+    "-ConfigDir",
+    "{workDir}/out",
+    "-Objects",
+    "Справочник.Номенклатура",
+    "-Mode",
+    "UpdateInfo"
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "UpdateInfo does not take an object list"
+  },
+  "noSnapshot": "навык ничего не пишет в рабочий каталог — проверяется, какие ключи ушли платформе"
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-dump-xml v1.19 — Dump 1C configuration to XML files
+# db-dump-xml v1.20 — Dump 1C configuration to XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -499,8 +499,8 @@ def main():
     parser.add_argument("-ConfigDir", required=True, help="Directory for configuration dump")
     parser.add_argument(
         "-Mode",
-        default="Changes",
-        choices=["Full", "Changes", "Partial", "UpdateInfo"],
+        default="",
+        choices=["", "Full", "Changes", "Partial", "UpdateInfo"],
         help="Dump mode (default: Changes)",
     )
     parser.add_argument("-Objects", default="", help="Comma-separated metadata object names (for Partial mode)")
@@ -563,6 +563,20 @@ def main():
                          if s.strip() and not s.strip().startswith("#")]
         inline = [s.strip() for s in args.Objects.split(",") if s.strip()]
         args.Objects = ",".join(inline + from_file)
+    # Перечислены объекты — операция частичная. Иначе список молча игнорировался бы: умолчание
+    # Changes выгружает «изменённое с прошлой выгрузки», а не то, что просили.
+    if args.Objects:
+        if args.Mode == "UpdateInfo":
+            # Не «шире/уже», а другая операция: обновление ConfigDumpInfo без выгрузки файлов.
+            print("Error: -Mode UpdateInfo does not take an object list — it only refreshes "
+                  "ConfigDumpInfo.xml", file=sys.stderr)
+            sys.exit(1)
+        if args.Mode in ("Full", "Changes"):
+            print("[note] перечислены объекты — выгружаются только они; -Mode %s не применён"
+                  % args.Mode)
+        args.Mode = "Partial"
+    if not args.Mode:
+        args.Mode = "Changes"
     if args.Mode == "Partial" and not args.Objects:
         print("Error: -Objects or -ObjectsFile required for Partial mode", file=sys.stderr)
         sys.exit(1)

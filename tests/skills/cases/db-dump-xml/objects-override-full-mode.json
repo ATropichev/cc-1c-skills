@@ -1,0 +1,27 @@
+{
+  "name": "Объекты вместе с -Mode Full: выгружаются только они, режим назван неприменённым",
+  "fakePlatform": {
+    "log": ""
+  },
+  "args_extra": [
+    "-V8Path",
+    "{fakePlatform}",
+    "-InfoBasePath",
+    "{workDir}/ib",
+    "-ConfigDir",
+    "{workDir}/out",
+    "-Objects",
+    "Справочник.Номенклатура",
+    "-Mode",
+    "Full"
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[note] перечислены объекты",
+      "-Mode Full не применён",
+      "Executing partial configuration dump..."
+    ]
+  },
+  "noSnapshot": "навык ничего не пишет в рабочий каталог — проверяется, какие ключи ушли платформе; фейк файлов не выгружает, поэтому постусловие навыка справедливо даёт отказ"
+}

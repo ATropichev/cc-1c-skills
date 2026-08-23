@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-xml v1.26 — Load 1C configuration from XML files
+# db-load-xml v1.27 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -570,8 +570,8 @@ def main():
     parser.add_argument("-ConfigDir", required=True, help="Directory with XML configuration sources")
     parser.add_argument(
         "-Mode",
-        default="Full",
-        choices=["Full", "Partial"],
+        default="",
+        choices=["", "Full", "Partial"],
         help="Load mode (default: Full)",
     )
     parser.add_argument("-Files", default="", help="Comma-separated relative file paths (for Partial mode)")
@@ -636,6 +636,14 @@ def main():
         sys.exit(1)
 
     # --- Validate Partial mode ---
+    # Перечислены файлы — загрузка частичная. Иначе список молча игнорировался бы, а умолчание
+    # Full заменило бы всю конфигурацию базы.
+    if args.Files or args.ListFile:
+        if args.Mode == "Full":
+            print("[note] перечислены файлы — загружаются только они; -Mode Full не применён")
+        args.Mode = "Partial"
+    if not args.Mode:
+        args.Mode = "Full"
     if args.Mode == "Partial" and not args.Files and not args.ListFile:
         print("Error: -Files or -ListFile required for Partial mode", file=sys.stderr)
         sys.exit(1)
@@ -647,7 +655,7 @@ def main():
             sys.exit(1)
         if args.AllExtensions:
             arguments = ["infobase", "config", "import", "all-extensions", args.ConfigDir, f"--db-path={args.InfoBasePath}"]
-        elif args.Mode == "Partial" or args.Files or args.ListFile:
+        elif args.Mode == "Partial":
             # partial: import specific files (relative to ConfigDir)
             if args.ListFile:
                 if not os.path.isfile(args.ListFile):
