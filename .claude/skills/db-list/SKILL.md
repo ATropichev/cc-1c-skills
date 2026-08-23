@@ -40,7 +40,19 @@ allowed-tools:
       "password": "",
       "aliases": ["dev", "разработка"],
       "branches": ["dev", "develop", "feature/*"],
-      "configSrc": "C:\\WS\\myapp\\cfsrc"
+      "configSrc": "C:\\WS\\myapp\\cfsrc",
+      "repository": {
+        "path": "\\\\srv01\\repo\\MyApp",
+        "user": "Ivanov",
+        "password": ""
+      },
+      "extensions": [
+        {
+          "name": "МоёРасширение",
+          "src": "src\\cfe\\МоёРасширение",
+          "repository": { "path": "\\\\srv01\\repo\\MyApp_Ext", "user": "Ivanov", "password": "" }
+        }
+      ]
     },
     {
       "id": "test",
@@ -82,6 +94,31 @@ allowed-tools:
 | `aliases` | string[] | нет | Альтернативные имена для быстрого доступа |
 | `branches` | string[] | нет | Git-ветки или glob-паттерны (`release/*`, `feature/*`), привязанные к этой базе |
 | `configSrc` | string | нет | Каталог XML-выгрузки конфигурации |
+| `repository` | object | нет | Хранилище конфигурации: `path`, `user`, `password` (см. ниже) |
+| `extensions` | array | нет | Расширения: `name`, `src`, необязательное `repository` (см. ниже) |
+
+### Хранилище конфигурации
+
+База, подключённая к хранилищу конфигурации 1С, **не принимает ни одной операции конфигуратора**
+без реквизитов доступа к хранилищу — это касается не только `/db-repo`, но и `/db-load-xml`,
+`/db-dump-xml`, `/db-update`, `/db-load-git`. Реквизиты берутся из `repository` записи базы,
+передавать их в каждом вызове не нужно.
+
+| Поле | Тип | Обязательное | Описание |
+|------|-----|:------------:|----------|
+| `repository.path` | string | да | Каталог хранилища или `tcp://<сервер>/<имя>` |
+| `repository.user` | string | нет | Пользователь **хранилища**. Не наследуется от `user` базы |
+| `repository.password` | string | нет | Пароль пользователя хранилища |
+
+У расширения **своё хранилище** со своим путём, поэтому одного `repository` мало:
+
+| Поле | Тип | Обязательное | Описание |
+|------|-----|:------------:|----------|
+| `extensions[].name` | string | да | Имя расширения, как в конфигурации |
+| `extensions[].src` | string | нет | Каталог XML-исходников расширения |
+| `extensions[].repository` | object | нет | Хранилище расширения. Расширение без хранилища — обычный случай |
+
+Пароль хранилища — такой же секрет, как `password` базы; `.v8-project.json` в `.gitignore`.
 
 ## Алгоритм разрешения базы данных
 
@@ -128,6 +165,7 @@ test    Тестовая      server   srv01/MyApp_Test
 - path (для file) или server + ref (для server)
 - user, password (необязательно)
 - aliases, branches (необязательно)
+- если база под хранилищем конфигурации — `repository`: путь, пользователь, пароль
 
 Добавь в массив `databases`. Если это первая база — установи как `default`.
 
@@ -159,3 +197,10 @@ test    Тестовая      server   srv01/MyApp_Test
 ```
 
 > **Важно**: между `/N` и именем пробела нет. Между `/P` и паролем пробела нет. Если пароль пустой — опусти `/P` целиком.
+
+**Хранилище конфигурации** (если у базы задан `repository`) — скрипты навыков подставляют
+сами, сопоставляя параметры соединения с записью реестра:
+```
+/ConfigurationRepositoryF"<path>" /ConfigurationRepositoryN"<user>" /ConfigurationRepositoryP"<password>"
+```
+
