@@ -329,7 +329,7 @@ CHILD_TYPE_DIR_MAP = {
     "XDTOPackage": "XDTOPackages", "WebService": "WebServices",
     "HTTPService": "HTTPServices", "WSReference": "WSReferences",
     "CommonAttribute": "CommonAttributes", "Style": "Styles",
-    "Bot": "Bots", "Language": "Languages",
+    "Bot": "Bots", "PaletteColor": "PaletteColors", "PaletteColor": "PaletteColors", "Language": "Languages",
 }
 
 # --- Модули заимствованных объектов ---
@@ -399,10 +399,10 @@ SYNONYM_MAP = {
 TYPE_ORDER = [
     "Language", "Subsystem", "StyleItem", "Style",
     "CommonPicture", "SessionParameter", "Role", "CommonTemplate",
-    "FilterCriterion", "CommonModule", "Bot", "CommonAttribute", "ExchangePlan",
+    "FilterCriterion", "CommonModule", "CommonAttribute", "ExchangePlan",
     "XDTOPackage", "WebService", "HTTPService", "WSReference",
     "EventSubscription", "ScheduledJob", "SettingsStorage", "FunctionalOption",
-    "FunctionalOptionsParameter", "DefinedType", "CommonCommand", "CommandGroup",
+    "FunctionalOptionsParameter", "DefinedType", "Bot", "PaletteColor", "CommonCommand", "CommandGroup",
     "Constant", "CommonForm", "Catalog", "Document",
     "DocumentNumerator", "Sequence", "DocumentJournal", "Enum",
     "Report", "DataProcessor", "InformationRegister", "AccumulationRegister",

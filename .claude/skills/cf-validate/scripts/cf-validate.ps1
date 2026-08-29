@@ -122,10 +122,10 @@ $validClassIds = @(
 $childObjectTypes = @(
 	"Language","Subsystem","StyleItem","Style",
 	"CommonPicture","SessionParameter","Role","CommonTemplate",
-	"FilterCriterion","CommonModule","Bot","CommonAttribute","ExchangePlan",
+	"FilterCriterion","CommonModule","CommonAttribute","ExchangePlan",
 	"XDTOPackage","WebService","HTTPService","WSReference",
 	"EventSubscription","ScheduledJob","SettingsStorage","FunctionalOption",
-	"FunctionalOptionsParameter","DefinedType","CommonCommand","CommandGroup",
+	"FunctionalOptionsParameter","DefinedType","Bot","PaletteColor","CommonCommand","CommandGroup",
 	"Constant","CommonForm","Catalog","Document",
 	"DocumentNumerator","Sequence","DocumentJournal","Enum",
 	"Report","DataProcessor","InformationRegister","AccumulationRegister",
@@ -140,6 +140,7 @@ $childTypeDirMap = @{
 	"CommonPicture"="CommonPictures"; "SessionParameter"="SessionParameters"; "Role"="Roles"
 	"CommonTemplate"="CommonTemplates"; "FilterCriterion"="FilterCriteria"; "CommonModule"="CommonModules"
 	"Bot"="Bots"
+	"PaletteColor"="PaletteColors"
 	"CommonAttribute"="CommonAttributes"; "ExchangePlan"="ExchangePlans"; "XDTOPackage"="XDTOPackages"
 	"WebService"="WebServices"; "HTTPService"="HTTPServices"; "WSReference"="WSReferences"
 	"EventSubscription"="EventSubscriptions"; "ScheduledJob"="ScheduledJobs"

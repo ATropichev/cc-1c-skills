@@ -86,14 +86,14 @@ function Get-PropML([string]$propName) {
 	return (Get-MLText $n)
 }
 
-# --- Type name maps (canonical order, 44 types) ---
+# --- Type name maps (canonical order, 46 types) ---
 $typeOrder = @(
 	"Language","Subsystem","StyleItem","Style",
 	"CommonPicture","SessionParameter","Role","CommonTemplate",
-	"FilterCriterion","CommonModule","Bot","CommonAttribute","ExchangePlan",
+	"FilterCriterion","CommonModule","CommonAttribute","ExchangePlan",
 	"XDTOPackage","WebService","HTTPService","WSReference",
 	"EventSubscription","ScheduledJob","SettingsStorage","FunctionalOption",
-	"FunctionalOptionsParameter","DefinedType","CommonCommand","CommandGroup",
+	"FunctionalOptionsParameter","DefinedType","Bot","PaletteColor","CommonCommand","CommandGroup",
 	"Constant","CommonForm","Catalog","Document",
 	"DocumentNumerator","Sequence","DocumentJournal","Enum",
 	"Report","DataProcessor","InformationRegister","AccumulationRegister",

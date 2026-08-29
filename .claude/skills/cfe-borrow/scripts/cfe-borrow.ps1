@@ -260,7 +260,7 @@ $childTypeDirMap = @{
 	"Sequence"="Sequences"; "IntegrationService"="IntegrationServices"
 	"XDTOPackage"="XDTOPackages"; "WebService"="WebServices"
 	"HTTPService"="HTTPServices"; "WSReference"="WSReferences"
-	"CommonAttribute"="CommonAttributes"; "Style"="Styles"; "Bot"="Bots"; "Language"="Languages"
+	"CommonAttribute"="CommonAttributes"; "Style"="Styles"; "Bot"="Bots"; "PaletteColor"="PaletteColors"; "Language"="Languages"
 }
 
 # --- 4a. Модули заимствованных объектов ---
@@ -310,14 +310,14 @@ $synonymMap = @{
 	"HTTPСервис"="HTTPService"; "СервисИнтеграции"="IntegrationService"
 }
 
-# --- 5. Canonical type order (44 types) ---
+# --- 5. Canonical type order (46 types) ---
 $script:typeOrder = @(
 	"Language","Subsystem","StyleItem","Style",
 	"CommonPicture","SessionParameter","Role","CommonTemplate",
-	"FilterCriterion","CommonModule","Bot","CommonAttribute","ExchangePlan",
+	"FilterCriterion","CommonModule","CommonAttribute","ExchangePlan",
 	"XDTOPackage","WebService","HTTPService","WSReference",
 	"EventSubscription","ScheduledJob","SettingsStorage","FunctionalOption",
-	"FunctionalOptionsParameter","DefinedType","CommonCommand","CommandGroup",
+	"FunctionalOptionsParameter","DefinedType","Bot","PaletteColor","CommonCommand","CommandGroup",
 	"Constant","CommonForm","Catalog","Document",
 	"DocumentNumerator","Sequence","DocumentJournal","Enum",
 	"Report","DataProcessor","InformationRegister","AccumulationRegister",

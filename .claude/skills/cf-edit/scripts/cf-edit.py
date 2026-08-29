@@ -317,14 +317,14 @@ XSI_NS = "http://www.w3.org/2001/XMLSchema-instance"
 V8_NS = "http://v8.1c.ru/8.1/data/core"
 XS_NS = "http://www.w3.org/2001/XMLSchema"
 
-# Canonical type order for ChildObjects (44 types)
+# Canonical type order for ChildObjects (46 types)
 TYPE_ORDER = [
     "Language", "Subsystem", "StyleItem", "Style",
     "CommonPicture", "SessionParameter", "Role", "CommonTemplate",
-    "FilterCriterion", "CommonModule", "Bot", "CommonAttribute", "ExchangePlan",
+    "FilterCriterion", "CommonModule", "CommonAttribute", "ExchangePlan",
     "XDTOPackage", "WebService", "HTTPService", "WSReference",
     "EventSubscription", "ScheduledJob", "SettingsStorage", "FunctionalOption",
-    "FunctionalOptionsParameter", "DefinedType", "CommonCommand", "CommandGroup",
+    "FunctionalOptionsParameter", "DefinedType", "Bot", "PaletteColor", "CommonCommand", "CommandGroup",
     "Constant", "CommonForm", "Catalog", "Document",
     "DocumentNumerator", "Sequence", "DocumentJournal", "Enum",
     "Report", "DataProcessor", "InformationRegister", "AccumulationRegister",
@@ -337,7 +337,7 @@ TYPE_ORDER = [
 TYPE_TO_DIR = {
     "Language": "Languages", "Subsystem": "Subsystems", "StyleItem": "StyleItems", "Style": "Styles",
     "CommonPicture": "CommonPictures", "SessionParameter": "SessionParameters", "Role": "Roles", "CommonTemplate": "CommonTemplates",
-    "FilterCriterion": "FilterCriteria", "CommonModule": "CommonModules", "Bot": "Bots", "CommonAttribute": "CommonAttributes", "ExchangePlan": "ExchangePlans",
+    "FilterCriterion": "FilterCriteria", "CommonModule": "CommonModules", "Bot": "Bots", "PaletteColor": "PaletteColors", "PaletteColor": "PaletteColors", "CommonAttribute": "CommonAttributes", "ExchangePlan": "ExchangePlans",
     "XDTOPackage": "XDTOPackages", "WebService": "WebServices", "HTTPService": "HTTPServices", "WSReference": "WSReferences",
     "EventSubscription": "EventSubscriptions", "ScheduledJob": "ScheduledJobs", "SettingsStorage": "SettingsStorages", "FunctionalOption": "FunctionalOptions",
     "FunctionalOptionsParameter": "FunctionalOptionsParameters", "DefinedType": "DefinedTypes", "CommonCommand": "CommonCommands", "CommandGroup": "CommandGroups",

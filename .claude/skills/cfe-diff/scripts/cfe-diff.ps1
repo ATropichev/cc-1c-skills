@@ -53,6 +53,7 @@ $childTypeDirMap = @{
 	"CommonAttribute"="CommonAttributes"; "Style"="Styles"; "XDTOPackage"="XDTOPackages"
 	"WebService"="WebServices"; "HTTPService"="HTTPServices"; "WSReference"="WSReferences"
 	"Bot"="Bots"
+	"PaletteColor"="PaletteColors"
 }
 
 # --- Parse extension Configuration.xml ---

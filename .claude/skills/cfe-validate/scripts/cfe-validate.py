@@ -55,14 +55,14 @@ VALID_CLASS_IDS = [
     'fb282519-d103-4dd3-bc12-cb271d631dfc',
 ]
 
-# 44 types in canonical order
+# 46 types in canonical order
 CHILD_OBJECT_TYPES = [
     'Language', 'Subsystem', 'StyleItem', 'Style',
     'CommonPicture', 'SessionParameter', 'Role', 'CommonTemplate',
-    'FilterCriterion', 'CommonModule', 'Bot', 'CommonAttribute', 'ExchangePlan',
+    'FilterCriterion', 'CommonModule', 'CommonAttribute', 'ExchangePlan',
     'XDTOPackage', 'WebService', 'HTTPService', 'WSReference',
     'EventSubscription', 'ScheduledJob', 'SettingsStorage', 'FunctionalOption',
-    'FunctionalOptionsParameter', 'DefinedType', 'CommonCommand', 'CommandGroup',
+    'FunctionalOptionsParameter', 'DefinedType', 'Bot', 'PaletteColor', 'CommonCommand', 'CommandGroup',
     'Constant', 'CommonForm', 'Catalog', 'Document',
     'DocumentNumerator', 'Sequence', 'DocumentJournal', 'Enum',
     'Report', 'DataProcessor', 'InformationRegister', 'AccumulationRegister',
@@ -97,7 +97,7 @@ CHILD_TYPE_DIR_MAP = {
     'Language': 'Languages', 'Subsystem': 'Subsystems', 'StyleItem': 'StyleItems', 'Style': 'Styles',
     'CommonPicture': 'CommonPictures', 'SessionParameter': 'SessionParameters', 'Role': 'Roles',
     'CommonTemplate': 'CommonTemplates', 'FilterCriterion': 'FilterCriteria', 'CommonModule': 'CommonModules',
-    'Bot': 'Bots',
+    'Bot': 'Bots', 'PaletteColor': 'PaletteColors',
     'CommonAttribute': 'CommonAttributes', 'ExchangePlan': 'ExchangePlans', 'XDTOPackage': 'XDTOPackages',
     'WebService': 'WebServices', 'HTTPService': 'HTTPServices', 'WSReference': 'WSReferences',
     'EventSubscription': 'EventSubscriptions', 'ScheduledJob': 'ScheduledJobs',

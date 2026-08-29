@@ -88,6 +88,7 @@ CHILD_TYPE_DIR_MAP = {
     "HTTPService": "HTTPServices",
     "WSReference": "WSReferences",
     "Bot": "Bots",
+    "PaletteColor": "PaletteColors",
 }
 
 

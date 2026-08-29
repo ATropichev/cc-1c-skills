@@ -1,0 +1,11 @@
+{
+  "name": "Bot встаёт сразу за DefinedType, а не после CommonModule (позиция замерена на платформе 8.3.27 и 8.5)",
+  "setup": "fixture:bot-position",
+  "input": [ { "operation": "add-childObject", "value": "Bot.ОповещенияПользователейОСобытиях" } ],
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<DefinedType>МойТип</DefinedType>\r\n\t\t\t<Bot>ОповещенияПользователейОСобытиях</Bot>\r\n\t\t\t<CommandGroup>МояГруппа</CommandGroup>"
+    }
+  }
+}

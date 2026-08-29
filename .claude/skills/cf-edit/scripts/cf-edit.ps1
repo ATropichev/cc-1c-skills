@@ -277,14 +277,14 @@ foreach ($child in $script:propsEl.ChildNodes) {
 }
 Info "Configuration: $($script:objName)"
 
-# --- Canonical type order for ChildObjects (44 types) ---
+# --- Canonical type order for ChildObjects (46 types) ---
 $script:typeOrder = @(
 	"Language","Subsystem","StyleItem","Style",
 	"CommonPicture","SessionParameter","Role","CommonTemplate",
-	"FilterCriterion","CommonModule","Bot","CommonAttribute","ExchangePlan",
+	"FilterCriterion","CommonModule","CommonAttribute","ExchangePlan",
 	"XDTOPackage","WebService","HTTPService","WSReference",
 	"EventSubscription","ScheduledJob","SettingsStorage","FunctionalOption",
-	"FunctionalOptionsParameter","DefinedType","CommonCommand","CommandGroup",
+	"FunctionalOptionsParameter","DefinedType","Bot","PaletteColor","CommonCommand","CommandGroup",
 	"Constant","CommonForm","Catalog","Document",
 	"DocumentNumerator","Sequence","DocumentJournal","Enum",
 	"Report","DataProcessor","InformationRegister","AccumulationRegister",
@@ -297,7 +297,7 @@ $script:typeOrder = @(
 $script:typeToDir = @{
 	"Language"="Languages"; "Subsystem"="Subsystems"; "StyleItem"="StyleItems"; "Style"="Styles"
 	"CommonPicture"="CommonPictures"; "SessionParameter"="SessionParameters"; "Role"="Roles"; "CommonTemplate"="CommonTemplates"
-	"FilterCriterion"="FilterCriteria"; "CommonModule"="CommonModules"; "Bot"="Bots"; "CommonAttribute"="CommonAttributes"; "ExchangePlan"="ExchangePlans"
+	"FilterCriterion"="FilterCriteria"; "CommonModule"="CommonModules"; "Bot"="Bots"; "PaletteColor"="PaletteColors"; "CommonAttribute"="CommonAttributes"; "ExchangePlan"="ExchangePlans"
 	"XDTOPackage"="XDTOPackages"; "WebService"="WebServices"; "HTTPService"="HTTPServices"; "WSReference"="WSReferences"
 	"EventSubscription"="EventSubscriptions"; "ScheduledJob"="ScheduledJobs"; "SettingsStorage"="SettingsStorages"; "FunctionalOption"="FunctionalOptions"
 	"FunctionalOptionsParameter"="FunctionalOptionsParameters"; "DefinedType"="DefinedTypes"; "CommonCommand"="CommonCommands"; "CommandGroup"="CommandGroups"
