@@ -1,0 +1,18 @@
+{
+  "name": "add-childObject без настройки: объект дописывается в конец своего вида (дефолт end)",
+  "setup": "fixture:unsorted-childobjects",
+  "preRun": [
+    {
+      "script": "cf-edit/scripts/cf-edit",
+      "args": { "-ConfigPath": "{workDir}", "-Operation": "remove-childObject", "-Value": "Catalog.Гамма" }
+    }
+  ],
+  "cwd": "workDir",
+  "input": [ { "operation": "add-childObject", "value": "Catalog.Гамма" } ],
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Бета</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>"
+    }
+  }
+}

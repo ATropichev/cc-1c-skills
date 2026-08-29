@@ -1,0 +1,11 @@
+{
+  "name": "sort-childObjects с видом: сортируется только он, остальные виды остаются как были",
+  "setup": "fixture:unsorted-childobjects",
+  "input": [ { "operation": "sort-childObjects", "value": "Catalog" } ],
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Бета</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>\r\n\t\t\t<Role>Омега</Role>\r\n\t\t\t<Role>Каппа</Role>"
+    }
+  }
+}

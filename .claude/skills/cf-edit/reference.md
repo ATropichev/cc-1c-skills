@@ -39,6 +39,18 @@
 
 Batch: `"Catalog.Товары ;; Document.Заказ ;; Enum.ВидыОплат"`
 
+## sort-childObjects
+
+Упорядочивает объекты в `<ChildObjects>` по имени **внутри вида**. Значение — имя вида (`Catalog`, `Role`, …), batch через `;;`. Без значения обрабатываются все виды, какие есть в файле.
+
+```
+-Operation sort-childObjects                       — все виды, кроме Subsystem
+-Operation sort-childObjects -Value "Catalog"       — только справочники
+-Operation sort-childObjects -Value "Catalog ;; Role"
+```
+
+`Subsystem` пропускается, пока вид не назван явно (`-Value "Subsystem"`): сортировка подсистем меняет порядок разделов в панели.
+
 ## add-defaultRole / remove-defaultRole / set-defaultRoles
 
 Имя роли: `ПолныеПрава` или `Role.ПолныеПрава` (префикс `Role.` добавляется автоматически).

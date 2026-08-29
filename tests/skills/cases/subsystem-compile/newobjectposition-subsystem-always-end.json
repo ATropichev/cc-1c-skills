@@ -1,0 +1,17 @@
+{
+  "name": "newObjectPosition=byName подсистем не касается: Бета дописывается в конец, потому что порядок подсистем виден в панели разделов",
+  "setup": "fixture:newobjectposition",
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "newObjectPosition": "byName", "databases": [] } } }
+  ],
+  "cwd": "workDir",
+  "input": { "name": "Бета" },
+  "validatePath": "Subsystems/Бета",
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Subsystem>Альфа</Subsystem>\r\n\t\t\t<Subsystem>Гамма</Subsystem>\r\n\t\t\t<Subsystem>Бета</Subsystem>"
+    },
+    "preserves": { "file": "Configuration.xml", "bom": true, "eol": "crlf", "encoding": "UTF-8", "finalNewline": false, "noCR13": true }
+  }
+}

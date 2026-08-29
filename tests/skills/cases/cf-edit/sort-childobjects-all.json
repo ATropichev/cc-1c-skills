@@ -1,0 +1,29 @@
+{
+  "name": "sort-childObjects без значения: справочники и роли упорядочены, подсистемы не тронуты",
+  "setup": "fixture:unsorted-childobjects",
+  "input": [
+    {
+      "operation": "sort-childObjects"
+    }
+  ],
+  "expect": {
+    "stdoutContains": [
+      "Sorted: Catalog (3)",
+      "Sorted: Role (2)"
+    ],
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Бета</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>\r\n\t\t\t<Role>Каппа</Role>\r\n\t\t\t<Role>Омега</Role>\r\n\t\t\t<Subsystem>Яблоко</Subsystem>\r\n\t\t\t<Subsystem>Банан</Subsystem>"
+    },
+    "preserves": {
+      "file": "Configuration.xml",
+      "bom": true,
+      "eol": "crlf",
+      "encoding": "UTF-8",
+      "finalNewline": false,
+      "noCR13": true,
+      "selfClose": "tight",
+      "noEmptyPairs": true
+    }
+  }
+}

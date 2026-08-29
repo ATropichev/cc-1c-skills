@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-# cf-edit v1.23 — Edit 1C configuration root (Configuration.xml)
+# cf-edit v1.24 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
+import functools
 import json
 import os
 import re
@@ -353,6 +354,122 @@ SCALAR_PROPS = ["Name", "Version", "Vendor", "Comment", "NamePrefix", "UpdateCat
 REF_PROPS = ["DefaultLanguage"]
 
 
+def get_new_object_position(cfg_dir):
+    """Куда навык ставит новую запись в <ChildObjects> — настройка newObjectPosition.
+
+    databases[].newObjectPosition базы, чей configSrc охватывает каталог родительского XML,
+    иначе корневое поле, иначе end. Значения: end — после последнего объекта того же вида
+    (так дописывает Конфигуратор); byName — по имени среди объектов того же вида.
+    Файл ищем от каталога конфигурации и лишь потом от cwd — в отличие от support-guard:
+    настройка принадлежит выгрузке, а рабочим каталогом при вызове навыка почти всегда
+    оказывается чужой проект со своим .v8-project.json, и он перекрыл бы нужный.
+    configSrc считается от каталога .v8-project.json, как задокументировано в
+    docs/v8-project-guide.md. Реестр семьи: tests/skills/check-inline-drift.mjs.
+    """
+    try:
+        pj = _sg_find_v8project(os.path.abspath(cfg_dir or ".")) or _sg_find_v8project(os.getcwd())
+        if not pj:
+            return "end"
+        proj = json.loads(open(pj, encoding="utf-8-sig").read())
+        proj_dir = os.path.dirname(pj)
+        cfg_full = os.path.normcase(os.path.abspath(cfg_dir or ".")).rstrip("\\/")
+        for db in proj.get("databases", []):
+            src = db.get("configSrc")
+            if src and db.get("newObjectPosition"):
+                src_full = os.path.normcase(os.path.abspath(os.path.join(proj_dir, src))).rstrip("\\/")
+                if cfg_full == src_full or cfg_full.startswith(src_full + os.sep):
+                    return "byName" if str(db["newObjectPosition"]).lower() == "byname" else "end"
+        if str(proj.get("newObjectPosition") or "").lower() == "byname":
+            return "byName"
+        return "end"
+    except Exception:
+        return "end"
+
+
+def compare_metadata_names(a, b):
+    """Порядок имён объектов метаданных, как в дереве Конфигуратора.
+
+    Ключ — пары «ранг+символ»: регистр не учитывается, подчёркивание раньше цифр, цифры раньше
+    букв, буквы по кодам (латиница раньше кириллицы), ё на месте е. Культурные таблицы не
+    используются — они разные на разных ОС и в разных рантаймах, а так оба порта сравнивают
+    одинаково везде. Равные ключи разводит ordinal-сравнение исходных строк.
+    Возвращает -1 | 0 | 1. Реестр семьи: tests/skills/check-inline-drift.mjs.
+    """
+    keys = []
+    for name in (a, b):
+        parts = []
+        for ch in name.lower():
+            if ch == "ё":
+                ch = "е"
+            if ch.isdigit():
+                parts.append("1" + ch)
+            elif ch.isalpha():
+                parts.append("2" + ch)
+            else:
+                parts.append("0" + ch)
+        keys.append("".join(parts))
+    if keys[0] != keys[1]:
+        return -1 if keys[0] < keys[1] else 1
+    if a != b:
+        return -1 if a < b else 1
+    return 0
+
+
+RU_TYPE_MAP = {
+    "справочник": "Catalog", "документ": "Document", "перечисление": "Enum",
+    "отчёт": "Report", "отчет": "Report", "обработка": "DataProcessor",
+    "общаяформа": "CommonForm", "журналдокументов": "DocumentJournal",
+    "планвидовхарактеристик": "ChartOfCharacteristicTypes",
+    "плансчетов": "ChartOfAccounts",
+    "планвидоврасчета": "ChartOfCalculationTypes",
+    "планвидоврасчёта": "ChartOfCalculationTypes",
+    "регистрсведений": "InformationRegister",
+    "регистрнакопления": "AccumulationRegister",
+    "регистрбухгалтерии": "AccountingRegister",
+    "регистррасчета": "CalculationRegister",
+    "регистррасчёта": "CalculationRegister",
+    "бизнеспроцесс": "BusinessProcess",
+    "бот": "Bot",
+    "задача": "Task", "планобмена": "ExchangePlan",
+    "хранилищенастроек": "SettingsStorage",
+    # Множественное число: в дереве конфигурации виды подписаны именно так.
+    "справочники": "Catalog", "документы": "Document", "перечисления": "Enum",
+    "отчёты": "Report", "отчеты": "Report", "обработки": "DataProcessor",
+    "общиеформы": "CommonForm", "журналыдокументов": "DocumentJournal",
+    "планывидовхарактеристик": "ChartOfCharacteristicTypes",
+    "планысчетов": "ChartOfAccounts",
+    "планывидоврасчета": "ChartOfCalculationTypes",
+    "планывидоврасчёта": "ChartOfCalculationTypes",
+    "регистрысведений": "InformationRegister",
+    "регистрынакопления": "AccumulationRegister",
+    "регистрыбухгалтерии": "AccountingRegister",
+    "регистррасчета": "CalculationRegister", "регистрырасчета": "CalculationRegister",
+    "регистрырасчёта": "CalculationRegister",
+    "бизнеспроцессы": "BusinessProcess",
+    "боты": "Bot",
+    "задачи": "Task", "планыобмена": "ExchangePlan",
+    "хранилищанастроек": "SettingsStorage",
+}
+
+
+def resolve_type_name(token):
+    """Имя вида из пользовательского ввода → каноническое имя или None.
+
+    Ввод прощающий: регистр не важен, принимается имя каталога выгрузки
+    (Catalogs → Catalog) и русское имя вида в единственном и множественном числе.
+    """
+    key = (token or "").strip().lower()
+    if not key:
+        return None
+    for canon in TYPE_ORDER:
+        if canon.lower() == key:
+            return canon
+    for canon, dir_name in TYPE_TO_DIR.items():
+        if dir_name.lower() == key:
+            return canon
+    return RU_TYPE_MAP.get(key)
+
+
 def localname(el):
     return etree.QName(el.tag).localname
 
@@ -498,7 +615,7 @@ def main():
     parser = argparse.ArgumentParser(description="Edit 1C configuration root (Configuration.xml)", allow_abbrev=False)
     parser.add_argument("-ConfigPath", "-Path", required=True)
     parser.add_argument("-DefinitionFile", default=None)
-    parser.add_argument("-Operation", default=None, choices=["modify-property", "add-childObject", "remove-childObject", "add-defaultRole", "remove-defaultRole", "set-defaultRoles", "set-panels", "set-home-page"])
+    parser.add_argument("-Operation", default=None, choices=["modify-property", "add-childObject", "remove-childObject", "add-defaultRole", "remove-defaultRole", "set-defaultRoles", "set-panels", "set-home-page", "sort-childObjects"])
     parser.add_argument("-Value", default=None)
     parser.add_argument("-NoValidate", action="store_true")
     args = ci_parse_args(parser)
@@ -637,7 +754,7 @@ def main():
             if dot_idx < 1:
                 print(f"Invalid format '{item}', expected 'Type.Name'", file=sys.stderr)
                 sys.exit(1)
-            type_name = item[:dot_idx]
+            type_name = resolve_type_name(item[:dot_idx]) or item[:dot_idx]
             obj_name_val = item[dot_idx + 1:]
 
             if type_name not in TYPE_ORDER:
@@ -674,8 +791,15 @@ def main():
                 warn(f"Already exists: {type_name}.{obj_name_val}")
                 continue
 
-            # Find insertion point
+            # Место вставки. Вид — по TYPE_ORDER; внутри вида — по newObjectPosition:
+            # end (по умолчанию) кладёт после последнего объекта того же вида, byName — по имени.
+            # Subsystem по имени не упорядочиваем никогда: порядок подсистем в дереве задаёт
+            # порядок разделов в панели, пока их не перечислили в <SubsystemsOrder>.
+            by_name = (type_name != "Subsystem"
+                       and get_new_object_position(config_dir) == "byName")
             insert_before = None
+            last_same = None
+            first_later = None
             for child in child_objs_el:
                 if not isinstance(child.tag, str):
                     continue
@@ -685,10 +809,24 @@ def main():
                 child_type_idx = TYPE_ORDER.index(child_type_name)
 
                 if child_type_name == type_name:
-                    if (child.text or "") > obj_name_val and insert_before is None:
+                    last_same = child
+                    if (by_name and insert_before is None
+                            and compare_metadata_names(child.text or "", obj_name_val) > 0):
                         insert_before = child
-                elif child_type_idx > type_idx and insert_before is None:
-                    insert_before = child
+                elif child_type_idx > type_idx and first_later is None:
+                    first_later = child
+
+            if insert_before is None:
+                # Место не выбрано именем — ставим сразу за последним объектом того же вида,
+                # то есть перед его следующим соседом. Через first_later этого не сделать:
+                # если видов старше в файле нет, запись уехала бы в самый конец блока,
+                # за пределы своей группы.
+                if last_same is not None:
+                    siblings = [c for c in child_objs_el if isinstance(c.tag, str)]
+                    pos = siblings.index(last_same)
+                    insert_before = siblings[pos + 1] if pos + 1 < len(siblings) else None
+                else:
+                    insert_before = first_later
 
             new_el = etree.Element(f"{{{MD_NS}}}{type_name}")
             new_el.text = obj_name_val
@@ -700,6 +838,48 @@ def main():
 
             add_count += 1
             info(f"Added: {type_name}.{obj_name_val}")
+
+    def do_sort_child_objects(batch_val):
+        """Упорядочить <ChildObjects> по имени внутри вида.
+
+        Без значения — все виды, кроме Subsystem (порядок подсистем в дереве задаёт порядок
+        разделов в панели, пока их не перечислили в <SubsystemsOrder>); явно названный вид
+        сортируется в любом случае. Взаимный порядок видов не трогаем: платформа приводит его
+        к своему при первой же выгрузке. Переставляем ЗНАЧЕНИЯ узлов, а не сами узлы —
+        отступы и структура файла остаются как были, меняются только имена в строках.
+        """
+        nonlocal modify_count
+        if child_objs_el is None:
+            print("No <ChildObjects> element found", file=sys.stderr)
+            sys.exit(1)
+
+        requested = []
+        for token in (parse_batch_value(batch_val) if str(batch_val or "").strip() else []):
+            canon = resolve_type_name(token)
+            if canon is None:
+                print(f"Unknown type '{token}'. Valid: {', '.join(TYPE_ORDER)}", file=sys.stderr)
+                sys.exit(1)
+            requested.append(canon)
+
+        groups = {}
+        for child in child_objs_el:
+            if not isinstance(child.tag, str):
+                continue
+            groups.setdefault(localname(child), []).append(child)
+
+        targets = requested or [t for t in groups if t != "Subsystem"]
+        for type_name in targets:
+            els = groups.get(type_name, [])
+            if len(els) < 2:
+                continue
+            names = [e.text or "" for e in els]
+            ordered = sorted(names, key=functools.cmp_to_key(compare_metadata_names))
+            if names == ordered:
+                continue
+            for el, name in zip(els, ordered):
+                el.text = name
+            modify_count += 1
+            info(f"Sorted: {type_name} ({len(els)})")
 
     def do_remove_child_object(batch_val):
         nonlocal remove_count
@@ -713,7 +893,7 @@ def main():
             if dot_idx < 1:
                 print(f"Invalid format '{item}', expected 'Type.Name'", file=sys.stderr)
                 sys.exit(1)
-            type_name = item[:dot_idx]
+            type_name = resolve_type_name(item[:dot_idx]) or item[:dot_idx]
             obj_name_val = item[dot_idx + 1:]
 
             found = False
@@ -933,24 +1113,6 @@ def main():
         info(f"Wrote panel layout: {cai_path}")
 
     # --- set-home-page (writes Ext/HomePageWorkArea.xml from scratch) ---
-    RU_TYPE_MAP = {
-        "справочник": "Catalog", "документ": "Document", "перечисление": "Enum",
-        "отчёт": "Report", "отчет": "Report", "обработка": "DataProcessor",
-        "общаяформа": "CommonForm", "журналдокументов": "DocumentJournal",
-        "планвидовхарактеристик": "ChartOfCharacteristicTypes",
-        "плансчетов": "ChartOfAccounts",
-        "планвидоврасчета": "ChartOfCalculationTypes",
-        "планвидоврасчёта": "ChartOfCalculationTypes",
-        "регистрсведений": "InformationRegister",
-        "регистрнакопления": "AccumulationRegister",
-        "регистрбухгалтерии": "AccountingRegister",
-        "регистррасчета": "CalculationRegister",
-        "регистррасчёта": "CalculationRegister",
-        "бизнеспроцесс": "BusinessProcess",
-        "бот": "Bot",
-        "задача": "Task", "планобмена": "ExchangePlan",
-        "хранилищенастроек": "SettingsStorage",
-    }
     DIR_TO_TYPE = {v.lower(): k for k, v in TYPE_TO_DIR.items()}
     UUID_RE = __import__("re").compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 
@@ -1130,6 +1292,8 @@ def main():
             do_set_panels(op_value)
         elif op_key == "set-home-page":
             do_set_home_page(op_value)
+        elif op_key == "sort-childobjects":
+            do_sort_child_objects(op_value if isinstance(op_value, str) else str(op_value))
         else:
             print(f"Unknown operation: {op_name}", file=sys.stderr)
             sys.exit(1)

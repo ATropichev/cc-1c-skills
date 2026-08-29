@@ -34,6 +34,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/cf-edit.ps1" -Confi
 | `modify-property` | `Ключ=Значение` (batch `;;`) | Изменить свойство |
 | `add-childObject` | `Type.Name` (batch `;;`) | Зарегистрировать уже существующий файл объекта в ChildObjects. Для создания нового объекта используй `/meta-compile`, `/role-compile`, `/subsystem-compile` — они регистрируют автоматически |
 | `remove-childObject` | `Type.Name` (batch `;;`) | Удалить объект из ChildObjects |
+| `sort-childObjects` | вид, напр. `Catalog` (batch `;;`), либо пусто | Упорядочить ChildObjects по имени внутри вида. Без значения — все виды, кроме `Subsystem` |
 | `add-defaultRole` | `Role.Name` или `Name` | Добавить роль по умолчанию |
 | `remove-defaultRole` | `Role.Name` или `Name` | Удалить роль по умолчанию |
 | `set-defaultRoles` | Имена через `;;` | Заменить список ролей по умолчанию |

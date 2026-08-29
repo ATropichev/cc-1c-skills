@@ -1,0 +1,16 @@
+{
+  "name": "newObjectPosition=byName: регистр не учитывается, латиница раньше кириллицы — тестBeta встаёт между ТестAlpha и ТестБета",
+  "setup": "fixture:newobjectposition",
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "newObjectPosition": "byName", "databases": [] } } }
+  ],
+  "cwd": "workDir",
+  "input": { "name": "тестBeta" },
+  "validatePath": "Roles/тестBeta",
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Role>ТестAlpha</Role>\r\n\t\t\t<Role>тестBeta</Role>\r\n\t\t\t<Role>ТестБета</Role>"
+    }
+  }
+}

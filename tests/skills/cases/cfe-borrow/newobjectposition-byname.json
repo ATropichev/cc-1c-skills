@@ -1,0 +1,27 @@
+{
+  "name": "newObjectPosition=byName: заимствованный объект встаёт в расширении по имени, а не в порядке заимствования",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Договоры" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Терминалы", "owners": ["Catalog.Договоры"] },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
+    },
+    { "writeFile": { "path": "cfe/.v8-project.json", "content": { "newObjectPosition": "byName", "databases": [] } } }
+  ],
+  "params": { "extensionPath": "cfe", "object": "Catalog.Терминалы" },
+  "expect": {
+    "fileContains": {
+      "file": "cfe/Configuration.xml",
+      "text": "<Catalog>Договоры</Catalog>\r\n\t\t\t<Catalog>Терминалы</Catalog>"
+    }
+  }
+}

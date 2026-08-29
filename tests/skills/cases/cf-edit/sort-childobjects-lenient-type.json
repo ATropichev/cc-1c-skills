@@ -1,0 +1,12 @@
+{
+  "name": "sort-childObjects принимает вид в любом регистре и во множественном числе (как каталог выгрузки)",
+  "setup": "fixture:unsorted-childobjects",
+  "input": [ { "operation": "sort-childObjects", "value": "catalogs" } ],
+  "expect": {
+    "stdoutContains": ["Sorted: Catalog (3)"],
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Бета</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>"
+    }
+  }
+}

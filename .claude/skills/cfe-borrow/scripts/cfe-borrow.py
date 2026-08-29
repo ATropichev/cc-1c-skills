@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.33 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.34 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -200,6 +201,82 @@ def decode_numeric_entities(s):
     s = re.sub(r'&#x([0-9A-Fa-f]+);', lambda m: chr(int(m.group(1), 16)), s)
     s = re.sub(r'&#(\d+);', lambda m: chr(int(m.group(1))), s)
     return s
+
+
+def _sg_find_v8project(start_dir):
+    d = start_dir
+    for _ in range(20):
+        if not d:
+            break
+        pj = os.path.join(d, ".v8-project.json")
+        if os.path.isfile(pj):
+            return pj
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return None
+
+
+def get_new_object_position(cfg_dir):
+    """Куда навык ставит новую запись в <ChildObjects> — настройка newObjectPosition.
+
+    databases[].newObjectPosition базы, чей configSrc охватывает каталог родительского XML,
+    иначе корневое поле, иначе end. Значения: end — после последнего объекта того же вида
+    (так дописывает Конфигуратор); byName — по имени среди объектов того же вида.
+    Файл ищем от каталога конфигурации и лишь потом от cwd — в отличие от support-guard:
+    настройка принадлежит выгрузке, а рабочим каталогом при вызове навыка почти всегда
+    оказывается чужой проект со своим .v8-project.json, и он перекрыл бы нужный.
+    configSrc считается от каталога .v8-project.json, как задокументировано в
+    docs/v8-project-guide.md. Реестр семьи: tests/skills/check-inline-drift.mjs.
+    """
+    try:
+        pj = _sg_find_v8project(os.path.abspath(cfg_dir or ".")) or _sg_find_v8project(os.getcwd())
+        if not pj:
+            return "end"
+        proj = json.loads(open(pj, encoding="utf-8-sig").read())
+        proj_dir = os.path.dirname(pj)
+        cfg_full = os.path.normcase(os.path.abspath(cfg_dir or ".")).rstrip("\\/")
+        for db in proj.get("databases", []):
+            src = db.get("configSrc")
+            if src and db.get("newObjectPosition"):
+                src_full = os.path.normcase(os.path.abspath(os.path.join(proj_dir, src))).rstrip("\\/")
+                if cfg_full == src_full or cfg_full.startswith(src_full + os.sep):
+                    return "byName" if str(db["newObjectPosition"]).lower() == "byname" else "end"
+        if str(proj.get("newObjectPosition") or "").lower() == "byname":
+            return "byName"
+        return "end"
+    except Exception:
+        return "end"
+
+
+def compare_metadata_names(a, b):
+    """Порядок имён объектов метаданных, как в дереве Конфигуратора.
+
+    Ключ — пары «ранг+символ»: регистр не учитывается, подчёркивание раньше цифр, цифры раньше
+    букв, буквы по кодам (латиница раньше кириллицы), ё на месте е. Культурные таблицы не
+    используются — они разные на разных ОС и в разных рантаймах, а так оба порта сравнивают
+    одинаково везде. Равные ключи разводит ordinal-сравнение исходных строк.
+    Возвращает -1 | 0 | 1. Реестр семьи: tests/skills/check-inline-drift.mjs.
+    """
+    keys = []
+    for name in (a, b):
+        parts = []
+        for ch in name.lower():
+            if ch == "ё":
+                ch = "е"
+            if ch.isdigit():
+                parts.append("1" + ch)
+            elif ch.isalpha():
+                parts.append("2" + ch)
+            else:
+                parts.append("0" + ch)
+        keys.append("".join(parts))
+    if keys[0] != keys[1]:
+        return -1 if keys[0] < keys[1] else 1
+    if a != b:
+        return -1 if a < b else 1
+    return 0
 
 
 def localname(el):
@@ -1035,6 +1112,13 @@ def main():
                 warn(f"Already in ChildObjects: {type_name}.{obj_name}")
                 return
 
+        # Место вставки. Вид — по TYPE_ORDER; внутри вида — по newObjectPosition:
+        # end (по умолчанию) кладёт после последнего объекта того же вида, byName — по имени.
+        # Так же, как заимствует Конфигуратор: в боевых выгрузках расширений ChildObjects
+        # не отсортирован. Subsystem по имени не упорядочиваем никогда: порядок подсистем
+        # в дереве задаёт порядок разделов в панели.
+        by_name = (type_name != "Subsystem"
+                   and get_new_object_position(ext_dir) == "byName")
         insert_before = None
         for child in child_objs_el:
             if not isinstance(child.tag, str):
@@ -1045,7 +1129,8 @@ def main():
             child_type_idx = TYPE_ORDER.index(child_type_name)
 
             if child_type_name == type_name:
-                if (child.text or "") > obj_name and insert_before is None:
+                if (by_name and insert_before is None
+                        and compare_metadata_names(child.text or "", obj_name) > 0):
                     insert_before = child
             elif child_type_idx > type_idx and insert_before is None:
                 insert_before = child

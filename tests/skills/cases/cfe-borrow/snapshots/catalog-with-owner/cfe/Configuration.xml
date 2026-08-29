@@ -66,8 +66,8 @@
 		<ChildObjects>
 			<Language>Русский</Language>
 			<Role>Тест_ОсновнаяРоль</Role>
-			<Catalog>Договоры</Catalog>
 			<Catalog>Терминалы</Catalog>
+			<Catalog>Договоры</Catalog>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

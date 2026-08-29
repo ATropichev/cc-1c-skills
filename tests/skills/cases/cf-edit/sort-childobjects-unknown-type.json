@@ -1,0 +1,7 @@
+{
+  "name": "sort-childObjects с несуществующим видом — отказ со списком допустимых, а не тихий пропуск",
+  "setup": "fixture:unsorted-childobjects",
+  "input": [ { "operation": "sort-childObjects", "value": "НетТакогоВида" } ],
+  "expectError": true,
+  "expect": { "stderrContains": ["Unknown type 'НетТакогоВида'", "Valid: Language, Subsystem"] }
+}

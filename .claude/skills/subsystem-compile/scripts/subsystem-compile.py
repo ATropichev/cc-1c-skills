@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-compile v1.30 — Create 1C subsystem from JSON definition
+# subsystem-compile v1.31 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -489,16 +489,19 @@ def register_in_childobjects(parent_xml_path, parent_tag, child_tag, child_name)
     # Правку ведём по сырому тексту, а не сериализацией ET: она не сохраняет отступы
     # и теряет xmlns, объявленные только внутри значений атрибутов (#38).
     entry = f'<{child_tag}>{esc_xml_text(child_name)}</{child_tag}>'
-    if '<ChildObjects/>' in raw_text:
+    empty = re.search(r'<ChildObjects\s*/>', raw_text)
+    if empty is not None:
         replacement = '<ChildObjects>' + eol + f'\t\t\t{entry}' + eol + '\t\t</ChildObjects>'
-        raw_text = raw_text.replace('<ChildObjects/>', replacement, 1)
-    elif '</ChildObjects>' in raw_text:
+        raw_text = raw_text[:empty.start()] + replacement + raw_text[empty.end():]
+    else:
         # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
         # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
         # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
-        raw_text = re.sub(r'([ \t]*)</ChildObjects>',
-                          lambda m: m.group(1) + '\t' + entry + eol + m.group(1) + '</ChildObjects>',
-                          raw_text, count=1)
+        cm = re.search(r'([ \t]*)</ChildObjects>', raw_text)
+        if cm is None:
+            return 'no-childobj'
+        raw_text = (raw_text[:cm.start()] + cm.group(1) + '\t' + entry + eol
+                    + cm.group(1) + '</ChildObjects>' + raw_text[cm.end():])
 
     write_utf8_bom(parent_xml_path, raw_text)
     return 'added'

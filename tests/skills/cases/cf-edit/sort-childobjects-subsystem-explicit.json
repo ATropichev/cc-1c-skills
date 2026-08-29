@@ -1,0 +1,11 @@
+{
+  "name": "sort-childObjects Subsystem: явно названный вид сортируется, несмотря на исключение по умолчанию",
+  "setup": "fixture:unsorted-childobjects",
+  "input": [ { "operation": "sort-childObjects", "value": "Subsystem" } ],
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Subsystem>Банан</Subsystem>\r\n\t\t\t<Subsystem>Яблоко</Subsystem>"
+    }
+  }
+}

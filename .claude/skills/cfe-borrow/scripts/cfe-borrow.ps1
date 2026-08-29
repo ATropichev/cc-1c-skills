@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.33 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.34 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1347,32 +1347,22 @@ function Register-FormInObject {
 	}
 
 	# Save object XML
+	# Стиль исходника снимаем ДО записи: правка чужого файла наследует его BOM/EOL/заголовок
+	# (#44/#46/#47), новый файл получает канон выгрузки. Зеркало _detect_xml_style в py-порту.
+	$style2 = Detect-XmlStyle $objFile
 	$settings2 = New-Object System.Xml.XmlWriterSettings
 	$settings2.Encoding = New-Object System.Text.UTF8Encoding($true)
 	$settings2.Indent = $false
 	$settings2.NewLineHandling = [System.Xml.NewLineHandling]::None
-
 	$memStream2 = New-Object System.IO.MemoryStream
 	$writer2 = [System.Xml.XmlWriter]::Create($memStream2, $settings2)
 	$objDoc.Save($writer2)
 	$writer2.Flush(); $writer2.Close()
-
-	$bytes2 = $memStream2.ToArray()
+	$text2 = [System.Text.Encoding]::UTF8.GetString($memStream2.ToArray())
 	$memStream2.Close()
-	$text2 = [System.Text.Encoding]::UTF8.GetString($bytes2)
-	if ($text2.Length -gt 0 -and $text2[0] -eq [char]0xFEFF) { $text2 = $text2.Substring(1) }
-	$text2 = $text2.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
-	# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
-	# поэтому они идут первыми ветками альтернации и возвращаются как есть.
-	$text2 = [regex]::Replace($text2, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
-
-	$utf8Bom2 = New-Object System.Text.UTF8Encoding($true)
-	# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
-	# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
-	$targetEol = if ((Test-Path -LiteralPath $objFile) -and ([System.IO.File]::ReadAllText($objFile) -notmatch "`r`n")) { "`n" } else { "`r`n" }
-	$text2 = ($text2 -replace "`r`n", "`n") -replace "`n", $targetEol
-	[System.IO.File]::WriteAllText($objFile, $text2, $utf8Bom2)
+	$text2 = Finalize-XmlText $text2 $style2
+	$writeBom2 = ($null -eq $style2) -or $style2.bom
+	[System.IO.File]::WriteAllText($objFile, $text2, (New-Object System.Text.UTF8Encoding($writeBom2)))
 	Info "  Registered form in: $objFile"
 }
 
@@ -1885,6 +1875,9 @@ function Merge-AttributesIntoObject {
 		}
 
 		# Save via text manipulation to avoid namespace issues with InnerXml
+		# Стиль исходника снимаем ДО записи: правка чужого файла наследует его BOM/EOL/заголовок
+		# (#44/#46/#47), новый файл получает канон выгрузки. Зеркало _detect_xml_style в py-порту.
+		$style3 = Detect-XmlStyle $objFile
 		$settings3 = New-Object System.Xml.XmlWriterSettings
 		$settings3.Encoding = New-Object System.Text.UTF8Encoding($true)
 		$settings3.Indent = $false
@@ -1893,28 +1886,15 @@ function Merge-AttributesIntoObject {
 		$writer3 = [System.Xml.XmlWriter]::Create($memStream3, $settings3)
 		$objDoc.Save($writer3)
 		$writer3.Flush(); $writer3.Close()
-		$bytes3 = $memStream3.ToArray()
+		$text3 = [System.Text.Encoding]::UTF8.GetString($memStream3.ToArray())
 		$memStream3.Close()
-		$text3 = [System.Text.Encoding]::UTF8.GetString($bytes3)
-		if ($text3.Length -gt 0 -and $text3[0] -eq [char]0xFEFF) { $text3 = $text3.Substring(1) }
-		$text3 = $text3.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-
 		# Самозакрытый элемент раскрывается текстом, а не пробельным узлом в DOM: тот давал
 		# лишнюю строку с табуляцией перед первым <Attribute> (у Конфигуратора пустых строк нет).
+		# Стоит ДО Finalize-XmlText, чтобы схлопывание пустых тегов накрыло и вставленные реквизиты.
 		$text3 = Insert-IntoOwnChildObjects $text3 $allAttrXml
-
-		# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
-		# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
-		# поэтому они идут первыми ветками альтернации и возвращаются как есть.
-		# Стоит ПОСЛЕ вставки реквизитов, чтобы накрыть и их.
-		$text3 = [regex]::Replace($text3, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
-
-		$utf8Bom3 = New-Object System.Text.UTF8Encoding($true)
-		# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
-		# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
-		$targetEol = if ((Test-Path -LiteralPath $objFile) -and ([System.IO.File]::ReadAllText($objFile) -notmatch "`r`n")) { "`n" } else { "`r`n" }
-		$text3 = ($text3 -replace "`r`n", "`n") -replace "`n", $targetEol
-		[System.IO.File]::WriteAllText($objFile, $text3, $utf8Bom3)
+		$text3 = Finalize-XmlText $text3 $style3
+		$writeBom3 = ($null -eq $style3) -or $style3.bom
+		[System.IO.File]::WriteAllText($objFile, $text3, (New-Object System.Text.UTF8Encoding($writeBom3)))
 		Info "  Merged $added attribute(s) into: $objFile"
 	}
 }
@@ -2230,6 +2210,114 @@ function Build-BorrowedObjectXml {
 }
 
 # --- 13. Helper: add object to extension ChildObjects ---
+# Стиль существующего файла для round-trip-сохранения: BOM / EOL / регистр encoding /
+# финальный перенос. $null → файл новый (сохранить текущее поведение).
+# Реестр семьи: tests/skills/check-inline-drift.mjs.
+function Detect-XmlStyle([string]$path) {
+	if (-not (Test-Path -LiteralPath $path)) { return $null }
+	$raw = [System.IO.File]::ReadAllBytes($path)
+	$bom = ($raw.Length -ge 3 -and $raw[0] -eq 0xEF -and $raw[1] -eq 0xBB -and $raw[2] -eq 0xBF)
+	$body = if ($bom) { [System.Text.Encoding]::UTF8.GetString($raw, 3, $raw.Length - 3) } else { [System.Text.Encoding]::UTF8.GetString($raw) }
+	$head = if ($body.Length -gt 200) { $body.Substring(0, 200) } else { $body }
+	$m = [regex]::Match($head, 'encoding="([^"]+)"')
+	return @{
+		bom = $bom
+		crlf = $body.Contains("`r`n")
+		enc = $(if ($m.Success) { $m.Groups[1].Value } else { "utf-8" })
+		finalNl = $body.EndsWith("`n")
+	}
+}
+
+# Привести текст XmlWriter к стилю оригинала; для НОВОГО файла ($null) — к канону выгрузки
+# Конфигуратора: encoding="UTF-8", CRLF, без перевода строки в конце.
+# Реестр семьи: tests/skills/check-inline-drift.mjs.
+function Finalize-XmlText([string]$text, $style) {
+	if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
+	$encDecl = $(if ($style) { $style.enc } else { "UTF-8" })
+	$text = $text.Replace('encoding="utf-8"', 'encoding="' + $encDecl + '"')
+	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+	# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+	# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+	$text = [regex]::Replace($text, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+	$text = ($text -replace "`r`n", "`n").TrimEnd("`n")
+	if ($style -and $style.finalNl) { $text += "`n" }
+	if (-not $style -or $style.crlf) { $text = $text -replace "`n", "`r`n" }
+	return $text
+}
+
+function Find-V8Project([string]$startDir) {
+	$d = $startDir
+	for ($i = 0; $i -lt 20 -and $d; $i++) {
+		$pj = Join-Path $d ".v8-project.json"
+		if (Test-Path $pj) { return $pj }
+		$parent = [System.IO.Path]::GetDirectoryName($d)
+		if ($parent -eq $d) { break }
+		$d = $parent
+	}
+	return $null
+}
+
+# Куда навык ставит новую запись в <ChildObjects> — настройка newObjectPosition.
+# databases[].newObjectPosition базы, чей configSrc охватывает каталог родительского XML,
+# иначе корневое поле, иначе end. Значения: end — после последнего объекта того же вида
+# (так дописывает Конфигуратор); byName — по имени среди объектов того же вида.
+# Файл ищем от каталога конфигурации и лишь потом от cwd — в отличие от support-guard:
+# настройка принадлежит выгрузке, а рабочим каталогом при вызове навыка почти всегда
+# оказывается чужой проект со своим .v8-project.json, и он перекрыл бы нужный.
+# configSrc считается от каталога .v8-project.json, как задокументировано в
+# docs/v8-project-guide.md. Реестр семьи: tests/skills/check-inline-drift.mjs.
+function Get-NewObjectPosition([string]$cfgDir) {
+	try {
+		if (-not $cfgDir) { $cfgDir = "." }
+		$pj = Find-V8Project ([System.IO.Path]::GetFullPath($cfgDir))
+		if (-not $pj) { $pj = Find-V8Project (Get-Location).Path }
+		if (-not $pj) { return "end" }
+		$proj = Get-Content -Raw $pj | ConvertFrom-Json
+		$projDir = [System.IO.Path]::GetDirectoryName($pj)
+		$cfgFull = [System.IO.Path]::GetFullPath($cfgDir).TrimEnd('\', '/')
+		if ($proj.databases) {
+			foreach ($db in $proj.databases) {
+				if ($db.configSrc -and $db.newObjectPosition) {
+					$src = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($projDir, $db.configSrc)).TrimEnd('\', '/')
+					if ($cfgFull -eq $src -or $cfgFull.StartsWith($src + [System.IO.Path]::DirectorySeparatorChar)) {
+						if ("$($db.newObjectPosition)" -eq "byName") { return "byName" }
+						return "end"
+					}
+				}
+			}
+		}
+		if ("$($proj.newObjectPosition)" -eq "byName") { return "byName" }
+		return "end"
+	} catch { return "end" }
+}
+
+# Порядок имён объектов метаданных, как в дереве Конфигуратора.
+# Ключ — пары «ранг+символ»: регистр не учитывается, подчёркивание раньше цифр, цифры раньше
+# букв, буквы по кодам (латиница раньше кириллицы), ё на месте е. Культурные таблицы не
+# используются — они разные на разных ОС и в разных рантаймах, а так оба порта сравнивают
+# одинаково везде. Равные ключи разводит ordinal-сравнение исходных строк.
+# Возвращает -1 | 0 | 1. Реестр семьи: tests/skills/check-inline-drift.mjs.
+function Compare-MetadataNames([string]$a, [string]$b) {
+	$keys = @("", "")
+	$names = @($a, $b)
+	for ($i = 0; $i -lt 2; $i++) {
+		$sb = New-Object System.Text.StringBuilder
+		foreach ($ch in $names[$i].ToLowerInvariant().ToCharArray()) {
+			if ($ch -eq [char]0x0451) { $ch = [char]0x0435 }
+			if ([char]::IsDigit($ch)) { [void]$sb.Append('1') }
+			elseif ([char]::IsLetter($ch)) { [void]$sb.Append('2') }
+			else { [void]$sb.Append('0') }
+			[void]$sb.Append($ch)
+		}
+		$keys[$i] = $sb.ToString()
+	}
+	$r = [string]::CompareOrdinal($keys[0], $keys[1])
+	if ($r -eq 0) { $r = [string]::CompareOrdinal($a, $b) }
+	if ($r -lt 0) { return -1 }
+	if ($r -gt 0) { return 1 }
+	return 0
+}
+
 function Add-ToChildObjects {
 	param([string]$typeName, [string]$objName)
 
@@ -2255,7 +2343,12 @@ function Add-ToChildObjects {
 		}
 	}
 
-	# Find insertion point: after last element of same type, or before first element of later type
+	# Место вставки. Вид — по $script:typeOrder; внутри вида — по newObjectPosition: end
+	# (по умолчанию) кладёт после последнего объекта того же вида, byName — по имени. Так же
+	# заимствует Конфигуратор: в боевых выгрузках расширений ChildObjects не отсортирован.
+	# Subsystem по имени не упорядочиваем никогда: порядок подсистем в дереве задаёт порядок
+	# разделов в панели.
+	$byName = ($typeName -cne "Subsystem" -and (Get-NewObjectPosition $extDir) -eq "byName")
 	$insertBefore = $null
 	$lastSameType = $null
 
@@ -2265,8 +2358,7 @@ function Add-ToChildObjects {
 		if ($childTypeIdx -lt 0) { continue }
 
 		if ($child.LocalName -eq $typeName) {
-			# Same type -- check alphabetical order
-			if ($child.InnerText -gt $objName -and -not $insertBefore) {
+			if ($byName -and -not $insertBefore -and (Compare-MetadataNames $child.InnerText $objName) -gt 0) {
 				$insertBefore = $child
 			}
 			$lastSameType = $child
@@ -2439,32 +2531,22 @@ while ($true) {
 }
 
 # --- 15. Save modified Configuration.xml ---
+# Стиль исходника снимаем ДО записи: правка чужого файла наследует его BOM/EOL/заголовок
+# (#44/#46/#47), новый файл получает канон выгрузки. Зеркало _detect_xml_style в py-порту.
+$style = Detect-XmlStyle $extResolvedPath
 $settings = New-Object System.Xml.XmlWriterSettings
 $settings.Encoding = New-Object System.Text.UTF8Encoding($true)
 $settings.Indent = $false
 $settings.NewLineHandling = [System.Xml.NewLineHandling]::None
-
 $memStream = New-Object System.IO.MemoryStream
 $writer = [System.Xml.XmlWriter]::Create($memStream, $settings)
 $script:xmlDoc.Save($writer)
 $writer.Flush(); $writer.Close()
-
-$bytes = $memStream.ToArray()
+$text = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
 $memStream.Close()
-$text = [System.Text.Encoding]::UTF8.GetString($bytes)
-if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
-$text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
-# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
-# поэтому они идут первыми ветками альтернации и возвращаются как есть.
-$text = [regex]::Replace($text, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
-
-$utf8Bom = New-Object System.Text.UTF8Encoding($true)
-# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
-# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
-$targetEol = if ((Test-Path -LiteralPath $extResolvedPath) -and ([System.IO.File]::ReadAllText($extResolvedPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
-$text = ($text -replace "`r`n", "`n") -replace "`n", $targetEol
-[System.IO.File]::WriteAllText($extResolvedPath, $text, $utf8Bom)
+$text = Finalize-XmlText $text $style
+$writeBom = ($null -eq $style) -or $style.bom
+[System.IO.File]::WriteAllText($extResolvedPath, $text, (New-Object System.Text.UTF8Encoding($writeBom)))
 Info "Saved: $extResolvedPath"
 
 # --- 16. Summary ---

@@ -1,0 +1,17 @@
+{
+  "name": "newObjectPosition=byName: подчёркивание раньше цифр — Тест_2 встаёт за Тест_1, а не после букв (ordinal дал бы иначе)",
+  "setup": "fixture:newobjectposition",
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "newObjectPosition": "byName", "databases": [] } } }
+  ],
+  "cwd": "workDir",
+  "input": { "name": "Тест_2" },
+  "validatePath": "Roles/Тест_2",
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Role>Тест_1</Role>\r\n\t\t\t<Role>Тест_2</Role>\r\n\t\t\t<Role>Тест1</Role>"
+    },
+    "preserves": { "file": "Configuration.xml", "bom": true, "eol": "crlf", "encoding": "UTF-8", "finalNewline": false, "noCR13": true }
+  }
+}

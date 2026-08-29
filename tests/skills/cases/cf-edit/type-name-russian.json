@@ -1,0 +1,15 @@
+{
+  "name": "Имя вида принимается по-русски: sort-childObjects «Справочники» и remove-childObject «Справочник.Бета»",
+  "setup": "fixture:unsorted-childobjects",
+  "input": [
+    { "operation": "sort-childObjects", "value": "Справочники" },
+    { "operation": "remove-childObject", "value": "Справочник.Бета" }
+  ],
+  "expect": {
+    "stdoutContains": ["Sorted: Catalog (3)", "Removed: Catalog.Бета"],
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>"
+    }
+  }
+}

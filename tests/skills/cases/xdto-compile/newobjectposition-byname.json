@@ -1,0 +1,19 @@
+{
+  "name": "newObjectPosition=byName: пакет XDTO встаёт между соседями по имени",
+  "setup": "fixture:newobjectposition",
+  "caseFiles": ["minimal.xsd"],
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "newObjectPosition": "byName", "databases": [] } } }
+  ],
+  "cwd": "workDir",
+  "params": { "xsdFile": "minimal.xsd" },
+  "validatePath": "XDTOPackages/minimal",
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<XDTOPackage>aaa</XDTOPackage>\r\n\t\t\t<XDTOPackage>minimal</XDTOPackage>\r\n\t\t\t<XDTOPackage>zzz</XDTOPackage>"
+    },
+    "preserves": { "file": "Configuration.xml", "bom": true, "eol": "crlf", "encoding": "UTF-8", "finalNewline": false, "noCR13": true }
+  },
+  "skipPlatformVerify": "фикстура объявляет пакеты aaa/zzz без файлов: кейс проверяет место вставки в ChildObjects, а не загружаемость конфигурации"
+}

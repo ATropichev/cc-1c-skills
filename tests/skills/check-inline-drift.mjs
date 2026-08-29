@@ -71,7 +71,7 @@ const FAMILIES = [
       // вверх. Группа db-* использует её же, чтобы найти запись базы и взять реквизиты
       // хранилища — задача одна, поэтому семья общая, а не вторая с тем же телом.
       { id: 'full', authority: 'cf-edit',
-        consumers: ['db-dump-xml', 'db-load-git', 'db-load-xml', 'db-repo', 'db-update',
+        consumers: ['cfe-borrow', 'db-dump-xml', 'db-load-git', 'db-load-xml', 'db-repo', 'db-update',
           'form-add', 'form-compile', 'form-edit', 'help-add', 'interface-edit', 'meta-compile',
           'meta-edit', 'meta-remove', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
           'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile', 'xdto-edit'] },
@@ -145,7 +145,7 @@ const FAMILIES = [
       { id: 'base', authority: 'cf-init',
         consumers: ['cfe-borrow', 'cfe-init', 'epf-init', 'erf-init', 'form-add', 'form-compile',
           'help-add', 'meta-compile', 'mxl-compile', 'role-compile', 'skd-compile',
-          'subsystem-compile', 'subsystem-edit', 'template-add'] },
+          'subsystem-compile', 'subsystem-edit', 'template-add', 'xdto-compile'] },
     ],
   },
 
@@ -213,24 +213,30 @@ const FAMILIES = [
       { id: 'text-no-quot', authority: 'meta-compile',
         consumers: ['cf-init', 'cfe-init', 'epf-init', 'erf-init', 'form-compile', 'form-edit',
           'meta-edit', 'mxl-compile', 'role-compile', 'skd-compile', 'skd-edit',
-          'subsystem-compile', 'subsystem-edit'] },
+          'subsystem-compile', 'subsystem-edit', 'xdto-compile'] },
     ],
   },
   // ─── Сохранение стиля XML при round-trip (#44/#46/#47) ───────────────────
   {
-    name: 'detect_xml_style', py: '_detect_xml_style', ps1: null,
+    name: 'detect_xml_style', py: '_detect_xml_style', ps1: 'Detect-XmlStyle',
     variants: [
-      { id: 'base', authority: 'cf-edit',
-        consumers: ['cfe-borrow', 'form-add', 'form-remove', 'help-add', 'interface-edit', 'meta-edit',
-          'meta-remove', 'subsystem-edit', 'template-add', 'template-remove'] },
+      { id: 'base', authority: 'cf-edit', consumers: [],
+        // PS-сторона семьи пока закрыта только в радиусе задачи про порядок объектов;
+        // в остальных навыках та же канонизация лежит инлайном — отдельная волна.
+        consumersPy: ['cfe-borrow', 'form-add', 'form-remove', 'help-add', 'interface-edit', 'meta-edit',
+          'meta-remove', 'subsystem-edit', 'template-add', 'template-remove'],
+        consumersPs1: ['cfe-borrow'] },
     ],
   },
   {
-    name: 'finalize_xml_bytes', py: '_finalize_xml_bytes', ps1: null,
+    name: 'finalize_xml_bytes', py: '_finalize_xml_bytes', ps1: 'Finalize-XmlText',
     variants: [
-      { id: 'base', authority: 'cf-edit',
-        consumers: ['cfe-borrow', 'form-add', 'form-remove', 'help-add', 'interface-edit', 'meta-edit',
-          'meta-remove', 'subsystem-edit', 'template-add', 'template-remove'] },
+      { id: 'base', authority: 'cf-edit', consumers: [],
+        // PS-сторона семьи пока закрыта только в радиусе задачи про порядок объектов;
+        // в остальных навыках та же канонизация лежит инлайном — отдельная волна.
+        consumersPy: ['cfe-borrow', 'form-add', 'form-remove', 'help-add', 'interface-edit', 'meta-edit',
+          'meta-remove', 'subsystem-edit', 'template-add', 'template-remove'],
+        consumersPs1: ['cfe-borrow'] },
     ],
   },
 
@@ -420,7 +426,7 @@ const FAMILIES = [
     name: 'ChildObjects: регистрация объекта в составе',
     py: 'register_in_childobjects', ps1: 'Register-InChildObjects',
     variants: [
-      { id: 'grouped', authority: 'meta-compile', consumers: ['role-compile'] },
+      { id: 'grouped', authority: 'meta-compile', consumers: ['role-compile', 'xdto-compile'] },
       { id: 'nested-parent', authority: 'subsystem-compile', consumers: [],
         why: 'родителем бывает вложенный Subsystem.xml произвольной глубины: отступ берётся из документа, а запись дописывается в конец блока — фиксированные три табуляции там неверны, и группировать по типу нечего' },
     ],
@@ -447,6 +453,26 @@ const FAMILIES = [
     ],
   },
 
+  // ─── Порядок объектов метаданных в <ChildObjects> ────────────────────────
+  // Куда встаёт новая запись — решение проекта (newObjectPosition в .v8-project.json),
+  // а не навыка. Компаратор при этом константа: он моделирует дерево Конфигуратора и
+  // одинаков для всех проектов, поэтому команда сортировки cf-edit настройку не читает.
+  {
+    name: 'ChildObjects: настройка newObjectPosition',
+    py: 'get_new_object_position', ps1: 'Get-NewObjectPosition',
+    variants: [
+      { id: 'base', authority: 'meta-compile',
+        consumers: ['cf-edit', 'cfe-borrow', 'role-compile', 'xdto-compile'] },
+    ],
+  },
+  {
+    name: 'ChildObjects: порядок имён объектов',
+    py: 'compare_metadata_names', ps1: 'Compare-MetadataNames',
+    variants: [
+      { id: 'base', authority: 'meta-compile',
+        consumers: ['cf-edit', 'cfe-borrow', 'role-compile', 'xdto-compile'] },
+    ],
+  },
 ];
 
 // ─── Семьи, разъехавшиеся целиком ───────────────────────────────────────────

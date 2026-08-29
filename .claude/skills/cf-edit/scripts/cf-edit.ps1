@@ -1,10 +1,10 @@
-﻿# cf-edit v1.23 — Edit 1C configuration root (Configuration.xml)
+﻿# cf-edit v1.24 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
 	[Parameter(Mandatory)][Alias('Path')][string]$ConfigPath,
 	[string]$DefinitionFile,
-	[ValidateSet("modify-property","add-childObject","remove-childObject","add-defaultRole","remove-defaultRole","set-defaultRoles","set-panels","set-home-page")]
+	[ValidateSet("modify-property","add-childObject","remove-childObject","add-defaultRole","remove-defaultRole","set-defaultRoles","set-panels","set-home-page","sort-childObjects")]
 	[string]$Operation,
 	[string]$Value,
 	[switch]$NoValidate
@@ -376,6 +376,21 @@ function Import-Fragment([string]$xmlString) {
 }
 
 # --- Parse batch value (split by ;;) ---
+
+# Имя вида из пользовательского ввода → каноническое имя или $null.
+# Ввод прощающий: регистр не важен, принимается имя каталога выгрузки (Catalogs → Catalog)
+# и русское имя вида в единственном и множественном числе.
+function Resolve-TypeName([string]$token) {
+	$key = "$token".Trim()
+	if (-not $key) { return $null }
+	foreach ($canon in $script:typeOrder) { if ($canon -eq $key) { return $canon } }
+	$byDir = $script:dirToType[$key.ToLowerInvariant()]
+	if ($byDir) { return $byDir }
+	$ru = $script:ruTypeMap[$key.ToLowerInvariant()]
+	if ($ru) { return $ru }
+	return $null
+}
+
 function Parse-BatchValue([string]$val) {
 	$items = @()
 	foreach ($part in $val.Split(";;")) {
@@ -441,6 +456,169 @@ function Do-ModifyProperty([string]$batchVal) {
 }
 
 # --- Operation: add-childObject ---
+# Куда навык ставит новую запись в <ChildObjects> — настройка newObjectPosition.
+# databases[].newObjectPosition базы, чей configSrc охватывает каталог родительского XML,
+# иначе корневое поле, иначе end. Значения: end — после последнего объекта того же вида
+# (так дописывает Конфигуратор); byName — по имени среди объектов того же вида.
+# Файл ищем от каталога конфигурации и лишь потом от cwd — в отличие от support-guard:
+# настройка принадлежит выгрузке, а рабочим каталогом при вызове навыка почти всегда
+# оказывается чужой проект со своим .v8-project.json, и он перекрыл бы нужный.
+# configSrc считается от каталога .v8-project.json, как задокументировано в
+# docs/v8-project-guide.md. Реестр семьи: tests/skills/check-inline-drift.mjs.
+function Get-NewObjectPosition([string]$cfgDir) {
+	try {
+		if (-not $cfgDir) { $cfgDir = "." }
+		$pj = Find-V8Project ([System.IO.Path]::GetFullPath($cfgDir))
+		if (-not $pj) { $pj = Find-V8Project (Get-Location).Path }
+		if (-not $pj) { return "end" }
+		$proj = Get-Content -Raw $pj | ConvertFrom-Json
+		$projDir = [System.IO.Path]::GetDirectoryName($pj)
+		$cfgFull = [System.IO.Path]::GetFullPath($cfgDir).TrimEnd('\', '/')
+		if ($proj.databases) {
+			foreach ($db in $proj.databases) {
+				if ($db.configSrc -and $db.newObjectPosition) {
+					$src = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($projDir, $db.configSrc)).TrimEnd('\', '/')
+					if ($cfgFull -eq $src -or $cfgFull.StartsWith($src + [System.IO.Path]::DirectorySeparatorChar)) {
+						if ("$($db.newObjectPosition)" -eq "byName") { return "byName" }
+						return "end"
+					}
+				}
+			}
+		}
+		if ("$($proj.newObjectPosition)" -eq "byName") { return "byName" }
+		return "end"
+	} catch { return "end" }
+}
+
+# Порядок имён объектов метаданных, как в дереве Конфигуратора.
+# Ключ — пары «ранг+символ»: регистр не учитывается, подчёркивание раньше цифр, цифры раньше
+# букв, буквы по кодам (латиница раньше кириллицы), ё на месте е. Культурные таблицы не
+# используются — они разные на разных ОС и в разных рантаймах, а так оба порта сравнивают
+# одинаково везде. Равные ключи разводит ordinal-сравнение исходных строк.
+# Возвращает -1 | 0 | 1. Реестр семьи: tests/skills/check-inline-drift.mjs.
+function Compare-MetadataNames([string]$a, [string]$b) {
+	$keys = @("", "")
+	$names = @($a, $b)
+	for ($i = 0; $i -lt 2; $i++) {
+		$sb = New-Object System.Text.StringBuilder
+		foreach ($ch in $names[$i].ToLowerInvariant().ToCharArray()) {
+			if ($ch -eq [char]0x0451) { $ch = [char]0x0435 }
+			if ([char]::IsDigit($ch)) { [void]$sb.Append('1') }
+			elseif ([char]::IsLetter($ch)) { [void]$sb.Append('2') }
+			else { [void]$sb.Append('0') }
+			[void]$sb.Append($ch)
+		}
+		$keys[$i] = $sb.ToString()
+	}
+	$r = [string]::CompareOrdinal($keys[0], $keys[1])
+	if ($r -eq 0) { $r = [string]::CompareOrdinal($a, $b) }
+	if ($r -lt 0) { return -1 }
+	if ($r -gt 0) { return 1 }
+	return 0
+}
+
+# Сортировка имён компаратором Compare-MetadataNames. В py-порту ту же роль играет
+# functools.cmp_to_key — штатный способ отсортировать компаратором; в PS 5.1 его нет,
+# поэтому слияние вручную. Порядок обоих портов задаёт один и тот же компаратор.
+function Sort-MetadataNames([string[]]$names) {
+	# Возврат без запятой-обёртки: приёмная сторона всегда пишет @(...), и одноэлементный
+	# результат остаётся массивом. С `return ,@(...)` @() собрал бы ОДИН объект-массив.
+	if ($names.Count -le 1) { return $names }
+	$mid = [int]($names.Count / 2)
+	$left = @(Sort-MetadataNames $names[0..($mid - 1)])
+	$right = @(Sort-MetadataNames $names[$mid..($names.Count - 1)])
+	$out = New-Object System.Collections.ArrayList
+	$i = 0; $j = 0
+	while ($i -lt $left.Count -and $j -lt $right.Count) {
+		if ((Compare-MetadataNames $left[$i] $right[$j]) -le 0) { [void]$out.Add($left[$i]); $i++ }
+		else { [void]$out.Add($right[$j]); $j++ }
+	}
+	while ($i -lt $left.Count) { [void]$out.Add($left[$i]); $i++ }
+	while ($j -lt $right.Count) { [void]$out.Add($right[$j]); $j++ }
+	return $out.ToArray()
+}
+
+# Упорядочить <ChildObjects> по имени внутри вида.
+# Без значения — все виды, кроме Subsystem (порядок подсистем в дереве задаёт порядок
+# разделов в панели, пока их не перечислили в <SubsystemsOrder>); явно названный вид
+# сортируется в любом случае. Взаимный порядок видов не трогаем: платформа приводит его
+# к своему при первой же выгрузке. Переставляем ЗНАЧЕНИЯ узлов, а не сами узлы — отступы
+# и структура файла остаются как были, меняются только имена в строках.
+function Do-SortChildObjects([string]$batchVal) {
+	if (-not $script:childObjsEl) { Write-Error "No <ChildObjects> element found"; exit 1 }
+
+	# Ввод прощающий: регистр не важен, принимается и имя каталога (Catalogs → Catalog) —
+	# в дереве выгрузки виды видны именно во множественном числе.
+	# Без @(...) на приёме: Parse-BatchValue возвращает ,$items — обёртка, которую @()
+	# собрал бы как ОДИН объект-массив, и вид не нашёлся бы в $script:typeOrder.
+	$tokens = @()
+	if ("$batchVal".Trim()) { $tokens = Parse-BatchValue $batchVal }
+	$requested = @()
+	foreach ($token in $tokens) {
+		$canon = Resolve-TypeName $token
+		if (-not $canon) { Write-Error "Unknown type '$token'. Valid: $($script:typeOrder -join ', ')"; exit 1 }
+		$requested += $canon
+	}
+
+	$groups = New-Object System.Collections.Specialized.OrderedDictionary
+	foreach ($child in $script:childObjsEl.ChildNodes) {
+		if ($child.NodeType -ne 'Element') { continue }
+		$ln = $child.get_LocalName()
+		if (-not $groups.Contains($ln)) { $groups[$ln] = New-Object System.Collections.ArrayList }
+		[void]$groups[$ln].Add($child)
+	}
+
+	$targets = if ($requested.Count -gt 0) { $requested } else { @($groups.Keys | Where-Object { $_ -cne 'Subsystem' }) }
+	foreach ($typeName in $targets) {
+		if (-not $groups.Contains($typeName)) { continue }
+		$els = $groups[$typeName]
+		if ($els.Count -lt 2) { continue }
+		$names = @(foreach ($e in $els) { $e.InnerText })
+		$ordered = @(Sort-MetadataNames $names)
+		$same = $true
+		for ($i = 0; $i -lt $names.Count; $i++) { if ($names[$i] -cne $ordered[$i]) { $same = $false; break } }
+		if ($same) { continue }
+		for ($i = 0; $i -lt $els.Count; $i++) { $els[$i].InnerText = $ordered[$i] }
+		$script:modifyCount++
+		Info "Sorted: $typeName ($($els.Count))"
+	}
+}
+
+# Стиль существующего файла для round-trip-сохранения: BOM / EOL / регистр encoding /
+# финальный перенос. $null → файл новый (сохранить текущее поведение).
+# Реестр семьи: tests/skills/check-inline-drift.mjs.
+function Detect-XmlStyle([string]$path) {
+	if (-not (Test-Path -LiteralPath $path)) { return $null }
+	$raw = [System.IO.File]::ReadAllBytes($path)
+	$bom = ($raw.Length -ge 3 -and $raw[0] -eq 0xEF -and $raw[1] -eq 0xBB -and $raw[2] -eq 0xBF)
+	$body = if ($bom) { [System.Text.Encoding]::UTF8.GetString($raw, 3, $raw.Length - 3) } else { [System.Text.Encoding]::UTF8.GetString($raw) }
+	$head = if ($body.Length -gt 200) { $body.Substring(0, 200) } else { $body }
+	$m = [regex]::Match($head, 'encoding="([^"]+)"')
+	return @{
+		bom = $bom
+		crlf = $body.Contains("`r`n")
+		enc = $(if ($m.Success) { $m.Groups[1].Value } else { "utf-8" })
+		finalNl = $body.EndsWith("`n")
+	}
+}
+
+# Привести текст XmlWriter к стилю оригинала; для НОВОГО файла ($null) — к канону выгрузки
+# Конфигуратора: encoding="UTF-8", CRLF, без перевода строки в конце.
+# Реестр семьи: tests/skills/check-inline-drift.mjs.
+function Finalize-XmlText([string]$text, $style) {
+	if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
+	$encDecl = $(if ($style) { $style.enc } else { "UTF-8" })
+	$text = $text.Replace('encoding="utf-8"', 'encoding="' + $encDecl + '"')
+	# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
+	# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
+	# поэтому они идут первыми ветками альтернации и возвращаются как есть.
+	$text = [regex]::Replace($text, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
+	$text = ($text -replace "`r`n", "`n").TrimEnd("`n")
+	if ($style -and $style.finalNl) { $text += "`n" }
+	if (-not $style -or $style.crlf) { $text = $text -replace "`n", "`r`n" }
+	return $text
+}
+
 function Do-AddChildObject([string]$batchVal) {
 	if (-not $script:childObjsEl) { Write-Error "No <ChildObjects> element found"; exit 1 }
 
@@ -460,6 +638,8 @@ function Do-AddChildObject([string]$batchVal) {
 			exit 1
 		}
 		$typeName = $item.Substring(0, $dotIdx)
+		$canonType = Resolve-TypeName $typeName
+		if ($canonType) { $typeName = $canonType }
 		$objNameVal = $item.Substring($dotIdx + 1)
 
 		# Check type is valid
@@ -504,11 +684,11 @@ To create a new $typeName, use $hintSkill (auto-registers in Configuration.xml):
 			continue
 		}
 
-		# Find insertion point: after last element of same type, or after last element of preceding type
+		# Место вставки. Вид — по $script:typeOrder; внутри вида — по newObjectPosition.
+		$byName = ($typeName -cne "Subsystem" -and (Get-NewObjectPosition $script:configDir) -eq "byName")
 		$insertBefore = $null
 		$lastSameType = $null
-		$lastPrecedingType = $null
-		$currentTypeIdx = -1
+		$firstLaterType = $null
 
 		foreach ($child in $script:childObjsEl.ChildNodes) {
 			if ($child.NodeType -ne 'Element') { continue }
@@ -516,17 +696,29 @@ To create a new $typeName, use $hintSkill (auto-registers in Configuration.xml):
 			if ($childTypeIdx -lt 0) { continue }
 
 			if ($child.LocalName -eq $typeName) {
-				# Same type — check alphabetical order
-				if ($child.InnerText -gt $objNameVal -and -not $insertBefore) {
-					# Insert before this element (alphabetical)
+				# Внутри вида — по newObjectPosition: end (по умолчанию) кладёт после последнего
+				# объекта того же вида, byName — по имени. Subsystem по имени не упорядочиваем
+				# никогда: порядок подсистем в дереве задаёт порядок разделов в панели.
+				$lastSameType = $child
+				if ($byName -and -not $insertBefore -and (Compare-MetadataNames $child.InnerText $objNameVal) -gt 0) {
 					$insertBefore = $child
 				}
-				$lastSameType = $child
-			} elseif ($childTypeIdx -lt $typeIdx) {
-				$lastPrecedingType = $child
-			} elseif ($childTypeIdx -gt $typeIdx -and -not $insertBefore) {
-				# First element of a later type — insert before it
-				$insertBefore = $child
+			} elseif ($childTypeIdx -gt $typeIdx -and -not $firstLaterType) {
+				$firstLaterType = $child
+			}
+		}
+
+		if (-not $insertBefore) {
+			# Место не выбрано именем — ставим сразу за последним объектом того же вида,
+			# то есть перед его следующим соседом. Через $firstLaterType этого не сделать:
+			# если видов старше в файле нет, запись уехала бы в самый конец блока,
+			# за пределы своей группы.
+			if ($lastSameType) {
+				$next = $lastSameType.NextSibling
+				while ($next -and $next.NodeType -ne 'Element') { $next = $next.NextSibling }
+				$insertBefore = $next
+			} else {
+				$insertBefore = $firstLaterType
 			}
 		}
 
@@ -558,6 +750,8 @@ function Do-RemoveChildObject([string]$batchVal) {
 			exit 1
 		}
 		$typeName = $item.Substring(0, $dotIdx)
+		$canonType = Resolve-TypeName $typeName
+		if ($canonType) { $typeName = $canonType }
 		$objNameVal = $item.Substring($dotIdx + 1)
 
 		$found = $false
@@ -787,6 +981,29 @@ $script:ruTypeMap = @{
 	"бот"                      = "Bot"
 	"планобмена"               = "ExchangePlan"
 	"хранилищенастроек"        = "SettingsStorage"
+	# Множественное число: в дереве конфигурации виды подписаны именно так.
+	"справочники"              = "Catalog"
+	"документы"                = "Document"
+	"перечисления"             = "Enum"
+	"отчёты"                   = "Report"
+	"отчеты"                   = "Report"
+	"обработки"                = "DataProcessor"
+	"общиеформы"               = "CommonForm"
+	"журналыдокументов"        = "DocumentJournal"
+	"планывидовхарактеристик"  = "ChartOfCharacteristicTypes"
+	"планысчетов"              = "ChartOfAccounts"
+	"планывидоврасчета"        = "ChartOfCalculationTypes"
+	"планывидоврасчёта"        = "ChartOfCalculationTypes"
+	"регистрысведений"         = "InformationRegister"
+	"регистрынакопления"       = "AccumulationRegister"
+	"регистрыбухгалтерии"      = "AccountingRegister"
+	"регистрырасчета"          = "CalculationRegister"
+	"регистрырасчёта"          = "CalculationRegister"
+	"бизнеспроцессы"           = "BusinessProcess"
+	"задачи"                   = "Task"
+	"боты"                     = "Bot"
+	"планыобмена"              = "ExchangePlan"
+	"хранилищанастроек"        = "SettingsStorage"
 }
 # plural folder → singular type
 $script:dirToType = @{}
@@ -1028,11 +1245,16 @@ foreach ($op in $operations) {
 		"set-defaultRoles"   { Do-SetDefaultRoles $opValueStr }
 		"set-panels"         { Do-SetPanels $opValue }
 		"set-home-page"      { Do-SetHomePage $opValue }
+		"sort-childObjects"  { Do-SortChildObjects $opValueStr }
 		default              { Write-Error "Unknown operation: $opName"; exit 1 }
 	}
 }
 
 # --- Save ---
+# Стиль исходника снимаем ДО записи: правка чужого файла наследует его BOM/EOL/заголовок
+# (#44/#46/#47), новый файл получает канон выгрузки. Зеркало _detect_xml_style в py-порту.
+$xmlStyle = Detect-XmlStyle $resolvedPath
+
 $settings = New-Object System.Xml.XmlWriterSettings
 $settings.Encoding = New-Object System.Text.UTF8Encoding($true)
 $settings.Indent = $false
@@ -1043,22 +1265,12 @@ $writer = [System.Xml.XmlWriter]::Create($memStream, $settings)
 $script:xmlDoc.Save($writer)
 $writer.Flush(); $writer.Close()
 
-$bytes = $memStream.ToArray()
+$text = [System.Text.Encoding]::UTF8.GetString($memStream.ToArray())
 $memStream.Close()
-$text = [System.Text.Encoding]::UTF8.GetString($bytes)
-if ($text.Length -gt 0 -and $text[0] -eq [char]0xFEFF) { $text = $text.Substring(1) }
-$text = $text.Replace('encoding="utf-8"', 'encoding="UTF-8"')
-# Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри
-# CDATA/комментария ` />` может быть содержимым (там `>` не экранируется),
-# поэтому они идут первыми ветками альтернации и возвращаются как есть.
-$text = [regex]::Replace($text, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
-# Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
-# новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
-$targetEol = if ((Test-Path -LiteralPath $resolvedPath) -and ([System.IO.File]::ReadAllText($resolvedPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
-$text = ($text -replace "`r`n", "`n") -replace "`n", $targetEol
+$text = Finalize-XmlText $text $xmlStyle
 
-$utf8Bom = New-Object System.Text.UTF8Encoding($true)
-[System.IO.File]::WriteAllText($resolvedPath, $text, $utf8Bom)
+$writeBom = ($null -eq $xmlStyle) -or $xmlStyle.bom
+[System.IO.File]::WriteAllText($resolvedPath, $text, (New-Object System.Text.UTF8Encoding($writeBom)))
 Info "Saved: $resolvedPath"
 
 # --- Auto-validate ---

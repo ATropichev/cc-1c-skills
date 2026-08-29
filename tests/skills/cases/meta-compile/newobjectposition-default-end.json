@@ -1,0 +1,13 @@
+{
+  "name": "newObjectPosition не задан: справочник дописывается в конец своего вида (поведение по умолчанию)",
+  "setup": "fixture:newobjectposition",
+  "cwd": "workDir",
+  "input": { "type": "Catalog", "name": "Бета" },
+  "validatePath": "Catalogs/Бета",
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>\r\n\t\t\t<Catalog>Бета</Catalog>"
+    }
+  }
+}

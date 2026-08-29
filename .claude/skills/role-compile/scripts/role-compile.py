@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-compile v1.32 — Compile 1C role from JSON
+# role-compile v1.33 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1056,10 +1056,71 @@ def parse_object_entry(entry):
     return {'Name': obj_name, 'Rights': rights}
 
 
+def get_new_object_position(cfg_dir):
+    """Куда навык ставит новую запись в <ChildObjects> — настройка newObjectPosition.
+
+    databases[].newObjectPosition базы, чей configSrc охватывает каталог родительского XML,
+    иначе корневое поле, иначе end. Значения: end — после последнего объекта того же вида
+    (так дописывает Конфигуратор); byName — по имени среди объектов того же вида.
+    Файл ищем от каталога конфигурации и лишь потом от cwd — в отличие от support-guard:
+    настройка принадлежит выгрузке, а рабочим каталогом при вызове навыка почти всегда
+    оказывается чужой проект со своим .v8-project.json, и он перекрыл бы нужный.
+    configSrc считается от каталога .v8-project.json, как задокументировано в
+    docs/v8-project-guide.md. Реестр семьи: tests/skills/check-inline-drift.mjs.
+    """
+    try:
+        pj = _sg_find_v8project(os.path.abspath(cfg_dir or ".")) or _sg_find_v8project(os.getcwd())
+        if not pj:
+            return "end"
+        proj = json.loads(open(pj, encoding="utf-8-sig").read())
+        proj_dir = os.path.dirname(pj)
+        cfg_full = os.path.normcase(os.path.abspath(cfg_dir or ".")).rstrip("\\/")
+        for db in proj.get("databases", []):
+            src = db.get("configSrc")
+            if src and db.get("newObjectPosition"):
+                src_full = os.path.normcase(os.path.abspath(os.path.join(proj_dir, src))).rstrip("\\/")
+                if cfg_full == src_full or cfg_full.startswith(src_full + os.sep):
+                    return "byName" if str(db["newObjectPosition"]).lower() == "byname" else "end"
+        if str(proj.get("newObjectPosition") or "").lower() == "byname":
+            return "byName"
+        return "end"
+    except Exception:
+        return "end"
+
+
+def compare_metadata_names(a, b):
+    """Порядок имён объектов метаданных, как в дереве Конфигуратора.
+
+    Ключ — пары «ранг+символ»: регистр не учитывается, подчёркивание раньше цифр, цифры раньше
+    букв, буквы по кодам (латиница раньше кириллицы), ё на месте е. Культурные таблицы не
+    используются — они разные на разных ОС и в разных рантаймах, а так оба порта сравнивают
+    одинаково везде. Равные ключи разводит ordinal-сравнение исходных строк.
+    Возвращает -1 | 0 | 1. Реестр семьи: tests/skills/check-inline-drift.mjs.
+    """
+    keys = []
+    for name in (a, b):
+        parts = []
+        for ch in name.lower():
+            if ch == "ё":
+                ch = "е"
+            if ch.isdigit():
+                parts.append("1" + ch)
+            elif ch.isalpha():
+                parts.append("2" + ch)
+            else:
+                parts.append("0" + ch)
+        keys.append("".join(parts))
+    if keys[0] != keys[1]:
+        return -1 if keys[0] < keys[1] else 1
+    if a != b:
+        return -1 if a < b else 1
+    return 0
+
+
 def register_in_childobjects(parent_xml_path, parent_tag, child_tag, child_name):
     """Регистрация объекта в <ChildObjects> родительского XML.
 
-    Общая реализация: эталон — meta-compile, копия — role-compile.
+    Общая реализация: эталон — meta-compile, копии — role-compile, xdto-compile.
     Реестр семьи: tests/skills/check-inline-drift.mjs.
     Возвращает исход: added | already | no-childobj | no-config.
     """
@@ -1109,6 +1170,20 @@ def register_in_childobjects(parent_xml_path, parent_tag, child_tag, child_name)
         new_content = config_content[:empty.start()] + replacement + config_content[empty.end():]
         write_utf8_bom(parent_xml_path, new_content)
         return 'added'
+
+    # byName: перед первым объектом того же вида, чьё имя больше нового. Subsystem — никогда:
+    # порядок подсистем в дереве задаёт порядок разделов в панели, пока их не перечислили в
+    # <SubsystemsOrder> файла Ext/CommandInterface.xml (платформа этот список сама не заводит).
+    if (child_tag != 'Subsystem'
+            and get_new_object_position(os.path.dirname(os.path.abspath(parent_xml_path))) == 'byName'):
+        line_rx = re.compile(rf'(?m)^([ \t]*)<{child_tag}>([^<]*)</{child_tag}>')
+        for m in line_rx.finditer(config_content, block.start(), block.end()):
+            if compare_metadata_names(m.group(2), child_name) > 0:
+                new_content = (config_content[:m.start()]
+                               + f'{m.group(1)}{entry}{eol}'
+                               + config_content[m.start():])
+                write_utf8_bom(parent_xml_path, new_content)
+                return 'added'
 
     close_same = f'</{child_tag}>'
     last_same = config_content.rfind(close_same, block.start(), block.end())

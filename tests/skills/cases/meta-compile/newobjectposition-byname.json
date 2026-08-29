@@ -1,0 +1,18 @@
+{
+  "name": "newObjectPosition=byName: справочник встаёт между соседями по имени, а не в конец вида",
+  "setup": "fixture:newobjectposition",
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "newObjectPosition": "byName", "databases": [] } } }
+  ],
+  "cwd": "workDir",
+  "input": { "type": "Catalog", "name": "Бета" },
+  "validatePath": "Catalogs/Бета",
+  "expect": {
+    "files": ["Catalogs/Бета.xml"],
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Бета</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>"
+    },
+    "preserves": { "file": "Configuration.xml", "bom": true, "eol": "crlf", "encoding": "UTF-8", "finalNewline": false, "noCR13": true }
+  }
+}

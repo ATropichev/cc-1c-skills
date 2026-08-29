@@ -1,0 +1,23 @@
+{
+  "name": "add-childObject при newObjectPosition=byName: объект возвращается на место по имени (список предварительно упорядочен)",
+  "setup": "fixture:unsorted-childobjects",
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "newObjectPosition": "byName", "databases": [] } } },
+    {
+      "script": "cf-edit/scripts/cf-edit",
+      "args": { "-ConfigPath": "{workDir}", "-Operation": "sort-childObjects", "-Value": "Catalog" }
+    },
+    {
+      "script": "cf-edit/scripts/cf-edit",
+      "args": { "-ConfigPath": "{workDir}", "-Operation": "remove-childObject", "-Value": "Catalog.Бета" }
+    }
+  ],
+  "cwd": "workDir",
+  "input": [ { "operation": "add-childObject", "value": "Catalog.Бета" } ],
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Бета</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>"
+    }
+  }
+}
