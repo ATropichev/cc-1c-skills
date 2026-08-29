@@ -1,0 +1,12 @@
+{
+  "name": "sort-childObjects по явно названным видам сортирует и общие реквизиты, и группы команд",
+  "setup": "fixture:order-sensitive",
+  "input": [ { "operation": "sort-childObjects", "value": "CommonAttribute ;; CommandGroup" } ],
+  "expect": {
+    "stdoutContains": ["Sorted: CommonAttribute (2)", "Sorted: CommandGroup (2)"],
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Catalog>Гамма</Catalog>\r\n\t\t\t<Catalog>Альфа</Catalog>\r\n\t\t\t<CommandGroup>ГруппаБанан</CommandGroup>\r\n\t\t\t<CommandGroup>ГруппаЯблоко</CommandGroup>\r\n\t\t\t<CommonAttribute>РеквизитА</CommonAttribute>\r\n\t\t\t<CommonAttribute>РеквизитЯ</CommonAttribute>"
+    }
+  }
+}

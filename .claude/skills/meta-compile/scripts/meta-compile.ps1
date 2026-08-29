@@ -5268,6 +5268,19 @@ function Get-NewObjectPosition([string]$cfgDir) {
 	} catch { return "end" }
 }
 
+# Виды, у которых порядок в дереве несёт смысл: автоматически их не упорядочиваем.
+# CommonAttribute — исключение самого стандарта (#std467): у общих реквизитов-разделителей
+# порядок в дереве задаёт порядок установки параметров сеанса. Subsystem и CommandGroup:
+# пока они не перечислены в <SubsystemsOrder> / <GroupsOrder> файла Ext/CommandInterface.xml,
+# порядок дерева задаёт порядок в интерфейсе, а платформа эти списки сама не заводит
+# (в выгрузке ACC вне GroupsOrder 15 живых групп из 39). Language: порядок языков задаёт
+# порядок <v8:item> в мультиязычных строках по всей выгрузке.
+# Явно названный вид сортируется в любом случае.
+# Реестр семьи: tests/skills/check-inline-drift.mjs.
+function Test-OrderSensitiveType([string]$typeName) {
+	return @("CommonAttribute", "Subsystem", "CommandGroup", "Language") -ccontains $typeName
+}
+
 # Порядок имён объектов метаданных, как в дереве Конфигуратора.
 # Ключ — пары «ранг+символ»: регистр не учитывается, подчёркивание раньше цифр, цифры раньше
 # букв, буквы по кодам (латиница раньше кириллицы), ё на месте е. Культурные таблицы не
@@ -5336,10 +5349,9 @@ function Register-InChildObjects([string]$ParentXmlPath, [string]$ParentTag, [st
 		return "added"
 	}
 
-	# byName: перед первым объектом того же вида, чьё имя больше нового. Subsystem — никогда:
-	# порядок подсистем в дереве задаёт порядок разделов в панели, пока их не перечислили в
-	# <SubsystemsOrder> файла Ext/CommandInterface.xml (платформа этот список сама не заводит).
-	if ($ChildTag -cne "Subsystem" -and (Get-NewObjectPosition ([System.IO.Path]::GetDirectoryName([System.IO.Path]::GetFullPath($ParentXmlPath)))) -eq "byName") {
+	# byName: перед первым объектом того же вида, чьё имя больше нового.
+	# Виды с осмысленным порядком в дереве пропускаем — см. Test-OrderSensitiveType.
+	if (-not (Test-OrderSensitiveType $ChildTag) -and (Get-NewObjectPosition ([System.IO.Path]::GetDirectoryName([System.IO.Path]::GetFullPath($ParentXmlPath)))) -eq "byName") {
 		$lineRx = [regex]"(?m)^([ \t]*)<$ChildTag>([^<]*)</$ChildTag>"
 		$m = $lineRx.Match($configContent, $block.Index, $block.Length)
 		while ($m.Success) {

@@ -466,6 +466,14 @@ const FAMILIES = [
     ],
   },
   {
+    name: 'ChildObjects: виды с осмысленным порядком',
+    py: 'is_order_sensitive_type', ps1: 'Test-OrderSensitiveType',
+    variants: [
+      { id: 'base', authority: 'meta-compile',
+        consumers: ['cf-edit', 'cfe-borrow', 'role-compile', 'xdto-compile'] },
+    ],
+  },
+  {
     name: 'ChildObjects: порядок имён объектов',
     py: 'compare_metadata_names', ps1: 'Compare-MetadataNames',
     variants: [

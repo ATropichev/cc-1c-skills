@@ -2291,6 +2291,19 @@ function Get-NewObjectPosition([string]$cfgDir) {
 	} catch { return "end" }
 }
 
+# Виды, у которых порядок в дереве несёт смысл: автоматически их не упорядочиваем.
+# CommonAttribute — исключение самого стандарта (#std467): у общих реквизитов-разделителей
+# порядок в дереве задаёт порядок установки параметров сеанса. Subsystem и CommandGroup:
+# пока они не перечислены в <SubsystemsOrder> / <GroupsOrder> файла Ext/CommandInterface.xml,
+# порядок дерева задаёт порядок в интерфейсе, а платформа эти списки сама не заводит
+# (в выгрузке ACC вне GroupsOrder 15 живых групп из 39). Language: порядок языков задаёт
+# порядок <v8:item> в мультиязычных строках по всей выгрузке.
+# Явно названный вид сортируется в любом случае.
+# Реестр семьи: tests/skills/check-inline-drift.mjs.
+function Test-OrderSensitiveType([string]$typeName) {
+	return @("CommonAttribute", "Subsystem", "CommandGroup", "Language") -ccontains $typeName
+}
+
 # Порядок имён объектов метаданных, как в дереве Конфигуратора.
 # Ключ — пары «ранг+символ»: регистр не учитывается, подчёркивание раньше цифр, цифры раньше
 # букв, буквы по кодам (латиница раньше кириллицы), ё на месте е. Культурные таблицы не
@@ -2348,7 +2361,7 @@ function Add-ToChildObjects {
 	# заимствует Конфигуратор: в боевых выгрузках расширений ChildObjects не отсортирован.
 	# Subsystem по имени не упорядочиваем никогда: порядок подсистем в дереве задаёт порядок
 	# разделов в панели.
-	$byName = ($typeName -cne "Subsystem" -and (Get-NewObjectPosition $extDir) -eq "byName")
+	$byName = (-not (Test-OrderSensitiveType $typeName) -and (Get-NewObjectPosition $extDir) -eq "byName")
 	$insertBefore = $null
 	$lastSameType = $null
 

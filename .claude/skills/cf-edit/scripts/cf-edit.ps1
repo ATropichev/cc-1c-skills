@@ -490,6 +490,19 @@ function Get-NewObjectPosition([string]$cfgDir) {
 	} catch { return "end" }
 }
 
+# Виды, у которых порядок в дереве несёт смысл: автоматически их не упорядочиваем.
+# CommonAttribute — исключение самого стандарта (#std467): у общих реквизитов-разделителей
+# порядок в дереве задаёт порядок установки параметров сеанса. Subsystem и CommandGroup:
+# пока они не перечислены в <SubsystemsOrder> / <GroupsOrder> файла Ext/CommandInterface.xml,
+# порядок дерева задаёт порядок в интерфейсе, а платформа эти списки сама не заводит
+# (в выгрузке ACC вне GroupsOrder 15 живых групп из 39). Language: порядок языков задаёт
+# порядок <v8:item> в мультиязычных строках по всей выгрузке.
+# Явно названный вид сортируется в любом случае.
+# Реестр семьи: tests/skills/check-inline-drift.mjs.
+function Test-OrderSensitiveType([string]$typeName) {
+	return @("CommonAttribute", "Subsystem", "CommandGroup", "Language") -ccontains $typeName
+}
+
 # Порядок имён объектов метаданных, как в дереве Конфигуратора.
 # Ключ — пары «ранг+символ»: регистр не учитывается, подчёркивание раньше цифр, цифры раньше
 # букв, буквы по кодам (латиница раньше кириллицы), ё на месте е. Культурные таблицы не
@@ -568,7 +581,7 @@ function Do-SortChildObjects([string]$batchVal) {
 		[void]$groups[$ln].Add($child)
 	}
 
-	$targets = if ($requested.Count -gt 0) { $requested } else { @($groups.Keys | Where-Object { $_ -cne 'Subsystem' }) }
+	$targets = if ($requested.Count -gt 0) { $requested } else { @($groups.Keys | Where-Object { -not (Test-OrderSensitiveType $_) }) }
 	foreach ($typeName in $targets) {
 		if (-not $groups.Contains($typeName)) { continue }
 		$els = $groups[$typeName]
@@ -685,7 +698,7 @@ To create a new $typeName, use $hintSkill (auto-registers in Configuration.xml):
 		}
 
 		# Место вставки. Вид — по $script:typeOrder; внутри вида — по newObjectPosition.
-		$byName = ($typeName -cne "Subsystem" -and (Get-NewObjectPosition $script:configDir) -eq "byName")
+		$byName = (-not (Test-OrderSensitiveType $typeName) -and (Get-NewObjectPosition $script:configDir) -eq "byName")
 		$insertBefore = $null
 		$lastSameType = $null
 		$firstLaterType = $null

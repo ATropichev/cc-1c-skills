@@ -386,6 +386,21 @@ def get_new_object_position(cfg_dir):
         return "end"
 
 
+def is_order_sensitive_type(type_name):
+    """Виды, у которых порядок в дереве несёт смысл: автоматически их не упорядочиваем.
+
+    CommonAttribute — исключение самого стандарта (#std467): у общих реквизитов-разделителей
+    порядок в дереве задаёт порядок установки параметров сеанса. Subsystem и CommandGroup:
+    пока они не перечислены в <SubsystemsOrder> / <GroupsOrder> файла Ext/CommandInterface.xml,
+    порядок дерева задаёт порядок в интерфейсе, а платформа эти списки сама не заводит
+    (в выгрузке ACC вне GroupsOrder 15 живых групп из 39). Language: порядок языков задаёт
+    порядок <v8:item> в мультиязычных строках по всей выгрузке.
+    Явно названный вид сортируется в любом случае.
+    Реестр семьи: tests/skills/check-inline-drift.mjs.
+    """
+    return type_name in ("CommonAttribute", "Subsystem", "CommandGroup", "Language")
+
+
 def compare_metadata_names(a, b):
     """Порядок имён объектов метаданных, как в дереве Конфигуратора.
 
@@ -795,7 +810,7 @@ def main():
             # end (по умолчанию) кладёт после последнего объекта того же вида, byName — по имени.
             # Subsystem по имени не упорядочиваем никогда: порядок подсистем в дереве задаёт
             # порядок разделов в панели, пока их не перечислили в <SubsystemsOrder>.
-            by_name = (type_name != "Subsystem"
+            by_name = (not is_order_sensitive_type(type_name)
                        and get_new_object_position(config_dir) == "byName")
             insert_before = None
             last_same = None
@@ -867,7 +882,7 @@ def main():
                 continue
             groups.setdefault(localname(child), []).append(child)
 
-        targets = requested or [t for t in groups if t != "Subsystem"]
+        targets = requested or [t for t in groups if not is_order_sensitive_type(t)]
         for type_name in targets:
             els = groups.get(type_name, [])
             if len(els) < 2:
