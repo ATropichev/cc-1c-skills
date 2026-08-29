@@ -460,16 +460,16 @@ function Do-ModifyProperty([string]$batchVal) {
 # databases[].newObjectPosition базы, чей configSrc охватывает каталог родительского XML,
 # иначе корневое поле, иначе end. Значения: end — после последнего объекта того же вида
 # (так дописывает Конфигуратор); byName — по имени среди объектов того же вида.
-# Файл ищем от каталога конфигурации и лишь потом от cwd — в отличие от support-guard:
-# настройка принадлежит выгрузке, а рабочим каталогом при вызове навыка почти всегда
-# оказывается чужой проект со своим .v8-project.json, и он перекрыл бы нужный.
+# Файл ищем от рабочего каталога вверх, каталог конфигурации — запасной путь: так же
+# его ищут support-guard и группа db-*, а скрипт навыка зовут по абсолютному пути, и cwd
+# остаётся рабочим каталогом проекта.
 # configSrc считается от каталога .v8-project.json, как задокументировано в
 # docs/v8-project-guide.md. Реестр семьи: tests/skills/check-inline-drift.mjs.
 function Get-NewObjectPosition([string]$cfgDir) {
 	try {
 		if (-not $cfgDir) { $cfgDir = "." }
-		$pj = Find-V8Project ([System.IO.Path]::GetFullPath($cfgDir))
-		if (-not $pj) { $pj = Find-V8Project (Get-Location).Path }
+		$pj = Find-V8Project (Get-Location).Path
+		if (-not $pj) { $pj = Find-V8Project ([System.IO.Path]::GetFullPath($cfgDir)) }
 		if (-not $pj) { return "end" }
 		$proj = Get-Content -Raw $pj | ConvertFrom-Json
 		$projDir = [System.IO.Path]::GetDirectoryName($pj)
