@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cf-edit v1.25 — Edit 1C configuration root (Configuration.xml)
+# cf-edit v1.26 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -895,6 +895,27 @@ def main():
                 el.text = name
             modify_count += 1
             info(f"Sorted: {type_name} ({len(els)})")
+
+        if requested:
+            # Вид назван явно — точечная операция: взаимный порядок групп не трогаем.
+            return
+
+        # Без аргумента приводим в порядок и сами группы видов: собранная навыками
+        # конфигурация может держать их не в каноне, и первая же выгрузка платформы даст
+        # диф. Переставляем содержимое существующих узлов, а не узлы, поэтому отступы и
+        # структура файла не меняются — в дифе только перестановка строк.
+        elems = [c for c in child_objs_el if isinstance(c.tag, str)]
+        pairs = [(localname(c), c.text or "") for c in elems]
+        ranked = sorted(range(len(pairs)),
+                        key=lambda i: (TYPE_ORDER.index(pairs[i][0]) if pairs[i][0] in TYPE_ORDER else len(TYPE_ORDER), i))
+        wanted = [pairs[i] for i in ranked]
+        if wanted == pairs:
+            return
+        for el, (tag, text) in zip(elems, wanted):
+            el.tag = f'{{{MD_NS}}}{tag}'
+            el.text = text
+        modify_count += 1
+        info(f"Reordered type groups: {len(elems)} entries")
 
     def do_remove_child_object(batch_val):
         nonlocal remove_count

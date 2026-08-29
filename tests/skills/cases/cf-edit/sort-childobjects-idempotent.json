@@ -4,12 +4,21 @@
   "preRun": [
     {
       "script": "cf-edit/scripts/cf-edit",
-      "args": { "-ConfigPath": "{workDir}", "-Operation": "sort-childObjects" }
+      "args": {
+        "-ConfigPath": "{workDir}",
+        "-Operation": "sort-childObjects"
+      }
     }
   ],
-  "input": [ { "operation": "sort-childObjects" } ],
+  "input": [
+    {
+      "operation": "sort-childObjects"
+    }
+  ],
   "expect": {
-    "stdoutContains": ["Modified:      0"],
+    "stdoutContains": [
+      "Modified:      0"
+    ],
     "fileContains": {
       "file": "Configuration.xml",
       "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Бета</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>"

@@ -246,12 +246,13 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
-			<CommonAttribute>РеквизитЯ</CommonAttribute>
-			<CommonAttribute>РеквизитА</CommonAttribute>
-			<CommandGroup>ГруппаЯблоко</CommandGroup>
-			<CommandGroup>ГруппаБанан</CommandGroup>
 			<Catalog>Альфа</Catalog>
+			<Catalog>Бета</Catalog>
 			<Catalog>Гамма</Catalog>
+			<Role>Омега</Role>
+			<Role>Каппа</Role>
+			<Subsystem>Яблоко</Subsystem>
+			<Subsystem>Банан</Subsystem>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

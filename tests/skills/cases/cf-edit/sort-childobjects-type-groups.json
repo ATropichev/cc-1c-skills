@@ -1,0 +1,13 @@
+{
+  "name": "sort-childObjects без значения приводит в канон и сами группы видов",
+  "setup": "fixture:unsorted-childobjects",
+  "input": [ { "operation": "sort-childObjects" } ],
+  "expect": {
+    "stdoutContains": ["Reordered type groups: 8 entries"],
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Language>Русский</Language>\r\n\t\t\t<Subsystem>Яблоко</Subsystem>\r\n\t\t\t<Subsystem>Банан</Subsystem>\r\n\t\t\t<Role>Каппа</Role>\r\n\t\t\t<Role>Омега</Role>\r\n\t\t\t<Catalog>Альфа</Catalog>"
+    },
+    "preserves": { "file": "Configuration.xml", "bom": true, "eol": "crlf", "encoding": "UTF-8", "finalNewline": false, "noCR13": true, "selfClose": "tight", "noEmptyPairs": true }
+  }
+}

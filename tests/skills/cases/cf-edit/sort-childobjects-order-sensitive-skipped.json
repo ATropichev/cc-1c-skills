@@ -1,12 +1,18 @@
 {
   "name": "sort-childObjects без значения не трогает виды с осмысленным порядком: CommonAttribute, CommandGroup, Language",
   "setup": "fixture:order-sensitive",
-  "input": [ { "operation": "sort-childObjects" } ],
+  "input": [
+    {
+      "operation": "sort-childObjects"
+    }
+  ],
   "expect": {
-    "stdoutContains": ["Sorted: Catalog (2)"],
+    "stdoutContains": [
+      "Sorted: Catalog (2)"
+    ],
     "fileContains": {
       "file": "Configuration.xml",
-      "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>\r\n\t\t\t<CommandGroup>ГруппаЯблоко</CommandGroup>\r\n\t\t\t<CommandGroup>ГруппаБанан</CommandGroup>\r\n\t\t\t<CommonAttribute>РеквизитЯ</CommonAttribute>\r\n\t\t\t<CommonAttribute>РеквизитА</CommonAttribute>"
+      "text": "<CommonAttribute>РеквизитЯ</CommonAttribute>\r\n\t\t\t<CommonAttribute>РеквизитА</CommonAttribute>\r\n\t\t\t<CommandGroup>ГруппаЯблоко</CommandGroup>\r\n\t\t\t<CommandGroup>ГруппаБанан</CommandGroup>\r\n\t\t\t<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>"
     }
   }
 }

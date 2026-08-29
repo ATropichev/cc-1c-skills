@@ -1,4 +1,4 @@
-﻿# cf-edit v1.25 — Edit 1C configuration root (Configuration.xml)
+﻿# cf-edit v1.26 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -595,6 +595,44 @@ function Do-SortChildObjects([string]$batchVal) {
 		$script:modifyCount++
 		Info "Sorted: $typeName ($($els.Count))"
 	}
+
+	if ($requested.Count -gt 0) { return }
+
+	# Без аргумента приводим в порядок и сами группы видов: собранная навыками конфигурация
+	# может держать их не в каноне, и первая же выгрузка платформы даст диф. Переставляем
+	# содержимое существующих узлов, а не узлы, поэтому отступы и структура файла не меняются —
+	# в дифе только перестановка строк. Имя тега у XmlElement неизменяемо, поэтому там, где вид
+	# меняется, узел заменяется через ReplaceChild: он сохраняет окружающие пробельные узлы.
+	$elems = @()
+	foreach ($child in $script:childObjsEl.ChildNodes) {
+		if ($child.NodeType -eq 'Element') { $elems += $child }
+	}
+	$tags = @(); $texts = @()
+	foreach ($e in $elems) { $tags += $e.get_LocalName(); $texts += $e.InnerText }
+	$rank = @()
+	for ($i = 0; $i -lt $tags.Count; $i++) {
+		$r = $script:typeOrder.IndexOf($tags[$i])
+		if ($r -lt 0) { $r = $script:typeOrder.Count }
+		$rank += $r
+	}
+	# Порядок стабильный: вторым ключом идёт исходная позиция
+	$order = @(0..($tags.Count - 1) | Sort-Object @{e={$rank[$_]}}, @{e={$_}})
+	$same = $true
+	for ($i = 0; $i -lt $order.Count; $i++) { if ($order[$i] -ne $i) { $same = $false; break } }
+	if ($same) { return }
+
+	for ($i = 0; $i -lt $elems.Count; $i++) {
+		$srcIdx = $order[$i]
+		if ($tags[$i] -ceq $tags[$srcIdx]) {
+			$elems[$i].InnerText = $texts[$srcIdx]
+			continue
+		}
+		$newEl = $script:xmlDoc.CreateElement($tags[$srcIdx], $script:mdNs)
+		$newEl.InnerText = $texts[$srcIdx]
+		[void]$script:childObjsEl.ReplaceChild($newEl, $elems[$i])
+	}
+	$script:modifyCount++
+	Info "Reordered type groups: $($elems.Count) entries"
 }
 
 # Стиль существующего файла для round-trip-сохранения: BOM / EOL / регистр encoding /

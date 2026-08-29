@@ -1,5 +1,5 @@
 {
-  "name": "sort-childObjects без значения: справочники и роли упорядочены, подсистемы не тронуты",
+  "name": "sort-childObjects без значения: имена внутри видов упорядочены, группы видов приведены к канону, подсистемы по имени не тронуты",
   "setup": "fixture:unsorted-childobjects",
   "input": [
     {
@@ -9,11 +9,12 @@
   "expect": {
     "stdoutContains": [
       "Sorted: Catalog (3)",
-      "Sorted: Role (2)"
+      "Sorted: Role (2)",
+      "Reordered type groups"
     ],
     "fileContains": {
       "file": "Configuration.xml",
-      "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Бета</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>\r\n\t\t\t<Role>Каппа</Role>\r\n\t\t\t<Role>Омега</Role>\r\n\t\t\t<Subsystem>Яблоко</Subsystem>\r\n\t\t\t<Subsystem>Банан</Subsystem>"
+      "text": "<Language>Русский</Language>\r\n\t\t\t<Subsystem>Яблоко</Subsystem>\r\n\t\t\t<Subsystem>Банан</Subsystem>\r\n\t\t\t<Role>Каппа</Role>\r\n\t\t\t<Role>Омега</Role>\r\n\t\t\t<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Бета</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>"
     },
     "preserves": {
       "file": "Configuration.xml",

@@ -246,13 +246,13 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
+			<Subsystem>Яблоко</Subsystem>
+			<Subsystem>Банан</Subsystem>
+			<Role>Каппа</Role>
+			<Role>Омега</Role>
 			<Catalog>Альфа</Catalog>
 			<Catalog>Бета</Catalog>
 			<Catalog>Гамма</Catalog>
-			<Role>Каппа</Role>
-			<Role>Омега</Role>
-			<Subsystem>Яблоко</Subsystem>
-			<Subsystem>Банан</Subsystem>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

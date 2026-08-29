@@ -1,0 +1,12 @@
+{
+  "name": "sort-childObjects с явным видом порядок групп не трогает — операция остаётся точечной",
+  "setup": "fixture:unsorted-childobjects",
+  "input": [ { "operation": "sort-childObjects", "value": "Catalog" } ],
+  "expect": {
+    "stdoutContains": ["Sorted: Catalog (3)"],
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Catalog>Гамма</Catalog>\r\n\t\t\t<Role>Омега</Role>\r\n\t\t\t<Role>Каппа</Role>\r\n\t\t\t<Subsystem>Яблоко</Subsystem>"
+    }
+  }
+}
