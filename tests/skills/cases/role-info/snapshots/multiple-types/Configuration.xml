@@ -246,10 +246,10 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
+			<Role>Комплексная</Role>
 			<Catalog>Товары</Catalog>
 			<Document>Продажа</Document>
 			<InformationRegister>Цены</InformationRegister>
-			<Role>Комплексная</Role>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

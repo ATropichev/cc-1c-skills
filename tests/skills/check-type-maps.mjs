@@ -53,6 +53,12 @@ const MAPS = [
   { skill: 'cf-validate', file: 'cf-validate', kind: 'order', py: 'CHILD_OBJECT_TYPES', ps1: '$childObjectTypes' },
   { skill: 'cfe-validate', file: 'cfe-validate', kind: 'order', py: 'CHILD_OBJECT_TYPES', ps1: '$childObjectTypes' },
   { skill: 'cfe-borrow', file: 'cfe-borrow', kind: 'order', py: 'TYPE_ORDER', ps1: '$script:typeOrder' },
+  // Навыки-создатели: список нужен, чтобы новая группа вида встала на своё место, а не в конец
+  // блока — иначе платформа переставит её при первой же выгрузке.
+  { skill: 'meta-compile', file: 'meta-compile', kind: 'order', py: 'CHILD_OBJECT_TYPES', ps1: '$childObjectTypes' },
+  { skill: 'role-compile', file: 'role-compile', kind: 'order', py: 'CHILD_OBJECT_TYPES', ps1: '$childObjectTypes' },
+  { skill: 'xdto-compile', file: 'xdto-compile', kind: 'order', py: 'CHILD_OBJECT_TYPES', ps1: '$childObjectTypes' },
+  { skill: 'subsystem-compile', file: 'subsystem-compile', kind: 'order', py: 'CHILD_OBJECT_TYPES', ps1: '$childObjectTypes' },
 
   // ключи — канонические имена
   { skill: 'cf-info', file: 'cf-info', kind: 'keys', py: 'type_ru_names', ps1: '$typeRuNames' },

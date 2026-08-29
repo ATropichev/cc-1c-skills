@@ -246,8 +246,8 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
-			<Document>РеализацияТоваров</Document>
 			<Role>РедакторДокументов</Role>
+			<Document>РеализацияТоваров</Document>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

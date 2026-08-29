@@ -246,8 +246,8 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
-			<Catalog>Контрагенты</Catalog>
 			<Role>ЧтениеКонтрагентов</Role>
+			<Catalog>Контрагенты</Catalog>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

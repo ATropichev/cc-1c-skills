@@ -246,9 +246,9 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
-			<HTTPService>ВнешнийAPI</HTTPService>
-			<WebService>ОбменДанными</WebService>
 			<Role>ДоступКСервисам</Role>
+			<WebService>ОбменДанными</WebService>
+			<HTTPService>ВнешнийAPI</HTTPService>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

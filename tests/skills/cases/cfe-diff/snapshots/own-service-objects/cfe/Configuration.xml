@@ -66,8 +66,8 @@
 		<ChildObjects>
 			<Language>Русский</Language>
 			<Role>Сервисы_ОсновнаяРоль</Role>
-			<HTTPService>Сервисы_API</HTTPService>
 			<XDTOPackage>Сервисы_Пакет</XDTOPackage>
+			<HTTPService>Сервисы_API</HTTPService>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

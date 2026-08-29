@@ -264,8 +264,8 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
-			<Enum>ВидыЦен</Enum>
 			<Catalog>Товары</Catalog>
+			<Enum>ВидыЦен</Enum>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

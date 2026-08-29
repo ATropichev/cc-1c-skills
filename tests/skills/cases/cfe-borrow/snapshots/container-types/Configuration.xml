@@ -246,14 +246,14 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
-			<Document>Накладная</Document>
-			<Report>ОстаткиТоваров</Report>
-			<DocumentJournal>Складские</DocumentJournal>
-			<Sequence>ПартионныйУчет</Sequence>
-			<HTTPService>ОбменДанными</HTTPService>
-			<WebService>СервисОбмена</WebService>
 			<FilterCriterion>ПоКонтрагенту</FilterCriterion>
+			<WebService>СервисОбмена</WebService>
+			<HTTPService>ОбменДанными</HTTPService>
 			<SettingsStorage>ХранилищеОтчетов</SettingsStorage>
+			<Document>Накладная</Document>
+			<Sequence>ПартионныйУчет</Sequence>
+			<DocumentJournal>Складские</DocumentJournal>
+			<Report>ОстаткиТоваров</Report>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

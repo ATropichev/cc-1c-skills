@@ -1,0 +1,15 @@
+{
+  "name": "Корневая подсистема встаёт в канонический порядок видов (сразу за языками)",
+  "setup": "fixture:canonical-group",
+  "cwd": "workDir",
+  "input": {
+    "name": "Дельта"
+  },
+  "validatePath": "Subsystems/Дельта",
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Language>Русский</Language>\r\n\t\t\t<Subsystem>Дельта</Subsystem>\r\n\t\t\t<CommonModule>МойМодуль</CommonModule>"
+    }
+  }
+}

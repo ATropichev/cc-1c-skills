@@ -246,9 +246,9 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
+			<Role>ЧтениеНоменклатуры</Role>
 			<Catalog>Номенклатура</Catalog>
 			<DataProcessor>Загрузка</DataProcessor>
-			<Role>ЧтениеНоменклатуры</Role>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

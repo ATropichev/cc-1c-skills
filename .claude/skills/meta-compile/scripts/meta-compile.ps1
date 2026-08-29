@@ -1,4 +1,4 @@
-﻿# meta-compile v1.100 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.101 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -5311,6 +5311,25 @@ function Compare-MetadataNames([string]$a, [string]$b) {
 # Регистрация объекта в <ChildObjects> родительского XML. Общая реализация: эталон —
 # meta-compile, копии — role-compile, xdto-compile. Реестр семьи: tests/skills/check-inline-drift.mjs.
 # Возвращает исход: added | already | no-childobj | no-config.
+# Канонический порядок видов в <ChildObjects> — эталон в docs/1c-configuration-spec.md,
+# таблица «Порядок типов в ChildObjects». Нужен, чтобы новая группа вида вставала на своё
+# место: иначе платформа переставит её при первой же выгрузке и даст диф на ровном месте.
+# Реестр карт: tests/skills/check-type-maps.mjs.
+$childObjectTypes = @(
+	"Language","Subsystem","StyleItem","Style",
+	"CommonPicture","SessionParameter","Role","CommonTemplate",
+	"FilterCriterion","CommonModule","CommonAttribute","ExchangePlan",
+	"XDTOPackage","WebService","HTTPService","WSReference",
+	"EventSubscription","ScheduledJob","SettingsStorage","FunctionalOption",
+	"FunctionalOptionsParameter","DefinedType","Bot","PaletteColor","CommonCommand","CommandGroup",
+	"Constant","CommonForm","Catalog","Document",
+	"DocumentNumerator","Sequence","DocumentJournal","Enum",
+	"Report","DataProcessor","InformationRegister","AccumulationRegister",
+	"ChartOfCharacteristicTypes","ChartOfAccounts","AccountingRegister",
+	"ChartOfCalculationTypes","CalculationRegister",
+	"BusinessProcess","Task","IntegrationService"
+)
+
 function Register-InChildObjects([string]$ParentXmlPath, [string]$ParentTag, [string]$ChildTag, [string]$ChildName) {
 	if (-not (Test-Path $ParentXmlPath)) { return "no-config" }
 
@@ -5372,10 +5391,28 @@ function Register-InChildObjects([string]$ParentXmlPath, [string]$ParentTag, [st
 		$insertAt = $lastSame + $closeSame.Length
 		$newContent = $configContent.Substring(0, $insertAt) + "$eol`t`t`t$entry" + $configContent.Substring($insertAt)
 	} else {
-		# Объектов этого вида ещё нет: новая строка перед </ChildObjects>,
-		# отступ закрывающего тега переиспользуется
-		$closeAt = $configContent.LastIndexOf("</ChildObjects>", $blockEnd - 1, $block.Length, [System.StringComparison]::Ordinal)
-		$newContent = $configContent.Substring(0, $closeAt) + "`t$entry$eol`t`t" + $configContent.Substring($closeAt)
+		# Группы своего вида ещё нет: ставим её в канонический порядок видов — перед первой
+		# группой вида старше по $childObjectTypes. Дописать в конец блока нельзя: платформа
+		# переставит группу при первой же выгрузке и даст диф на ровном месте.
+		$ownIdx = $childObjectTypes.IndexOf($ChildTag)
+		$anchor = $null
+		if ($ownIdx -ge 0) {
+			$typeRx = [regex]"(?m)^([ \t]*)<(\w+)>[^<]*</\2>"
+			$tm = $typeRx.Match($configContent, $block.Index, $block.Length)
+			while ($tm.Success) {
+				$otherIdx = $childObjectTypes.IndexOf($tm.Groups[2].Value)
+				if ($otherIdx -gt $ownIdx) { $anchor = $tm; break }
+				$tm = $tm.NextMatch()
+			}
+		}
+		if ($anchor) {
+			$newContent = $configContent.Substring(0, $anchor.Index) + $anchor.Groups[1].Value + $entry + $eol + $configContent.Substring($anchor.Index)
+		} else {
+			# Видов старше в файле нет — новая строка перед </ChildObjects>,
+			# отступ закрывающего тега переиспользуется
+			$closeAt = $configContent.LastIndexOf("</ChildObjects>", $blockEnd - 1, $block.Length, [System.StringComparison]::Ordinal)
+			$newContent = $configContent.Substring(0, $closeAt) + "`t$entry$eol`t`t" + $configContent.Substring($closeAt)
+		}
 	}
 	[System.IO.File]::WriteAllText($ParentXmlPath, $newContent, $enc)
 	return "added"

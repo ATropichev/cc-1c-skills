@@ -246,8 +246,8 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
-			<HTTPService>ВнешнийAPI</HTTPService>
 			<Role>ДоступКAPI</Role>
+			<HTTPService>ВнешнийAPI</HTTPService>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

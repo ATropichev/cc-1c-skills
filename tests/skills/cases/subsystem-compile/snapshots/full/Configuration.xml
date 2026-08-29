@@ -246,9 +246,9 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
+			<Subsystem>Продажи</Subsystem>
 			<Catalog>Товары</Catalog>
 			<Report>ОтчетПоПродажам</Report>
-			<Subsystem>Продажи</Subsystem>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

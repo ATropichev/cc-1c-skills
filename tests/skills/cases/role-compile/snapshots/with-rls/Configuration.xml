@@ -246,9 +246,9 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
+			<Role>ЧтениеДокументовПоОрганизации</Role>
 			<Catalog>Организации</Catalog>
 			<Document>РеализацияТоваровУслуг</Document>
-			<Role>ЧтениеДокументовПоОрганизации</Role>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

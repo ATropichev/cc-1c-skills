@@ -1,0 +1,14 @@
+{
+  "name": "Первый объект нового вида встаёт в канонический порядок видов, а не в конец блока",
+  "setup": "fixture:newobjectposition",
+  "cwd": "workDir",
+  "input": { "type": "CommonModule", "name": "МойМодуль" },
+  "validatePath": "CommonModules/МойМодуль",
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Language>Русский</Language>\r\n\t\t\t<CommonModule>МойМодуль</CommonModule>\r\n\t\t\t<Catalog>Альфа</Catalog>"
+    },
+    "preserves": { "file": "Configuration.xml", "bom": true, "eol": "crlf", "encoding": "UTF-8", "finalNewline": false, "noCR13": true }
+  }
+}

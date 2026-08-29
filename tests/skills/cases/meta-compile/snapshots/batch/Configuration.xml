@@ -246,9 +246,9 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
-			<Enum>Статусы</Enum>
-			<Catalog>Валюты</Catalog>
 			<Constant>ОсновнаяВалюта</Constant>
+			<Catalog>Валюты</Catalog>
+			<Enum>Статусы</Enum>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

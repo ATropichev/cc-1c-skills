@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.31 — Create 1C subsystem from JSON definition
+﻿# subsystem-compile v1.32 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -677,6 +677,25 @@ if ($children.Count -gt 0) {
 # внутри подсистемы нечего — потомок там всегда один и тот же.
 # Реестр семьи: tests/skills/check-inline-drift.mjs.
 # Возвращает исход: added | already | no-childobj | no-config.
+# Канонический порядок видов в <ChildObjects> — эталон в docs/1c-configuration-spec.md,
+# таблица «Порядок типов в ChildObjects». Нужен, чтобы новая группа вида вставала на своё
+# место: иначе платформа переставит её при первой же выгрузке и даст диф на ровном месте.
+# Реестр карт: tests/skills/check-type-maps.mjs.
+$childObjectTypes = @(
+	"Language","Subsystem","StyleItem","Style",
+	"CommonPicture","SessionParameter","Role","CommonTemplate",
+	"FilterCriterion","CommonModule","CommonAttribute","ExchangePlan",
+	"XDTOPackage","WebService","HTTPService","WSReference",
+	"EventSubscription","ScheduledJob","SettingsStorage","FunctionalOption",
+	"FunctionalOptionsParameter","DefinedType","Bot","PaletteColor","CommonCommand","CommandGroup",
+	"Constant","CommonForm","Catalog","Document",
+	"DocumentNumerator","Sequence","DocumentJournal","Enum",
+	"Report","DataProcessor","InformationRegister","AccumulationRegister",
+	"ChartOfCharacteristicTypes","ChartOfAccounts","AccountingRegister",
+	"ChartOfCalculationTypes","CalculationRegister",
+	"BusinessProcess","Task","IntegrationService"
+)
+
 function Register-InChildObjects([string]$ParentXmlPath, [string]$ParentTag, [string]$ChildTag, [string]$ChildName) {
 	if (-not (Test-Path $ParentXmlPath)) { return "no-config" }
 
@@ -708,11 +727,33 @@ function Register-InChildObjects([string]$ParentXmlPath, [string]$ParentTag, [st
 		$replacement = "<ChildObjects>$eol`t`t`t$entry$eol`t`t</ChildObjects>"
 		$rawText = $rawText.Substring(0, $empty.Index) + $replacement + $rawText.Substring($empty.Index + $empty.Length)
 	} else {
-		# Отступ вставки берём у закрывающего тега +1 уровень: подстановка по голому
-		# '</ChildObjects>' удваивала бы уже присутствующий отступ строки.
-		$cm = [regex]::Match($rawText, '([ 	]*)</ChildObjects>')
-		if (-not $cm.Success) { return "no-childobj" }
-		$rawText = $rawText.Substring(0, $cm.Index) + $cm.Groups[1].Value + "`t" + $entry + $eol + $cm.Groups[1].Value + "</ChildObjects>" + $rawText.Substring($cm.Index + $cm.Length)
+		# В корне подсистема встаёт перед первой группой вида старше по $childObjectTypes:
+		# так она попадает и в канонический порядок видов, и в конец своей группы, если та уже
+		# есть. Дописать в конец блока нельзя вдвойне: платформа переставит новую группу при
+		# первой же выгрузке, а существующую подсистема покинула бы, уехав за виды ниже.
+		# Во вложенном Subsystem.xml порядок видов неприменим — потомок там всегда один.
+		$anchor = $null
+		if ($ParentTag -eq "Configuration") {
+			$ownIdx = $childObjectTypes.IndexOf($ChildTag)
+			if ($ownIdx -ge 0) {
+				$typeRx = [regex]"(?m)^([ \t]*)<(\w+)>[^<]*</\2>"
+				$tm = $typeRx.Match($rawText)
+				while ($tm.Success) {
+					$otherIdx = $childObjectTypes.IndexOf($tm.Groups[2].Value)
+					if ($otherIdx -gt $ownIdx) { $anchor = $tm; break }
+					$tm = $tm.NextMatch()
+				}
+			}
+		}
+		if ($anchor) {
+			$rawText = $rawText.Substring(0, $anchor.Index) + $anchor.Groups[1].Value + $entry + $eol + $rawText.Substring($anchor.Index)
+		} else {
+			# Отступ вставки берём у закрывающего тега +1 уровень: подстановка по голому
+			# '</ChildObjects>' удваивала бы уже присутствующий отступ строки.
+			$cm = [regex]::Match($rawText, '([ 	]*)</ChildObjects>')
+			if (-not $cm.Success) { return "no-childobj" }
+			$rawText = $rawText.Substring(0, $cm.Index) + $cm.Groups[1].Value + "`t" + $entry + $eol + $cm.Groups[1].Value + "</ChildObjects>" + $rawText.Substring($cm.Index + $cm.Length)
+		}
 	}
 
 	[System.IO.File]::WriteAllText($ParentXmlPath, $rawText, (New-Object System.Text.UTF8Encoding($true)))

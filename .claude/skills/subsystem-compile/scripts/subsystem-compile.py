@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-compile v1.31 — Create 1C subsystem from JSON definition
+# subsystem-compile v1.32 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -450,6 +450,26 @@ def write_child_subsystem_stub(child_path, child_name, format_version):
     write_utf8_bom(child_path, '\r\n'.join(lines))
 
 
+# Канонический порядок видов в <ChildObjects> — эталон в docs/1c-configuration-spec.md,
+# таблица «Порядок типов в ChildObjects». Нужен, чтобы новая группа вида вставала на своё
+# место: иначе платформа переставит её при первой же выгрузке и даст диф на ровном месте.
+# Реестр карт: tests/skills/check-type-maps.mjs.
+CHILD_OBJECT_TYPES = [
+    'Language', 'Subsystem', 'StyleItem', 'Style',
+    'CommonPicture', 'SessionParameter', 'Role', 'CommonTemplate',
+    'FilterCriterion', 'CommonModule', 'CommonAttribute', 'ExchangePlan',
+    'XDTOPackage', 'WebService', 'HTTPService', 'WSReference',
+    'EventSubscription', 'ScheduledJob', 'SettingsStorage', 'FunctionalOption',
+    'FunctionalOptionsParameter', 'DefinedType', 'Bot', 'PaletteColor', 'CommonCommand', 'CommandGroup',
+    'Constant', 'CommonForm', 'Catalog', 'Document',
+    'DocumentNumerator', 'Sequence', 'DocumentJournal', 'Enum',
+    'Report', 'DataProcessor', 'InformationRegister', 'AccumulationRegister',
+    'ChartOfCharacteristicTypes', 'ChartOfAccounts', 'AccountingRegister',
+    'ChartOfCalculationTypes', 'CalculationRegister',
+    'BusinessProcess', 'Task', 'IntegrationService',
+]
+
+
 def register_in_childobjects(parent_xml_path, parent_tag, child_tag, child_name):
     """Регистрация объекта в <ChildObjects> родительского XML.
 
@@ -494,14 +514,32 @@ def register_in_childobjects(parent_xml_path, parent_tag, child_tag, child_name)
         replacement = '<ChildObjects>' + eol + f'\t\t\t{entry}' + eol + '\t\t</ChildObjects>'
         raw_text = raw_text[:empty.start()] + replacement + raw_text[empty.end():]
     else:
-        # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
-        # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
-        # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
-        cm = re.search(r'([ \t]*)</ChildObjects>', raw_text)
-        if cm is None:
-            return 'no-childobj'
-        raw_text = (raw_text[:cm.start()] + cm.group(1) + '\t' + entry + eol
-                    + cm.group(1) + '</ChildObjects>' + raw_text[cm.end():])
+        # В корне подсистема встаёт перед первой группой вида старше по CHILD_OBJECT_TYPES:
+        # так она попадает и в канонический порядок видов, и в конец своей группы, если та уже
+        # есть. Дописать в конец блока нельзя вдвойне: платформа переставит новую группу при
+        # первой же выгрузке, а существующую подсистема покинула бы, уехав за виды ниже.
+        # Во вложенном Subsystem.xml порядок видов неприменим — потомок там всегда один.
+        anchor = None
+        if parent_tag == 'Configuration' and child_tag in CHILD_OBJECT_TYPES:
+            own_idx = CHILD_OBJECT_TYPES.index(child_tag)
+            type_rx = re.compile(r'(?m)^([ \t]*)<(\w+)>[^<]*</\2>')
+            for m in type_rx.finditer(raw_text):
+                other = m.group(2)
+                if other in CHILD_OBJECT_TYPES and CHILD_OBJECT_TYPES.index(other) > own_idx:
+                    anchor = m
+                    break
+        if anchor is not None:
+            raw_text = (raw_text[:anchor.start()] + anchor.group(1) + entry + eol
+                        + raw_text[anchor.start():])
+        else:
+            # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
+            # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
+            # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
+            cm = re.search(r'([ \t]*)</ChildObjects>', raw_text)
+            if cm is None:
+                return 'no-childobj'
+            raw_text = (raw_text[:cm.start()] + cm.group(1) + '\t' + entry + eol
+                        + cm.group(1) + '</ChildObjects>' + raw_text[cm.end():])
 
     write_utf8_bom(parent_xml_path, raw_text)
     return 'added'

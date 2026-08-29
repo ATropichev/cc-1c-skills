@@ -246,10 +246,10 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
+			<Role>РольАлиасы</Role>
+			<Report>Сводный</Report>
 			<ChartOfCalculationTypes>ВидыРасчета</ChartOfCalculationTypes>
 			<CalculationRegister>Начисления</CalculationRegister>
-			<Report>Сводный</Report>
-			<Role>РольАлиасы</Role>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

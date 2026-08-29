@@ -246,8 +246,8 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
-			<AccumulationRegister>ОстаткиТест</AccumulationRegister>
 			<Document>ПриходТест</Document>
+			<AccumulationRegister>ОстаткиТест</AccumulationRegister>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

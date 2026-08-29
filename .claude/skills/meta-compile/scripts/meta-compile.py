@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.100 — Compile 1C metadata object from JSON
+# meta-compile v1.101 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -5285,6 +5285,26 @@ def compare_metadata_names(a, b):
     return 0
 
 
+# Канонический порядок видов в <ChildObjects> — эталон в docs/1c-configuration-spec.md,
+# таблица «Порядок типов в ChildObjects». Нужен, чтобы новая группа вида вставала на своё
+# место: иначе платформа переставит её при первой же выгрузке и даст диф на ровном месте.
+# Реестр карт: tests/skills/check-type-maps.mjs.
+CHILD_OBJECT_TYPES = [
+    'Language', 'Subsystem', 'StyleItem', 'Style',
+    'CommonPicture', 'SessionParameter', 'Role', 'CommonTemplate',
+    'FilterCriterion', 'CommonModule', 'CommonAttribute', 'ExchangePlan',
+    'XDTOPackage', 'WebService', 'HTTPService', 'WSReference',
+    'EventSubscription', 'ScheduledJob', 'SettingsStorage', 'FunctionalOption',
+    'FunctionalOptionsParameter', 'DefinedType', 'Bot', 'PaletteColor', 'CommonCommand', 'CommandGroup',
+    'Constant', 'CommonForm', 'Catalog', 'Document',
+    'DocumentNumerator', 'Sequence', 'DocumentJournal', 'Enum',
+    'Report', 'DataProcessor', 'InformationRegister', 'AccumulationRegister',
+    'ChartOfCharacteristicTypes', 'ChartOfAccounts', 'AccountingRegister',
+    'ChartOfCalculationTypes', 'CalculationRegister',
+    'BusinessProcess', 'Task', 'IntegrationService',
+]
+
+
 def register_in_childobjects(parent_xml_path, parent_tag, child_tag, child_name):
     """Регистрация объекта в <ChildObjects> родительского XML.
 
@@ -5361,12 +5381,29 @@ def register_in_childobjects(parent_xml_path, parent_tag, child_tag, child_name)
                        + f'{eol}\t\t\t{entry}'
                        + config_content[insert_at:])
     else:
-        # No element of this type yet: new line before </ChildObjects>,
-        # reusing the block's existing closing indent for </ChildObjects>.
-        close_at = config_content.rfind('</ChildObjects>', block.start(), block.end())
-        new_content = (config_content[:close_at]
-                       + f'\t{entry}{eol}\t\t'
-                       + config_content[close_at:])
+        # Группы своего вида ещё нет: ставим её в канонический порядок видов — перед первой
+        # группой вида старше по CHILD_OBJECT_TYPES. Дописать в конец блока нельзя: платформа
+        # переставит группу при первой же выгрузке и даст диф на ровном месте.
+        anchor = None
+        if child_tag in CHILD_OBJECT_TYPES:
+            own_idx = CHILD_OBJECT_TYPES.index(child_tag)
+            type_rx = re.compile(r'(?m)^([ \t]*)<(\w+)>[^<]*</\2>')
+            for m in type_rx.finditer(config_content, block.start(), block.end()):
+                other = m.group(2)
+                if other in CHILD_OBJECT_TYPES and CHILD_OBJECT_TYPES.index(other) > own_idx:
+                    anchor = m
+                    break
+        if anchor is not None:
+            new_content = (config_content[:anchor.start()]
+                           + f'{anchor.group(1)}{entry}{eol}'
+                           + config_content[anchor.start():])
+        else:
+            # Видов старше в файле нет — новая строка перед </ChildObjects>,
+            # отступ закрывающего тега переиспользуется.
+            close_at = config_content.rfind('</ChildObjects>', block.start(), block.end())
+            new_content = (config_content[:close_at]
+                           + f'\t{entry}{eol}\t\t'
+                           + config_content[close_at:])
     write_utf8_bom(parent_xml_path, new_content)
     return 'added'
 

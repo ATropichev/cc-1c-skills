@@ -252,8 +252,8 @@
 			<Language>Русский</Language>
 			<Catalog>Валюты</Catalog>
 			<Catalog>Договоры</Catalog>
-			<InformationRegister>КурсыВалют</InformationRegister>
 			<DataProcessor>ЗагрузкаКурсов</DataProcessor>
+			<InformationRegister>КурсыВалют</InformationRegister>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

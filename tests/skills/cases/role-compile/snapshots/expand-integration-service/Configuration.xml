@@ -246,8 +246,8 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
-			<IntegrationService>Сообщения</IntegrationService>
 			<Role>ДоступКШине</Role>
+			<IntegrationService>Сообщения</IntegrationService>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>

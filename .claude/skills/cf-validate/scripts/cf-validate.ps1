@@ -1,4 +1,4 @@
-﻿# cf-validate v1.8 — Validate 1C configuration root structure
+﻿# cf-validate v1.9 — Validate 1C configuration root structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(

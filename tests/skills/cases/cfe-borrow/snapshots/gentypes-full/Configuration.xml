@@ -246,14 +246,14 @@
 		</Properties>
 		<ChildObjects>
 			<Language>Русский</Language>
+			<Document>Операция</Document>
 			<ChartOfCharacteristicTypes>ВидыСубконто</ChartOfCharacteristicTypes>
 			<ChartOfAccounts>Хозрасчетный</ChartOfAccounts>
-			<ChartOfCalculationTypes>ОсновныеНачисления</ChartOfCalculationTypes>
 			<AccountingRegister>Хозрасчетный</AccountingRegister>
+			<ChartOfCalculationTypes>ОсновныеНачисления</ChartOfCalculationTypes>
 			<CalculationRegister>Начисления</CalculationRegister>
-			<Task>ЗадачаИсполнителя</Task>
 			<BusinessProcess>Согласование</BusinessProcess>
-			<Document>Операция</Document>
+			<Task>ЗадачаИсполнителя</Task>
 		</ChildObjects>
 	</Configuration>
 </MetaDataObject>
