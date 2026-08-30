@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-patch-method v2.10 — Source-aware method interceptor for 1C extension (CFE)
+# cfe-patch-method v2.11 — Source-aware method interceptor for 1C extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -496,6 +496,14 @@ def normalize(line):
 # (inner spaces, comments and letter case are significant). Measured on 8.3.24 and 8.3.27.
 def control_key(lines):
     return "\n".join([k for k in (x.strip() for x in lines) if k != ""])
+
+
+# Parameter count of a signature params text. The platform compares only the number of
+# parameters of a &ИзменениеИКонтроль copy (names and default values it ignores).
+def param_count(params_text):
+    if not params_text or not params_text.strip():
+        return 0
+    return len([p for p in split_top_level(params_text) if p.strip()])
 
 
 def parse_marked_body(body_lines):
@@ -1136,7 +1144,7 @@ def resync_one(ext_bsl, ext_lines, dup, method, logical_module, conflict_folder,
     sig = read_signature(ext_lines, sig_line_idx)
     if not sig:
         return {"id": method_id, "status": "ОШИБКА", "ext_bsl": ext_bsl, "reason": "не разобрать сигнатуру"}
-    _params, sig_end = sig
+    ext_params_text, sig_end = sig
     is_func = bool(re.match(r'^\s*(?:Асинх\s+)?Функция\b', ext_lines[sig_line_idx], re.IGNORECASE))
     end_re = re.compile(r'^\s*КонецФункции\b' if is_func else r'^\s*КонецПроцедуры\b', re.IGNORECASE)
     block_end = -1
@@ -1153,7 +1161,15 @@ def resync_one(ext_bsl, ext_lines, dup, method, logical_module, conflict_folder,
     v1norm = [normalize(x) for x in v1]
     v2norm = [normalize(x) for x in v2]
 
-    if control_key(v1) == control_key(v2):
+    # Signature: the platform rejects the interceptor when the parameter COUNT differs, so a
+    # body-only comparison would miss a vendor-added parameter. Names/defaults it ignores.
+    ext_param_count = param_count(ext_params_text)
+    src_param_count = param_count(method["params_text"])
+    params_drift = ext_param_count != src_param_count
+    params_reason = ("список параметров: в оригинале %d, в перехватчике %d"
+                     % (src_param_count, ext_param_count)) if params_drift else ""
+
+    if not params_drift and control_key(v1) == control_key(v2):
         return {"id": method_id, "status": "АКТУАЛЕН", "ext_bsl": ext_bsl}
 
     insert_top = []; insert_after = {}; del_start = set(); del_end = set(); disputed = []; transferred = 0; absorbed = 0; absorbed_notes = []
@@ -1215,7 +1231,11 @@ def resync_one(ext_bsl, ext_lines, dup, method, logical_module, conflict_folder,
             st = "ПЕРЕНЕСЕНО В ОСНОВНУЮ"
         else:
             st = "ДРЕЙФ"
+        if params_drift and st == "ПЕРЕНЕСЕНО В ОСНОВНУЮ":
+            st = "ДРЕЙФ"
         rsn = conflict_reason(disputed) if disputed else ("все правки уже в основной конфигурации" if st == "ПЕРЕНЕСЕНО В ОСНОВНУЮ" else "")
+        if params_drift:
+            rsn = ("%s; %s" % (params_reason, rsn)) if rsn else params_reason
         return {"id": method_id, "status": st, "ext_bsl": ext_bsl, "transferred": transferred,
                 "absorbed": absorbed, "disputed": len(disputed), "reason": rsn, "absorbed_notes": absorbed_notes}
 

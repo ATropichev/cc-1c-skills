@@ -1,4 +1,4 @@
-﻿# cfe-patch-method v2.10 — Source-aware method interceptor for 1C extension (CFE)
+﻿# cfe-patch-method v2.11 — Source-aware method interceptor for 1C extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -370,6 +370,14 @@ function Get-ControlKey {
 	return (@($lines | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }) -join "`n")
 }
 
+# Parameter count of a signature params text. The platform compares only the number of
+# parameters of a &ИзменениеИКонтроль copy (names and default values it ignores).
+function Get-ParamCount {
+	param([string]$paramsText)
+	if ([string]::IsNullOrWhiteSpace($paramsText)) { return 0 }
+	return @(Split-TopLevel $paramsText | Where-Object { $_.Trim() -ne '' }).Count
+}
+
 # Reconstruct v1 body and edit ops from a marked body
 function Parse-MarkedBody {
 	param($bodyLines)
@@ -659,7 +667,14 @@ function Invoke-Resync {
 	$v1norm = @($v1 | ForEach-Object { Get-Normalized $_ })
 	$v2norm = @($v2 | ForEach-Object { Get-Normalized $_ })
 
-	if ([string]::Equals((Get-ControlKey $v1), (Get-ControlKey $v2), 'Ordinal')) {
+	# Signature: the platform rejects the interceptor when the parameter COUNT differs, so a
+	# body-only comparison would miss a vendor-added parameter. Names/defaults it ignores.
+	$extParamCount = Get-ParamCount $sig.ParamsText
+	$srcParamCount = Get-ParamCount $method.ParamsText
+	$paramsDrift = ($extParamCount -ne $srcParamCount)
+	$paramsReason = if ($paramsDrift) { "список параметров: в оригинале $srcParamCount, в перехватчике $extParamCount" } else { '' }
+
+	if (-not $paramsDrift -and [string]::Equals((Get-ControlKey $v1), (Get-ControlKey $v2), 'Ordinal')) {
 		return @{ Id = $methodId; Status = 'АКТУАЛЕН'; ExtBsl = $extBsl }
 	}
 
@@ -709,7 +724,9 @@ function Invoke-Resync {
 
 	if ($ReportOnly) {
 		$st = if ($disputed.Count -gt 0) { 'КОНФЛИКТ' } elseif ($transferred.Count -eq 0 -and $absorbed.Count -gt 0) { 'ПЕРЕНЕСЕНО В ОСНОВНУЮ' } else { 'ДРЕЙФ' }
+		if ($paramsDrift -and $st -eq 'ПЕРЕНЕСЕНО В ОСНОВНУЮ') { $st = 'ДРЕЙФ' }
 		$rsn = if ($disputed.Count -gt 0) { Get-ResyncConflictReason $disputed } elseif ($st -eq 'ПЕРЕНЕСЕНО В ОСНОВНУЮ') { 'все правки уже в основной конфигурации' } else { '' }
+		if ($paramsDrift) { $rsn = if ($rsn) { "$paramsReason; $rsn" } else { $paramsReason } }
 		return @{ Id = $methodId; Status = $st; ExtBsl = $extBsl; Transferred = $transferred.Count; Absorbed = $absorbed.Count; Disputed = $disputed.Count; Reason = $rsn; AbsorbedNotes = $absorbedNotes }
 	}
 

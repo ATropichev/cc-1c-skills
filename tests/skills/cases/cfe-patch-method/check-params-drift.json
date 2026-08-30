@@ -1,0 +1,55 @@
+{
+  "name": "-Check: у оригинала прибавился параметр, тело не менялось — дрейф (платформа такой перехватчик отвергает)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "CommonModule",
+        "name": "БатчМод",
+        "context": "server"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "CommonModules/БатчМод/Ext/Module.bsl",
+        "content": "#Область ПрограммныйИнтерфейс\n\nФункция Расчёт(А, Б = 5) Экспорт\n\tХ = 1;\n\tВозврат Х;\nКонецФункции\n\n#КонецОбласти\n"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "CommonModule.БатчМод"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "cfe/CommonModules/БатчМод/Ext/Module.bsl",
+        "content": "#Область ПрограммныйИнтерфейс\n&ИзменениеИКонтроль(\"Расчёт\")\nФункция Тест_Расчёт(А)\n\tХ = 1;\n\tВозврат Х;\nКонецФункции\n#КонецОбласти\n"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-Check"
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "ДРЕЙФ"
+  }
+}
