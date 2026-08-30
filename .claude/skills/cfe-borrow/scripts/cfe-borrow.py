@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.35 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.36 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -257,8 +257,8 @@ def is_order_sensitive_type(type_name):
     порядок в дереве задаёт порядок установки параметров сеанса. Subsystem и CommandGroup:
     пока они не перечислены в <SubsystemsOrder> / <GroupsOrder> файла Ext/CommandInterface.xml,
     порядок дерева задаёт порядок в интерфейсе, а платформа эти списки сама не заводит
-    (в выгрузке ACC вне GroupsOrder 15 живых групп из 39). Language: порядок языков задаёт
-    порядок <v8:item> в мультиязычных строках по всей выгрузке.
+    (в выгрузке ACC вне GroupsOrder 15 живых групп из 39). Language исключён из осторожности,
+    без замера: языков обычно один-два, и в типовых их порядок не алфавитный.
     Явно названный вид сортируется в любом случае.
     Реестр семьи: tests/skills/check-inline-drift.mjs.
     """
