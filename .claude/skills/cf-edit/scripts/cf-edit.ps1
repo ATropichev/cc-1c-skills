@@ -1,4 +1,4 @@
-﻿# cf-edit v1.26 — Edit 1C configuration root (Configuration.xml)
+﻿# cf-edit v1.27 — Edit 1C configuration root (Configuration.xml)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -551,12 +551,12 @@ function Sort-MetadataNames([string[]]$names) {
 	return $out.ToArray()
 }
 
-# Упорядочить <ChildObjects> по имени внутри вида.
-# Без значения — все виды, кроме Subsystem (порядок подсистем в дереве задаёт порядок
-# разделов в панели, пока их не перечислили в <SubsystemsOrder>); явно названный вид
-# сортируется в любом случае. Взаимный порядок видов не трогаем: платформа приводит его
-# к своему при первой же выгрузке. Переставляем ЗНАЧЕНИЯ узлов, а не сами узлы — отступы
-# и структура файла остаются как были, меняются только имена в строках.
+# Упорядочить <ChildObjects>: имена внутри вида, а без аргумента — и группы видов.
+# Виды из Test-OrderSensitiveType по имени не сортируются, пока не названы явно.
+# Вызов без значения дополнительно ставит группы видов в канонический порядок: платформа
+# починила бы его только при загрузке-выгрузке, то есть неканоничный файл даёт диф на
+# ровном месте. Переставляем ЗНАЧЕНИЯ узлов, а не сами узлы — отступы и структура файла
+# остаются как были, в дифе только перестановка строк.
 function Do-SortChildObjects([string]$batchVal) {
 	if (-not $script:childObjsEl) { Write-Error "No <ChildObjects> element found"; exit 1 }
 
