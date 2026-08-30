@@ -1,0 +1,55 @@
+{
+  "name": "-Check: контекст отличается регистром идентификатора — дрейф, как у платформы",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "CommonModule",
+        "name": "БатчМод",
+        "context": "server"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "CommonModules/БатчМод/Ext/Module.bsl",
+        "content": "#Область ПрограммныйИнтерфейс\n\nФункция РасчётА() Экспорт\n\t\n\tХ = 1;\n\t\n\tВозврат Х;\n\t\nКонецФункции\n\nФункция РасчётБ() Экспорт\n\tY = 2;\n\n\tВозврат Y;\nКонецФункции\n\n#КонецОбласти\n"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "CommonModule.БатчМод"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "cfe/CommonModules/БатчМод/Ext/Module.bsl",
+        "content": "#Область ПрограммныйИнтерфейс\n&ИзменениеИКонтроль(\"РасчётА\")\nФункция Тест_РасчётА()\n\n\tХ = 1;\n\n\tВозврат Х;\nКонецФункции\n&ИзменениеИКонтроль(\"РасчётБ\")\nФункция Тест_РасчётБ()\n\ty = 2;\n\tВозврат Y;\nКонецФункции\n#КонецОбласти\n"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-Check"
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "ДРЕЙФ"
+  }
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-patch-method v2.9 — Source-aware method interceptor for 1C extension (CFE)
+# cfe-patch-method v2.10 — Source-aware method interceptor for 1C extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -489,6 +489,13 @@ def build_wrapped_block(chain_arr, core):
 
 def normalize(line):
     return re.sub(r'\s+', ' ', line).strip()
+
+
+# Control comparison key, as the platform compares a &ИзменениеИКонтроль copy with the original:
+# each line trimmed, blank lines dropped, everything else byte-for-byte and case-sensitive
+# (inner spaces, comments and letter case are significant). Measured on 8.3.24 and 8.3.27.
+def control_key(lines):
+    return "\n".join([k for k in (x.strip() for x in lines) if k != ""])
 
 
 def parse_marked_body(body_lines):
@@ -1146,7 +1153,7 @@ def resync_one(ext_bsl, ext_lines, dup, method, logical_module, conflict_folder,
     v1norm = [normalize(x) for x in v1]
     v2norm = [normalize(x) for x in v2]
 
-    if "\n".join(v1norm) == "\n".join(v2norm):
+    if control_key(v1) == control_key(v2):
         return {"id": method_id, "status": "АКТУАЛЕН", "ext_bsl": ext_bsl}
 
     insert_top = []; insert_after = {}; del_start = set(); del_end = set(); disputed = []; transferred = 0; absorbed = 0; absorbed_notes = []

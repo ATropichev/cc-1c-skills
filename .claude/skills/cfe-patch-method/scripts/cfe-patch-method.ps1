@@ -1,4 +1,4 @@
-﻿# cfe-patch-method v2.9 — Source-aware method interceptor for 1C extension (CFE)
+﻿# cfe-patch-method v2.10 — Source-aware method interceptor for 1C extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -362,6 +362,14 @@ function Get-Normalized {
 	return (($line -replace '\s+', ' ').Trim())
 }
 
+# Control comparison key, as the platform compares a &ИзменениеИКонтроль copy with the original:
+# each line trimmed, blank lines dropped, everything else byte-for-byte and case-sensitive
+# (inner spaces, comments and letter case are significant). Measured on 8.3.24 and 8.3.27.
+function Get-ControlKey {
+	param($lines)
+	return (@($lines | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }) -join "`n")
+}
+
 # Reconstruct v1 body and edit ops from a marked body
 function Parse-MarkedBody {
 	param($bodyLines)
@@ -651,7 +659,7 @@ function Invoke-Resync {
 	$v1norm = @($v1 | ForEach-Object { Get-Normalized $_ })
 	$v2norm = @($v2 | ForEach-Object { Get-Normalized $_ })
 
-	if (($v1norm -join "`n") -eq ($v2norm -join "`n")) {
+	if ([string]::Equals((Get-ControlKey $v1), (Get-ControlKey $v2), 'Ordinal')) {
 		return @{ Id = $methodId; Status = 'АКТУАЛЕН'; ExtBsl = $extBsl }
 	}
 
