@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-decompile v0.99 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+# skd-decompile v0.100 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1055,16 +1055,23 @@ def same_value_list(a, b):
     return True
 
 
+# Варианты стандартного периода: краткая запись значения читает их как период, а не строку.
+# Копия в skd-compile, skd-edit и skd-decompile — держит check-inline-drift.
+def standard_period_variants():
+    return [
+        "Custom", "Today", "ThisWeek", "ThisTenDays", "ThisMonth", "ThisQuarter", "ThisHalfYear",
+        "ThisYear", "FromBeginningOfThisWeek", "FromBeginningOfThisTenDays", "FromBeginningOfThisMonth",
+        "FromBeginningOfThisQuarter", "FromBeginningOfThisHalfYear", "FromBeginningOfThisYear",
+        "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
+        "NextDay", "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
+        "TillEndOfThisWeek", "TillEndOfThisTenDays", "TillEndOfThisMonth", "TillEndOfThisQuarter",
+        "TillEndOfThisHalfYear", "TillEndOfThisYear",
+    ]
+
+
 # Слова, которые краткая запись compile читает не как строку: варианты стандартного периода,
 # булевы (регистр не важен — compile сравнивает без учёта регистра).
-_SHORTHAND_KEYWORDS = {k.lower() for k in (
-    "Custom", "Today", "ThisWeek", "ThisTenDays", "ThisMonth", "ThisQuarter", "ThisHalfYear", "ThisYear",
-    "FromBeginningOfThisWeek", "FromBeginningOfThisTenDays", "FromBeginningOfThisMonth",
-    "FromBeginningOfThisQuarter", "FromBeginningOfThisHalfYear", "FromBeginningOfThisYear",
-    "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
-    "NextDay", "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
-    "TillEndOfThisWeek", "TillEndOfThisTenDays", "TillEndOfThisMonth",
-    "TillEndOfThisQuarter", "TillEndOfThisHalfYear", "TillEndOfThisYear", "true", "false")}
+_SHORTHAND_KEYWORDS = {k.lower() for k in standard_period_variants() + ["true", "false"]}
 
 
 # Строку не передать краткой записью как есть: пробелы по краям, флаги (@), заголовок ([…]),
@@ -1098,13 +1105,14 @@ def format_value_list_shorthand(items):
 # Одиночное значение для краткой записи: с запятой — в кавычках (иначе compile разобьёт
 # его в список). None — так не выразить: обрамлено кавычками, апостроф при запятой,
 # shorthand_unsafe; у строкового значения ещё и слово, которое краткая запись читает
-# как период/булево/дату (as_string).
+# как период/булево/дату/ссылку (as_string).
 def format_scalar_shorthand(s, as_string=False):
     if len(s) >= 2 and s[0] in ("'", '"') and s[-1] == s[0]:
         return None
     if shorthand_unsafe(s):
         return None
-    if as_string and (s.lower() in _SHORTHAND_KEYWORDS or re.match(r'^\d{4}-\d{2}-\d{2}T', s)):
+    if as_string and (s.lower() in _SHORTHAND_KEYWORDS or re.match(r'^\d{4}-\d{2}-\d{2}T', s) or
+                      re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', s)):
         return None
     if ',' in s:
         if "'" in s:
@@ -1237,7 +1245,8 @@ def render_parameter(p):
         if value_short is None:
             needs_object = True
     elif isinstance(value_display, str) and value_display != '':
-        value_short = format_scalar_shorthand(value_display, isinstance(type_short, str) and type_short.startswith('string'))
+        # Тип в краткой записи параметра указан — значение пишется по нему, ключевые слова не мешают
+        value_short = format_scalar_shorthand(value_display)
         if value_short is None:
             needs_object = True
     if p['availableValues'] and len(p['availableValues']) > 0:

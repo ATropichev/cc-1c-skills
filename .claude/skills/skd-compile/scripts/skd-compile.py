@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.130 — Compile 1C DCS from JSON
+# skd-compile v1.131 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -800,15 +800,18 @@ def parse_calc_shorthand(s):
 
 # --- DataParameter shorthand parser ---
 
-PERIOD_VARIANTS = [
-    "Custom", "Today", "ThisWeek", "ThisTenDays", "ThisMonth", "ThisQuarter",
-    "ThisHalfYear", "ThisYear", "FromBeginningOfThisWeek", "FromBeginningOfThisTenDays",
-    "FromBeginningOfThisMonth", "FromBeginningOfThisQuarter", "FromBeginningOfThisHalfYear",
-    "FromBeginningOfThisYear", "LastWeek", "LastTenDays", "LastMonth", "LastQuarter",
-    "LastHalfYear", "LastYear", "NextDay", "NextWeek", "NextTenDays", "NextMonth",
-    "NextQuarter", "NextHalfYear", "NextYear", "TillEndOfThisWeek", "TillEndOfThisTenDays",
-    "TillEndOfThisMonth", "TillEndOfThisQuarter", "TillEndOfThisHalfYear", "TillEndOfThisYear",
-]
+# Варианты стандартного периода: краткая запись значения читает их как период, а не строку.
+# Копия в skd-compile, skd-edit и skd-decompile — держит check-inline-drift.
+def standard_period_variants():
+    return [
+        "Custom", "Today", "ThisWeek", "ThisTenDays", "ThisMonth", "ThisQuarter", "ThisHalfYear",
+        "ThisYear", "FromBeginningOfThisWeek", "FromBeginningOfThisTenDays", "FromBeginningOfThisMonth",
+        "FromBeginningOfThisQuarter", "FromBeginningOfThisHalfYear", "FromBeginningOfThisYear",
+        "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
+        "NextDay", "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
+        "TillEndOfThisWeek", "TillEndOfThisTenDays", "TillEndOfThisMonth", "TillEndOfThisQuarter",
+        "TillEndOfThisHalfYear", "TillEndOfThisYear",
+    ]
 
 
 def parse_data_param_shorthand(s):
@@ -842,7 +845,7 @@ def parse_data_param_shorthand(s):
 
         if len(items) >= 2:
             result['value'] = items
-        elif val_str in PERIOD_VARIANTS:
+        elif val_str in standard_period_variants():
             result['value'] = {'variant': val_str}
         elif re.match(r'^\d{4}-\d{2}-\d{2}T', val_str):
             result['value'] = val_str
@@ -1483,6 +1486,11 @@ def is_empty_value(v):
     return False
 
 
+# Список из двух и более элементов — не пустое значение, даже если все элементы пустые
+def is_data_param_list(v):
+    return isinstance(v, (list, tuple)) and len(v) > 1
+
+
 def emit_empty_value(lines, type_str, indent, tag_prefix='', value_list_allowed=False):
     if value_list_allowed:
         return
@@ -1598,7 +1606,11 @@ def emit_single_param(lines, p, parsed):
     elif isinstance(parsed.get('value'), list):
         # Multi-value (массив значений по умолчанию для valueListAllowed-параметра).
         for v in parsed['value']:
-            emit_param_value(lines, p_type, v, '\t\t', False)
+            if v is None:
+                # null в списке — пустой элемент
+                lines.append('\t\t<value xsi:nil="true"/>')
+            else:
+                emit_param_value(lines, p_type, v, '\t\t', False)
     else:
         emit_param_value(lines, p_type, parsed.get('value'), '\t\t', vla)
 
@@ -2692,7 +2704,7 @@ def emit_data_parameters(lines, items, indent):
         # Value
         if dp.get('nilValue') is True:
             lines.append(f'{indent}\t\t<dcscor:value xsi:nil="true"/>')
-        elif is_empty_value(dp.get('value')):
+        elif not is_data_param_list(dp.get('value')) and is_empty_value(dp.get('value')):
             emit_empty_value(lines, str(dp.get('valueType') or ''), f'{indent}\t\t', 'dcscor:', False)
         elif dp.get('value') is not None:
             val = dp['value']
@@ -2730,6 +2742,8 @@ def emit_data_parameters(lines, items, indent):
                     lines.append(f'{indent}\t\t</dcscor:value>')
             else:
                 # Список значений (valueListAllowed) — каждый элемент отдельным <dcscor:value>, как пишет платформа.
+                # Примитивный тип (заданный или объявленный) главнее формы значения
+                v_prim = bool(re.match(r'^(boolean|date|decimal|string)', vtype, re.I))
                 for dpv in (val if isinstance(val, (list, tuple)) else [val]):
                     if dpv is None:
                         # null в списке — пустой элемент
@@ -2738,10 +2752,10 @@ def emit_data_parameters(lines, items, indent):
                         # Полный xsi:type из decompile (например "xs:boolean", "dcscor:DesignTimeValue").
                         v_str = str(dpv).lower() if isinstance(dpv, bool) else str(dpv)
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="{vtype}">{esc_xml_text(v_str)}</dcscor:value>')
-                    elif vtype == 'boolean' or isinstance(dpv, bool):
+                    elif vtype.lower() == 'boolean' or (not v_prim and isinstance(dpv, bool)):
                         bv = str(dpv).lower()
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:boolean">{esc_xml_text(bv)}</dcscor:value>')
-                    elif re.match(r'^date', vtype) or re.match(r'^\d{4}-\d{2}-\d{2}T', str(dpv)):
+                    elif re.match(r'^date', vtype, re.I) or (not v_prim and re.match(r'^\d{4}-\d{2}-\d{2}T', str(dpv))):
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:dateTime">{esc_xml_text(str(dpv))}</dcscor:value>')
                     elif re.match(r'^decimal', vtype):
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:decimal">{esc_xml_text(str(dpv))}</dcscor:value>')

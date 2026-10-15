@@ -1,5 +1,5 @@
 {
-  "name": "dataParameters: список значений — по <dcscor:value> на элемент; без valueType — тип из объявления параметра; null — xsi:nil; апостроф внутри слова (#119)",
+  "name": "dataParameters: список значений — по <dcscor:value> на элемент; без valueType — тип из объявления параметра (главнее формы значения); null — xsi:nil, и в списке из одних null, и в значении параметра схемы; апостроф внутри слова (#119)",
   "params": { "outputPath": "Template.xml" },
   "input": {
     "dataSets": [{
@@ -11,7 +11,9 @@
       { "name": "Суммы", "type": "decimal(10,2)", "valueListAllowed": true, "value": [1, 2.5] },
       "Метки: string(20) @valueList",
       "Порог: decimal(10,2) = 1",
-      "Фамилии: string(20) @valueList"
+      "Фамилии: string(20) @valueList",
+      "Пусто: string(10) @valueList",
+      { "name": "Отметки", "type": "string(30)", "valueListAllowed": true, "value": [null, "a"] }
     ],
     "settingsVariants": [
       {
@@ -26,7 +28,8 @@
           "dataParameters": [
             "Коды = X, 'Y, Z' @user",
             { "parameter": "Суммы", "value": [3, 4.75] },
-            { "parameter": "Метки", "value": ["одна, с запятой", null] },
+            { "parameter": "Метки", "value": ["одна, с запятой", null, "2024-01-01T00:00:00"] },
+            { "parameter": "Пусто", "value": [null, null] },
             "Порог = 5",
             "Фамилии = Иванов, O'Brien, Петров"
           ]

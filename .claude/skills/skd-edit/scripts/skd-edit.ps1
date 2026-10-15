@@ -1,4 +1,4 @@
-﻿# skd-edit v1.44 — Atomic 1C DCS editor
+﻿# skd-edit v1.45 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: парный .py собирает выражения автодат вне f-string ради совместимости с python 3.9 (PEP 701).
 [CmdletBinding(PositionalBinding=$false)]
@@ -675,6 +675,12 @@ function Parse-FilterShorthand {
 	return $result
 }
 
+# Варианты стандартного периода: краткая запись значения читает их как период, а не строку.
+# Копия в skd-compile, skd-edit и skd-decompile — держит check-inline-drift.
+function Get-StandardPeriodVariants {
+	return @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear")
+}
+
 function Parse-DataParamShorthand {
 	param([string]$s)
 
@@ -712,7 +718,7 @@ function Parse-DataParamShorthand {
 		$items = Parse-ValueList $valStr
 		if ($items.Count -eq 1) { $valStr = $items[0] }
 
-		$periodVariants = @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear")
+		$periodVariants = Get-StandardPeriodVariants
 		# Empty / sentinel — record as "" so caller emits xsi:nil
 		if ($items.Count -ge 2) {
 			$result.value = $items
@@ -966,7 +972,8 @@ function Parse-AvailableValueList {
 			$c = $item[$j]
 			if ($q) {
 				if ($c -eq $q) { $q = $null }
-			} elseif ($c -eq "'" -or $c -eq '"') {
+			} elseif (($c -eq "'" -or $c -eq '"') -and $j -eq 0) {
+				# Кавычка открывает значение только в начале элемента; апостроф внутри слова — символ
 				$q = $c
 			} elseif ($c -eq ':') {
 				$colonIdx = $j; break
@@ -1533,8 +1540,23 @@ function Build-SelectionItemFragment {
 }
 
 # <dcscor:value> параметра данных; список — по элементу на значение, как пишет платформа.
+# Примитивный тип, объявленный у параметра схемы (xs:string/decimal/boolean/dateTime), иначе "".
+# Составной и ссылочный тип не подставляем — тогда тип угадывается по значению, как в skd-compile.
+function Get-DeclaredParamType {
+	param([string]$name)
+	$schemaNs = "http://v8.1c.ru/8.1/data-composition-system/schema"
+	$paramEl = Find-ElementByChildValue $xmlDoc.DocumentElement "parameter" "name" $name $schemaNs
+	if (-not $paramEl) { return "" }
+	$vtEl = Find-FirstElement $paramEl @("valueType") $schemaNs
+	if (-not $vtEl) { return "" }
+	$types = @($vtEl.ChildNodes | Where-Object { $_.NodeType -eq 'Element' -and $_.LocalName -eq 'Type' })
+	if ($types.Count -ne 1) { return "" }
+	if ($types[0].InnerText.Trim() -cmatch '^(?:\w+:)?(string|decimal|boolean|dateTime)$') { return "xs:$($Matches[1])" }
+	return ""
+}
+
 function Build-DataParamValueLines {
-	param($value, [string]$vi)
+	param($value, [string]$vi, [string]$declType = "")
 	$lines = @()
 	if ($value -is [hashtable] -and $value.variant) {
 		$lines += "$vi<dcscor:value xsi:type=`"v8:StandardPeriod`">"
@@ -1546,7 +1568,11 @@ function Build-DataParamValueLines {
 		$lines += "$vi<dcscor:value xsi:nil=`"true`"/>"
 	} else {
 		foreach ($v in @($value)) {
-			if ("$v" -match '^\d{4}-\d{2}-\d{2}T') {
+			if ($declType) {
+				# Объявленный тип параметра главнее формы значения
+				$vStr = if ($declType -eq 'xs:boolean') { "$v".ToLowerInvariant() } else { "$v" }
+				$lines += "$vi<dcscor:value xsi:type=`"$declType`">$(Esc-XmlText $vStr)</dcscor:value>"
+			} elseif ("$v" -match '^\d{4}-\d{2}-\d{2}T') {
 				$lines += "$vi<dcscor:value xsi:type=`"xs:dateTime`">$(Esc-XmlText "$v")</dcscor:value>"
 			} elseif ("$v" -eq "true" -or "$v" -eq "false") {
 				# Регистр не важен, как в skd-compile; xs:boolean — только строчными
@@ -1576,7 +1602,7 @@ function Build-DataParamFragment {
 	$lines += "$i`t<dcscor:parameter>$(Esc-XmlText $parsed.parameter)</dcscor:parameter>"
 
 	if ($null -ne $parsed.value) {
-		$lines += Build-DataParamValueLines $parsed.value "$i`t"
+		$lines += Build-DataParamValueLines $parsed.value "$i`t" (Get-DeclaredParamType $parsed.parameter)
 	}
 
 	if ($parsed.viewMode) {
@@ -3690,7 +3716,7 @@ switch ($Operation) {
 					while ($sib -and $sib.NodeType -ne 'Element') { $sib = $sib.NextSibling }
 					$refEl = $sib
 				}
-				$valXml = (Build-DataParamValueLines $parsed.value $itemIndent) -join "`n"
+				$valXml = (Build-DataParamValueLines $parsed.value $itemIndent (Get-DeclaredParamType $parsed.parameter)) -join "`n"
 				$valNodes = Import-Fragment $xmlDoc $valXml
 				foreach ($node in $valNodes) {
 					Insert-BeforeElement $dpItem $node $refEl $itemIndent

@@ -87,6 +87,32 @@
 		<useRestriction>false</useRestriction>
 		<valueListAllowed>true</valueListAllowed>
 	</parameter>
+	<parameter>
+		<name>Пусто</name>
+		<valueType>
+			<v8:Type>xs:string</v8:Type>
+			<v8:StringQualifiers>
+				<v8:Length>10</v8:Length>
+				<v8:AllowedLength>Variable</v8:AllowedLength>
+			</v8:StringQualifiers>
+		</valueType>
+		<useRestriction>false</useRestriction>
+		<valueListAllowed>true</valueListAllowed>
+	</parameter>
+	<parameter>
+		<name>Отметки</name>
+		<valueType>
+			<v8:Type>xs:string</v8:Type>
+			<v8:StringQualifiers>
+				<v8:Length>30</v8:Length>
+				<v8:AllowedLength>Variable</v8:AllowedLength>
+			</v8:StringQualifiers>
+		</valueType>
+		<value xsi:nil="true"/>
+		<value xsi:type="xs:string">a</value>
+		<useRestriction>false</useRestriction>
+		<valueListAllowed>true</valueListAllowed>
+	</parameter>
 	<settingsVariant>
 		<dcsset:name>Авто</dcsset:name>
 		<dcsset:presentation xsi:type="v8:LocalStringType">
@@ -132,6 +158,18 @@
 					<dcscor:value xsi:nil="true"/>
 					<dcsset:userSettingID>UUID-005</dcsset:userSettingID>
 				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:use>false</dcscor:use>
+					<dcscor:parameter>Пусто</dcscor:parameter>
+					<dcscor:value xsi:nil="true"/>
+					<dcsset:userSettingID>UUID-006</dcsset:userSettingID>
+				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:parameter>Отметки</dcscor:parameter>
+					<dcscor:value xsi:nil="true"/>
+					<dcscor:value xsi:type="xs:string">a</dcscor:value>
+					<dcsset:userSettingID>UUID-007</dcsset:userSettingID>
+				</dcscor:item>
 			</dcsset:dataParameters>
 			<dcsset:item xsi:type="dcsset:StructureItemGroup">
 				<dcsset:order>
@@ -162,7 +200,7 @@
 					<dcscor:parameter>Коды</dcscor:parameter>
 					<dcscor:value xsi:type="xs:string">X</dcscor:value>
 					<dcscor:value xsi:type="xs:string">Y, Z</dcscor:value>
-					<dcsset:userSettingID>UUID-006</dcsset:userSettingID>
+					<dcsset:userSettingID>UUID-008</dcsset:userSettingID>
 				</dcscor:item>
 				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
 					<dcscor:parameter>Суммы</dcscor:parameter>
@@ -172,6 +210,12 @@
 				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
 					<dcscor:parameter>Метки</dcscor:parameter>
 					<dcscor:value xsi:type="xs:string">одна, с запятой</dcscor:value>
+					<dcscor:value xsi:nil="true"/>
+					<dcscor:value xsi:type="xs:string">2024-01-01T00:00:00</dcscor:value>
+				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:parameter>Пусто</dcscor:parameter>
+					<dcscor:value xsi:nil="true"/>
 					<dcscor:value xsi:nil="true"/>
 				</dcscor:item>
 				<dcscor:item xsi:type="dcsset:SettingsParameterValue">

@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.99 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.100 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -845,9 +845,15 @@ function Test-SameValueList {
 	return $true
 }
 
+# Варианты стандартного периода: краткая запись значения читает их как период, а не строку.
+# Копия в skd-compile, skd-edit и skd-decompile — держит check-inline-drift.
+function Get-StandardPeriodVariants {
+	return @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear")
+}
+
 # Слова, которые краткая запись compile читает не как строку: варианты стандартного периода,
 # булевы (регистр не важен — compile сравнивает без учёта регистра).
-$script:shorthandKeywords = @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear","true","false")
+$script:shorthandKeywords = @(Get-StandardPeriodVariants) + @("true","false")
 
 # Строку не передать краткой записью как есть: пробелы по краям, флаги (@), заголовок ([…]),
 # маркер пустого значения (_ / null).
@@ -876,12 +882,13 @@ function Format-ValueListShorthand {
 # Одиночное значение для краткой записи: с запятой — в кавычках (иначе compile разобьёт
 # его в список). $null — так не выразить: обрамлено кавычками, апостроф при запятой,
 # Test-ShorthandUnsafe; у строкового значения ещё и слово, которое краткая запись читает
-# как период/булево/дату ($asString).
+# как период/булево/дату/ссылку ($asString).
 function Format-ScalarShorthand {
 	param([string]$s, [bool]$asString = $false)
 	if ($s.Length -ge 2 -and ($s[0] -eq "'" -or $s[0] -eq '"') -and $s[-1] -eq $s[0]) { return $null }
 	if (Test-ShorthandUnsafe $s) { return $null }
-	if ($asString -and ($script:shorthandKeywords -contains $s -or $s -match '^\d{4}-\d{2}-\d{2}T')) { return $null }
+	if ($asString -and ($script:shorthandKeywords -contains $s -or $s -match '^\d{4}-\d{2}-\d{2}T' -or
+		$s -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.')) { return $null }
 	if ($s.Contains(',')) {
 		if ($s.Contains("'")) { return $null }
 		return "'$s'"
@@ -1019,7 +1026,8 @@ function Render-Parameter {
 		$valueShort = Format-ValueListShorthand $valueDisplay
 		if ($null -eq $valueShort) { $needsObject = $true }
 	} elseif ($valueDisplay -is [string] -and $valueDisplay -ne '') {
-		$valueShort = Format-ScalarShorthand $valueDisplay ($typeShort -is [string] -and $typeShort -match '^string')
+		# Тип в краткой записи параметра указан — значение пишется по нему, ключевые слова не мешают
+		$valueShort = Format-ScalarShorthand $valueDisplay
 		if ($null -eq $valueShort) { $needsObject = $true }
 	}
 	if ($p.availableValues -and $p.availableValues.Count -gt 0) { $needsObject = $true }

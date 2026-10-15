@@ -96,6 +96,20 @@
 		<value xsi:type="xs:string">LastMonth</value>
 		<useRestriction>false</useRestriction>
 	</parameter>
+	<parameter>
+		<name>Ссылка</name>
+		<valueType>
+			<v8:Type>xs:string</v8:Type>
+			<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:CatalogRef.Валюты</v8:Type>
+			<v8:StringQualifiers>
+				<v8:Length>30</v8:Length>
+				<v8:AllowedLength>Variable</v8:AllowedLength>
+			</v8:StringQualifiers>
+		</valueType>
+		<value xsi:nil="true"/>
+		<useRestriction>true</useRestriction>
+		<availableAsField>false</availableAsField>
+	</parameter>
 	<settingsVariant>
 		<dcsset:name>Авто</dcsset:name>
 		<dcsset:presentation xsi:type="v8:LocalStringType">
@@ -186,6 +200,10 @@
 				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
 					<dcscor:parameter>Слово</dcscor:parameter>
 					<dcscor:value xsi:type="xs:string">true</dcscor:value>
+				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:parameter>Ссылка</dcscor:parameter>
+					<dcscor:value xsi:type="xs:string">Справочник.Валюты</dcscor:value>
 				</dcscor:item>
 			</dcsset:dataParameters>
 			<dcsset:item xsi:type="dcsset:StructureItemGroup">

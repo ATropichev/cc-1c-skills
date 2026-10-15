@@ -1,4 +1,4 @@
-﻿# skd-compile v1.130 — Compile 1C DCS from JSON
+﻿# skd-compile v1.131 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -867,6 +867,12 @@ function Parse-CalcShorthand {
 }
 
 # --- 8b. DataParameter shorthand parser ---
+# Варианты стандартного периода: краткая запись значения читает их как период, а не строку.
+# Копия в skd-compile, skd-edit и skd-decompile — держит check-inline-drift.
+function Get-StandardPeriodVariants {
+	return @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear")
+}
+
 # Formats: "Период = LastMonth @user", "Организация @off @user", "Период @user"
 function Parse-DataParamShorthand {
 	param([string]$s)
@@ -902,7 +908,7 @@ function Parse-DataParamShorthand {
 		if ($items.Count -eq 1) { $valStr = $items[0] }
 
 		# Detect StandardPeriod variants
-		$periodVariants = @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear")
+		$periodVariants = Get-StandardPeriodVariants
 		if ($items.Count -ge 2) {
 			$result.value = $items
 		} elseif ($periodVariants -contains $valStr) {
@@ -1643,7 +1649,12 @@ function Emit-SingleParam {
 		if (-not $vla) { X "`t`t<value xsi:nil=`"true`"/>" }
 	} elseif ($valIsArray) {
 		foreach ($v in @($parsed.value)) {
-			Emit-ParamValue -type $parsed.type -val $v -indent "`t`t" -valueListAllowed $false
+			if ($null -eq $v) {
+				# null в списке — пустой элемент
+				X "`t`t<value xsi:nil=`"true`"/>"
+			} else {
+				Emit-ParamValue -type $parsed.type -val $v -indent "`t`t" -valueListAllowed $false
+			}
 		}
 	} else {
 		Emit-ParamValue -type $parsed.type -val $parsed.value -indent "`t`t" -valueListAllowed $vla
@@ -1807,6 +1818,12 @@ function Test-EmptyValue {
 	if ($s -eq "_") { return $true }
 	if ($s.ToLowerInvariant() -eq "null") { return $true }
 	return $false
+}
+
+# Список из двух и более элементов — не пустое значение, даже если все элементы пустые
+function Test-DataParamList {
+	param($v)
+	return (($v -is [array]) -or ($v -is [System.Collections.IList] -and $v -isnot [string])) -and @($v).Count -gt 1
 }
 
 function Emit-EmptyValue {
@@ -3111,7 +3128,7 @@ function Emit-DataParameters {
 		# Value
 		if ($dp.nilValue -eq $true) {
 			X "$indent`t`t<dcscor:value xsi:nil=`"true`"/>"
-		} elseif (Test-EmptyValue $dp.value) {
+		} elseif (-not (Test-DataParamList $dp.value) -and (Test-EmptyValue $dp.value)) {
 			Emit-EmptyValue -type "$($dp.valueType)" -indent "$indent`t`t" -tagPrefix "dcscor:" -valueListAllowed $false
 		} elseif ($null -ne $dp.value) {
 			$vtype = "$($dp.valueType)"
@@ -3168,6 +3185,8 @@ function Emit-DataParameters {
 				}
 			} else {
 				# Список значений (valueListAllowed) — каждый элемент отдельным <dcscor:value>, как пишет платформа.
+				# Примитивный тип (заданный или объявленный) главнее формы значения
+				$vPrim = $vtype -match '^(boolean|date|decimal|string)'
 				foreach ($dpv in @($dp.value)) {
 					if ($null -eq $dpv) {
 						# null в списке — пустой элемент
@@ -3176,10 +3195,10 @@ function Emit-DataParameters {
 						# Полный xsi:type из decompile (например "xs:boolean", "dcscor:DesignTimeValue").
 						$vStr = if ($dpv -is [bool]) { "$dpv".ToLower() } else { "$dpv" }
 						X "$indent`t`t<dcscor:value xsi:type=`"$vtype`">$(Esc-XmlText $vStr)</dcscor:value>"
-					} elseif ($vtype -eq 'boolean' -or $dpv -is [bool]) {
+					} elseif ($vtype -eq 'boolean' -or (-not $vPrim -and $dpv -is [bool])) {
 						$bv = "$dpv".ToLower()
 						X "$indent`t`t<dcscor:value xsi:type=`"xs:boolean`">$(Esc-XmlText $bv)</dcscor:value>"
-					} elseif ($vtype -match '^date' -or "$dpv" -match '^\d{4}-\d{2}-\d{2}T') {
+					} elseif ($vtype -match '^date' -or (-not $vPrim -and "$dpv" -match '^\d{4}-\d{2}-\d{2}T')) {
 						X "$indent`t`t<dcscor:value xsi:type=`"xs:dateTime`">$(Esc-XmlText "$dpv")</dcscor:value>"
 					} elseif ($vtype -match '^decimal') {
 						X "$indent`t`t<dcscor:value xsi:type=`"xs:decimal`">$(Esc-XmlText "$dpv")</dcscor:value>"

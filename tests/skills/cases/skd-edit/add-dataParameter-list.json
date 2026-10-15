@@ -1,5 +1,5 @@
 {
-  "name": "add-dataParameter: список через запятую — по <dcscor:value> на элемент; апостроф внутри слова; булево в любом регистре — строчными (#119)",
+  "name": "add-dataParameter: список через запятую — по <dcscor:value> на элемент; апостроф внутри слова; булево в любом регистре — строчными; тип из объявления параметра; апостроф внутри слова и в availableValue (#119)",
   "preRun": [
     {
       "script": "skd-compile/scripts/skd-compile",
@@ -9,18 +9,22 @@
           "query": "ВЫБРАТЬ Т.Код ИЗ Регистр КАК Т",
           "fields": ["Код: string(10)"]
         }],
-        "parameters": ["Коды: string(10) @valueList", "Фамилии: string(20) @valueList", "Флаг: boolean"],
+        "parameters": ["Коды: string(10) @valueList", "Фамилии: string(20) @valueList", "Флаг: boolean", "Суммы: decimal(10,2) @valueList"],
         "settingsVariants": [{
           "name": "Основной",
           "settings": { "selection": ["Auto"], "structure": "details" }
         }]
       },
       "args": { "-DefinitionFile": "{inputFile}", "-OutputPath": "{workDir}/Template.xml" }
+    },
+    {
+      "script": "skd-edit/scripts/skd-edit",
+      "args": { "-TemplatePath": "{workDir}/Template.xml", "-Operation": "add-parameter", "-Value": "Автор: string(20) availableValue=O'Brien: Брайен, 'Smith, J': Смит" }
     }
   ],
   "params": {
     "templatePath": "Template.xml",
     "operation": "add-dataParameter",
-    "value": "Коды = A, 'B, C' @user ;; Фамилии = Иванов, O'Brien, Петров ;; Флаг = True"
+    "value": "Коды = A, 'B, C' @user ;; Фамилии = Иванов, O'Brien, Петров ;; Флаг = True ;; Суммы = 1, 2"
   }
 }

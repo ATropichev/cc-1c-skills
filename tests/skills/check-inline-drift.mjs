@@ -197,6 +197,17 @@ const FAMILIES = [
     ],
   },
 
+  // ─── СКД: краткая запись значения ────────────────────────────────────────
+  // compile и edit читают вариант стандартного периода в краткой записи как период, а decompile
+  // по тому же списку решает, можно ли строку записать кратко. Разъехавшийся список даёт тихую
+  // подмену строки периодом на круге decompile → compile (ревью #119).
+  {
+    name: 'СКД: варианты стандартного периода', py: 'standard_period_variants', ps1: 'Get-StandardPeriodVariants',
+    variants: [
+      { id: 'base', authority: 'skd-compile', consumers: ['skd-edit', 'skd-decompile'] },
+    ],
+  },
+
   // ─── Запись файла в каноне выгрузки ──────────────────────────────────────
   {
     name: 'write_xml_file', py: 'write_xml_file', ps1: 'Write-XmlFile',

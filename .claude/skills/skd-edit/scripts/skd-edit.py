@@ -1,4 +1,4 @@
-# skd-edit v1.44 — Atomic 1C DCS editor (Python port)
+# skd-edit v1.45 — Atomic 1C DCS editor (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -712,6 +712,20 @@ def parse_filter_shorthand(s):
     return result
 
 
+# Варианты стандартного периода: краткая запись значения читает их как период, а не строку.
+# Копия в skd-compile, skd-edit и skd-decompile — держит check-inline-drift.
+def standard_period_variants():
+    return [
+        "Custom", "Today", "ThisWeek", "ThisTenDays", "ThisMonth", "ThisQuarter", "ThisHalfYear",
+        "ThisYear", "FromBeginningOfThisWeek", "FromBeginningOfThisTenDays", "FromBeginningOfThisMonth",
+        "FromBeginningOfThisQuarter", "FromBeginningOfThisHalfYear", "FromBeginningOfThisYear",
+        "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
+        "NextDay", "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
+        "TillEndOfThisWeek", "TillEndOfThisTenDays", "TillEndOfThisMonth", "TillEndOfThisQuarter",
+        "TillEndOfThisHalfYear", "TillEndOfThisYear",
+    ]
+
+
 def parse_data_param_shorthand(s):
     # use is tristate: None = not specified (modify-* won't touch),
     # False = @off (explicit), True = @on (explicit). add-* writes <use>false</use> only when False.
@@ -744,15 +758,7 @@ def parse_data_param_shorthand(s):
         if len(items) == 1:
             val_str = items[0]
 
-        period_variants = [
-            "Custom", "Today", "ThisWeek", "ThisTenDays", "ThisMonth", "ThisQuarter", "ThisHalfYear", "ThisYear",
-            "FromBeginningOfThisWeek", "FromBeginningOfThisTenDays", "FromBeginningOfThisMonth",
-            "FromBeginningOfThisQuarter", "FromBeginningOfThisHalfYear", "FromBeginningOfThisYear",
-            "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
-            "NextDay", "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
-            "TillEndOfThisWeek", "TillEndOfThisTenDays", "TillEndOfThisMonth",
-            "TillEndOfThisQuarter", "TillEndOfThisHalfYear", "TillEndOfThisYear",
-        ]
+        period_variants = standard_period_variants()
         # Empty / sentinel — record as "" so caller emits xsi:nil
         if len(items) >= 2:
             result["value"] = items
@@ -970,7 +976,8 @@ def parse_available_value_list(s):
             if q:
                 if c == q:
                     q = None
-            elif c in ("'", '"'):
+            elif c in ("'", '"') and j == 0:
+                # Кавычка открывает значение только в начале элемента; апостроф внутри слова — символ
                 q = c
             elif c == ':':
                 colon_idx = j
@@ -1450,7 +1457,23 @@ def build_selection_item_fragment(field_name, indent):
 
 
 # <dcscor:value> параметра данных; список — по элементу на значение, как пишет платформа.
-def build_data_param_value_lines(value, vi):
+# Примитивный тип, объявленный у параметра схемы (xs:string/decimal/boolean/dateTime), иначе "".
+# Составной и ссылочный тип не подставляем — тогда тип угадывается по значению, как в skd-compile.
+def get_declared_param_type(name):
+    param_el = find_element_by_child_value(xml_doc, "parameter", "name", name, SCH_NS)
+    if param_el is None:
+        return ""
+    vt_el = find_first_element(param_el, ["valueType"], SCH_NS)
+    if vt_el is None:
+        return ""
+    types = [c for c in vt_el if isinstance(c.tag, str) and local_name(c) == "Type"]
+    if len(types) != 1:
+        return ""
+    m = re.match(r'^(?:\w+:)?(string|decimal|boolean|dateTime)$', (types[0].text or "").strip())
+    return f"xs:{m.group(1)}" if m else ""
+
+
+def build_data_param_value_lines(value, vi, decl_type=""):
     lines = []
     if isinstance(value, dict) and value.get("variant"):
         lines.append(f'{vi}<dcscor:value xsi:type="v8:StandardPeriod">')
@@ -1462,7 +1485,11 @@ def build_data_param_value_lines(value, vi):
         lines.append(f'{vi}<dcscor:value xsi:nil="true"/>')
     else:
         for v in (value if isinstance(value, list) else [value]):
-            if re.match(r'^\d{4}-\d{2}-\d{2}T', str(v)):
+            if decl_type:
+                # Объявленный тип параметра главнее формы значения
+                v_str = str(v).lower() if decl_type == "xs:boolean" else str(v)
+                lines.append(f'{vi}<dcscor:value xsi:type="{decl_type}">{esc_xml_text(v_str)}</dcscor:value>')
+            elif re.match(r'^\d{4}-\d{2}-\d{2}T', str(v)):
                 lines.append(f'{vi}<dcscor:value xsi:type="xs:dateTime">{esc_xml_text(str(v))}</dcscor:value>')
             elif str(v).lower() in ("true", "false"):
                 # Регистр не важен, как в skd-compile; xs:boolean — только строчными
@@ -1485,7 +1512,7 @@ def build_data_param_fragment(parsed, indent):
     lines.append(f"{i}\t<dcscor:parameter>{esc_xml_text(parsed['parameter'])}</dcscor:parameter>")
 
     if parsed.get("value") is not None:
-        lines.extend(build_data_param_value_lines(parsed["value"], f"{i}\t"))
+        lines.extend(build_data_param_value_lines(parsed["value"], f"{i}\t", get_declared_param_type(parsed["parameter"])))
 
     if parsed.get("viewMode"):
         lines.append(f"{i}\t<dcsset:viewMode>{esc_xml_text(parsed['viewMode'])}</dcsset:viewMode>")
@@ -3192,7 +3219,7 @@ elif operation == "modify-dataParameter":
                     sib = sib.getnext()
                 ref_el = sib
 
-            val_xml = "\n".join(build_data_param_value_lines(parsed["value"], item_indent))
+            val_xml = "\n".join(build_data_param_value_lines(parsed["value"], item_indent, get_declared_param_type(parsed["parameter"])))
             val_nodes = import_fragment(xml_doc, val_xml)
             for node in val_nodes:
                 insert_before_element(dp_item, node, ref_el, item_indent)

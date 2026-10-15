@@ -1,5 +1,5 @@
 {
-  "name": "Списки значений параметров: краткая запись через запятую, «auto» при поэлементном совпадении, явный список — объектной формой; nil в списке, большие числа, строки-ключевые слова (#119)",
+  "name": "Списки значений параметров: краткая запись через запятую, «auto» при поэлементном совпадении, явный список — объектной формой; nil в списке, большие числа, строки-ключевые слова и строки вида ссылки у параметра данных, ключевое слово в параметре схемы — кратко (#119)",
   "preRun": [
     {
       "script": "skd-compile/scripts/skd-compile",
@@ -11,7 +11,8 @@
           { "name": "Суммы", "type": "decimal(10,2)", "valueListAllowed": true, "value": [1, 2.5] },
           "Метка: string(20) = 'x, y'",
           "Большие: decimal(15,0) = 10000000000, 20000000000",
-          { "name": "Слово", "type": "string(20)", "value": "LastMonth" }
+          { "name": "Слово", "type": "string(20)", "value": "LastMonth" },
+          { "name": "Ссылка", "type": ["string(30)", "CatalogRef.Валюты"], "hidden": true }
         ],
         "settingsVariants": [
           { "name": "Авто", "settings": { "structure": "details", "dataParameters": "auto" } },
@@ -20,7 +21,8 @@
             { "parameter": "Суммы", "value": [3, 4.75], "valueType": "decimal(10,2)" },
             "Метка = 'одна, с запятой' @user",
             { "parameter": "Склады", "value": ["Основной", null] },
-            { "parameter": "Слово", "value": "true", "valueType": "xs:string" }
+            { "parameter": "Слово", "value": "true", "valueType": "xs:string" },
+            { "parameter": "Ссылка", "value": "Справочник.Валюты", "valueType": "xs:string" }
           ] } }
         ]
       },
