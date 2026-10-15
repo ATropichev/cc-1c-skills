@@ -13,6 +13,7 @@
       "Порог: decimal(10,2) = 1",
       "Фамилии: string(20) @valueList",
       "Пусто: string(10) @valueList",
+      "Режим: string(10)",
       { "name": "Отметки", "type": "string(30)", "valueListAllowed": true, "value": [null, "a"] }
     ],
     "settingsVariants": [
@@ -30,6 +31,7 @@
             { "parameter": "Суммы", "value": [3, 4.75] },
             { "parameter": "Метки", "value": ["одна, с запятой", null, "2024-01-01T00:00:00"] },
             { "parameter": "Пусто", "value": [null, null] },
+            "Режим = true",
             "Порог = 5",
             "Фамилии = Иванов, O'Brien, Петров"
           ]

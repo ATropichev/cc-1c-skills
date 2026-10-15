@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.131 — Compile 1C DCS from JSON
+# skd-compile v1.132 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -2757,10 +2757,12 @@ def emit_data_parameters(lines, items, indent):
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:boolean">{esc_xml_text(bv)}</dcscor:value>')
                     elif re.match(r'^date', vtype, re.I) or (not v_prim and re.match(r'^\d{4}-\d{2}-\d{2}T', str(dpv))):
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:dateTime">{esc_xml_text(str(dpv))}</dcscor:value>')
-                    elif re.match(r'^decimal', vtype):
+                    elif re.match(r'^decimal', vtype, re.I):
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:decimal">{esc_xml_text(str(dpv))}</dcscor:value>')
-                    elif re.match(r'^string', vtype):
-                        lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:string">{esc_xml_text(str(dpv))}</dcscor:value>')
+                    elif re.match(r'^string', vtype, re.I):
+                        # Краткая запись уже превратила true/false в булево — вернуть текст, как написан
+                        sv = str(dpv).lower() if isinstance(dpv, bool) else str(dpv)
+                        lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:string">{esc_xml_text(sv)}</dcscor:value>')
                     elif re.match(r'^(\u041f\u043b\u0430\u043d\u0421\u0447\u0435\u0442\u043e\u0432|\u0421\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a|\u041f\u0435\u0440\u0435\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u0435|\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442|\u041f\u043b\u0430\u043d\u0412\u0438\u0434\u043e\u0432\u0425\u0430\u0440\u0430\u043a\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043a|\u041f\u043b\u0430\u043d\u0412\u0438\u0434\u043e\u0432\u0420\u0430\u0441\u0447\u0435\u0442\u0430|\u0411\u0438\u0437\u043d\u0435\u0441\u041f\u0440\u043e\u0446\u0435\u0441\u0441|\u0417\u0430\u0434\u0430\u0447\u0430|\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0421\u0432\u0435\u0434\u0435\u043d\u0438\u0439|\u041f\u043b\u0430\u043d\u041e\u0431\u043c\u0435\u043d\u0430)\.', str(dpv)) or re.match(r'^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(dpv)):
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(str(dpv))}</dcscor:value>')
                     else:

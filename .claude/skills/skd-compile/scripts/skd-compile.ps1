@@ -1,4 +1,4 @@
-﻿# skd-compile v1.131 — Compile 1C DCS from JSON
+﻿# skd-compile v1.132 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -3203,7 +3203,9 @@ function Emit-DataParameters {
 					} elseif ($vtype -match '^decimal') {
 						X "$indent`t`t<dcscor:value xsi:type=`"xs:decimal`">$(Esc-XmlText "$dpv")</dcscor:value>"
 					} elseif ($vtype -match '^string') {
-						X "$indent`t`t<dcscor:value xsi:type=`"xs:string`">$(Esc-XmlText "$dpv")</dcscor:value>"
+						# Краткая запись уже превратила true/false в булево — вернуть текст, как написан
+						$sv = if ($dpv -is [bool]) { "$dpv".ToLower() } else { "$dpv" }
+						X "$indent`t`t<dcscor:value xsi:type=`"xs:string`">$(Esc-XmlText $sv)</dcscor:value>"
 					} elseif ("$dpv" -match '^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.' -or "$dpv" -match '^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') {
 						X "$indent`t`t<dcscor:value xsi:type=`"dcscor:DesignTimeValue`">$(Esc-XmlText "$dpv")</dcscor:value>"
 					} else {
