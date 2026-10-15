@@ -1,4 +1,4 @@
-﻿# skd-edit v1.42 — Atomic 1C DCS editor
+﻿# skd-edit v1.43 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: парный .py собирает выражения автодат вне f-string ради совместимости с python 3.9 (PEP 701).
 [CmdletBinding(PositionalBinding=$false)]
@@ -708,10 +708,15 @@ function Parse-DataParamShorthand {
 	if ($s -match '^([^=]+)=\s*(.*)$') {
 		$result.parameter = $Matches[1].Trim()
 		$valStr = $Matches[2].Trim()
+		# Список значений через запятую; запятая внутри значения — в кавычках.
+		$items = Parse-ValueList $valStr
+		if ($items.Count -eq 1) { $valStr = $items[0] }
 
 		$periodVariants = @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear")
 		# Empty / sentinel — record as "" so caller emits xsi:nil
-		if ($valStr -eq "" -or $valStr -eq "_" -or $valStr.ToLowerInvariant() -eq "null") {
+		if ($items.Count -ge 2) {
+			$result.value = $items
+		} elseif ($valStr -eq "" -or $valStr -eq "_" -or $valStr.ToLowerInvariant() -eq "null") {
 			$result.value = ""
 		} elseif ($periodVariants -contains $valStr) {
 			$result.value = @{ variant = $valStr }
@@ -1525,6 +1530,35 @@ function Build-SelectionItemFragment {
 	return $lines -join "`n"
 }
 
+# <dcscor:value> параметра данных; список — по элементу на значение, как пишет платформа.
+function Build-DataParamValueLines {
+	param($value, [string]$vi)
+	$lines = @()
+	if ($value -is [hashtable] -and $value.variant) {
+		$lines += "$vi<dcscor:value xsi:type=`"v8:StandardPeriod`">"
+		$lines += "$vi`t<v8:variant xsi:type=`"v8:StandardPeriodVariant`">$(Esc-XmlText $value.variant)</v8:variant>"
+		$lines += "$vi`t<v8:startDate>0001-01-01T00:00:00</v8:startDate>"
+		$lines += "$vi`t<v8:endDate>0001-01-01T00:00:00</v8:endDate>"
+		$lines += "$vi</dcscor:value>"
+	} elseif (Test-EmptyValue $value) {
+		$lines += "$vi<dcscor:value xsi:nil=`"true`"/>"
+	} else {
+		foreach ($v in @($value)) {
+			if ("$v" -match '^\d{4}-\d{2}-\d{2}T') {
+				$lines += "$vi<dcscor:value xsi:type=`"xs:dateTime`">$(Esc-XmlText "$v")</dcscor:value>"
+			} elseif ("$v" -ceq "true" -or "$v" -ceq "false") {
+				$lines += "$vi<dcscor:value xsi:type=`"xs:boolean`">$(Esc-XmlText "$v")</dcscor:value>"
+			} elseif ("$v" -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.' -or
+			          "$v" -match '^(Catalog|Document|Enum|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') {
+				$lines += "$vi<dcscor:value xsi:type=`"dcscor:DesignTimeValue`">$(Esc-XmlText "$v")</dcscor:value>"
+			} else {
+				$lines += "$vi<dcscor:value xsi:type=`"xs:string`">$(Esc-XmlText "$v")</dcscor:value>"
+			}
+		}
+	}
+	return ,$lines
+}
+
 function Build-DataParamFragment {
 	param($parsed, [string]$indent)
 
@@ -1539,21 +1573,7 @@ function Build-DataParamFragment {
 	$lines += "$i`t<dcscor:parameter>$(Esc-XmlText $parsed.parameter)</dcscor:parameter>"
 
 	if ($null -ne $parsed.value) {
-		if ($parsed.value -is [hashtable] -and $parsed.value.variant) {
-			$lines += "$i`t<dcscor:value xsi:type=`"v8:StandardPeriod`">"
-			$lines += "$i`t`t<v8:variant xsi:type=`"v8:StandardPeriodVariant`">$(Esc-XmlText $parsed.value.variant)</v8:variant>"
-			$lines += "$i`t`t<v8:startDate>0001-01-01T00:00:00</v8:startDate>"
-			$lines += "$i`t`t<v8:endDate>0001-01-01T00:00:00</v8:endDate>"
-			$lines += "$i`t</dcscor:value>"
-		} elseif (Test-EmptyValue $parsed.value) {
-			$lines += "$i`t<dcscor:value xsi:nil=`"true`"/>"
-		} elseif ("$($parsed.value)" -match '^\d{4}-\d{2}-\d{2}T') {
-			$lines += "$i`t<dcscor:value xsi:type=`"xs:dateTime`">$(Esc-XmlText "$($parsed.value)")</dcscor:value>"
-		} elseif ("$($parsed.value)" -eq "true" -or "$($parsed.value)" -eq "false") {
-			$lines += "$i`t<dcscor:value xsi:type=`"xs:boolean`">$(Esc-XmlText "$($parsed.value)")</dcscor:value>"
-		} else {
-			$lines += "$i`t<dcscor:value xsi:type=`"xs:string`">$(Esc-XmlText "$($parsed.value)")</dcscor:value>"
-		}
+		$lines += Build-DataParamValueLines $parsed.value "$i`t"
 	}
 
 	if ($parsed.viewMode) {
@@ -1933,7 +1953,19 @@ function Find-ElementByChildValue($container, [string]$elemName, [string]$childN
 	return $null
 }
 
-function Set-OrCreateChildElement($parent, [string]$localName, [string]$nsUri, [string]$value, [string]$indent) {
+# Опорный элемент для вставки нового дочернего: первый, который по схеме идёт после него.
+# $order — порядок дочерних элементов (локальные имена). Без $order или опоры — $null (в конец).
+function Get-OrderedInsertRef($parent, [string]$localName, [string[]]$order) {
+	if (-not $order) { return $null }
+	$newIdx = [array]::IndexOf($order, $localName)
+	foreach ($ch in $parent.ChildNodes) {
+		if ($ch.NodeType -ne 'Element') { continue }
+		if ([array]::IndexOf($order, $ch.LocalName) -gt $newIdx) { return $ch }
+	}
+	return $null
+}
+
+function Set-OrCreateChildElement($parent, [string]$localName, [string]$nsUri, [string]$value, [string]$indent, [string[]]$order = $null) {
 	$existing = $null
 	foreach ($ch in $parent.ChildNodes) {
 		if ($ch.NodeType -eq 'Element' -and $ch.LocalName -eq $localName -and $ch.NamespaceURI -eq $nsUri) {
@@ -1947,14 +1979,15 @@ function Set-OrCreateChildElement($parent, [string]$localName, [string]$nsUri, [
 		$prefix = $parent.GetPrefixOfNamespace($nsUri)
 		$qualName = if ($prefix) { "${prefix}:$localName" } else { $localName }
 		$fragXml = "$indent<$qualName>$(Esc-XmlText $value)</$qualName>"
+		$refEl = Get-OrderedInsertRef $parent $localName $order
 		$nodes = Import-Fragment $xmlDoc $fragXml
 		foreach ($node in $nodes) {
-			Insert-BeforeElement $parent $node $null $indent
+			Insert-BeforeElement $parent $node $refEl $indent
 		}
 	}
 }
 
-function Set-OrCreateChildElementWithAttr($parent, [string]$localName, [string]$nsUri, [string]$value, [string]$xsiType, [string]$indent) {
+function Set-OrCreateChildElementWithAttr($parent, [string]$localName, [string]$nsUri, [string]$value, [string]$xsiType, [string]$indent, [string[]]$order = $null) {
 	$existing = $null
 	foreach ($ch in $parent.ChildNodes) {
 		if ($ch.NodeType -eq 'Element' -and $ch.LocalName -eq $localName -and $ch.NamespaceURI -eq $nsUri) {
@@ -1972,9 +2005,10 @@ function Set-OrCreateChildElementWithAttr($parent, [string]$localName, [string]$
 		$qualName = if ($prefix) { "${prefix}:$localName" } else { $localName }
 		$typeAttr = if ($xsiType) { " xsi:type=`"$xsiType`"" } else { "" }
 		$fragXml = "$indent<$qualName$typeAttr>$(Esc-XmlText $value)</$qualName>"
+		$refEl = Get-OrderedInsertRef $parent $localName $order
 		$nodes = Import-Fragment $xmlDoc $fragXml
 		foreach ($node in $nodes) {
-			Insert-BeforeElement $parent $node $null $indent
+			Insert-BeforeElement $parent $node $refEl $indent
 		}
 	}
 }
@@ -3570,19 +3604,20 @@ switch ($Operation) {
 			}
 
 			$itemIndent = Get-ChildIndent $filterItem
+			$filterChildOrder = @('use', 'left', 'comparisonType', 'right', 'presentation', 'viewMode', 'userSettingID', 'userSettingPresentation')
 
 			# Update comparisonType
-			Set-OrCreateChildElement $filterItem "comparisonType" $setNs $parsed.op $itemIndent
+			Set-OrCreateChildElement $filterItem "comparisonType" $setNs $parsed.op $itemIndent $filterChildOrder
 
 			# Update right value
 			if ($null -ne $parsed.value) {
 				$vt = if ($parsed["valueType"]) { $parsed["valueType"] } else { "xs:string" }
-				Set-OrCreateChildElementWithAttr $filterItem "right" $setNs "$($parsed.value)" $vt $itemIndent
+				Set-OrCreateChildElementWithAttr $filterItem "right" $setNs "$($parsed.value)" $vt $itemIndent $filterChildOrder
 			}
 
 			# Update use (only when explicitly set via @off / @on)
 			if ($parsed.use -eq $false) {
-				Set-OrCreateChildElement $filterItem "use" $setNs "false" $itemIndent
+				Set-OrCreateChildElement $filterItem "use" $setNs "false" $itemIndent $filterChildOrder
 			} elseif ($parsed.use -eq $true) {
 				# @on: remove existing use=false if any
 				$useEl = $null
@@ -3598,13 +3633,13 @@ switch ($Operation) {
 
 			# Update viewMode
 			if ($parsed.viewMode) {
-				Set-OrCreateChildElement $filterItem "viewMode" $setNs $parsed.viewMode $itemIndent
+				Set-OrCreateChildElement $filterItem "viewMode" $setNs $parsed.viewMode $itemIndent $filterChildOrder
 			}
 
 			# Update userSettingID
 			if ($parsed.userSettingID) {
 				$uid = if ($parsed.userSettingID -eq "auto") { [System.Guid]::NewGuid().ToString() } else { $parsed.userSettingID }
-				Set-OrCreateChildElement $filterItem "userSettingID" $setNs $uid $itemIndent
+				Set-OrCreateChildElement $filterItem "userSettingID" $setNs $uid $itemIndent $filterChildOrder
 			}
 
 			$script:Dirty = $true; Write-Host "[OK] Filter `"$($parsed.field)`" modified in variant `"$varName`""
@@ -3631,47 +3666,37 @@ switch ($Operation) {
 			}
 
 			$itemIndent = Get-ChildIndent $dpItem
+			$dpChildOrder = @('use', 'parameter', 'value', 'viewMode', 'userSettingID', 'userSettingPresentation')
 
 			# Update value
 			if ($null -ne $parsed.value) {
-				# Remove existing value element first
-				$existingVal = $null
+				# Удалить ВСЕ прежние значения (у списка их несколько)
+				$existingVals = @()
+				$paramEl = $null
 				foreach ($ch in $dpItem.ChildNodes) {
-					if ($ch.NodeType -eq 'Element' -and $ch.LocalName -eq 'value' -and $ch.NamespaceURI -eq $corNs) {
-						$existingVal = $ch; break
-					}
+					if ($ch.NodeType -ne 'Element' -or $ch.NamespaceURI -ne $corNs) { continue }
+					if ($ch.LocalName -eq 'value') { $existingVals += $ch }
+					elseif ($ch.LocalName -eq 'parameter') { $paramEl = $ch }
 				}
-				if ($existingVal) {
-					Remove-NodeWithWhitespace $existingVal
-				}
+				foreach ($ev in $existingVals) { Remove-NodeWithWhitespace $ev }
 
-				# Build new value fragment
-				$valLines = @()
-				if ($parsed.value -is [hashtable] -and $parsed.value.variant) {
-					$valLines += "$itemIndent<dcscor:value xsi:type=`"v8:StandardPeriod`">"
-					$valLines += "$itemIndent`t<v8:variant xsi:type=`"v8:StandardPeriodVariant`">$(Esc-XmlText $parsed.value.variant)</v8:variant>"
-					$valLines += "$itemIndent`t<v8:startDate>0001-01-01T00:00:00</v8:startDate>"
-					$valLines += "$itemIndent`t<v8:endDate>0001-01-01T00:00:00</v8:endDate>"
-					$valLines += "$itemIndent</dcscor:value>"
-				} elseif (Test-EmptyValue $parsed.value) {
-					$valLines += "$itemIndent<dcscor:value xsi:nil=`"true`"/>"
-				} elseif ("$($parsed.value)" -match '^\d{4}-\d{2}-\d{2}T') {
-					$valLines += "$itemIndent<dcscor:value xsi:type=`"xs:dateTime`">$(Esc-XmlText "$($parsed.value)")</dcscor:value>"
-				} elseif ("$($parsed.value)" -eq "true" -or "$($parsed.value)" -eq "false") {
-					$valLines += "$itemIndent<dcscor:value xsi:type=`"xs:boolean`">$(Esc-XmlText "$($parsed.value)")</dcscor:value>"
-				} else {
-					$valLines += "$itemIndent<dcscor:value xsi:type=`"xs:string`">$(Esc-XmlText "$($parsed.value)")</dcscor:value>"
+				# Новые значения — сразу после <dcscor:parameter>: по схеме value идёт до viewMode/userSettingID
+				$refEl = $null
+				if ($paramEl) {
+					$sib = $paramEl.NextSibling
+					while ($sib -and $sib.NodeType -ne 'Element') { $sib = $sib.NextSibling }
+					$refEl = $sib
 				}
-				$valXml = $valLines -join "`n"
+				$valXml = (Build-DataParamValueLines $parsed.value $itemIndent) -join "`n"
 				$valNodes = Import-Fragment $xmlDoc $valXml
 				foreach ($node in $valNodes) {
-					Insert-BeforeElement $dpItem $node $null $itemIndent
+					Insert-BeforeElement $dpItem $node $refEl $itemIndent
 				}
 			}
 
 			# Update use (only when explicitly set via @off / @on)
 			if ($parsed.use -eq $false) {
-				Set-OrCreateChildElement $dpItem "use" $corNs "false" $itemIndent
+				Set-OrCreateChildElement $dpItem "use" $corNs "false" $itemIndent $dpChildOrder
 			} elseif ($parsed.use -eq $true) {
 				# @on: remove existing use=false if any
 				$useEl = $null
@@ -3687,13 +3712,13 @@ switch ($Operation) {
 
 			# Update viewMode
 			if ($parsed.viewMode) {
-				Set-OrCreateChildElement $dpItem "viewMode" $setNs $parsed.viewMode $itemIndent
+				Set-OrCreateChildElement $dpItem "viewMode" $setNs $parsed.viewMode $itemIndent $dpChildOrder
 			}
 
 			# Update userSettingID
 			if ($parsed.userSettingID) {
 				$uid = if ($parsed.userSettingID -eq "auto") { [System.Guid]::NewGuid().ToString() } else { $parsed.userSettingID }
-				Set-OrCreateChildElement $dpItem "userSettingID" $setNs $uid $itemIndent
+				Set-OrCreateChildElement $dpItem "userSettingID" $setNs $uid $itemIndent $dpChildOrder
 			}
 
 			$script:Dirty = $true; Write-Host "[OK] DataParameter `"$($parsed.parameter)`" modified in variant `"$varName`""

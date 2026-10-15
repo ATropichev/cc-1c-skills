@@ -1,0 +1,26 @@
+{
+  "name": "add-dataParameter: список ссылок — dcscor:DesignTimeValue, как в skd-compile",
+  "preRun": [
+    {
+      "script": "skd-compile/scripts/skd-compile",
+      "input": {
+        "dataSets": [{
+          "name": "Основной",
+          "query": "ВЫБРАТЬ Т.Поле ИЗ Регистр КАК Т",
+          "fields": ["Поле: string"]
+        }],
+        "parameters": ["Виды: ChartOfCharacteristicTypesRef.ВидыСубконтоХозрасчетные @valueList"],
+        "settingsVariants": [{
+          "name": "Основной",
+          "settings": { "selection": ["Auto"], "structure": "details" }
+        }]
+      },
+      "args": { "-DefinitionFile": "{inputFile}", "-OutputPath": "{workDir}/Template.xml" }
+    }
+  ],
+  "params": {
+    "templatePath": "Template.xml",
+    "operation": "add-dataParameter",
+    "value": "Виды = ПланВидовХарактеристик.ВидыСубконтоХозрасчетные.Контрагенты, ПланВидовХарактеристик.ВидыСубконтоХозрасчетные.Договоры @user"
+  }
+}

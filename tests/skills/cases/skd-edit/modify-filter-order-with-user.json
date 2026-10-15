@@ -1,0 +1,29 @@
+{
+  "name": "modify-filter: use/right/viewMode встают на свои места, а не после userSettingID",
+  "preRun": [
+    {
+      "script": "skd-compile/scripts/skd-compile",
+      "input": {
+        "dataSets": [{
+          "name": "Основной",
+          "query": "ВЫБРАТЬ Т.Код, Т.Статус ИЗ Регистр КАК Т",
+          "fields": ["Код: string(10)", "Статус: string(10)"]
+        }],
+        "settingsVariants": [{
+          "name": "Основной",
+          "settings": {
+            "selection": ["Auto"],
+            "filter": ["Код = A @user", "Статус filled @user"],
+            "structure": "details"
+          }
+        }]
+      },
+      "args": { "-DefinitionFile": "{inputFile}", "-OutputPath": "{workDir}/Template.xml" }
+    }
+  ],
+  "params": {
+    "templatePath": "Template.xml",
+    "operation": "modify-filter",
+    "value": "Код = B @off @quickAccess ;; Статус = X @quickAccess"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "add-dataParameter: список значений через запятую — по <dcscor:value> на элемент (#119)",
+  "preRun": [
+    {
+      "script": "skd-compile/scripts/skd-compile",
+      "input": {
+        "dataSets": [{
+          "name": "Основной",
+          "query": "ВЫБРАТЬ Т.Код ИЗ Регистр КАК Т",
+          "fields": ["Код: string(10)"]
+        }],
+        "parameters": ["Коды: string(10) @valueList"],
+        "settingsVariants": [{
+          "name": "Основной",
+          "settings": { "selection": ["Auto"], "structure": "details" }
+        }]
+      },
+      "args": { "-DefinitionFile": "{inputFile}", "-OutputPath": "{workDir}/Template.xml" }
+    }
+  ],
+  "params": {
+    "templatePath": "Template.xml",
+    "operation": "add-dataParameter",
+    "value": "Коды = A, 'B, C' @user"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "modify-dataParameter: список заменяет ВСЕ прежние значения; значения и use — на своих местах при userSettingID (#119)",
+  "preRun": [
+    {
+      "script": "skd-compile/scripts/skd-compile",
+      "input": {
+        "dataSets": [{
+          "name": "Основной",
+          "query": "ВЫБРАТЬ Т.Код ИЗ Регистр КАК Т",
+          "fields": ["Код: string(10)"]
+        }],
+        "parameters": ["Коды: string(10) = A, B, C", "Метка: string(20) = x"],
+        "settingsVariants": [{
+          "name": "Основной",
+          "settings": {
+            "selection": ["Auto"],
+            "dataParameters": "auto",
+            "structure": "details"
+          }
+        }]
+      },
+      "args": { "-DefinitionFile": "{inputFile}", "-OutputPath": "{workDir}/Template.xml" }
+    }
+  ],
+  "params": {
+    "templatePath": "Template.xml",
+    "operation": "modify-dataParameter",
+    "value": "Коды = Z, 'Q, R' ;; Метка = y1, y2 @off @quickAccess"
+  }
+}
