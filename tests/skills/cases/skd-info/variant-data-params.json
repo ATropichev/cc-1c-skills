@@ -1,0 +1,21 @@
+{
+  "name": "Вариант: параметры данных — все значения списка, стандартный период по варианту (#119)",
+  "args_extra": ["-Mode", "variant", "-Name", "Основной"],
+  "preRun": [
+    {
+      "script": "skd-compile/scripts/skd-compile",
+      "input": {
+        "dataSets": [{ "name": "Н", "query": "ВЫБРАТЬ 1 КАК А", "fields": ["А"] }],
+        "parameters": [
+          "Период: StandardPeriod = LastMonth",
+          "Коды: string(10) = A, 'B, C'",
+          "Метка: string(10) = x"
+        ],
+        "settingsVariants": [{ "name": "Основной", "settings": { "structure": "details", "dataParameters": "auto" } }]
+      },
+      "args": { "-DefinitionFile": "{inputFile}", "-OutputPath": "{workDir}/Template.xml" }
+    }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "expect": { "stdoutContains": "DataParams: Период=\"LastMonth\", Коды=[\"A\", \"B, C\"], Метка=\"x\"" }
+}

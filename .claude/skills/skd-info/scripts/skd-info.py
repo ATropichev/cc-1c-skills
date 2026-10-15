@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-info v1.12 — Analyze 1C DCS structure
+# skd-info v1.13 — Analyze 1C DCS structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1298,14 +1298,20 @@ def main():
                         lines.append(f"  {f}")
 
                 # Data parameters
-                data_params = settings.findall("dcsset:dataParameters/dcsset:item", NSMAP)
+                data_params = settings.findall("dcsset:dataParameters/dcscor:item", NSMAP)
                 if data_params:
                     dp_strs = []
                     for dp in data_params:
                         dp_param = dp.find("dcscor:parameter", NSMAP)
-                        dp_val = dp.find("dcscor:value", NSMAP)
-                        if dp_param is not None and dp_val is not None:
-                            dp_strs.append(f'{(dp_param.text or "")}="{(dp_val.text or "")}"')
+                        dp_vals = dp.findall("dcscor:value", NSMAP)
+                        if dp_param is not None and dp_vals:
+                            # Стандартный период — по варианту; список значений — в квадратных скобках
+                            vs = []
+                            for v in dp_vals:
+                                var = v.find("v8:variant", NSMAP)
+                                vs.append('"%s"' % (var.text or "") if var is not None else '"%s"' % "".join(v.itertext()))
+                            v_text = "[" + ", ".join(vs) + "]" if len(vs) > 1 else vs[0]
+                            dp_strs.append(f'{(dp_param.text or "")}={v_text}')
                     if dp_strs:
                         lines.append("")
                         lines.append("DataParams: " + ", ".join(dp_strs))

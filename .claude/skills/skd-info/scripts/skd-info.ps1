@@ -1,4 +1,4 @@
-﻿# skd-info v1.12 — Analyze 1C DCS structure
+﻿# skd-info v1.13 — Analyze 1C DCS structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1379,14 +1379,21 @@ function Show-Variant {
 		}
 
 		# Data parameters
-		$dataParams = $settings.SelectNodes("dcsset:dataParameters/dcsset:item", $ns)
+		$dataParams = $settings.SelectNodes("dcsset:dataParameters/dcscor:item", $ns)
 		if ($dataParams.Count -gt 0) {
 			$dpStrs = @()
 			foreach ($dp in $dataParams) {
 				$dpParam = $dp.SelectSingleNode("dcscor:parameter", $ns)
-				$dpVal = $dp.SelectSingleNode("dcscor:value", $ns)
-				if ($dpParam -and $dpVal) {
-					$dpStrs += "$($dpParam.InnerText)=`"$($dpVal.InnerText)`""
+				$dpVals = $dp.SelectNodes("dcscor:value", $ns)
+				if ($dpParam -and $dpVals.Count -gt 0) {
+					# Стандартный период — по варианту; список значений — в квадратных скобках
+					$vs = @()
+					foreach ($v in $dpVals) {
+						$var = $v.SelectSingleNode("v8:variant", $ns)
+						$vs += if ($var) { "`"$($var.InnerText)`"" } else { "`"$($v.InnerText)`"" }
+					}
+					$vText = if ($vs.Count -gt 1) { "[" + ($vs -join ", ") + "]" } else { $vs[0] }
+					$dpStrs += "$($dpParam.InnerText)=$vText"
 				}
 			}
 			if ($dpStrs.Count -gt 0) {
