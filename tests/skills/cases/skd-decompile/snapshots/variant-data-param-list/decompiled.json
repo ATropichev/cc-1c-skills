@@ -1,0 +1,8 @@
+{
+  "dataSets": [{ "name": "Н", "query": "ВЫБРАТЬ 1 КАК А", "fields": ["А"] }],
+  "parameters": ["Коды: string(10) = A, B, C @valueList", "Склады: string(30) = Основной, 'Склад, розница' @valueList", "Суммы: decimal(10,2) = 1, 2.5 @valueList", "Метка: string(20) = 'x, y'"],
+  "settingsVariants": [
+    { "name": "Авто", "settings": { "selection": [], "dataParameters": "auto", "structure": "details" } },
+    { "name": "Явный", "settings": { "selection": [], "dataParameters": [{ "parameter": "Коды", "value": ["A", "B"], "valueType": "xs:string", "userSettingID": "auto" }, { "parameter": "Суммы", "value": [3, 4.75], "valueType": "xs:decimal" }, "Метка = 'одна, с запятой' @user"], "structure": "details" } }
+  ]
+}

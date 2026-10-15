@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-decompile v0.97 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+# skd-decompile v0.98 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1017,6 +1017,71 @@ def get_standard_period_variant(value_node):
     return None
 
 
+# Элемент списка значений (<value>/<dcscor:value>) → типизированное JSON-значение.
+def convert_list_item_value(vn):
+    vt = get_local_xsi_type(vn)
+    v_txt = vn.inner_text
+    if vt == 'boolean':
+        return v_txt == 'true'
+    if vt == 'decimal':
+        if re.match(r'^-?\d+$', v_txt or ''):
+            return int(v_txt)
+        return float(v_txt)
+    return v_txt
+
+
+def _list_item_str(v):
+    # Как "$v" в PS: целое double без дробной части — без ".0"
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v)
+
+
+# Списки значений равны поэлементно: тип JSON и текст (Ordinal).
+def same_value_list(a, b):
+    if not isinstance(a, list) or not isinstance(b, list) or len(a) != len(b):
+        return False
+    for x, y in zip(a, b):
+        if type(x) is not type(y):
+            return False
+        if _list_item_str(x) != _list_item_str(y):
+            return False
+    return True
+
+
+# Список значений → "a, b, 'c, d'" для краткой записи (compile разбирает через запятую,
+# элемент с запятой — в кавычках). None — элемент так не выразить, нужна объектная форма.
+def format_value_list_shorthand(items):
+    parts = []
+    for it in items:
+        if isinstance(it, bool):
+            return None
+        if isinstance(it, str):
+            s = it
+        elif isinstance(it, (int, float)):
+            s = _list_item_str(it)
+        else:
+            return None
+        if s == '' or s != s.strip() or re.search(r"['\"@\[\]]", s):
+            return None
+        if ',' in s:
+            s = "'%s'" % s
+        parts.append(s)
+    return ', '.join(parts)
+
+
+# Одиночное значение для краткой записи: с запятой — в кавычках (иначе compile разобьёт
+# его в список). None — так не выразить (обрамлено кавычками, апостроф при запятой).
+def format_scalar_shorthand(s):
+    if len(s) >= 2 and s[0] in ("'", '"') and s[-1] == s[0]:
+        return None
+    if ',' in s:
+        if "'" in s:
+            return None
+        return "'%s'" % s
+    return s
+
+
 # Build parameter → shorthand or object form
 def build_parameter(p_node, loc):
     name = get_text(p_node, "r:name")
@@ -1031,17 +1096,7 @@ def build_parameter(p_node, loc):
     if len(value_nodes) > 1:
         value_arr = []
         for vn in value_nodes:
-            vt = get_local_xsi_type(vn)
-            v_txt = vn.inner_text
-            if vt == 'boolean':
-                value_arr.append(v_txt == 'true')
-            elif vt == 'decimal':
-                if re.match(r'^-?\d+$', v_txt or ''):
-                    value_arr.append(int(v_txt))
-                else:
-                    value_arr.append(float(v_txt))
-            else:
-                value_arr.append(v_txt)
+            value_arr.append(convert_list_item_value(vn))
         value_display = value_arr
     elif len(value_nodes) == 1:
         value_node = value_nodes[0]
@@ -1143,6 +1198,17 @@ def render_parameter(p):
     value_is_dict = isinstance(value_display, dict)
 
     needs_object = False
+    # Список значений по умолчанию: в краткой записи — через запятую; элемент, который так
+    # не выразить, требует объектной формы (value — массив).
+    value_short = value_display
+    if isinstance(value_display, list):
+        value_short = format_value_list_shorthand(value_display)
+        if value_short is None:
+            needs_object = True
+    elif isinstance(value_display, str) and value_display != '':
+        value_short = format_scalar_shorthand(value_display)
+        if value_short is None:
+            needs_object = True
     if p['availableValues'] and len(p['availableValues']) > 0:
         needs_object = True
     if p['inputParameters']:
@@ -1179,8 +1245,8 @@ def render_parameter(p):
             s += " [%s]" % title
         if type_short:
             s += ": %s" % type_short
-        if not value_is_nil and value_display is not None and value_display != '':
-            s += " = %s" % value_display
+        if not value_is_nil and value_short is not None and value_short != '':
+            s += " = %s" % value_short
         if flags:
             s += ' ' + ' '.join(flags)
         return s
@@ -2260,6 +2326,33 @@ def build_data_parameters(dp_node, top_params):
             flags.append('@user')
         if use == 'false':
             flags.append('@off')
+        # Список значений: по <dcscor:value> на элемент. «auto» — только при поэлементном
+        # совпадении с умолчанием параметра; явно — объектная форма с полным xsi:type.
+        val_nodes = it.select_nodes("dcscor:value")
+        if len(val_nodes) > 1:
+            v_list = [convert_list_item_value(vn) for vn in val_nodes]
+            if not tp or not same_value_list(tp['valueDisplay'], v_list):
+                can_auto = False
+            obj = {'parameter': pn, 'value': v_list}
+            v_types = []
+            for vn in val_nodes:
+                ta = vn.get_attr_raw('xsi:type')
+                if ta not in v_types:
+                    v_types.append(ta)
+            if len(v_types) == 1 and v_types[0]:
+                obj['valueType'] = v_types[0]
+            if use == 'false':
+                obj['use'] = False
+            if usid:
+                obj['userSettingID'] = 'auto'
+            if vm_n:
+                obj['viewMode'] = vm_n.inner_text
+            if usp_n:
+                usp_v = get_ml_text(usp_n)
+                if usp_v:
+                    obj['userSettingPresentation'] = usp_v
+            entries.append(obj)
+            continue
         vt = get_local_xsi_type(val_node)
         v_display = None
         std_period_obj = None
@@ -2296,14 +2389,21 @@ def build_data_parameters(dp_node, top_params):
         else:
             if val_node:
                 v_display = val_node.inner_text
-        if tp and tp['valueDisplay'] != v_display:
+        if tp and (isinstance(tp['valueDisplay'], list) or tp['valueDisplay'] != v_display):
             can_auto = False
         if not tp:
             can_auto = False
         is_empty_string_placeholder = (vt == 'string') and (not val_node.inner_text) and (use == 'false')
         if is_empty_string_placeholder:
             can_auto = False
-        if std_period_obj or vm_n or usp_n or is_empty_string_placeholder:
+        # Значение, которое краткая запись не выражает (кавычки по краям, апостроф при запятой)
+        v_short = v_display
+        scalar_needs_object = False
+        if isinstance(v_display, str) and v_display != '':
+            v_short = format_scalar_shorthand(v_display)
+            if v_short is None:
+                scalar_needs_object = True
+        if std_period_obj or vm_n or usp_n or is_empty_string_placeholder or scalar_needs_object:
             obj = {'parameter': pn}
             if std_period_obj:
                 obj['value'] = std_period_obj
@@ -2336,8 +2436,8 @@ def build_data_parameters(dp_node, top_params):
             entries.append(obj)
         else:
             s = pn
-            if v_display is not None and v_display != '':
-                s += " = %s" % v_display
+            if v_short is not None and v_short != '':
+                s += " = %s" % v_short
             if flags:
                 s += ' ' + ' '.join(flags)
             entries.append(s)

@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.97 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.98 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -815,6 +815,58 @@ function Get-StandardPeriodVariant {
 	return $null
 }
 
+# Элемент списка значений (<value>/<dcscor:value>) → типизированное JSON-значение.
+function ConvertTo-ListItemValue {
+	param($vn)
+	$vt = Get-LocalXsiType $vn
+	$vTxt = $vn.InnerText
+	if ($vt -eq 'boolean') { return ($vTxt -eq 'true') }
+	if ($vt -eq 'decimal') {
+		if ($vTxt -match '^-?\d+$') { return [int]$vTxt }
+		return [double]$vTxt
+	}
+	return $vTxt
+}
+
+# Списки значений равны поэлементно: тип JSON и текст (Ordinal).
+function Test-SameValueList {
+	param($a, $b)
+	if (-not ($a -is [array]) -or -not ($b -is [array]) -or $a.Count -ne $b.Count) { return $false }
+	for ($i = 0; $i -lt $a.Count; $i++) {
+		if ($a[$i].GetType() -ne $b[$i].GetType()) { return $false }
+		if (-not [string]::Equals("$($a[$i])", "$($b[$i])", [StringComparison]::Ordinal)) { return $false }
+	}
+	return $true
+}
+
+# Список значений → "a, b, 'c, d'" для краткой записи (compile разбирает через запятую,
+# элемент с запятой — в кавычках). $null — элемент так не выразить, нужна объектная форма.
+function Format-ValueListShorthand {
+	param($items)
+	$parts = @()
+	foreach ($it in $items) {
+		if ($it -is [string]) { $s = $it }
+		elseif ($it -is [int] -or $it -is [double]) { $s = "$it" }
+		else { return $null }
+		if ($s -eq '' -or $s -ne $s.Trim() -or $s -match "['`"@\[\]]") { return $null }
+		if ($s.Contains(',')) { $s = "'$s'" }
+		$parts += $s
+	}
+	return ($parts -join ', ')
+}
+
+# Одиночное значение для краткой записи: с запятой — в кавычках (иначе compile разобьёт
+# его в список). $null — так не выразить (обрамлено кавычками, апостроф при запятой).
+function Format-ScalarShorthand {
+	param([string]$s)
+	if ($s.Length -ge 2 -and ($s[0] -eq "'" -or $s[0] -eq '"') -and $s[-1] -eq $s[0]) { return $null }
+	if ($s.Contains(',')) {
+		if ($s.Contains("'")) { return $null }
+		return "'$s'"
+	}
+	return $s
+}
+
 # Build parameter → shorthand or object form
 function Build-Parameter {
 	param($pNode, [string]$loc)
@@ -831,15 +883,7 @@ function Build-Parameter {
 	if ($valueNodes.Count -gt 1) {
 		# Multi-value (список значений по умолчанию для параметра-списка)
 		$valueArr = @()
-		foreach ($vn in $valueNodes) {
-			$vt = Get-LocalXsiType $vn
-			$vTxt = $vn.InnerText
-			if ($vt -eq 'boolean') { $valueArr += ($vTxt -eq 'true') }
-			elseif ($vt -eq 'decimal') {
-				if ($vTxt -match '^-?\d+$') { $valueArr += [int]$vTxt }
-				else { $valueArr += [double]$vTxt }
-			} else { $valueArr += $vTxt }
-		}
+		foreach ($vn in $valueNodes) { $valueArr += ConvertTo-ListItemValue $vn }
 		$valueDisplay = $valueArr
 	}
 	elseif ($valueNodes.Count -eq 1) {
@@ -946,6 +990,16 @@ function Render-Parameter {
 	# Object form needed if: availableValues, multilingual title, composite type,
 	# explicit denyIncomplete/use without @autoDates, useRestriction without autoDates, expression set
 	$needsObject = $false
+	# Список значений по умолчанию: в краткой записи — через запятую; элемент, который так
+	# не выразить, требует объектной формы (value — массив).
+	$valueShort = $valueDisplay
+	if ($valueDisplay -is [array]) {
+		$valueShort = Format-ValueListShorthand $valueDisplay
+		if ($null -eq $valueShort) { $needsObject = $true }
+	} elseif ($valueDisplay -is [string] -and $valueDisplay -ne '') {
+		$valueShort = Format-ScalarShorthand $valueDisplay
+		if ($null -eq $valueShort) { $needsObject = $true }
+	}
 	if ($p.availableValues -and $p.availableValues.Count -gt 0) { $needsObject = $true }
 	if ($p.inputParameters) { $needsObject = $true }
 	if ($titleNeedsObject) { $needsObject = $true }
@@ -975,7 +1029,7 @@ function Render-Parameter {
 		$s = $name
 		if ($title) { $s += " [$title]" }
 		if ($typeShort) { $s += ": $typeShort" }
-		if (-not $valueIsNil -and $null -ne $valueDisplay -and $valueDisplay -ne '') { $s += " = $valueDisplay" }
+		if (-not $valueIsNil -and $null -ne $valueShort -and $valueShort -ne '') { $s += " = $valueShort" }
 		if ($flags) { $s += ' ' + ($flags -join ' ') }
 		return $s
 	}
@@ -983,7 +1037,7 @@ function Render-Parameter {
 	$obj = [ordered]@{ name = $name }
 	if ($title) { $obj['title'] = $title }
 	if ($typeShort) { $obj['type'] = $typeShort }
-	if (-not $valueIsNil -and $null -ne $valueDisplay -and $valueDisplay -ne '') { $obj['value'] = $valueDisplay }
+	if (-not $valueIsNil -and $null -ne $valueDisplay -and ($valueDisplay -is [array] -or $valueDisplay -ne '')) { $obj['value'] = $valueDisplay }
 	if ($nilNeedsObject) { $obj['nilValue'] = $true }
 	if ($p.useAttr -and -not $p.autoDates) { $obj['use'] = $p.useAttr }
 	if ($p.denyIncomplete -and -not $p.autoDates) { $obj['denyIncompleteValues'] = $true }
@@ -2131,6 +2185,26 @@ function Build-DataParameters {
 		$flags = @()
 		if ($usid) { $flags += '@user' }
 		if ($use -eq 'false') { $flags += '@off' }
+		# Список значений: по <dcscor:value> на элемент. «auto» — только при поэлементном
+		# совпадении с умолчанием параметра; явно — объектная форма с полным xsi:type.
+		$valNodes = $it.SelectNodes("dcscor:value", $ns)
+		if ($valNodes.Count -gt 1) {
+			$vList = @()
+			foreach ($vn in $valNodes) { $vList += ConvertTo-ListItemValue $vn }
+			if (-not $tp -or -not (Test-SameValueList $tp.valueDisplay $vList)) { $canAuto = $false }
+			$obj = [ordered]@{ parameter = $pn; value = $vList }
+			$vTypes = @($valNodes | ForEach-Object { $_.GetAttribute('type', $NS_XSI) } | Select-Object -Unique)
+			if ($vTypes.Count -eq 1 -and $vTypes[0]) { $obj['valueType'] = $vTypes[0] }
+			if ($use -eq 'false') { $obj['use'] = $false }
+			if ($usid) { $obj['userSettingID'] = 'auto' }
+			if ($vmN) { $obj['viewMode'] = $vmN.InnerText }
+			if ($uspN) {
+				$uspV = Get-MLText $uspN
+				if ($uspV) { $obj['userSettingPresentation'] = $uspV }
+			}
+			$entries += $obj
+			continue
+		}
 		$vt = Get-LocalXsiType $valNode
 		$vDisplay = $null
 		$stdPeriodObj = $null
@@ -2172,7 +2246,7 @@ function Build-DataParameters {
 			if ($valNode) { $vDisplay = $valNode.InnerText }
 		}
 		# Compare to top-level default
-		if ($tp -and $tp.valueDisplay -ne $vDisplay) { $canAuto = $false }
+		if ($tp -and ($tp.valueDisplay -is [array] -or $tp.valueDisplay -cne $vDisplay)) { $canAuto = $false }
 		if (-not $tp) { $canAuto = $false }   # extra param not in top-level
 		# Empty xs:string + use=false — оригинальный placeholder для disabled-параметра
 		# (используется для типа DateTime в settings; см. АнализПлановыхНачислений @1506).
@@ -2180,8 +2254,15 @@ function Build-DataParameters {
 		# вместо xsi:nil.
 		$isEmptyStringPlaceholder = ($vt -eq 'string') -and (-not $valNode.InnerText) -and ($use -eq 'false')
 		if ($isEmptyStringPlaceholder) { $canAuto = $false }
+		# Значение, которое краткая запись не выражает (кавычки по краям, апостроф при запятой)
+		$vShort = $vDisplay
+		$scalarNeedsObject = $false
+		if ($vDisplay -is [string] -and $vDisplay -ne '') {
+			$vShort = Format-ScalarShorthand $vDisplay
+			if ($null -eq $vShort) { $scalarNeedsObject = $true }
+		}
 		# Object form требуется если есть viewMode / userSettingPresentation / StandardPeriod-с-датами / xs:string-placeholder
-		if ($stdPeriodObj -or $vmN -or $uspN -or $isEmptyStringPlaceholder) {
+		if ($stdPeriodObj -or $vmN -or $uspN -or $isEmptyStringPlaceholder -or $scalarNeedsObject) {
 			$obj = [ordered]@{ parameter = $pn }
 			if ($stdPeriodObj) {
 				$obj['value'] = $stdPeriodObj
@@ -2212,7 +2293,7 @@ function Build-DataParameters {
 		} else {
 			# Build shorthand entry
 			$s = $pn
-			if ($null -ne $vDisplay -and $vDisplay -ne '') { $s += " = $vDisplay" }
+			if ($null -ne $vShort -and $vShort -ne '') { $s += " = $vShort" }
 			if ($flags) { $s += ' ' + ($flags -join ' ') }
 			$entries += $s
 		}

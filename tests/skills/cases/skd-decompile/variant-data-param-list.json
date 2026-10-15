@@ -1,0 +1,32 @@
+{
+  "name": "Списки значений параметров: краткая запись через запятую, «auto» при поэлементном совпадении, явный список — объектной формой (#119)",
+  "preRun": [
+    {
+      "script": "skd-compile/scripts/skd-compile",
+      "input": {
+        "dataSets": [{ "name": "Н", "query": "ВЫБРАТЬ 1 КАК А", "fields": ["А"] }],
+        "parameters": [
+          "Коды: string(10) = A, B, C",
+          "Склады: string(30) = Основной, 'Склад, розница'",
+          { "name": "Суммы", "type": "decimal(10,2)", "valueListAllowed": true, "value": [1, 2.5] },
+          "Метка: string(20) = 'x, y'"
+        ],
+        "settingsVariants": [
+          { "name": "Авто", "settings": { "structure": "details", "dataParameters": "auto" } },
+          { "name": "Явный", "settings": { "structure": "details", "dataParameters": [
+            "Коды = A, B @user",
+            { "parameter": "Суммы", "value": [3, 4.75], "valueType": "decimal(10,2)" },
+            "Метка = 'одна, с запятой' @user"
+          ] } }
+        ]
+      },
+      "args": { "-DefinitionFile": "{inputFile}", "-OutputPath": "Template.xml" },
+      "cwd": "{workDir}"
+    }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "outputPath": "decompiled.json",
+  "expect": {
+    "fileContains": { "file": "decompiled.json", "text": "\"dataParameters\": \"auto\"" }
+  }
+}
