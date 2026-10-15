@@ -845,9 +845,22 @@ dcsset:settings
 |---|---|
 | `dcscor:use` | `true`/`false` — использовать значение или нет |
 | `dcscor:parameter` | Имя параметра из раздела 8 |
-| `dcscor:value` | Значение параметра |
+| `dcscor:value` | Значение параметра. Список значений — элемент повторяется подряд по одному на значение, без обёртки (как `<value>` у параметра схемы) |
 | `dcsset:viewMode` | Режим отображения: `Normal`, `QuickAccess`, `Inaccessible` |
 | `dcsset:userSettingID` | GUID пользовательской настройки |
+
+Порядок элементов строгий: `use`, `parameter`, `value`…, `viewMode`, `userSettingID`. Элемент не на своём месте (например, `value` после `userSettingID`) платформа не читает: «Ошибка преобразования данных XDTO … Проверка свойства 'value'».
+
+```xml
+<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+  <dcscor:parameter>Склады</dcscor:parameter>
+  <dcscor:value xsi:type="xs:string">Основной</dcscor:value>
+  <dcscor:value xsi:type="xs:string">Склад, розница</dcscor:value>
+  <dcsset:userSettingID>GUID</dcsset:userSettingID>
+</dcscor:item>
+```
+
+Одно `dcscor:value` со склеенным текстом (`A B C`) платформа читает молча как строку, отбор `В (&Параметр)` по нему ничего не находит. Список работает и у параметра без `valueListAllowed`.
 
 ### 11.8. Элементы структуры (structure items)
 

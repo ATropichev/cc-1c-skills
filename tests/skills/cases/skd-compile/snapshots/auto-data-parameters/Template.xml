@@ -147,6 +147,21 @@
 		<value xsi:type="dcscor:DesignTimeValue">Справочник.Валюты.EmptyRef</value>
 		<useRestriction>false</useRestriction>
 	</parameter>
+	<parameter>
+		<name>Коды</name>
+		<valueType>
+			<v8:Type>xs:string</v8:Type>
+			<v8:StringQualifiers>
+				<v8:Length>10</v8:Length>
+				<v8:AllowedLength>Variable</v8:AllowedLength>
+			</v8:StringQualifiers>
+		</valueType>
+		<value xsi:type="xs:string">A</value>
+		<value xsi:type="xs:string">B</value>
+		<value xsi:type="xs:string">C</value>
+		<useRestriction>false</useRestriction>
+		<valueListAllowed>true</valueListAllowed>
+	</parameter>
 	<settingsVariant>
 		<dcsset:name>Основной</dcsset:name>
 		<dcsset:presentation xsi:type="v8:LocalStringType">
@@ -204,6 +219,13 @@
 					<dcscor:parameter>Валюта</dcscor:parameter>
 					<dcscor:value xsi:type="dcscor:DesignTimeValue">Справочник.Валюты.EmptyRef</dcscor:value>
 					<dcsset:userSettingID>UUID-008</dcsset:userSettingID>
+				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:parameter>Коды</dcscor:parameter>
+					<dcscor:value xsi:type="xs:string">A</dcscor:value>
+					<dcscor:value xsi:type="xs:string">B</dcscor:value>
+					<dcscor:value xsi:type="xs:string">C</dcscor:value>
+					<dcsset:userSettingID>UUID-009</dcsset:userSettingID>
 				</dcscor:item>
 			</dcsset:dataParameters>
 			<dcsset:item xsi:type="dcsset:StructureItemGroup">

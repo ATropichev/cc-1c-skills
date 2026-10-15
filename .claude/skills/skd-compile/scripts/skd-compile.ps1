@@ -1,4 +1,4 @@
-﻿# skd-compile v1.128 — Compile 1C DCS from JSON
+﻿# skd-compile v1.129 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -894,10 +894,15 @@ function Parse-DataParamShorthand {
 	if ($s -match '^([^=]+)=\s*(.+)$') {
 		$result.parameter = $Matches[1].Trim()
 		$valStr = $Matches[2].Trim()
+		# Список значений через запятую — как у параметра схемы; запятая внутри значения — в кавычках.
+		$items = Split-ValueListCsv $valStr
+		if ($items.Count -eq 1) { $valStr = $items[0] }
 
 		# Detect StandardPeriod variants
 		$periodVariants = @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear")
-		if ($periodVariants -contains $valStr) {
+		if ($items.Count -ge 2) {
+			$result.value = $items
+		} elseif ($periodVariants -contains $valStr) {
 			$result.value = @{ variant = $valStr }
 		} elseif ($valStr -match '^\d{4}-\d{2}-\d{2}T') {
 			$result.value = $valStr
@@ -3153,23 +3158,28 @@ function Emit-DataParameters {
 					}
 					X "$indent`t`t</dcscor:value>"
 				}
-			} elseif ($vtype -match '^[a-zA-Z]+:') {
-				# Полный xsi:type из decompile (например "xs:boolean", "dcscor:DesignTimeValue").
-				$vStr = if ($dp.value -is [bool]) { "$($dp.value)".ToLower() } else { "$($dp.value)" }
-				X "$indent`t`t<dcscor:value xsi:type=`"$vtype`">$(Esc-XmlText $vStr)</dcscor:value>"
-			} elseif ($vtype -eq 'boolean' -or $dp.value -is [bool]) {
-				$bv = "$($dp.value)".ToLower()
-				X "$indent`t`t<dcscor:value xsi:type=`"xs:boolean`">$(Esc-XmlText $bv)</dcscor:value>"
-			} elseif ($vtype -match '^date' -or "$($dp.value)" -match '^\d{4}-\d{2}-\d{2}T') {
-				X "$indent`t`t<dcscor:value xsi:type=`"xs:dateTime`">$(Esc-XmlText "$($dp.value)")</dcscor:value>"
-			} elseif ($vtype -match '^decimal') {
-				X "$indent`t`t<dcscor:value xsi:type=`"xs:decimal`">$(Esc-XmlText "$($dp.value)")</dcscor:value>"
-			} elseif ($vtype -match '^string') {
-				X "$indent`t`t<dcscor:value xsi:type=`"xs:string`">$(Esc-XmlText "$($dp.value)")</dcscor:value>"
-			} elseif ("$($dp.value)" -match '^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.' -or "$($dp.value)" -match '^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') {
-				X "$indent`t`t<dcscor:value xsi:type=`"dcscor:DesignTimeValue`">$(Esc-XmlText "$($dp.value)")</dcscor:value>"
 			} else {
-				X "$indent`t`t<dcscor:value xsi:type=`"xs:string`">$(Esc-XmlText "$($dp.value)")</dcscor:value>"
+				# Список значений (valueListAllowed) — каждый элемент отдельным <dcscor:value>, как пишет платформа.
+				foreach ($dpv in @($dp.value)) {
+					if ($vtype -match '^[a-zA-Z]+:') {
+						# Полный xsi:type из decompile (например "xs:boolean", "dcscor:DesignTimeValue").
+						$vStr = if ($dpv -is [bool]) { "$dpv".ToLower() } else { "$dpv" }
+						X "$indent`t`t<dcscor:value xsi:type=`"$vtype`">$(Esc-XmlText $vStr)</dcscor:value>"
+					} elseif ($vtype -eq 'boolean' -or $dpv -is [bool]) {
+						$bv = "$dpv".ToLower()
+						X "$indent`t`t<dcscor:value xsi:type=`"xs:boolean`">$(Esc-XmlText $bv)</dcscor:value>"
+					} elseif ($vtype -match '^date' -or "$dpv" -match '^\d{4}-\d{2}-\d{2}T') {
+						X "$indent`t`t<dcscor:value xsi:type=`"xs:dateTime`">$(Esc-XmlText "$dpv")</dcscor:value>"
+					} elseif ($vtype -match '^decimal') {
+						X "$indent`t`t<dcscor:value xsi:type=`"xs:decimal`">$(Esc-XmlText "$dpv")</dcscor:value>"
+					} elseif ($vtype -match '^string') {
+						X "$indent`t`t<dcscor:value xsi:type=`"xs:string`">$(Esc-XmlText "$dpv")</dcscor:value>"
+					} elseif ("$dpv" -match '^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.' -or "$dpv" -match '^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') {
+						X "$indent`t`t<dcscor:value xsi:type=`"dcscor:DesignTimeValue`">$(Esc-XmlText "$dpv")</dcscor:value>"
+					} else {
+						X "$indent`t`t<dcscor:value xsi:type=`"xs:string`">$(Esc-XmlText "$dpv")</dcscor:value>"
+					}
+				}
 			}
 		}
 

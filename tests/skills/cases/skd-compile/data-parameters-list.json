@@ -1,0 +1,37 @@
+{
+  "name": "dataParameters: список значений — по <dcscor:value> на элемент (#119)",
+  "params": { "outputPath": "Template.xml" },
+  "input": {
+    "dataSets": [{
+      "query": "ВЫБРАТЬ Т.Код КАК Код ИЗ (ВЫБРАТЬ \"A\" КАК Код) КАК Т ГДЕ Т.Код В (&Коды)",
+      "fields": ["Код: string(10)"]
+    }],
+    "parameters": [
+      "Коды: string(10) = A, B, C",
+      { "name": "Суммы", "type": "decimal(10,2)", "valueListAllowed": true, "value": [1, 2.5] },
+      "Метки: string(20) @valueList"
+    ],
+    "settingsVariants": [
+      {
+        "name": "Авто",
+        "settings": { "selection": ["Код"], "structure": "details", "dataParameters": "auto" }
+      },
+      {
+        "name": "Явный",
+        "settings": {
+          "selection": ["Код"],
+          "structure": "details",
+          "dataParameters": [
+            "Коды = X, 'Y, Z' @user",
+            { "parameter": "Суммы", "value": [3, 4.75], "valueType": "decimal(10,2)" },
+            "Метки = 'одна, с запятой'"
+          ]
+        }
+      }
+    ]
+  },
+  "validatePath": "Template.xml",
+  "expect": {
+    "files": ["Template.xml"]
+  }
+}
