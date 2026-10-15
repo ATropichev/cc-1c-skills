@@ -1,4 +1,4 @@
-﻿# skd-edit v1.43 — Atomic 1C DCS editor
+﻿# skd-edit v1.44 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: парный .py собирает выражения автодат вне f-string ради совместимости с python 3.9 (PEP 701).
 [CmdletBinding(PositionalBinding=$false)]
@@ -905,7 +905,9 @@ function Split-QuotedCsv {
 		if ($inQuote) {
 			[void]$buf.Append($ch)
 			if ($ch -eq $inQuote) { $inQuote = $null }
-		} elseif ($ch -eq "'" -or $ch -eq '"') {
+		} elseif (($ch -eq "'" -or $ch -eq '"') -and ($buf.ToString().Trim() -eq '' -or $buf.ToString().TrimEnd().EndsWith(':'))) {
+			# Кавычка открывает значение только в начале элемента или после ':' (представление
+			# в availableValue); апостроф внутри слова (O'Brien) — просто символ
 			$inQuote = $ch
 			[void]$buf.Append($ch)
 		} elseif ($ch -eq ',') {
@@ -1546,8 +1548,9 @@ function Build-DataParamValueLines {
 		foreach ($v in @($value)) {
 			if ("$v" -match '^\d{4}-\d{2}-\d{2}T') {
 				$lines += "$vi<dcscor:value xsi:type=`"xs:dateTime`">$(Esc-XmlText "$v")</dcscor:value>"
-			} elseif ("$v" -ceq "true" -or "$v" -ceq "false") {
-				$lines += "$vi<dcscor:value xsi:type=`"xs:boolean`">$(Esc-XmlText "$v")</dcscor:value>"
+			} elseif ("$v" -eq "true" -or "$v" -eq "false") {
+				# Регистр не важен, как в skd-compile; xs:boolean — только строчными
+				$lines += "$vi<dcscor:value xsi:type=`"xs:boolean`">$("$v".ToLowerInvariant())</dcscor:value>"
 			} elseif ("$v" -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.' -or
 			          "$v" -match '^(Catalog|Document|Enum|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') {
 				$lines += "$vi<dcscor:value xsi:type=`"dcscor:DesignTimeValue`">$(Esc-XmlText "$v")</dcscor:value>"

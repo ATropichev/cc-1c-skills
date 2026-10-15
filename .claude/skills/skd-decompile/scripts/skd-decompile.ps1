@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.98 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.99 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -815,14 +815,16 @@ function Get-StandardPeriodVariant {
 	return $null
 }
 
-# Элемент списка значений (<value>/<dcscor:value>) → типизированное JSON-значение.
+# Элемент списка значений (<value>/<dcscor:value>) → типизированное JSON-значение; xsi:nil → $null.
 function ConvertTo-ListItemValue {
 	param($vn)
+	if ($vn.GetAttribute("nil", $NS_XSI) -eq 'true') { return $null }
 	$vt = Get-LocalXsiType $vn
 	$vTxt = $vn.InnerText
 	if ($vt -eq 'boolean') { return ($vTxt -eq 'true') }
 	if ($vt -eq 'decimal') {
-		if ($vTxt -match '^-?\d+$') { return [int]$vTxt }
+		if ($vTxt -match '^-?\d{1,18}$') { return [long]$vTxt }
+		if ($vTxt -match '^-?\d+$') { return [decimal]$vTxt }
 		return [double]$vTxt
 	}
 	return $vTxt
@@ -833,10 +835,25 @@ function Test-SameValueList {
 	param($a, $b)
 	if (-not ($a -is [array]) -or -not ($b -is [array]) -or $a.Count -ne $b.Count) { return $false }
 	for ($i = 0; $i -lt $a.Count; $i++) {
+		if ($null -eq $a[$i] -or $null -eq $b[$i]) {
+			if ($null -ne $a[$i] -or $null -ne $b[$i]) { return $false }
+			continue
+		}
 		if ($a[$i].GetType() -ne $b[$i].GetType()) { return $false }
 		if (-not [string]::Equals("$($a[$i])", "$($b[$i])", [StringComparison]::Ordinal)) { return $false }
 	}
 	return $true
+}
+
+# Слова, которые краткая запись compile читает не как строку: варианты стандартного периода,
+# булевы (регистр не важен — compile сравнивает без учёта регистра).
+$script:shorthandKeywords = @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear","true","false")
+
+# Строку не передать краткой записью как есть: пробелы по краям, флаги (@), заголовок ([…]),
+# маркер пустого значения (_ / null).
+function Test-ShorthandUnsafe {
+	param([string]$s)
+	return ($s -ne $s.Trim() -or $s -match '[@\[\]]' -or $s -eq '_' -or $s.ToLowerInvariant() -eq 'null')
 }
 
 # Список значений → "a, b, 'c, d'" для краткой записи (compile разбирает через запятую,
@@ -846,9 +863,10 @@ function Format-ValueListShorthand {
 	$parts = @()
 	foreach ($it in $items) {
 		if ($it -is [string]) { $s = $it }
-		elseif ($it -is [int] -or $it -is [double]) { $s = "$it" }
+		elseif ($it -is [int] -or $it -is [long] -or $it -is [decimal] -or $it -is [double]) { $s = "$it" }
 		else { return $null }
-		if ($s -eq '' -or $s -ne $s.Trim() -or $s -match "['`"@\[\]]") { return $null }
+		# Экспоненциальная запись числа у портов разная — только объектной формой
+		if ($s -eq '' -or (Test-ShorthandUnsafe $s) -or $s -match "['`"]" -or ($it -isnot [string] -and $s -match '[eE]')) { return $null }
 		if ($s.Contains(',')) { $s = "'$s'" }
 		$parts += $s
 	}
@@ -856,10 +874,14 @@ function Format-ValueListShorthand {
 }
 
 # Одиночное значение для краткой записи: с запятой — в кавычках (иначе compile разобьёт
-# его в список). $null — так не выразить (обрамлено кавычками, апостроф при запятой).
+# его в список). $null — так не выразить: обрамлено кавычками, апостроф при запятой,
+# Test-ShorthandUnsafe; у строкового значения ещё и слово, которое краткая запись читает
+# как период/булево/дату ($asString).
 function Format-ScalarShorthand {
-	param([string]$s)
+	param([string]$s, [bool]$asString = $false)
 	if ($s.Length -ge 2 -and ($s[0] -eq "'" -or $s[0] -eq '"') -and $s[-1] -eq $s[0]) { return $null }
+	if (Test-ShorthandUnsafe $s) { return $null }
+	if ($asString -and ($script:shorthandKeywords -contains $s -or $s -match '^\d{4}-\d{2}-\d{2}T')) { return $null }
 	if ($s.Contains(',')) {
 		if ($s.Contains("'")) { return $null }
 		return "'$s'"
@@ -997,7 +1019,7 @@ function Render-Parameter {
 		$valueShort = Format-ValueListShorthand $valueDisplay
 		if ($null -eq $valueShort) { $needsObject = $true }
 	} elseif ($valueDisplay -is [string] -and $valueDisplay -ne '') {
-		$valueShort = Format-ScalarShorthand $valueDisplay
+		$valueShort = Format-ScalarShorthand $valueDisplay ($typeShort -is [string] -and $typeShort -match '^string')
 		if ($null -eq $valueShort) { $needsObject = $true }
 	}
 	if ($p.availableValues -and $p.availableValues.Count -gt 0) { $needsObject = $true }
@@ -2193,7 +2215,7 @@ function Build-DataParameters {
 			foreach ($vn in $valNodes) { $vList += ConvertTo-ListItemValue $vn }
 			if (-not $tp -or -not (Test-SameValueList $tp.valueDisplay $vList)) { $canAuto = $false }
 			$obj = [ordered]@{ parameter = $pn; value = $vList }
-			$vTypes = @($valNodes | ForEach-Object { $_.GetAttribute('type', $NS_XSI) } | Select-Object -Unique)
+			$vTypes = @($valNodes | ForEach-Object { $_.GetAttribute('type', $NS_XSI) } | Where-Object { $_ } | Select-Object -Unique)
 			if ($vTypes.Count -eq 1 -and $vTypes[0]) { $obj['valueType'] = $vTypes[0] }
 			if ($use -eq 'false') { $obj['use'] = $false }
 			if ($usid) { $obj['userSettingID'] = 'auto' }
@@ -2258,7 +2280,7 @@ function Build-DataParameters {
 		$vShort = $vDisplay
 		$scalarNeedsObject = $false
 		if ($vDisplay -is [string] -and $vDisplay -ne '') {
-			$vShort = Format-ScalarShorthand $vDisplay
+			$vShort = Format-ScalarShorthand $vDisplay ($vt -eq 'string')
 			if ($null -eq $vShort) { $scalarNeedsObject = $true }
 		}
 		# Object form требуется если есть viewMode / userSettingPresentation / StandardPeriod-с-датами / xs:string-placeholder

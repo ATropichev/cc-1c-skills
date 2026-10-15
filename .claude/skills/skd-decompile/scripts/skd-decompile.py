@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-decompile v0.98 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+# skd-decompile v0.99 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1017,8 +1017,10 @@ def get_standard_period_variant(value_node):
     return None
 
 
-# Элемент списка значений (<value>/<dcscor:value>) → типизированное JSON-значение.
+# Элемент списка значений (<value>/<dcscor:value>) → типизированное JSON-значение; xsi:nil → None.
 def convert_list_item_value(vn):
+    if vn.get_attribute("nil", NS_XSI) == 'true':
+        return None
     vt = get_local_xsi_type(vn)
     v_txt = vn.inner_text
     if vt == 'boolean':
@@ -1042,11 +1044,33 @@ def same_value_list(a, b):
     if not isinstance(a, list) or not isinstance(b, list) or len(a) != len(b):
         return False
     for x, y in zip(a, b):
+        if x is None or y is None:
+            if x is not None or y is not None:
+                return False
+            continue
         if type(x) is not type(y):
             return False
         if _list_item_str(x) != _list_item_str(y):
             return False
     return True
+
+
+# Слова, которые краткая запись compile читает не как строку: варианты стандартного периода,
+# булевы (регистр не важен — compile сравнивает без учёта регистра).
+_SHORTHAND_KEYWORDS = {k.lower() for k in (
+    "Custom", "Today", "ThisWeek", "ThisTenDays", "ThisMonth", "ThisQuarter", "ThisHalfYear", "ThisYear",
+    "FromBeginningOfThisWeek", "FromBeginningOfThisTenDays", "FromBeginningOfThisMonth",
+    "FromBeginningOfThisQuarter", "FromBeginningOfThisHalfYear", "FromBeginningOfThisYear",
+    "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
+    "NextDay", "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
+    "TillEndOfThisWeek", "TillEndOfThisTenDays", "TillEndOfThisMonth",
+    "TillEndOfThisQuarter", "TillEndOfThisHalfYear", "TillEndOfThisYear", "true", "false")}
+
+
+# Строку не передать краткой записью как есть: пробелы по краям, флаги (@), заголовок ([…]),
+# маркер пустого значения (_ / null).
+def shorthand_unsafe(s):
+    return s != s.strip() or bool(re.search(r'[@\[\]]', s)) or s == '_' or s.lower() == 'null'
 
 
 # Список значений → "a, b, 'c, d'" для краткой записи (compile разбирает через запятую,
@@ -1062,7 +1086,8 @@ def format_value_list_shorthand(items):
             s = _list_item_str(it)
         else:
             return None
-        if s == '' or s != s.strip() or re.search(r"['\"@\[\]]", s):
+        # Экспоненциальная запись числа у портов разная — только объектной формой
+        if s == '' or shorthand_unsafe(s) or re.search(r"['\"]", s) or (not isinstance(it, str) and re.search(r'[eE]', s)):
             return None
         if ',' in s:
             s = "'%s'" % s
@@ -1071,9 +1096,15 @@ def format_value_list_shorthand(items):
 
 
 # Одиночное значение для краткой записи: с запятой — в кавычках (иначе compile разобьёт
-# его в список). None — так не выразить (обрамлено кавычками, апостроф при запятой).
-def format_scalar_shorthand(s):
+# его в список). None — так не выразить: обрамлено кавычками, апостроф при запятой,
+# shorthand_unsafe; у строкового значения ещё и слово, которое краткая запись читает
+# как период/булево/дату (as_string).
+def format_scalar_shorthand(s, as_string=False):
     if len(s) >= 2 and s[0] in ("'", '"') and s[-1] == s[0]:
+        return None
+    if shorthand_unsafe(s):
+        return None
+    if as_string and (s.lower() in _SHORTHAND_KEYWORDS or re.match(r'^\d{4}-\d{2}-\d{2}T', s)):
         return None
     if ',' in s:
         if "'" in s:
@@ -1206,7 +1237,7 @@ def render_parameter(p):
         if value_short is None:
             needs_object = True
     elif isinstance(value_display, str) and value_display != '':
-        value_short = format_scalar_shorthand(value_display)
+        value_short = format_scalar_shorthand(value_display, isinstance(type_short, str) and type_short.startswith('string'))
         if value_short is None:
             needs_object = True
     if p['availableValues'] and len(p['availableValues']) > 0:
@@ -2337,7 +2368,7 @@ def build_data_parameters(dp_node, top_params):
             v_types = []
             for vn in val_nodes:
                 ta = vn.get_attr_raw('xsi:type')
-                if ta not in v_types:
+                if ta and ta not in v_types:
                     v_types.append(ta)
             if len(v_types) == 1 and v_types[0]:
                 obj['valueType'] = v_types[0]
@@ -2400,7 +2431,7 @@ def build_data_parameters(dp_node, top_params):
         v_short = v_display
         scalar_needs_object = False
         if isinstance(v_display, str) and v_display != '':
-            v_short = format_scalar_shorthand(v_display)
+            v_short = format_scalar_shorthand(v_display, vt == 'string')
             if v_short is None:
                 scalar_needs_object = True
         if std_period_obj or vm_n or usp_n or is_empty_string_placeholder or scalar_needs_object:

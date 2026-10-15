@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.129 — Compile 1C DCS from JSON
+# skd-compile v1.130 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -687,7 +687,8 @@ def split_value_list_csv(s):
             buf.append(ch)
             if ch == in_quote:
                 in_quote = None
-        elif ch in ("'", '"'):
+        elif ch in ("'", '"') and ''.join(buf).strip() == '':
+            # Кавычка открывает значение только в начале элемента: апостроф внутри слова (O'Brien) — просто символ
             in_quote = ch
             buf.append(ch)
         elif ch == ',':
@@ -2696,6 +2697,11 @@ def emit_data_parameters(lines, items, indent):
         elif dp.get('value') is not None:
             val = dp['value']
             vtype = str(dp.get('valueType') or '')
+            if not vtype:
+                # Тип не задан — объявленный у параметра схемы, как в «auto» (составной не подставляем)
+                decl = next((ap for ap in _all_params if ap['name'] == str(dp.get('parameter'))), None)
+                if decl and isinstance(decl['type'], str) and decl['type'] and not re.search(r'\s', decl['type']):
+                    vtype = decl['type']
             if isinstance(val, dict) and val.get('variant'):
                 # Standard{Period,BeginningDate} — различаем по форме value:
                 #  {variant, date}                → SBD
@@ -2725,7 +2731,10 @@ def emit_data_parameters(lines, items, indent):
             else:
                 # Список значений (valueListAllowed) — каждый элемент отдельным <dcscor:value>, как пишет платформа.
                 for dpv in (val if isinstance(val, (list, tuple)) else [val]):
-                    if re.match(r'^[a-zA-Z]+:', vtype):
+                    if dpv is None:
+                        # null в списке — пустой элемент
+                        lines.append(f'{indent}\t\t<dcscor:value xsi:nil="true"/>')
+                    elif re.match(r'^[a-zA-Z]+:', vtype):
                         # Полный xsi:type из decompile (например "xs:boolean", "dcscor:DesignTimeValue").
                         v_str = str(dpv).lower() if isinstance(dpv, bool) else str(dpv)
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="{vtype}">{esc_xml_text(v_str)}</dcscor:value>')

@@ -1,5 +1,5 @@
 {
-  "name": "dataParameters: список значений — по <dcscor:value> на элемент (#119)",
+  "name": "dataParameters: список значений — по <dcscor:value> на элемент; без valueType — тип из объявления параметра; null — xsi:nil; апостроф внутри слова (#119)",
   "params": { "outputPath": "Template.xml" },
   "input": {
     "dataSets": [{
@@ -9,7 +9,9 @@
     "parameters": [
       "Коды: string(10) = A, B, C",
       { "name": "Суммы", "type": "decimal(10,2)", "valueListAllowed": true, "value": [1, 2.5] },
-      "Метки: string(20) @valueList"
+      "Метки: string(20) @valueList",
+      "Порог: decimal(10,2) = 1",
+      "Фамилии: string(20) @valueList"
     ],
     "settingsVariants": [
       {
@@ -23,8 +25,10 @@
           "structure": "details",
           "dataParameters": [
             "Коды = X, 'Y, Z' @user",
-            { "parameter": "Суммы", "value": [3, 4.75], "valueType": "decimal(10,2)" },
-            "Метки = 'одна, с запятой'"
+            { "parameter": "Суммы", "value": [3, 4.75] },
+            { "parameter": "Метки", "value": ["одна, с запятой", null] },
+            "Порог = 5",
+            "Фамилии = Иванов, O'Brien, Петров"
           ]
         }
       }

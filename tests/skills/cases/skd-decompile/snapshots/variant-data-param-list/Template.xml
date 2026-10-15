@@ -69,6 +69,33 @@
 		<value xsi:type="xs:string">x, y</value>
 		<useRestriction>false</useRestriction>
 	</parameter>
+	<parameter>
+		<name>Большие</name>
+		<valueType>
+			<v8:Type>xs:decimal</v8:Type>
+			<v8:NumberQualifiers>
+				<v8:Digits>15</v8:Digits>
+				<v8:FractionDigits>0</v8:FractionDigits>
+				<v8:AllowedSign>Any</v8:AllowedSign>
+			</v8:NumberQualifiers>
+		</valueType>
+		<value xsi:type="xs:decimal">10000000000</value>
+		<value xsi:type="xs:decimal">20000000000</value>
+		<useRestriction>false</useRestriction>
+		<valueListAllowed>true</valueListAllowed>
+	</parameter>
+	<parameter>
+		<name>Слово</name>
+		<valueType>
+			<v8:Type>xs:string</v8:Type>
+			<v8:StringQualifiers>
+				<v8:Length>20</v8:Length>
+				<v8:AllowedLength>Variable</v8:AllowedLength>
+			</v8:StringQualifiers>
+		</valueType>
+		<value xsi:type="xs:string">LastMonth</value>
+		<useRestriction>false</useRestriction>
+	</parameter>
 	<settingsVariant>
 		<dcsset:name>Авто</dcsset:name>
 		<dcsset:presentation xsi:type="v8:LocalStringType">
@@ -103,6 +130,17 @@
 					<dcscor:value xsi:type="xs:string">x, y</dcscor:value>
 					<dcsset:userSettingID>UUID-004</dcsset:userSettingID>
 				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:parameter>Большие</dcscor:parameter>
+					<dcscor:value xsi:type="xs:decimal">10000000000</dcscor:value>
+					<dcscor:value xsi:type="xs:decimal">20000000000</dcscor:value>
+					<dcsset:userSettingID>UUID-005</dcsset:userSettingID>
+				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:parameter>Слово</dcscor:parameter>
+					<dcscor:value xsi:type="xs:string">LastMonth</dcscor:value>
+					<dcsset:userSettingID>UUID-006</dcsset:userSettingID>
+				</dcscor:item>
 			</dcsset:dataParameters>
 			<dcsset:item xsi:type="dcsset:StructureItemGroup">
 				<dcsset:order>
@@ -128,7 +166,7 @@
 					<dcscor:parameter>Коды</dcscor:parameter>
 					<dcscor:value xsi:type="xs:string">A</dcscor:value>
 					<dcscor:value xsi:type="xs:string">B</dcscor:value>
-					<dcsset:userSettingID>UUID-005</dcsset:userSettingID>
+					<dcsset:userSettingID>UUID-007</dcsset:userSettingID>
 				</dcscor:item>
 				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
 					<dcscor:parameter>Суммы</dcscor:parameter>
@@ -138,7 +176,16 @@
 				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
 					<dcscor:parameter>Метка</dcscor:parameter>
 					<dcscor:value xsi:type="xs:string">одна, с запятой</dcscor:value>
-					<dcsset:userSettingID>UUID-006</dcsset:userSettingID>
+					<dcsset:userSettingID>UUID-008</dcsset:userSettingID>
+				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:parameter>Склады</dcscor:parameter>
+					<dcscor:value xsi:type="xs:string">Основной</dcscor:value>
+					<dcscor:value xsi:nil="true"/>
+				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:parameter>Слово</dcscor:parameter>
+					<dcscor:value xsi:type="xs:string">true</dcscor:value>
 				</dcscor:item>
 			</dcsset:dataParameters>
 			<dcsset:item xsi:type="dcsset:StructureItemGroup">

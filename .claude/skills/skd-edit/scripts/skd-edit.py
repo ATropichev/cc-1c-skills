@@ -1,4 +1,4 @@
-# skd-edit v1.43 — Atomic 1C DCS editor (Python port)
+# skd-edit v1.44 — Atomic 1C DCS editor (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -914,7 +914,9 @@ def split_quoted_csv(s):
             buf.append(ch)
             if ch == in_quote:
                 in_quote = None
-        elif ch in ("'", '"'):
+        elif ch in ("'", '"') and (''.join(buf).strip() == '' or ''.join(buf).rstrip().endswith(':')):
+            # Кавычка открывает значение только в начале элемента или после ':' (представление
+            # в availableValue); апостроф внутри слова (O'Brien) — просто символ
             in_quote = ch
             buf.append(ch)
         elif ch == ',':
@@ -1462,8 +1464,9 @@ def build_data_param_value_lines(value, vi):
         for v in (value if isinstance(value, list) else [value]):
             if re.match(r'^\d{4}-\d{2}-\d{2}T', str(v)):
                 lines.append(f'{vi}<dcscor:value xsi:type="xs:dateTime">{esc_xml_text(str(v))}</dcscor:value>')
-            elif str(v) in ("true", "false"):
-                lines.append(f'{vi}<dcscor:value xsi:type="xs:boolean">{esc_xml_text(str(v))}</dcscor:value>')
+            elif str(v).lower() in ("true", "false"):
+                # Регистр не важен, как в skd-compile; xs:boolean — только строчными
+                lines.append(f'{vi}<dcscor:value xsi:type="xs:boolean">{str(v).lower()}</dcscor:value>')
             elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.', str(v)) or \
                     re.match(r'^(Catalog|Document|Enum|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(v)):
                 lines.append(f'{vi}<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(str(v))}</dcscor:value>')

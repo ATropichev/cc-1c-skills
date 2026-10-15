@@ -1,4 +1,4 @@
-﻿# skd-compile v1.129 — Compile 1C DCS from JSON
+﻿# skd-compile v1.130 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -745,7 +745,10 @@ function Split-ValueListCsv {
 	for ($i = 0; $i -lt $s.Length; $i++) {
 		$ch = $s[$i]
 		if ($inQuote) { [void]$buf.Append($ch); if ($ch -eq $inQuote) { $inQuote = $null } }
-		elseif ($ch -eq "'" -or $ch -eq '"') { $inQuote = $ch; [void]$buf.Append($ch) }
+		elseif (($ch -eq "'" -or $ch -eq '"') -and $buf.ToString().Trim() -eq '') {
+			# Кавычка открывает значение только в начале элемента: апостроф внутри слова (O'Brien) — просто символ
+			$inQuote = $ch; [void]$buf.Append($ch)
+		}
 		elseif ($ch -eq ',') { $items += $buf.ToString(); [void]$buf.Clear() }
 		else { [void]$buf.Append($ch) }
 	}
@@ -3112,6 +3115,11 @@ function Emit-DataParameters {
 			Emit-EmptyValue -type "$($dp.valueType)" -indent "$indent`t`t" -tagPrefix "dcscor:" -valueListAllowed $false
 		} elseif ($null -ne $dp.value) {
 			$vtype = "$($dp.valueType)"
+			if (-not $vtype) {
+				# Тип не задан — объявленный у параметра схемы, как в «auto» (составной не подставляем)
+				$decl = $script:allParams | Where-Object { $_.name -ceq "$($dp.parameter)" } | Select-Object -First 1
+				if ($decl -and $decl.type -and $decl.type -notmatch '\s') { $vtype = $decl.type }
+			}
 			if (($dp.value -is [PSCustomObject] -or $dp.value -is [hashtable]) -and ($dp.value.variant)) {
 				# Standard{Period,BeginningDate} — различаем по форме value:
 				#  {variant, date}         → SBD
@@ -3161,7 +3169,10 @@ function Emit-DataParameters {
 			} else {
 				# Список значений (valueListAllowed) — каждый элемент отдельным <dcscor:value>, как пишет платформа.
 				foreach ($dpv in @($dp.value)) {
-					if ($vtype -match '^[a-zA-Z]+:') {
+					if ($null -eq $dpv) {
+						# null в списке — пустой элемент
+						X "$indent`t`t<dcscor:value xsi:nil=`"true`"/>"
+					} elseif ($vtype -match '^[a-zA-Z]+:') {
 						# Полный xsi:type из decompile (например "xs:boolean", "dcscor:DesignTimeValue").
 						$vStr = if ($dpv -is [bool]) { "$dpv".ToLower() } else { "$dpv" }
 						X "$indent`t`t<dcscor:value xsi:type=`"$vtype`">$(Esc-XmlText $vStr)</dcscor:value>"

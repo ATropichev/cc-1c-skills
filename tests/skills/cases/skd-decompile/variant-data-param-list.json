@@ -1,5 +1,5 @@
 {
-  "name": "Списки значений параметров: краткая запись через запятую, «auto» при поэлементном совпадении, явный список — объектной формой (#119)",
+  "name": "Списки значений параметров: краткая запись через запятую, «auto» при поэлементном совпадении, явный список — объектной формой; nil в списке, большие числа, строки-ключевые слова (#119)",
   "preRun": [
     {
       "script": "skd-compile/scripts/skd-compile",
@@ -9,14 +9,18 @@
           "Коды: string(10) = A, B, C",
           "Склады: string(30) = Основной, 'Склад, розница'",
           { "name": "Суммы", "type": "decimal(10,2)", "valueListAllowed": true, "value": [1, 2.5] },
-          "Метка: string(20) = 'x, y'"
+          "Метка: string(20) = 'x, y'",
+          "Большие: decimal(15,0) = 10000000000, 20000000000",
+          { "name": "Слово", "type": "string(20)", "value": "LastMonth" }
         ],
         "settingsVariants": [
           { "name": "Авто", "settings": { "structure": "details", "dataParameters": "auto" } },
           { "name": "Явный", "settings": { "structure": "details", "dataParameters": [
             "Коды = A, B @user",
             { "parameter": "Суммы", "value": [3, 4.75], "valueType": "decimal(10,2)" },
-            "Метка = 'одна, с запятой' @user"
+            "Метка = 'одна, с запятой' @user",
+            { "parameter": "Склады", "value": ["Основной", null] },
+            { "parameter": "Слово", "value": "true", "valueType": "xs:string" }
           ] } }
         ]
       },
