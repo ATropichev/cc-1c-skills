@@ -294,6 +294,9 @@
 			<value xsi:type="xs:string">_</value>
 		</availableValue>
 		<availableValue>
+			<value xsi:type="xs:string"/>
+		</availableValue>
+		<availableValue>
 			<value xsi:type="xs:string">a</value>
 		</availableValue>
 	</parameter>

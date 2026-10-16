@@ -209,6 +209,15 @@
 				</v8:item>
 			</presentation>
 		</availableValue>
+		<availableValue>
+			<value xsi:type="xs:string"/>
+			<presentation xsi:type="v8:LocalStringType">
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Пустая строка</v8:content>
+				</v8:item>
+			</presentation>
+		</availableValue>
 	</parameter>
 	<parameter>
 		<name>Пер</name>

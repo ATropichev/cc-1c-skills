@@ -1,4 +1,4 @@
-﻿# skd-compile v1.135 — Compile 1C DCS from JSON
+﻿# skd-compile v1.136 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1336,7 +1336,8 @@ function Emit-AvailableValue {
 			}
 			$typeAttr = "xsi:type=`"$avType`""
 		}
-		X "$indent`t<value $typeAttr>$text</value>"
+		# Пустая строка — самозакрывающимся тегом, как у платформы
+		if ($text -eq '') { X "$indent`t<value $typeAttr/>" } else { X "$indent`t<value $typeAttr>$text</value>" }
 	}
 	# `title` — синоним `presentation`
 	$avPres = if ($av.presentation) { $av.presentation } elseif ($av.title) { $av.title } else { "" }

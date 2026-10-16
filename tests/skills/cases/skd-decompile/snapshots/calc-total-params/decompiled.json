@@ -15,7 +15,7 @@
     "СлужебныйПар: string @hidden",
     { "name": "ПорядокОкругления", "type": "EnumRef.Округления", "value": "Перечисление.Округления.Окр1", "availableValues": [{ "value": "Перечисление.Округления.Окр1_00", "presentation": "руб. коп" }, { "value": "Перечисление.Округления.Окр1", "presentation": "руб." }, { "value": null, "presentation": "Не задано" }] },
     { "name": "Пер", "type": "StandardPeriod", "value": "ThisYear", "availableValues": [{ "value": { "variant": "ThisYear" } }, { "value": { "variant": "Custom", "startDate": "2024-01-01T00:00:00", "endDate": "2024-12-31T23:59:59" } }] },
-    { "name": "Метка", "type": "string(5)", "availableValues": [{ "value": "_", "valueType": "xs:string" }, { "value": "a" }] }
+    { "name": "Метка", "type": "string(5)", "availableValues": [{ "value": "_", "valueType": "xs:string" }, { "value": "", "valueType": "xs:string" }, { "value": "a" }] }
   ],
   "settingsVariants": [{ "name": "Основной", "settings": { "selection": ["Цена", "Закупка", "Код", "Маржа", "Наценка", "Признак"], "structure": "details" } }]
 }

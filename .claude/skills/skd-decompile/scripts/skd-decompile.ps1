@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.103 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.104 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2303,6 +2303,8 @@ function Build-DataParameters {
 		$uspN = $it.SelectSingleNode("dcsset:userSettingPresentation", $ns)
 		if ($vmN -or $uspN) { $canAuto = $false }
 		$tp = $visibleTop[$pn]
+		# «auto» пишет имя как объявлено — при другом регистре свёртка потеряла бы написание
+		if ($tp -and -not [string]::Equals($tp.name, $pn, [StringComparison]::Ordinal)) { $canAuto = $false }
 		$flags = @()
 		if ($usid) { $flags += '@user' }
 		if ($use -eq 'false') { $flags += '@off' }
@@ -2989,9 +2991,9 @@ foreach ($p in $paramsRaw) {
 	$startMatch = $null
 	$endMatch = $null
 	foreach ($q in $paramsRaw) {
-		if ($q.name -eq $parentName) { continue }
-		if ($q.expression -eq $startExpr) { $startMatch = $q.name }
-		elseif ($q.expression -eq $endExpr) { $endMatch = $q.name }
+		if ($q.name -ceq $parentName) { continue }
+		if ($q.expression -ceq $startExpr) { $startMatch = $q.name }
+		elseif ($q.expression -ceq $endExpr) { $endMatch = $q.name }
 	}
 	# Fold ТОЛЬКО если companion-имена точно "НачалоПериода"/"КонецПериода" БЕЗ суффикса.
 	# Иначе compile (который генерирует именно эти имена + type=date + DateFractions=Date)
@@ -3003,7 +3005,8 @@ foreach ($p in $paramsRaw) {
 	$beginP = if ($startMatch) { $paramByName[$startMatch] } else { $null }
 	$endP   = if ($endMatch)   { $paramByName[$endMatch]   } else { $null }
 	$hasNotAField = ($beginP -and $beginP.notAField) -or ($endP -and $endP.notAField)
-	if ($startMatch -eq 'НачалоПериода' -and $endMatch -eq 'КонецПериода' -and -not $hasNotAField) {
+	# Сравнения — с учётом регистра: compile генерирует ровно эти имена и выражения
+	if ($startMatch -ceq 'НачалоПериода' -and $endMatch -ceq 'КонецПериода' -and -not $hasNotAField) {
 		$p['autoDates'] = $true
 		$removedNames[$startMatch] = $true
 		$removedNames[$endMatch] = $true

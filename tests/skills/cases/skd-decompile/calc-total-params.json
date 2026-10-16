@@ -1,5 +1,5 @@
 {
-  "name": "calculatedFields, totalFields, parameters с autoDates/valueList/hidden/availableValues; availableValues поля набора и вычисляемого поля: xsi:nil — null, строка вида ссылки или даты — с valueType xs:string, ссылка — без valueType; null у параметра; период в availableValues параметра — объектом; «_» у параметра — с valueType xs:string",
+  "name": "calculatedFields, totalFields, parameters с autoDates/valueList/hidden/availableValues; availableValues поля набора и вычисляемого поля: xsi:nil — null, строка вида ссылки или даты — с valueType xs:string, ссылка — без valueType; null у параметра; период в availableValues параметра — объектом; «_» и пустая строка у параметра — с valueType xs:string",
   "preRun": [
     {
       "script": "skd-compile/scripts/skd-compile",
@@ -50,7 +50,7 @@
           {
             "name": "Метка",
             "type": "string(5)",
-            "availableValues": [{"value": "_", "valueType": "xs:string"}, {"value": "a"}]
+            "availableValues": [{"value": "_", "valueType": "xs:string"}, {"value": ""}, {"value": "a"}]
           }
         ]
       },

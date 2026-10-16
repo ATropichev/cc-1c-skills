@@ -1,5 +1,5 @@
 {
-  "name": "availableValues, denyIncompleteValues, Folder в selection; ссылка БизнесПроцесс.X.Y в availableValues — DesignTimeValue; availableValues поля набора (ссылка — DesignTimeValue, null — xsi:nil, дробное — decimal) и вычисляемого поля; null у параметра — xsi:nil; значение-период в availableValues и значение параметра в любом регистре — узлами периода; «_» с valueType xs:string — строкой",
+  "name": "availableValues, denyIncompleteValues, Folder в selection; ссылка БизнесПроцесс.X.Y в availableValues — DesignTimeValue; availableValues поля набора (ссылка — DesignTimeValue, null — xsi:nil, дробное — decimal) и вычисляемого поля; null у параметра — xsi:nil; значение-период в availableValues и значение параметра в любом регистре — узлами периода; «_» с valueType xs:string — строкой; пустая строка с valueType — самозакрывающимся тегом",
   "params": { "outputPath": "Template.xml" },
   "input": {
     "dataSets": [{
@@ -36,7 +36,8 @@
       "availableValues": [
         {"value": "БизнесПроцесс.Задание.ПустаяСсылка", "presentation": "Без процесса"},
         {"value": null, "presentation": "Не задан"},
-        {"value": "_", "valueType": "xs:string", "presentation": "Подчёркивание"}
+        {"value": "_", "valueType": "xs:string", "presentation": "Подчёркивание"},
+        {"value": "", "valueType": "xs:string", "presentation": "Пустая строка"}
       ]
     }, {
       "name": "Пер",

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-decompile v0.103 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+# skd-decompile v0.104 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -2456,6 +2456,9 @@ def build_data_parameters(dp_node, top_params):
         if vm_n or usp_n:
             can_auto = False
         tp = visible_top.get(str(pn).lower())
+        # «auto» пишет имя как объявлено — при другом регистре свёртка потеряла бы написание
+        if tp and tp['name'] != pn:
+            can_auto = False
         flags = []
         if usid:
             flags.append('@user')

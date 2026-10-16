@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.135 — Compile 1C DCS from JSON
+# skd-compile v1.136 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1263,7 +1263,11 @@ def emit_available_value(lines, av, indent, param_type=None, is_param=False):
                 else:
                     av_type = 'xs:string'
             type_attr = f'xsi:type="{av_type}"'
-        lines.append(f'{indent}\t<value {type_attr}>{text}</value>')
+        # Пустая строка — самозакрывающимся тегом, как у платформы
+        if text == '':
+            lines.append(f'{indent}\t<value {type_attr}/>')
+        else:
+            lines.append(f'{indent}\t<value {type_attr}>{text}</value>')
     # `title` — синоним `presentation`
     av_pres = av.get('presentation') or av.get('title') or ''
     if av_pres:
