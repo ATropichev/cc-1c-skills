@@ -6,9 +6,10 @@
       "fields": [
         { "field": "СегментНоменклатуры", "type": "CatalogRef.СегментыНоменклатуры", "inputParameters": [{ "parameter": "ПараметрыВыбора", "choiceParameters": [{ "name": "Отбор.СпособФормирования", "values": ["Перечисление.СпособыФормированияСегментов.ФормироватьВручную", "Перечисление.СпособыФормированияСегментов.ПериодическиОбновлять"] }] }] },
         { "field": "Сотрудник", "type": "CatalogRef.Сотрудники", "inputParameters": [{ "parameter": "СвязиПараметровВыбора", "choiceParameterLinks": [{ "name": "Отбор.ТекущаяОрганизация", "value": "Организация", "mode": "Clear" }, { "name": "Отбор.ТекущееПодразделение", "value": "Подразделение", "mode": "Clear" }] }] },
-        { "field": "ПростоЕА", "type": "CatalogRef.Сотрудники", "inputParameters": [{ "parameter": "ПараметрыВыбора", "choiceParameters": [] }, { "parameter": "БыстрыйВыбор", "use": false, "value": true }] }
+        { "field": "ПростоЕА", "type": "CatalogRef.Сотрудники", "inputParameters": [{ "parameter": "ПараметрыВыбора", "choiceParameters": [] }, { "parameter": "БыстрыйВыбор", "use": false, "value": true }] },
+        { "field": "Субконто", "type": "CatalogRef.Сотрудники", "inputParameters": [{ "parameter": "СвязьПоТипу", "typeLink": { "field": "Сотрудник", "linkItem": 1 } }] }
       ]
     }
   ],
-  "settingsVariants": [{ "name": "Основной", "settings": { "selection": ["СегментНоменклатуры", "Сотрудник", "ПростоЕА"], "structure": "details" } }]
+  "settingsVariants": [{ "name": "Основной", "settings": { "selection": ["СегментНоменклатуры", "Сотрудник", "ПростоЕА", "Субконто"], "structure": "details" } }]
 }

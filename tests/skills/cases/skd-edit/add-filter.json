@@ -1,5 +1,5 @@
 {
-  "name": "Добавление фильтра в вариант",
+  "name": "Добавление фильтра в вариант; ссылка Задача.X.Y — DesignTimeValue",
   "preRun": [
     {
       "script": "skd-compile/scripts/skd-compile",
@@ -16,6 +16,6 @@
   "params": {
     "templatePath": "Template.xml",
     "operation": "add-filter",
-    "value": "Организация = _ @off @user"
+    "value": "Организация = _ @off @user ;; Организация <> Задача.ЗадачаИсполнителя.ПустаяСсылка"
   }
 }

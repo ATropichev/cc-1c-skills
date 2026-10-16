@@ -1,5 +1,5 @@
 {
-  "name": "dataParameters: список значений — по <dcscor:value> на элемент; без valueType — тип из объявления параметра (главнее формы значения); null — xsi:nil, и в списке из одних null, и в значении параметра схемы; апостроф внутри слова (#119)",
+  "name": "dataParameters: список значений — по <dcscor:value> на элемент; без valueType — тип из объявления параметра (главнее формы значения); null — xsi:nil, и в списке из одних null, и в значении параметра схемы; апостроф внутри слова (#119); TRUE в краткой записи — как true; слово-вариант периода (month) у строкового параметра — строкой как написано; тип {uri, name} — xmlns на каждом <dcscor:value>",
   "params": { "outputPath": "Template.xml" },
   "input": {
     "dataSets": [{
@@ -14,6 +14,7 @@
       "Фамилии: string(20) @valueList",
       "Пусто: string(10) @valueList",
       "Режим: string(10)",
+      "Единица: string(10)",
       { "name": "Отметки", "type": "string(30)", "valueListAllowed": true, "value": [null, "a"] }
     ],
     "settingsVariants": [
@@ -31,7 +32,9 @@
             { "parameter": "Суммы", "value": [3, 4.75] },
             { "parameter": "Метки", "value": ["одна, с запятой", null, "2024-01-01T00:00:00"] },
             { "parameter": "Пусто", "value": [null, null] },
-            "Режим = true",
+            "Режим = TRUE",
+            "Единица = month",
+            { "parameter": "Отметки", "value": ["Active", "Passive"], "valueType": { "uri": "http://v8.1c.ru/8.1/data/enterprise", "name": "AccountType" } },
             "Порог = 5",
             "Фамилии = Иванов, O'Brien, Петров"
           ]

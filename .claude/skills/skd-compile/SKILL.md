@@ -198,7 +198,7 @@ Shorthand: `"Имя [Заголовок]: тип = значение @флаги"
 
 Формат: `"Поле оператор значение @флаги"`. Значение `_` = пустое (placeholder). Флаги: `@off` (use=false), `@user` (userSettingID=auto), `@quickAccess`, `@normal`, `@inaccessible`.
 
-В объектной форме доступны: `viewMode`, `userSettingID`, `userSettingPresentation`.
+В объектной форме доступны: `viewMode`, `userSettingID`, `userSettingPresentation`. Значение-период — объектом: `{ "field": "Дата", "op": "<", "value": { "variant": "BeginningOfThisMonth" } }`, своя дата — `{ "variant": "Custom", "date": "2024-01-01T00:00:00" }`.
 
 Группы фильтров (Or/And/Not):
 ```json

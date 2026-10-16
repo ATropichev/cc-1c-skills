@@ -1,5 +1,5 @@
 {
-  "name": "Списки значений параметров: краткая запись через запятую, «auto» при поэлементном совпадении, явный список — объектной формой; nil в списке, большие числа, строки-ключевые слова и строки вида ссылки у параметра данных, ключевое слово в параметре схемы — кратко (#119)",
+  "name": "Списки значений параметров: краткая запись через запятую, «auto» при поэлементном совпадении, явный список — объектной формой; nil в списке, большие числа, строки-ключевые слова и строки вида ссылки у параметра данных, ключевое слово в параметре схемы — кратко (#119); тип из пространства имён не из корня (xmlns на узле) — valueType {uri, name}, в отборе и в параметре данных; значение-период в отборе — объектом {variant[, date | startDate, endDate]}, не текстом узлов; StandardBeginningDate Custom с нулевой датой — с date (иначе станет StandardPeriod); вариант Month — краткой записью; правая часть у filled, если есть в XML, сохраняется (без неё — краткая запись); строка вида ссылки/числа в отборе — с valueType xs:string; период у параметра, объявленного строкой, — объектом {variant}",
   "preRun": [
     {
       "script": "skd-compile/scripts/skd-compile",
@@ -12,11 +12,28 @@
           "Метка: string(20) = 'x, y'",
           "Большие: decimal(15,0) = 10000000000, 20000000000",
           { "name": "Слово", "type": "string(20)", "value": "LastMonth" },
-          { "name": "Ссылка", "type": ["string(30)", "CatalogRef.Валюты"], "hidden": true }
+          { "name": "Ссылка", "type": ["string(30)", "CatalogRef.Валюты"], "hidden": true },
+          { "name": "Вид", "type": "string(10)", "hidden": true },
+          { "name": "Начало", "type": "dateTime", "hidden": true },
+          { "name": "Период", "type": "StandardPeriod", "value": "Month", "hidden": true },
+          { "name": "Обозначение", "type": "string(10)", "hidden": true }
         ],
         "settingsVariants": [
           { "name": "Авто", "settings": { "structure": "details", "dataParameters": "auto" } },
-          { "name": "Явный", "settings": { "structure": "details", "dataParameters": [
+          { "name": "Явный", "settings": { "structure": "details", "filter": [
+            { "field": "А", "op": "=", "value": "Active", "valueType": { "uri": "http://v8.1c.ru/8.1/data/enterprise", "name": "AccountType" } },
+            { "field": "А", "op": ">=", "value": { "variant": "BeginningOfThisMonth" } },
+            { "field": "А", "op": "<", "value": { "variant": "Custom", "date": "2024-01-01T00:00:00" } },
+            { "field": "А", "op": "=", "value": { "variant": "Custom", "startDate": "2024-01-01T00:00:00", "endDate": "2024-03-31T23:59:59" } },
+            { "field": "А", "op": "filled", "value": { "variant": "Custom", "date": "0001-01-01T00:00:00" } },
+            { "field": "А", "op": "=", "value": "Catalog.Валюты.Рубль", "valueType": "xs:string" },
+            { "field": "А", "op": "<>", "value": "5", "valueType": "xs:string" },
+            "А notFilled"
+          ], "dataParameters": [
+            { "parameter": "Вид", "value": ["Active", "Passive"], "valueType": { "uri": "http://v8.1c.ru/8.1/data/enterprise", "name": "AccountType" } },
+            { "parameter": "Начало", "value": { "variant": "Custom", "date": "0001-01-01T00:00:00" } },
+            "Период = Month",
+            { "parameter": "Обозначение", "value": { "variant": "Today" } },
             "Коды = A, B @user",
             { "parameter": "Суммы", "value": [3, 4.75], "valueType": "decimal(10,2)" },
             "Метка = 'одна, с запятой' @user",

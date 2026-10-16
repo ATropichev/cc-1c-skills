@@ -66,6 +66,18 @@
 		<valueListAllowed>true</valueListAllowed>
 	</parameter>
 	<parameter>
+		<name>Единица</name>
+		<valueType>
+			<v8:Type>xs:string</v8:Type>
+			<v8:StringQualifiers>
+				<v8:Length>10</v8:Length>
+				<v8:AllowedLength>Variable</v8:AllowedLength>
+			</v8:StringQualifiers>
+		</valueType>
+		<value xsi:type="xs:string"/>
+		<useRestriction>false</useRestriction>
+	</parameter>
+	<parameter>
 		<name>Автор</name>
 		<valueType>
 			<v8:Type>xs:string</v8:Type>
@@ -126,6 +138,10 @@
 					<dcscor:parameter>Суммы</dcscor:parameter>
 					<dcscor:value xsi:type="xs:decimal">1</dcscor:value>
 					<dcscor:value xsi:type="xs:decimal">2</dcscor:value>
+				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:parameter>Единица</dcscor:parameter>
+					<dcscor:value xsi:type="xs:string">Today</dcscor:value>
 				</dcscor:item>
 			</dcsset:dataParameters>
 			<dcsset:item xsi:type="dcsset:StructureItemGroup">

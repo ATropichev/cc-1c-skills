@@ -1,13 +1,39 @@
 {
   "dataSets": [{ "name": "Н", "query": "ВЫБРАТЬ 1 КАК А", "fields": ["А"] }],
-  "parameters": ["Коды: string(10) = A, B, C @valueList", "Склады: string(30) = Основной, 'Склад, розница' @valueList", "Суммы: decimal(10,2) = 1, 2.5 @valueList", "Метка: string(20) = 'x, y'", "Большие: decimal(15) = 10000000000, 20000000000 @valueList", "Слово: string(20) = LastMonth", { "name": "Ссылка", "type": ["string(30)", "CatalogRef.Валюты"], "hidden": true }],
+  "parameters": [
+    "Коды: string(10) = A, B, C @valueList",
+    "Склады: string(30) = Основной, 'Склад, розница' @valueList",
+    "Суммы: decimal(10,2) = 1, 2.5 @valueList",
+    "Метка: string(20) = 'x, y'",
+    "Большие: decimal(15) = 10000000000, 20000000000 @valueList",
+    "Слово: string(20) = LastMonth",
+    { "name": "Ссылка", "type": ["string(30)", "CatalogRef.Валюты"], "hidden": true },
+    "Вид: string(10) @hidden",
+    "Начало: dateTime = 0001-01-01T00:00:00 @hidden",
+    "Период: StandardPeriod = Month @hidden",
+    "Обозначение: string(10) @hidden"
+  ],
   "settingsVariants": [
     { "name": "Авто", "settings": { "selection": [], "dataParameters": "auto", "structure": "details" } },
     {
       "name": "Явный",
       "settings": {
         "selection": [],
+        "filter": [
+          { "field": "А", "op": "=", "value": "Active", "valueType": { "uri": "http://v8.1c.ru/8.1/data/enterprise", "name": "AccountType" } },
+          { "field": "А", "op": ">=", "value": { "variant": "BeginningOfThisMonth" } },
+          { "field": "А", "op": "<", "value": { "variant": "Custom", "date": "2024-01-01T00:00:00" } },
+          { "field": "А", "op": "=", "value": { "variant": "Custom", "startDate": "2024-01-01T00:00:00", "endDate": "2024-03-31T23:59:59" } },
+          { "field": "А", "op": "filled", "value": { "variant": "Custom", "date": "0001-01-01T00:00:00" } },
+          { "field": "А", "op": "=", "value": "Catalog.Валюты.Рубль", "valueType": "xs:string" },
+          { "field": "А", "op": "<>", "value": "5", "valueType": "xs:string" },
+          "А notFilled"
+        ],
         "dataParameters": [
+          { "parameter": "Вид", "value": ["Active", "Passive"], "valueType": { "uri": "http://v8.1c.ru/8.1/data/enterprise", "name": "AccountType" } },
+          { "parameter": "Начало", "value": { "variant": "Custom", "date": "0001-01-01T00:00:00" } },
+          "Период = Month",
+          { "parameter": "Обозначение", "value": { "variant": "Today" } },
           { "parameter": "Коды", "value": ["A", "B"], "valueType": "xs:string", "userSettingID": "auto" },
           { "parameter": "Суммы", "value": [3, 4.75], "valueType": "xs:decimal" },
           "Метка = 'одна, с запятой' @user",

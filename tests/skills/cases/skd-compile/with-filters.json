@@ -1,15 +1,16 @@
 {
-  "name": "СКД с фильтрами в варианте",
+  "name": "СКД с фильтрами в варианте; ссылки (Задача.X.Y, Catalog.X.Y, объектная форма) — DesignTimeValue; тип {uri, name} — xmlns на <right>; вариант периода в любом регистре — написанием платформы; значение-период в отборе ({variant} / {variant, date}) — StandardBeginningDate с узлами",
   "params": { "outputPath": "Template.xml" },
   "input": {
     "dataSets": [{
       "name": "Основной",
-      "query": "ВЫБРАТЬ Продажи.Организация, Продажи.Номенклатура, Продажи.Статус, Продажи.Сумма ИЗ РегистрНакопления.Продажи КАК Продажи",
+      "query": "ВЫБРАТЬ Продажи.Организация, Продажи.Номенклатура, Продажи.Статус, Продажи.Сумма, Продажи.Период КАК Дата ИЗ РегистрНакопления.Продажи КАК Продажи",
       "fields": [
         "Организация: CatalogRef.Организации @dimension",
         "Номенклатура",
         "Статус: string",
-        "Сумма: decimal(15,2)"
+        "Сумма: decimal(15,2)",
+        "Дата: dateTime"
       ]
     }],
     "settingsVariants": [{
@@ -19,9 +20,16 @@
         "filter": [
           "Организация = _ @off @user",
           "Статус filled",
-          "Сумма > 0"
+          "Сумма > 0",
+          "Номенклатура <> Задача.ЗадачаИсполнителя.ПустаяСсылка",
+          "Организация <> Catalog.Организации.EmptyRef",
+          "Организация <> справочник.Организации.ПустаяСсылка",
+          { "field": "Номенклатура", "op": "<>", "value": "Справочник.Номенклатура.ПустаяСсылка" },
+          { "field": "Статус", "op": "=", "value": "Active", "valueType": { "uri": "http://v8.1c.ru/8.1/data/enterprise", "name": "AccountType" } },
+          { "field": "Дата", "op": ">=", "value": { "variant": "beginningofthismonth" } },
+          { "field": "Дата", "op": "<", "value": { "variant": "Custom", "date": "2024-01-01T00:00:00" } }
         ],
-        "dataParameters": ["Период = LastMonth @user"],
+        "dataParameters": ["Период = lastmonth @user"],
         "structure": "details"
       }
     }],

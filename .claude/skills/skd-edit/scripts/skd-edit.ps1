@@ -1,4 +1,4 @@
-﻿# skd-edit v1.45 — Atomic 1C DCS editor
+﻿# skd-edit v1.46 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: парный .py собирает выражения автодат вне f-string ради совместимости с python 3.9 (PEP 701).
 [CmdletBinding(PositionalBinding=$false)]
@@ -660,7 +660,7 @@ function Parse-FilterShorthand {
 			} elseif ($valPart -match '^\d+(\.\d+)?$') {
 				$result.value = $valPart
 				$result["valueType"] = "xs:decimal"
-			} elseif ($valPart -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.') {
+			} elseif (Test-RefValueLiteral $valPart) {
 				$result.value = $valPart
 				$result["valueType"] = "dcscor:DesignTimeValue"
 			} else {
@@ -678,7 +678,22 @@ function Parse-FilterShorthand {
 # Варианты стандартного периода: краткая запись значения читает их как период, а не строку.
 # Копия в skd-compile, skd-edit и skd-decompile — держит check-inline-drift.
 function Get-StandardPeriodVariants {
-	return @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","NextDay","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear")
+	return @("Custom","Today","ThisWeek","ThisTenDays","ThisMonth","ThisQuarter","ThisHalfYear","ThisYear","FromBeginningOfThisWeek","FromBeginningOfThisTenDays","FromBeginningOfThisMonth","FromBeginningOfThisQuarter","FromBeginningOfThisHalfYear","FromBeginningOfThisYear","Yesterday","LastWeek","LastTenDays","LastMonth","LastQuarter","LastHalfYear","LastYear","LastWeekTillSameWeekDay","LastTenDaysTillSameDayNumber","LastMonthTillSameDate","LastQuarterTillSameDate","LastHalfYearTillSameDate","LastYearTillSameDate","Tomorrow","NextWeek","NextTenDays","NextMonth","NextQuarter","NextHalfYear","NextYear","NextWeekTillSameWeekDay","NextTenDaysTillSameDayNumber","NextMonthTillSameDate","NextQuarterTillSameDate","NextHalfYearTillSameDate","NextYearTillSameDate","TillEndOfThisWeek","TillEndOfThisTenDays","TillEndOfThisMonth","TillEndOfThisQuarter","TillEndOfThisHalfYear","TillEndOfThisYear","Last7Days","Next7Days","Month")
+}
+
+# Вариант периода в любом регистре → написание платформы; не вариант — $null.
+# Копия в skd-compile и skd-edit — держит check-inline-drift.
+function Resolve-StandardPeriodVariant([string]$s) {
+	foreach ($v in Get-StandardPeriodVariants) {
+		if ($v -ieq $s) { return $v }
+	}
+	return $null
+}
+
+# Значение-ссылка в краткой записи (Справочник.X.Y, Catalog.X.Y) — пишется как DesignTimeValue.
+# Копия в skd-compile, skd-edit и skd-decompile — держит check-inline-drift.
+function Test-RefValueLiteral([string]$s) {
+	return $s -match '^(Справочник|Перечисление|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|ChartOfAccounts|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.'
 }
 
 function Parse-DataParamShorthand {
@@ -718,14 +733,15 @@ function Parse-DataParamShorthand {
 		$items = Parse-ValueList $valStr
 		if ($items.Count -eq 1) { $valStr = $items[0] }
 
-		$periodVariants = Get-StandardPeriodVariants
+		$periodVariant = Resolve-StandardPeriodVariant $valStr
 		# Empty / sentinel — record as "" so caller emits xsi:nil
 		if ($items.Count -ge 2) {
 			$result.value = $items
 		} elseif ($valStr -eq "" -or $valStr -eq "_" -or $valStr.ToLowerInvariant() -eq "null") {
 			$result.value = ""
-		} elseif ($periodVariants -contains $valStr) {
-			$result.value = @{ variant = $valStr }
+		} elseif ($periodVariant -and (Get-DeclaredParamType $result.parameter) -notmatch '^xs:(string|decimal|boolean)$') {
+			# У параметра, объявленного строкой/числом/булевым, слово-вариант остаётся строкой (ветка ниже)
+			$result.value = @{ variant = $periodVariant }
 		} else {
 			$result.value = $valStr
 		}
@@ -1315,6 +1331,8 @@ function Build-ParamValueXml {
 	$lines = @()
 
 	if ($type -eq "StandardPeriod") {
+		$pv = Resolve-StandardPeriodVariant $valStr
+		if ($pv) { $valStr = $pv }
 		$lines += "$i<$open xsi:type=`"v8:StandardPeriod`">"
 		$lines += "$i`t<v8:variant xsi:type=`"v8:StandardPeriodVariant`">$(Esc-XmlText $valStr)</v8:variant>"
 		$lines += "$i`t<v8:startDate>0001-01-01T00:00:00</v8:startDate>"
@@ -1335,8 +1353,7 @@ function Build-ParamValueXml {
 		# Type unknown or empty — guess from value
 		if ($valStr -match '^\d{4}-\d{2}-\d{2}T') { $xsi = "xs:dateTime" }
 		elseif ($valStr -eq "true" -or $valStr -eq "false") { $xsi = "xs:boolean" }
-		elseif ($valStr -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.' -or
-		        $valStr -match '^(Catalog|Document|Enum|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') {
+		elseif (Test-RefValueLiteral $valStr) {
 			$xsi = "dcscor:DesignTimeValue"
 		}
 		else { $xsi = "xs:string" }
@@ -1577,8 +1594,7 @@ function Build-DataParamValueLines {
 			} elseif ("$v" -eq "true" -or "$v" -eq "false") {
 				# Регистр не важен, как в skd-compile; xs:boolean — только строчными
 				$lines += "$vi<dcscor:value xsi:type=`"xs:boolean`">$("$v".ToLowerInvariant())</dcscor:value>"
-			} elseif ("$v" -match '^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.' -or
-			          "$v" -match '^(Catalog|Document|Enum|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.') {
+			} elseif (Test-RefValueLiteral "$v") {
 				$lines += "$vi<dcscor:value xsi:type=`"dcscor:DesignTimeValue`">$(Esc-XmlText "$v")</dcscor:value>"
 			} else {
 				$lines += "$vi<dcscor:value xsi:type=`"xs:string`">$(Esc-XmlText "$v")</dcscor:value>"

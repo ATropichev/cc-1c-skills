@@ -1,4 +1,4 @@
-# skd-edit v1.45 — Atomic 1C DCS editor (Python port)
+# skd-edit v1.46 — Atomic 1C DCS editor (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -700,7 +700,7 @@ def parse_filter_shorthand(s):
             elif re.match(r'^\d+(\.\d+)?$', val_part):
                 result["value"] = val_part
                 result["valueType"] = "xs:decimal"
-            elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.', val_part):
+            elif is_ref_value_literal(val_part):
                 result["value"] = val_part
                 result["valueType"] = "dcscor:DesignTimeValue"
             else:
@@ -719,11 +719,30 @@ def standard_period_variants():
         "Custom", "Today", "ThisWeek", "ThisTenDays", "ThisMonth", "ThisQuarter", "ThisHalfYear",
         "ThisYear", "FromBeginningOfThisWeek", "FromBeginningOfThisTenDays", "FromBeginningOfThisMonth",
         "FromBeginningOfThisQuarter", "FromBeginningOfThisHalfYear", "FromBeginningOfThisYear",
-        "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
-        "NextDay", "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
+        "Yesterday", "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
+        "LastWeekTillSameWeekDay", "LastTenDaysTillSameDayNumber", "LastMonthTillSameDate",
+        "LastQuarterTillSameDate", "LastHalfYearTillSameDate", "LastYearTillSameDate", "Tomorrow",
+        "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
+        "NextWeekTillSameWeekDay", "NextTenDaysTillSameDayNumber", "NextMonthTillSameDate",
+        "NextQuarterTillSameDate", "NextHalfYearTillSameDate", "NextYearTillSameDate",
         "TillEndOfThisWeek", "TillEndOfThisTenDays", "TillEndOfThisMonth", "TillEndOfThisQuarter",
-        "TillEndOfThisHalfYear", "TillEndOfThisYear",
+        "TillEndOfThisHalfYear", "TillEndOfThisYear", "Last7Days", "Next7Days", "Month",
     ]
+
+
+# Вариант периода в любом регистре → написание платформы; не вариант — None.
+# Копия в skd-compile и skd-edit — держит check-inline-drift.
+def resolve_standard_period_variant(s):
+    for v in standard_period_variants():
+        if v.lower() == str(s).lower():
+            return v
+    return None
+
+
+# Значение-ссылка в краткой записи (Справочник.X.Y, Catalog.X.Y) — пишется как DesignTimeValue.
+# Копия в skd-compile, skd-edit и skd-decompile — держит check-inline-drift.
+def is_ref_value_literal(s):
+    return re.match(r'^(Справочник|Перечисление|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|ChartOfAccounts|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(s), re.I) is not None
 
 
 def parse_data_param_shorthand(s):
@@ -758,14 +777,15 @@ def parse_data_param_shorthand(s):
         if len(items) == 1:
             val_str = items[0]
 
-        period_variants = standard_period_variants()
+        period_variant = resolve_standard_period_variant(val_str)
         # Empty / sentinel — record as "" so caller emits xsi:nil
         if len(items) >= 2:
             result["value"] = items
         elif val_str == "" or val_str == "_" or val_str.lower() == "null":
             result["value"] = ""
-        elif val_str in period_variants:
-            result["value"] = {"variant": val_str}
+        elif period_variant and not re.match(r'^xs:(string|decimal|boolean)$', get_declared_param_type(result["parameter"])):
+            # У параметра, объявленного строкой/числом/булевым, слово-вариант остаётся строкой (ветка ниже)
+            result["value"] = {"variant": period_variant}
         else:
             result["value"] = val_str
     else:
@@ -1276,6 +1296,9 @@ def build_param_value_xml(type_str, value, indent, tag_name="value", tag_ns=""):
     lines = []
 
     if type_str == "StandardPeriod":
+        pv = resolve_standard_period_variant(val_str)
+        if pv:
+            val_str = pv
         lines.append(f'{indent}<{open_tag} xsi:type="v8:StandardPeriod">')
         lines.append(f'{indent}\t<v8:variant xsi:type="v8:StandardPeriodVariant">{esc_xml_text(val_str)}</v8:variant>')
         lines.append(f"{indent}\t<v8:startDate>0001-01-01T00:00:00</v8:startDate>")
@@ -1300,8 +1323,7 @@ def build_param_value_xml(type_str, value, indent, tag_name="value", tag_ns=""):
             xsi = "xs:dateTime"
         elif val_str in ("true", "false"):
             xsi = "xs:boolean"
-        elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.', val_str) or \
-             re.match(r'^(Catalog|Document|Enum|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', val_str):
+        elif is_ref_value_literal(val_str):
             xsi = "dcscor:DesignTimeValue"
         else:
             xsi = "xs:string"
@@ -1494,8 +1516,7 @@ def build_data_param_value_lines(value, vi, decl_type=""):
             elif str(v).lower() in ("true", "false"):
                 # Регистр не важен, как в skd-compile; xs:boolean — только строчными
                 lines.append(f'{vi}<dcscor:value xsi:type="xs:boolean">{str(v).lower()}</dcscor:value>')
-            elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.', str(v)) or \
-                    re.match(r'^(Catalog|Document|Enum|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(v)):
+            elif is_ref_value_literal(str(v)):
                 lines.append(f'{vi}<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(str(v))}</dcscor:value>')
             else:
                 lines.append(f'{vi}<dcscor:value xsi:type="xs:string">{esc_xml_text(str(v))}</dcscor:value>')
@@ -1828,7 +1849,8 @@ def find_element_by_child_value(container, elem_name, child_name, child_value, n
         if ns_uri and etree.QName(child.tag).namespace != ns_uri:
             continue
         for gc in child:
-            if isinstance(gc.tag, str) and local_name(gc) == child_name and (gc.text or "").strip() == child_value:
+            # Имена в 1С регистронезависимы — как -eq в PS-порте
+            if isinstance(gc.tag, str) and local_name(gc) == child_name and (gc.text or "").strip().lower() == child_value.lower():
                 return child
     return None
 

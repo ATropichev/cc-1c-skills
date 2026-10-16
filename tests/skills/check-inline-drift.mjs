@@ -207,6 +207,22 @@ const FAMILIES = [
       { id: 'base', authority: 'skd-compile', consumers: ['skd-edit', 'skd-decompile'] },
     ],
   },
+  // Вариант периода принимается в любом регистре, а в XML уходит написанием платформы — иначе
+  // значение перечисления недопустимо, а compile и edit напишут одно и то же по-разному.
+  {
+    name: 'СКД: вариант периода в каноничном написании', py: 'resolve_standard_period_variant', ps1: 'Resolve-StandardPeriodVariant',
+    variants: [
+      { id: 'base', authority: 'skd-compile', consumers: ['skd-edit'] },
+    ],
+  },
+  // Какое значение краткой записи — ссылка (DesignTimeValue). Урезанные копии регулярки писали
+  // Задача.X.Y в отборе строкой, а decompile при этом опускал тип, полагаясь на авто-определение.
+  {
+    name: 'СКД: литерал ссылки в значении', py: 'is_ref_value_literal', ps1: 'Test-RefValueLiteral',
+    variants: [
+      { id: 'base', authority: 'skd-compile', consumers: ['skd-edit', 'skd-decompile'] },
+    ],
+  },
 
   // ─── Запись файла в каноне выгрузки ──────────────────────────────────────
   {

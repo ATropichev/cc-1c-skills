@@ -1,5 +1,5 @@
 {
-  "name": "Поле: inputParameters (ChoiceParameters, ChoiceParameterLinks, simple typed)",
+  "name": "Поле: inputParameters (ChoiceParameters, ChoiceParameterLinks, TypeLink — {field, linkItem}, simple typed)",
   "preRun": [
     {
       "script": "skd-compile/scripts/skd-compile",
@@ -36,6 +36,13 @@
               "inputParameters": [
                 { "parameter": "ПараметрыВыбора", "choiceParameters": [] },
                 { "parameter": "БыстрыйВыбор", "use": false, "value": true }
+              ]
+            },
+            {
+              "field": "Субконто",
+              "type": "CatalogRef.Сотрудники",
+              "inputParameters": [
+                { "parameter": "СвязьПоТипу", "typeLink": { "field": "Сотрудник", "linkItem": 1 } }
               ]
             }
           ]

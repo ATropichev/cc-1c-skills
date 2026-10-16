@@ -1,5 +1,5 @@
 {
-  "name": "availableValues, denyIncompleteValues, Folder в selection",
+  "name": "availableValues, denyIncompleteValues, Folder в selection; ссылка БизнесПроцесс.X.Y в availableValues — DesignTimeValue",
   "params": { "outputPath": "Template.xml" },
   "input": {
     "dataSets": [{
@@ -17,6 +17,12 @@
         {"value": "Перечисление.Округления.Окр1_00", "presentation": "руб. коп"},
         {"value": "Перечисление.Округления.Окр1", "presentation": "руб."},
         {"value": "Перечисление.Округления.Окр1000", "presentation": "тыс. руб"}
+      ]
+    }, {
+      "name": "Процесс",
+      "type": "string(50)",
+      "availableValues": [
+        {"value": "БизнесПроцесс.Задание.ПустаяСсылка", "presentation": "Без процесса"}
       ]
     }],
     "settingsVariants": [{

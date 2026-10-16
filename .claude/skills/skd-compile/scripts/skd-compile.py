@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.132 — Compile 1C DCS from JSON
+# skd-compile v1.133 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -807,11 +807,82 @@ def standard_period_variants():
         "Custom", "Today", "ThisWeek", "ThisTenDays", "ThisMonth", "ThisQuarter", "ThisHalfYear",
         "ThisYear", "FromBeginningOfThisWeek", "FromBeginningOfThisTenDays", "FromBeginningOfThisMonth",
         "FromBeginningOfThisQuarter", "FromBeginningOfThisHalfYear", "FromBeginningOfThisYear",
-        "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
-        "NextDay", "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
+        "Yesterday", "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
+        "LastWeekTillSameWeekDay", "LastTenDaysTillSameDayNumber", "LastMonthTillSameDate",
+        "LastQuarterTillSameDate", "LastHalfYearTillSameDate", "LastYearTillSameDate", "Tomorrow",
+        "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
+        "NextWeekTillSameWeekDay", "NextTenDaysTillSameDayNumber", "NextMonthTillSameDate",
+        "NextQuarterTillSameDate", "NextHalfYearTillSameDate", "NextYearTillSameDate",
         "TillEndOfThisWeek", "TillEndOfThisTenDays", "TillEndOfThisMonth", "TillEndOfThisQuarter",
-        "TillEndOfThisHalfYear", "TillEndOfThisYear",
+        "TillEndOfThisHalfYear", "TillEndOfThisYear", "Last7Days", "Next7Days", "Month",
     ]
+
+
+# Вариант периода в любом регистре → написание платформы; не вариант — None.
+# Копия в skd-compile и skd-edit — держит check-inline-drift.
+def resolve_standard_period_variant(s):
+    for v in standard_period_variants():
+        if v.lower() == str(s).lower():
+            return v
+    return None
+
+
+# Значение-ссылка в краткой записи (Справочник.X.Y, Catalog.X.Y) — пишется как DesignTimeValue.
+# Копия в skd-compile, skd-edit и skd-decompile — держит check-inline-drift.
+def is_ref_value_literal(s):
+    return re.match(r'^(Справочник|Перечисление|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|ChartOfAccounts|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(s), re.I) is not None
+
+
+# valueType из decompile в форме {uri, name} — тип из пространства имён, которого нет в корне
+# схемы (d8p1:AccountType). Возвращает {'uri', 'name'} или None для строки и пустого.
+def get_custom_value_type(vt_src):
+    if isinstance(vt_src, dict):
+        uri = vt_src.get('uri'); t_name = vt_src.get('name')
+        if uri and t_name:
+            return {'uri': str(uri), 'name': str(t_name)}
+    return None
+
+
+# Значение-объект с variant — Standard{Period,BeginningDate}; что именно — по форме:
+#  {variant, date}               → SBD
+#  {variant, startDate, endDate} → SP с датами
+#  {variant} only                → по имени (BeginningOf* → SBD, иначе SP)
+# Даты пишутся ТОЛЬКО для variant=Custom (как у платформы). Общий для параметра данных и отбора.
+_STANDARD_BEGINNING_DATE_VARIANTS = [
+    "Custom", "BeginningOfThisDay", "BeginningOfThisWeek", "BeginningOfThisTenDays", "BeginningOfThisMonth",
+    "BeginningOfThisQuarter", "BeginningOfThisHalfYear", "BeginningOfThisYear", "BeginningOfLastDay",
+    "BeginningOfLastWeek", "BeginningOfLastTenDays", "BeginningOfLastMonth", "BeginningOfLastQuarter",
+    "BeginningOfLastHalfYear", "BeginningOfLastYear", "BeginningOfNextDay", "BeginningOfNextWeek",
+    "BeginningOfNextTenDays", "BeginningOfNextMonth", "BeginningOfNextQuarter", "BeginningOfNextHalfYear",
+    "BeginningOfNextYear",
+]
+
+
+def is_standard_period_value(val):
+    return isinstance(val, dict) and bool(val.get('variant'))
+
+
+def emit_standard_period_value(lines, val, tag, indent):
+    variant_str = str(val['variant'])
+    is_sbd = 'date' in val or ('startDate' not in val and variant_str.lower().startswith('beginningof'))
+    # Вариант в любом регистре → написание платформы (свой список у каждого из двух типов)
+    known = _STANDARD_BEGINNING_DATE_VARIANTS if is_sbd else standard_period_variants()
+    variant_str = next((v for v in known if v.lower() == variant_str.lower()), variant_str)
+    if is_sbd:
+        lines.append(f'{indent}<{tag} xsi:type="v8:StandardBeginningDate">')
+        lines.append(f'{indent}\t<v8:variant xsi:type="v8:StandardBeginningDateVariant">{esc_xml_text(variant_str)}</v8:variant>')
+        if variant_str == 'Custom':
+            d = str(val.get('date') or '0001-01-01T00:00:00')
+            lines.append(f'{indent}\t<v8:date>{esc_xml_text(d)}</v8:date>')
+    else:
+        lines.append(f'{indent}<{tag} xsi:type="v8:StandardPeriod">')
+        lines.append(f'{indent}\t<v8:variant xsi:type="v8:StandardPeriodVariant">{esc_xml_text(variant_str)}</v8:variant>')
+        if variant_str == 'Custom':
+            sd = str(val.get('startDate') or '0001-01-01T00:00:00')
+            ed = str(val.get('endDate') or '0001-01-01T00:00:00')
+            lines.append(f'{indent}\t<v8:startDate>{esc_xml_text(sd)}</v8:startDate>')
+            lines.append(f'{indent}\t<v8:endDate>{esc_xml_text(ed)}</v8:endDate>')
+    lines.append(f'{indent}</{tag}>')
 
 
 def parse_data_param_shorthand(s):
@@ -842,15 +913,18 @@ def parse_data_param_shorthand(s):
         items = split_value_list_csv(val_str)
         if len(items) == 1:
             val_str = items[0]
+        result['text'] = val_str   # как написано — если слово окажется не периодом, а строкой
 
+        # Detect StandardPeriod variants
+        period_variant = resolve_standard_period_variant(val_str)
         if len(items) >= 2:
             result['value'] = items
-        elif val_str in standard_period_variants():
-            result['value'] = {'variant': val_str}
+        elif period_variant:
+            result['value'] = {'variant': period_variant}
         elif re.match(r'^\d{4}-\d{2}-\d{2}T', val_str):
             result['value'] = val_str
-        elif val_str == 'true' or val_str == 'false':
-            result['value'] = val_str == 'true'
+        elif val_str.lower() == 'true' or val_str.lower() == 'false':
+            result['value'] = val_str.lower() == 'true'
         else:
             result['value'] = val_str
     else:
@@ -910,7 +984,7 @@ def parse_filter_shorthand(s):
             elif re.match(r'^\d+(\.\d+)?$', val_part):
                 result['value'] = val_part
                 result['valueType'] = 'xs:decimal'
-            elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.', val_part):
+            elif is_ref_value_literal(val_part):
                 result['value'] = val_part
                 result['valueType'] = 'dcscor:DesignTimeValue'
             else:
@@ -1014,16 +1088,24 @@ def emit_input_parameters(lines, ip, indent):
                     lines.append(f'{indent}\t\t\t\t<dcscor:mode xmlns:d8p1="http://v8.1c.ru/8.1/data/enterprise" xsi:type="d8p1:LinkedValueChangeMode">{mode}</dcscor:mode>')
                     lines.append(f'{indent}\t\t\t</dcscor:item>')
                 lines.append(f'{indent}\t\t</dcscor:value>')
+        elif 'typeLink' in item:
+            # Связь по типу: {field, linkItem} — поле, от значения которого зависит тип, и номер элемента связи
+            # (оба необязательны по XSD — пишем, что задано)
+            tl = item.get('typeLink') or {}
+            if isinstance(tl, str):
+                tl = {'field': tl}
+            lines.append(f'{indent}\t\t<dcscor:value xsi:type="dcscor:TypeLink">')
+            if tl.get('field') is not None and str(tl.get('field')) != '':
+                lines.append(f'{indent}\t\t\t<dcscor:field>{esc_xml_text(str(tl["field"]))}</dcscor:field>')
+            if tl.get('linkItem') is not None and str(tl.get('linkItem')) != '':
+                lines.append(f'{indent}\t\t\t<dcscor:linkItem>{esc_xml_text(str(tl["linkItem"]))}</dcscor:linkItem>')
+            lines.append(f'{indent}\t\t</dcscor:value>')
         elif 'value' in item:
             val = item['value']
             # Явный кастомный type из decompile: {uri, name}
-            vt_src = item.get('valueType')
-            custom_uri = None; custom_name = None
-            if isinstance(vt_src, dict):
-                custom_uri = vt_src.get('uri')
-                custom_name = vt_src.get('name')
-            if custom_uri and custom_name:
-                lines.append(f'{indent}\t\t<dcscor:value xmlns:dN="{custom_uri}" xsi:type="dN:{custom_name}">{esc_xml_text(str(val))}</dcscor:value>')
+            custom_type = get_custom_value_type(item.get('valueType'))
+            if custom_type:
+                lines.append(f'{indent}\t\t<dcscor:value xmlns:dN="{custom_type["uri"]}" xsi:type="dN:{custom_type["name"]}">{esc_xml_text(str(val))}</dcscor:value>')
             elif isinstance(val, bool):
                 vstr = 'true' if val else 'false'
                 lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:boolean">{vstr}</dcscor:value>')
@@ -1538,6 +1620,9 @@ def emit_param_value(lines, type_str, val, indent, value_list_allowed=False):
 
     if type_str == 'StandardPeriod':
         # Platform-pattern: startDate/endDate ТОЛЬКО для variant=Custom.
+        pv = resolve_standard_period_variant(val_str)
+        if pv:
+            val_str = pv
         lines.append(f'{indent}<value xsi:type="v8:StandardPeriod">')
         lines.append(f'{indent}\t<v8:variant xsi:type="v8:StandardPeriodVariant">{esc_xml_text(val_str)}</v8:variant>')
         if val_str == 'Custom':
@@ -1562,7 +1647,7 @@ def emit_param_value(lines, type_str, val, indent, value_list_allowed=False):
             lines.append(f'{indent}<value xsi:type="xs:dateTime">{esc_xml_text(val_str)}</value>')
         elif val_str.lower() in ('true', 'false'):
             lines.append(f'{indent}<value xsi:type="xs:boolean">{esc_xml_text(val_str.lower())}</value>')
-        elif re.match(r'^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', val_str):
+        elif is_ref_value_literal(val_str):
             lines.append(f'{indent}<value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(val_str)}</value>')
         else:
             lines.append(f'{indent}<value xsi:type="xs:string">{esc_xml_text(val_str)}</value>')
@@ -1655,7 +1740,7 @@ def emit_single_param(lines, p, parsed):
                 else:
                     av_val = str(av_v)
                     av_type = 'xs:string'
-                    if re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.', av_val):
+                    if is_ref_value_literal(av_val):
                         av_type = 'dcscor:DesignTimeValue'
                     lines.append(f'\t\t\t<value xsi:type="{av_type}">{esc_xml_text(av_val)}</value>')
             # `title` accepted as synonym of `presentation` — both map to the same UI label.
@@ -2279,6 +2364,9 @@ def emit_filter_item(lines, item, indent):
     lines.append(f'{indent}\t<dcsset:comparisonType>{esc_xml_text(comp_type)}</dcsset:comparisonType>')
 
     # Right value: один, несколько (InList) или ValueListType (пустой list-placeholder)
+    # Тип из чужого пространства имён ({uri, name}) — xmlns объявляется на самом <right>
+    custom_type = get_custom_value_type(item.get('valueType'))
+    type_attr = f'xmlns:dN="{custom_type["uri"]}" xsi:type="dN:{custom_type["name"]}"' if custom_type else None
     val = item.get('value')
     val_is_array = isinstance(val, list)
     if val_is_array:
@@ -2290,8 +2378,11 @@ def emit_filter_item(lines, item, indent):
             lines.append(f'{indent}\t</dcsset:right>')
         else:
             for v in val:
-                vt = str(item.get('valueType', '')) if item.get('valueType') else ''
-                if not vt:
+                if is_standard_period_value(v):
+                    emit_standard_period_value(lines, v, 'dcsset:right', f'{indent}\t')
+                    continue
+                vt = str(item.get('valueType', '')) if item.get('valueType') and not custom_type else ''
+                if not vt and not custom_type:
                     if isinstance(v, bool):
                         vt = 'xs:boolean'
                     elif isinstance(v, (int, float)):
@@ -2300,15 +2391,18 @@ def emit_filter_item(lines, item, indent):
                         vt = 'xs:dateTime'
                     elif re.match(r'^-?\d+(\.\d+)?$', str(v)):
                         vt = 'xs:decimal'
-                    elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(v)):
+                    elif is_ref_value_literal(str(v)):
                         vt = 'dcscor:DesignTimeValue'
                     else:
                         vt = 'xs:string'
                 v_str = str(v).lower() if isinstance(v, bool) else esc_xml_text(str(v))
-                lines.append(f'{indent}\t<dcsset:right xsi:type="{vt}">{v_str}</dcsset:right>')
+                attr = type_attr if type_attr else f'xsi:type="{vt}"'
+                lines.append(f'{indent}\t<dcsset:right {attr}>{v_str}</dcsset:right>')
+    elif is_standard_period_value(val):
+        emit_standard_period_value(lines, val, 'dcsset:right', f'{indent}\t')
     elif val is not None:
-        vt = str(item.get('valueType', '')) if item.get('valueType') else ''
-        if not vt:
+        vt = str(item.get('valueType', '')) if item.get('valueType') and not custom_type else ''
+        if not vt and not custom_type:
             v = val
             if isinstance(v, bool):
                 vt = 'xs:boolean'
@@ -2318,13 +2412,16 @@ def emit_filter_item(lines, item, indent):
                 vt = 'xs:dateTime'
             elif re.match(r'^-?\d+(\.\d+)?$', str(v)):
                 vt = 'xs:decimal'
+            elif is_ref_value_literal(str(v)):
+                vt = 'dcscor:DesignTimeValue'
             else:
                 vt = 'xs:string'
         if isinstance(val, bool):
             v_str = str(val).lower()
         else:
             v_str = esc_xml_text(str(val))
-        lines.append(f'{indent}\t<dcsset:right xsi:type="{vt}">{v_str}</dcsset:right>')
+        attr = type_attr if type_attr else f'xsi:type="{vt}"'
+        lines.append(f'{indent}\t<dcsset:right {attr}>{v_str}</dcsset:right>')
 
     if item.get('presentation'):
         emit_mltext(lines, f'{indent}\t', 'dcsset:presentation', item["presentation"])
@@ -2682,6 +2779,12 @@ def emit_data_parameters(lines, items, indent):
         # Support string shorthand
         if isinstance(dp, str):
             parsed = parse_data_param_shorthand(dp)
+            # Слово-вариант периода у параметра, объявленного строкой/числом/булевым, — это строка
+            # (как true/false у строкового параметра). Дату не трогаем: период у даты — штатно.
+            if is_standard_period_value(parsed.get('value')):
+                decl = next((ap for ap in _all_params if ap['name'] == str(parsed['parameter'])), None)
+                if decl and isinstance(decl['type'], str) and re.match(r'^(string|decimal|boolean)', decl['type'], re.I):
+                    parsed['value'] = parsed['text']
             dp = {
                 'parameter': parsed['parameter'],
             }
@@ -2708,38 +2811,16 @@ def emit_data_parameters(lines, items, indent):
             emit_empty_value(lines, str(dp.get('valueType') or ''), f'{indent}\t\t', 'dcscor:', False)
         elif dp.get('value') is not None:
             val = dp['value']
-            vtype = str(dp.get('valueType') or '')
-            if not vtype:
+            # Тип из чужого пространства имён ({uri, name}) — xmlns объявляется на самом <value>
+            custom_type = get_custom_value_type(dp.get('valueType'))
+            vtype = '' if custom_type else str(dp.get('valueType') or '')
+            if not vtype and not custom_type:
                 # Тип не задан — объявленный у параметра схемы, как в «auto» (составной не подставляем)
                 decl = next((ap for ap in _all_params if ap['name'] == str(dp.get('parameter'))), None)
                 if decl and isinstance(decl['type'], str) and decl['type'] and not re.search(r'\s', decl['type']):
                     vtype = decl['type']
-            if isinstance(val, dict) and val.get('variant'):
-                # Standard{Period,BeginningDate} — различаем по форме value:
-                #  {variant, date}                → SBD
-                #  {variant, startDate, endDate}  → SP с датами
-                #  {variant} only                 → инференс по имени (BeginningOf* → SBD, иначе SP)
-                variant_str = str(val['variant'])
-                has_date = 'date' in val
-                has_sd = 'startDate' in val
-                is_sbd = has_date or (not has_sd and variant_str.startswith('BeginningOf'))
-                if is_sbd:
-                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="v8:StandardBeginningDate">')
-                    lines.append(f'{indent}\t\t\t<v8:variant xsi:type="v8:StandardBeginningDateVariant">{esc_xml_text(variant_str)}</v8:variant>')
-                    if variant_str == 'Custom':
-                        d = str(val.get('date') or '0001-01-01T00:00:00')
-                        lines.append(f'{indent}\t\t\t<v8:date>{esc_xml_text(d)}</v8:date>')
-                    lines.append(f'{indent}\t\t</dcscor:value>')
-                else:
-                    # StandardPeriod — platform-pattern: startDate/endDate ТОЛЬКО для variant=Custom.
-                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="v8:StandardPeriod">')
-                    lines.append(f'{indent}\t\t\t<v8:variant xsi:type="v8:StandardPeriodVariant">{esc_xml_text(variant_str)}</v8:variant>')
-                    if variant_str == 'Custom':
-                        sd = str(val.get('startDate') or '0001-01-01T00:00:00')
-                        ed = str(val.get('endDate') or '0001-01-01T00:00:00')
-                        lines.append(f'{indent}\t\t\t<v8:startDate>{esc_xml_text(sd)}</v8:startDate>')
-                        lines.append(f'{indent}\t\t\t<v8:endDate>{esc_xml_text(ed)}</v8:endDate>')
-                    lines.append(f'{indent}\t\t</dcscor:value>')
+            if is_standard_period_value(val):
+                emit_standard_period_value(lines, val, 'dcscor:value', f'{indent}\t\t')
             else:
                 # Список значений (valueListAllowed) — каждый элемент отдельным <dcscor:value>, как пишет платформа.
                 # Примитивный тип (заданный или объявленный) главнее формы значения
@@ -2748,6 +2829,8 @@ def emit_data_parameters(lines, items, indent):
                     if dpv is None:
                         # null в списке — пустой элемент
                         lines.append(f'{indent}\t\t<dcscor:value xsi:nil="true"/>')
+                    elif custom_type:
+                        lines.append(f'{indent}\t\t<dcscor:value xmlns:dN="{custom_type["uri"]}" xsi:type="dN:{custom_type["name"]}">{esc_xml_text(str(dpv))}</dcscor:value>')
                     elif re.match(r'^[a-zA-Z]+:', vtype):
                         # Полный xsi:type из decompile (например "xs:boolean", "dcscor:DesignTimeValue").
                         v_str = str(dpv).lower() if isinstance(dpv, bool) else str(dpv)
@@ -2760,10 +2843,10 @@ def emit_data_parameters(lines, items, indent):
                     elif re.match(r'^decimal', vtype, re.I):
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:decimal">{esc_xml_text(str(dpv))}</dcscor:value>')
                     elif re.match(r'^string', vtype, re.I):
-                        # Краткая запись уже превратила true/false в булево — вернуть текст, как написан
+                        # Краткая запись уже превратила true/false (в любом регистре) в булево — вернуть текстом, строчными
                         sv = str(dpv).lower() if isinstance(dpv, bool) else str(dpv)
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:string">{esc_xml_text(sv)}</dcscor:value>')
-                    elif re.match(r'^(\u041f\u043b\u0430\u043d\u0421\u0447\u0435\u0442\u043e\u0432|\u0421\u043f\u0440\u0430\u0432\u043e\u0447\u043d\u0438\u043a|\u041f\u0435\u0440\u0435\u0447\u0438\u0441\u043b\u0435\u043d\u0438\u0435|\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442|\u041f\u043b\u0430\u043d\u0412\u0438\u0434\u043e\u0432\u0425\u0430\u0440\u0430\u043a\u0442\u0435\u0440\u0438\u0441\u0442\u0438\u043a|\u041f\u043b\u0430\u043d\u0412\u0438\u0434\u043e\u0432\u0420\u0430\u0441\u0447\u0435\u0442\u0430|\u0411\u0438\u0437\u043d\u0435\u0441\u041f\u0440\u043e\u0446\u0435\u0441\u0441|\u0417\u0430\u0434\u0430\u0447\u0430|\u0420\u0435\u0433\u0438\u0441\u0442\u0440\u0421\u0432\u0435\u0434\u0435\u043d\u0438\u0439|\u041f\u043b\u0430\u043d\u041e\u0431\u043c\u0435\u043d\u0430)\.', str(dpv)) or re.match(r'^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(dpv)):
+                    elif is_ref_value_literal(str(dpv)):
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(str(dpv))}</dcscor:value>')
                     else:
                         lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:string">{esc_xml_text(str(dpv))}</dcscor:value>')

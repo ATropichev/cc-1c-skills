@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-decompile v0.100 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+# skd-decompile v0.101 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -808,6 +808,16 @@ def read_input_parameters(parent_node):
                         cpl_entry['mode'] = mode
                     cpl.append(cpl_entry)
                 entry['choiceParameterLinks'] = cpl
+            elif v_type == 'TypeLink':
+                # Связь по типу: поле + номер элемента связи (оба необязательны)
+                tl = {}
+                tl_field = get_text(val, "dcscor:field")
+                tl_item = get_text(val, "dcscor:linkItem")
+                if tl_field:
+                    tl['field'] = tl_field
+                if tl_item:
+                    tl['linkItem'] = int(tl_item) if re.match(r'^-?\d+$', tl_item) else tl_item
+                entry['typeLink'] = tl
             elif v_type == 'LocalStringType':
                 ml = get_ml_text(val)
                 entry['value'] = ml if ml else ''
@@ -1062,11 +1072,21 @@ def standard_period_variants():
         "Custom", "Today", "ThisWeek", "ThisTenDays", "ThisMonth", "ThisQuarter", "ThisHalfYear",
         "ThisYear", "FromBeginningOfThisWeek", "FromBeginningOfThisTenDays", "FromBeginningOfThisMonth",
         "FromBeginningOfThisQuarter", "FromBeginningOfThisHalfYear", "FromBeginningOfThisYear",
-        "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
-        "NextDay", "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
+        "Yesterday", "LastWeek", "LastTenDays", "LastMonth", "LastQuarter", "LastHalfYear", "LastYear",
+        "LastWeekTillSameWeekDay", "LastTenDaysTillSameDayNumber", "LastMonthTillSameDate",
+        "LastQuarterTillSameDate", "LastHalfYearTillSameDate", "LastYearTillSameDate", "Tomorrow",
+        "NextWeek", "NextTenDays", "NextMonth", "NextQuarter", "NextHalfYear", "NextYear",
+        "NextWeekTillSameWeekDay", "NextTenDaysTillSameDayNumber", "NextMonthTillSameDate",
+        "NextQuarterTillSameDate", "NextHalfYearTillSameDate", "NextYearTillSameDate",
         "TillEndOfThisWeek", "TillEndOfThisTenDays", "TillEndOfThisMonth", "TillEndOfThisQuarter",
-        "TillEndOfThisHalfYear", "TillEndOfThisYear",
+        "TillEndOfThisHalfYear", "TillEndOfThisYear", "Last7Days", "Next7Days", "Month",
     ]
+
+
+# Значение-ссылка в краткой записи (Справочник.X.Y, Catalog.X.Y) — пишется как DesignTimeValue.
+# Копия в skd-compile, skd-edit и skd-decompile — держит check-inline-drift.
+def is_ref_value_literal(s):
+    return re.match(r'^(Справочник|Перечисление|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|ChartOfAccounts|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(s), re.I) is not None
 
 
 # Слова, которые краткая запись compile читает не как строку: варианты стандартного периода,
@@ -1112,7 +1132,7 @@ def format_scalar_shorthand(s, as_string=False):
     if shorthand_unsafe(s):
         return None
     if as_string and (s.lower() in _SHORTHAND_KEYWORDS or re.match(r'^\d{4}-\d{2}-\d{2}T', s) or
-                      re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', s)):
+                      is_ref_value_literal(s)):
         return None
     if ',' in s:
         if "'" in s:
@@ -1824,6 +1844,26 @@ filter_op_map = {
 }
 
 
+# Значение Standard{Period,BeginningDate} → {variant[, date | startDate, endDate]} — форма, по которой
+# compile восстанавливает тип (date → SBD, BeginningOf* → SBD, иначе SP). Даты есть только у Custom.
+def to_standard_period_object(val_node):
+    obj = {'variant': get_text(val_node, "v8:variant")}
+    if obj['variant'] != 'Custom':
+        return obj
+    if get_local_xsi_type(val_node) == 'StandardBeginningDate':
+        d = get_text(val_node, "v8:date")
+        # date обязателен: без него Custom прочитается как StandardPeriod
+        obj['date'] = d if d else '0001-01-01T00:00:00'
+    else:
+        sd = get_text(val_node, "v8:startDate")
+        ed = get_text(val_node, "v8:endDate")
+        if sd:
+            obj['startDate'] = sd
+        if ed:
+            obj['endDate'] = ed
+    return obj
+
+
 def get_filter_value(val_node):
     if not val_node:
         return '_'
@@ -1831,6 +1871,8 @@ def get_filter_value(val_node):
     if nil == 'true':
         return '_'
     v_type = get_local_xsi_type(val_node)
+    if v_type in ('StandardPeriod', 'StandardBeginningDate'):
+        return to_standard_period_object(val_node)
     if v_type == 'DesignTimeValue':
         return val_node.inner_text
     if v_type == 'LocalStringType':
@@ -1839,6 +1881,35 @@ def get_filter_value(val_node):
     if not txt:
         return '_'
     return txt
+
+
+# xsi:type значения для valueType в DSL. Префикс, который compile объявляет в корне, — строкой
+# с этим префиксом; тип из другого пространства имён (d8p1:AccountType, d6p1:CatalogRef.X —
+# xmlns на самом узле) — {uri, name}: строкой его префикс в результате compile не объявлен.
+_COMPILE_ROOT_PREFIXES = {
+    'http://www.w3.org/2001/XMLSchema': 'xs',
+    'http://www.w3.org/2001/XMLSchema-instance': 'xsi',
+    'http://v8.1c.ru/8.1/data/core': 'v8',
+    'http://v8.1c.ru/8.1/data/ui': 'v8ui',
+    'http://v8.1c.ru/8.1/data-composition-system/common': 'dcscom',
+    'http://v8.1c.ru/8.1/data-composition-system/core': 'dcscor',
+    'http://v8.1c.ru/8.1/data-composition-system/settings': 'dcsset',
+}
+
+
+def get_dsl_value_type(val_node):
+    raw = val_node.get_attribute("type", NS_XSI)
+    m = re.match(r'^([^:]+):(.+)$', raw or '')
+    if not m:
+        return raw
+    pfx, name = m.group(1), m.group(2)
+    uri = val_node.get_namespace_of_prefix(pfx)
+    if not uri:
+        return raw
+    root_pfx = _COMPILE_ROOT_PREFIXES.get(uri)
+    if root_pfx:
+        return f'{root_pfx}:{name}'
+    return {'uri': uri, 'name': name}
 
 
 def get_filter_value_with_type(val_node):
@@ -1851,6 +1922,9 @@ def get_filter_value_with_type(val_node):
     v_type = get_local_xsi_type(val_node)
     if v_type == 'LocalStringType':
         return {'value': get_ml_text(val_node), 'type': raw_type}
+    # Тип периода compile выводит из формы объекта — valueType не нужен
+    if v_type in ('StandardPeriod', 'StandardBeginningDate'):
+        return {'value': to_standard_period_object(val_node), 'type': None}
     txt = val_node.inner_text
     if not txt:
         return {'value': '_', 'type': raw_type}
@@ -1918,9 +1992,15 @@ def build_filter_item(item_node, loc):
             vt = get_filter_value_with_type(rn)
             value = vt['value']
             auto_detects_dtv = (vt['type'] == 'dcscor:DesignTimeValue') and \
-                re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(vt['value']))
-            if vt['type'] and not re.match(r'^xs:', vt['type']) and not auto_detects_dtv:
-                value_type_attr = vt['type']
+                is_ref_value_literal(str(vt['value']))
+            # Строка, которую compile по виду прочитал бы иначе (ссылка, число, дата, true/false), —
+            # тип сохраняем явно, иначе круг меняет её тип
+            v = vt['value']
+            str_looks_typed = get_local_xsi_type(rn) == 'string' and isinstance(v, str) and (
+                is_ref_value_literal(v) or re.match(r'^-?\d+(\.\d+)?$', v) or
+                re.match(r'^\d{4}-\d{2}-\d{2}T', v) or v.lower() in ('true', 'false'))
+            if (vt['type'] and not re.match(r'^xs:', vt['type']) and not auto_detects_dtv) or str_looks_typed:
+                value_type_attr = get_dsl_value_type(rn)
     elif len(right_nodes) > 1:
         arr = []
         raw_types = []
@@ -1932,15 +2012,17 @@ def build_filter_item(item_node, loc):
         uniq_types = sorted(set(t for t in raw_types if t))
         # PS does Sort-Object -Unique, preserves None as well; we filtered. Replicate "all same":
         uniq_all = sorted(set(raw_types))
-        if len(uniq_all) == 1 and uniq_all[0]:
+        first_local = get_local_xsi_type(right_nodes[0])
+        is_period_list = first_local in ('StandardPeriod', 'StandardBeginningDate')
+        if len(uniq_all) == 1 and uniq_all[0] and not is_period_list:
             t0 = uniq_all[0]
             if t0 == 'dcscor:DesignTimeValue' and len(arr) > 0:
-                all_match = all(re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена|Catalog|Enum|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(x)) for x in arr)
+                all_match = all(is_ref_value_literal(str(x)) for x in arr)
                 auto_detects_dtv = all_match
             else:
                 auto_detects_dtv = False
             if not auto_detects_dtv:
-                value_type_attr = t0
+                value_type_attr = get_dsl_value_type(right_nodes[0])
 
     use = get_text(item_node, "dcsset:use")
     user_id = get_text(item_node, "dcsset:userSettingID")
@@ -1967,10 +2049,15 @@ def build_filter_item(item_node, loc):
         flags.append('@normal')
 
     no_value_ops = ('filled', 'notFilled')
+    # ...но если правая часть в XML всё же есть (платформа её хранит, смысла она не несёт) —
+    # сохраняем для раундтрипа
+    keep_no_op_right = op in no_value_ops and len(right_nodes) > 0 and value is not None and value != '_'
 
-    if user_pres_node or value_is_array_flag or value_type_attr or fi_pres:
+    # значение-объект (период {variant, ...}, многоязычная строка) краткой записью не выражается — объектная форма
+    value_is_period = isinstance(value, dict)
+    if user_pres_node or value_is_array_flag or value_type_attr or fi_pres or value_is_period or keep_no_op_right:
         obj = {'field': field, 'op': op}
-        if op not in no_value_ops and value is not None:
+        if (op not in no_value_ops or keep_no_op_right) and value is not None:
             if value_is_array_flag:
                 obj['value'] = list(value)
             else:
@@ -2340,6 +2427,12 @@ def build_data_parameters(dp_node, top_params):
     if len(items) == 0:
         return None
     visible_top = {}
+    # Объявленный тип каждого параметра (и скрытого): краткая запись compile у строки/числа/булева
+    # оставляет слово-вариант строкой — период у такого параметра пишем объектом
+    decl_prim = {}
+    for tp in top_params:
+        ts = tp['typeShort']
+        decl_prim[tp['name']] = isinstance(ts, str) and bool(re.match(r'^(string|decimal|boolean)', ts, re.I))
     for tp in top_params:
         if not tp['hidden'] and tp['name'] not in auto_dates_companions:
             visible_top[tp['name']] = tp
@@ -2375,12 +2468,15 @@ def build_data_parameters(dp_node, top_params):
                 can_auto = False
             obj = {'parameter': pn, 'value': v_list}
             v_types = []
+            typed_node = None
             for vn in val_nodes:
                 ta = vn.get_attr_raw('xsi:type')
                 if ta and ta not in v_types:
                     v_types.append(ta)
+                if ta and typed_node is None:
+                    typed_node = vn
             if len(v_types) == 1 and v_types[0]:
-                obj['valueType'] = v_types[0]
+                obj['valueType'] = get_dsl_value_type(typed_node)
             if use == 'false':
                 obj['use'] = False
             if usid:
@@ -2410,17 +2506,15 @@ def build_data_parameters(dp_node, top_params):
                 can_auto = False
             elif variant:
                 v_display = variant
-                if vm_n or usp_n:
+                if vm_n or usp_n or decl_prim.get(pn):
                     std_period_obj = {'variant': variant}
+                if decl_prim.get(pn):
+                    can_auto = False
         elif vt == 'StandardBeginningDate':
-            variant = get_text(val_node, "v8:variant")
-            d_ = get_text(val_node, "v8:date")
-            has_explicit_date = d_ and d_ != '0001-01-01T00:00:00'
-            if has_explicit_date:
-                std_period_obj = {'variant': variant, 'date': d_}
-                can_auto = False
-            elif variant:
-                std_period_obj = {'variant': variant}
+            # Shape inference в compile: {variant, date} → SBD, либо variant начинается с BeginningOf*.
+            # У Custom date пишется всегда, даже нулевая: без него compile прочитает StandardPeriod.
+            if get_text(val_node, "v8:variant"):
+                std_period_obj = to_standard_period_object(val_node)
                 can_auto = False
         elif vt == 'DesignTimeValue':
             v_display = val_node.inner_text
@@ -2460,9 +2554,8 @@ def build_data_parameters(dp_node, top_params):
                         obj['value'] = float(v_display)
                 else:
                     obj['value'] = v_display
-                ta = val_node.get_attr_raw('xsi:type')
-                if ta:
-                    obj['valueType'] = ta
+                if val_node.get_attribute('type', NS_XSI):
+                    obj['valueType'] = get_dsl_value_type(val_node)
             if use == 'false':
                 obj['use'] = False
             if usid:
