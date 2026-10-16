@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.134 — Compile 1C DCS from JSON
+# skd-compile v1.135 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -981,7 +981,7 @@ def parse_filter_shorthand(s):
             elif re.match(r'^\d{4}-\d{2}-\d{2}T', val_part):
                 result['value'] = val_part
                 result['valueType'] = 'xs:dateTime'
-            elif re.match(r'^\d+(\.\d+)?$', val_part):
+            elif re.match(r'^-?\d+(\.\d+)?$', val_part):
                 result['value'] = val_part
                 result['valueType'] = 'xs:decimal'
             elif is_ref_value_literal(val_part):
@@ -1240,6 +1240,8 @@ def emit_available_value(lines, av, indent, param_type=None, is_param=False):
     vt_src = av.get('valueType')
     if v is None:
         lines.append(f'{indent}\t<value xsi:nil="true"/>')
+    elif is_standard_period_value(v):
+        emit_standard_period_value(lines, v, 'value', f'{indent}\t')
     elif is_param and not vt_src and is_empty_value(v):
         emit_empty_value(lines, param_type or '', f'{indent}\t', '', False)
     else:
@@ -2788,7 +2790,7 @@ def emit_data_parameters(lines, items, indent):
             # Слово-вариант периода у параметра, объявленного строкой/числом/булевым, — это строка
             # (как true/false у строкового параметра). Дату не трогаем: период у даты — штатно.
             if is_standard_period_value(parsed.get('value')):
-                decl = next((ap for ap in _all_params if ap['name'] == str(parsed['parameter'])), None)
+                decl = next((ap for ap in _all_params if str(ap['name']).lower() == str(parsed['parameter']).lower()), None)
                 if decl and isinstance(decl['type'], str) and re.match(r'^(string|decimal|boolean)', decl['type'], re.I):
                     parsed['value'] = parsed['text']
             dp = {
@@ -2822,7 +2824,7 @@ def emit_data_parameters(lines, items, indent):
             vtype = '' if custom_type else str(dp.get('valueType') or '')
             if not vtype and not custom_type:
                 # Тип не задан — объявленный у параметра схемы, как в «auto» (составной не подставляем)
-                decl = next((ap for ap in _all_params if ap['name'] == str(dp.get('parameter'))), None)
+                decl = next((ap for ap in _all_params if str(ap['name']).lower() == str(dp.get('parameter')).lower()), None)
                 if decl and isinstance(decl['type'], str) and decl['type'] and not re.search(r'\s', decl['type']):
                     vtype = decl['type']
             if is_standard_period_value(val):

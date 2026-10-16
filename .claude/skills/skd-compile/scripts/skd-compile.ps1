@@ -1,4 +1,4 @@
-﻿# skd-compile v1.134 — Compile 1C DCS from JSON
+﻿# skd-compile v1.135 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -988,7 +988,7 @@ function Parse-DataParamShorthand {
 			$result.value = $items
 		} elseif ($periodVariant) {
 			$result.value = @{ variant = $periodVariant }
-		} elseif ($valStr -match '^\d{4}-\d{2}-\d{2}T') {
+		} elseif ($valStr -cmatch '^\d{4}-\d{2}-\d{2}T') {
 			$result.value = $valStr
 		} elseif ($valStr -eq "true" -or $valStr -eq "false") {
 			$result.value = [bool]($valStr -eq "true")
@@ -1063,10 +1063,10 @@ function Parse-FilterShorthand {
 			if ($valPart -eq "true" -or $valPart -eq "false") {
 				$result.value = [bool]($valPart -eq "true")
 				$result["valueType"] = "xs:boolean"
-			} elseif ($valPart -match '^\d{4}-\d{2}-\d{2}T') {
+			} elseif ($valPart -cmatch '^\d{4}-\d{2}-\d{2}T') {
 				$result.value = $valPart
 				$result["valueType"] = "xs:dateTime"
-			} elseif ($valPart -match '^\d+(\.\d+)?$') {
+			} elseif ($valPart -match '^-?\d+(\.\d+)?$') {
 				$result.value = $valPart
 				$result["valueType"] = "xs:decimal"
 			} elseif (Test-RefValueLiteral $valPart) {
@@ -1316,6 +1316,8 @@ function Emit-AvailableValue {
 	$vtSrc = $av.valueType
 	if ($null -eq $v) {
 		X "$indent`t<value xsi:nil=`"true`"/>"
+	} elseif (Test-StandardPeriodValue $v) {
+		Emit-StandardPeriodValue $v "value" "$indent`t"
 	} elseif ($isParam -and -not $vtSrc -and (Test-EmptyValue $v)) {
 		Emit-EmptyValue -type $paramType -indent "$indent`t" -tagPrefix "" -valueListAllowed $false
 	} else {
@@ -1329,7 +1331,7 @@ function Emit-AvailableValue {
 				if ($v -is [bool]) { $avType = 'xs:boolean' }
 				elseif ($v -is [int] -or $v -is [long] -or $v -is [double] -or $v -is [decimal]) { $avType = 'xs:decimal' }
 				elseif (Test-RefValueLiteral "$v") { $avType = 'dcscor:DesignTimeValue' }
-				elseif (-not $isParam -and "$v" -match '^\d{4}-\d{2}-\d{2}T') { $avType = 'xs:dateTime' }
+				elseif (-not $isParam -and "$v" -cmatch '^\d{4}-\d{2}-\d{2}T') { $avType = 'xs:dateTime' }
 				else { $avType = 'xs:string' }
 			}
 			$typeAttr = "xsi:type=`"$avType`""
@@ -1988,7 +1990,7 @@ function Emit-ParamValue {
 		X "$indent<value xsi:type=`"dcscor:DesignTimeValue`">$(Esc-XmlText $valStr)</value>"
 	} else {
 		# Guess from value
-		if ($valStr -match '^\d{4}-\d{2}-\d{2}T') {
+		if ($valStr -cmatch '^\d{4}-\d{2}-\d{2}T') {
 			X "$indent<value xsi:type=`"xs:dateTime`">$(Esc-XmlText $valStr)</value>"
 		} elseif ($valStr -eq "true" -or $valStr -eq "false") {
 			X "$indent<value xsi:type=`"xs:boolean`">$(Esc-XmlText $valStr.ToLower())</value>"
@@ -2637,7 +2639,7 @@ function Emit-FilterItem {
 				if (-not $vt -and -not $customType) {
 					if ($v -is [bool]) { $vt = 'xs:boolean' }
 					elseif ($v -is [int] -or $v -is [long] -or $v -is [double]) { $vt = 'xs:decimal' }
-					elseif ("$v" -match '^\d{4}-\d{2}-\d{2}T') { $vt = 'xs:dateTime' }
+					elseif ("$v" -cmatch '^\d{4}-\d{2}-\d{2}T') { $vt = 'xs:dateTime' }
 					elseif ("$v" -match '^-?\d+(\.\d+)?$') { $vt = 'xs:decimal' }
 					elseif (Test-RefValueLiteral "$v") { $vt = 'dcscor:DesignTimeValue' }
 					else { $vt = 'xs:string' }
@@ -2657,7 +2659,7 @@ function Emit-FilterItem {
 				$vt = "xs:boolean"
 			} elseif ($v -is [int] -or $v -is [long] -or $v -is [double]) {
 				$vt = "xs:decimal"
-			} elseif ("$v" -match '^\d{4}-\d{2}-\d{2}T') {
+			} elseif ("$v" -cmatch '^\d{4}-\d{2}-\d{2}T') {
 				$vt = "xs:dateTime"
 			} elseif ("$v" -match '^-?\d+(\.\d+)?$') {
 				$vt = "xs:decimal"
@@ -3191,7 +3193,7 @@ function Emit-DataParameters {
 			# Слово-вариант периода у параметра, объявленного строкой/числом/булевым, — это строка
 			# (как true/false у строкового параметра). Дату не трогаем: период у даты — штатно.
 			if ((Test-StandardPeriodValue $parsed.value)) {
-				$decl = $script:allParams | Where-Object { $_.name -ceq "$($parsed.parameter)" } | Select-Object -First 1
+				$decl = $script:allParams | Where-Object { $_.name -eq "$($parsed.parameter)" } | Select-Object -First 1
 				if ($decl -and "$($decl.type)" -match '^(string|decimal|boolean)') { $parsed.value = $parsed.text }
 			}
 			$dpObj = New-Object PSObject
@@ -3230,7 +3232,7 @@ function Emit-DataParameters {
 			$vtype = if ($customType) { "" } else { "$($dp.valueType)" }
 			if (-not $vtype -and -not $customType) {
 				# Тип не задан — объявленный у параметра схемы, как в «auto» (составной не подставляем)
-				$decl = $script:allParams | Where-Object { $_.name -ceq "$($dp.parameter)" } | Select-Object -First 1
+				$decl = $script:allParams | Where-Object { $_.name -eq "$($dp.parameter)" } | Select-Object -First 1
 				if ($decl -and $decl.type -and $decl.type -notmatch '\s') { $vtype = $decl.type }
 			}
 			if (Test-StandardPeriodValue $dp.value) {
@@ -3252,7 +3254,7 @@ function Emit-DataParameters {
 					} elseif ($vtype -eq 'boolean' -or (-not $vPrim -and $dpv -is [bool])) {
 						$bv = "$dpv".ToLower()
 						X "$indent`t`t<dcscor:value xsi:type=`"xs:boolean`">$(Esc-XmlText $bv)</dcscor:value>"
-					} elseif ($vtype -match '^date' -or (-not $vPrim -and "$dpv" -match '^\d{4}-\d{2}-\d{2}T')) {
+					} elseif ($vtype -match '^date' -or (-not $vPrim -and "$dpv" -cmatch '^\d{4}-\d{2}-\d{2}T')) {
 						X "$indent`t`t<dcscor:value xsi:type=`"xs:dateTime`">$(Esc-XmlText "$dpv")</dcscor:value>"
 					} elseif ($vtype -match '^decimal') {
 						X "$indent`t`t<dcscor:value xsi:type=`"xs:decimal`">$(Esc-XmlText "$dpv")</dcscor:value>"
@@ -3323,8 +3325,8 @@ function Emit-GroupItems {
 			# Auto-detect: ISO date → xs:dateTime, иначе → dcscor:Field (path).
 			$pab = if ($field.periodAdditionBegin) { "$($field.periodAdditionBegin)" } else { '0001-01-01T00:00:00' }
 			$pae = if ($field.periodAdditionEnd)   { "$($field.periodAdditionEnd)"   } else { '0001-01-01T00:00:00' }
-			$pabT = if ($pab -match '^\d{4}-\d{2}-\d{2}T') { 'xs:dateTime' } else { 'dcscor:Field' }
-			$paeT = if ($pae -match '^\d{4}-\d{2}-\d{2}T') { 'xs:dateTime' } else { 'dcscor:Field' }
+			$pabT = if ($pab -cmatch '^\d{4}-\d{2}-\d{2}T') { 'xs:dateTime' } else { 'dcscor:Field' }
+			$paeT = if ($pae -cmatch '^\d{4}-\d{2}-\d{2}T') { 'xs:dateTime' } else { 'dcscor:Field' }
 			X "$indent`t`t<dcsset:periodAdditionBegin xsi:type=`"$pabT`">$(Esc-XmlText $pab)</dcsset:periodAdditionBegin>"
 			X "$indent`t`t<dcsset:periodAdditionEnd xsi:type=`"$paeT`">$(Esc-XmlText $pae)</dcsset:periodAdditionEnd>"
 			X "$indent`t</dcsset:item>"

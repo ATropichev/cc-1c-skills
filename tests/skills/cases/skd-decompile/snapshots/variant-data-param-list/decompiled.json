@@ -27,13 +27,17 @@
           { "field": "А", "op": "filled", "value": { "variant": "Custom", "date": "0001-01-01T00:00:00" } },
           { "field": "А", "op": "=", "value": "Catalog.Валюты.Рубль", "valueType": "xs:string" },
           { "field": "А", "op": "<>", "value": "5", "valueType": "xs:string" },
+          { "field": "А", "op": "<>", "value": "true", "valueType": "xs:string" },
+          { "field": "А", "op": "<>", "value": "2024-01-01T00:00:00", "valueType": "xs:string" },
+          "А > -5",
+          { "field": "А", "op": "in", "value": [{ "variant": "Custom", "date": "2024-01-01T00:00:00" }, { "variant": "BeginningOfThisMonth" }] },
           "А notFilled"
         ],
         "dataParameters": [
           { "parameter": "Вид", "value": ["Active", "Passive"], "valueType": { "uri": "http://v8.1c.ru/8.1/data/enterprise", "name": "AccountType" } },
           { "parameter": "Начало", "value": { "variant": "Custom", "date": "0001-01-01T00:00:00" } },
           "Период = Month",
-          { "parameter": "Обозначение", "value": { "variant": "Today" } },
+          { "parameter": "обозначение", "value": { "variant": "Today" } },
           { "parameter": "Коды", "value": ["A", "B"], "valueType": "xs:string", "userSettingID": "auto" },
           { "parameter": "Суммы", "value": [3, 4.75], "valueType": "xs:decimal" },
           "Метка = 'одна, с запятой' @user",

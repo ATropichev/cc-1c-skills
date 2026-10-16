@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-decompile v0.102 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+# skd-decompile v0.103 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1880,25 +1880,33 @@ def get_dsl_value_type(val_node):
 
 
 # <availableValue> поля, вычисляемого поля или параметра → {value[, valueType][, presentation]}.
-# xsi:nil → value None. valueType — только если compile вывел бы из значения другой тип:
-# ссылку он узнаёт по литералу, дату (кроме параметра) — по виду, остальное — xs:string.
+# xsi:nil → value None; период — объектом {variant[, date | startDate, endDate]}. valueType —
+# только если compile вывел бы из значения другой тип: ссылку он узнаёт по литералу, дату (кроме
+# параметра) — по виду, остальное — xs:string; у параметра ""/"_"/"null" без valueType — пустое
+# значение его типа, поэтому такой строке valueType пишется всегда.
 def convert_available_value_entry(av, is_param=False):
     vn = av.select_single_node("r:value")
     pn = av.select_single_node("r:presentation")
     entry = {}
     if vn:
-        val = convert_list_item_value(vn)
-        entry['value'] = val
-        if isinstance(val, str):
-            dt = get_dsl_value_type(vn)
-            if is_ref_value_literal(val):
-                inferred = 'dcscor:DesignTimeValue'
-            elif not is_param and re.match(r'^\d{4}-\d{2}-\d{2}T', val):
-                inferred = 'xs:dateTime'
-            else:
-                inferred = 'xs:string'
-            if dt and not (isinstance(dt, str) and dt == inferred):
-                entry['valueType'] = dt
+        v_type = get_local_xsi_type(vn)
+        if v_type in ('StandardPeriod', 'StandardBeginningDate'):
+            entry['value'] = to_standard_period_object(vn)
+        else:
+            val = convert_list_item_value(vn)
+            entry['value'] = val
+            if isinstance(val, str):
+                dt = get_dsl_value_type(vn)
+                if is_ref_value_literal(val):
+                    inferred = 'dcscor:DesignTimeValue'
+                elif not is_param and re.match(r'^\d{4}-\d{2}-\d{2}T', val):
+                    inferred = 'xs:dateTime'
+                else:
+                    inferred = 'xs:string'
+                t = val.strip()
+                looks_empty = is_param and (t == '' or t == '_' or t.lower() == 'null')
+                if dt and (looks_empty or not (isinstance(dt, str) and dt == inferred)):
+                    entry['valueType'] = dt
     if pn:
         pres = get_ml_text(pn)
         if pres:
@@ -2047,7 +2055,7 @@ def build_filter_item(item_node, loc):
     # сохраняем для раундтрипа
     keep_no_op_right = op in no_value_ops and len(right_nodes) > 0 and value is not None and value != '_'
 
-    # значение-объект (период {variant, ...}, многоязычная строка) краткой записью не выражается — объектная форма
+    # значение-объект (период {variant, ...}; многоязычная строка — тоже, но compile её не восстанавливает) краткой записью не выражается — объектная форма
     value_is_period = isinstance(value, dict)
     if user_pres_node or value_is_array_flag or value_type_attr or fi_pres or value_is_period or keep_no_op_right:
         obj = {'field': field, 'op': op}
@@ -2426,16 +2434,16 @@ def build_data_parameters(dp_node, top_params):
     decl_prim = {}
     for tp in top_params:
         ts = tp['typeShort']
-        decl_prim[tp['name']] = isinstance(ts, str) and bool(re.match(r'^(string|decimal|boolean)', ts, re.I))
+        decl_prim[str(tp['name']).lower()] = isinstance(ts, str) and bool(re.match(r'^(string|decimal|boolean)', ts, re.I))
     for tp in top_params:
         if not tp['hidden'] and tp['name'] not in auto_dates_companions:
-            visible_top[tp['name']] = tp
+            visible_top[str(tp['name']).lower()] = tp
     can_auto = True
     present_names = {}
     entries = []
     for it in items:
         pn = get_text(it, "dcscor:parameter")
-        present_names[pn] = True
+        present_names[str(pn).lower()] = True
         usid = get_text(it, "dcsset:userSettingID")
         if not usid:
             can_auto = False
@@ -2447,7 +2455,7 @@ def build_data_parameters(dp_node, top_params):
         usp_n = it.select_single_node("dcsset:userSettingPresentation")
         if vm_n or usp_n:
             can_auto = False
-        tp = visible_top.get(pn)
+        tp = visible_top.get(str(pn).lower())
         flags = []
         if usid:
             flags.append('@user')
@@ -2500,9 +2508,9 @@ def build_data_parameters(dp_node, top_params):
                 can_auto = False
             elif variant:
                 v_display = variant
-                if vm_n or usp_n or decl_prim.get(pn):
+                if vm_n or usp_n or decl_prim.get(str(pn).lower()):
                     std_period_obj = {'variant': variant}
-                if decl_prim.get(pn):
+                if decl_prim.get(str(pn).lower()):
                     can_auto = False
         elif vt == 'StandardBeginningDate':
             # Shape inference в compile: {variant, date} → SBD, либо variant начинается с BeginningOf*.

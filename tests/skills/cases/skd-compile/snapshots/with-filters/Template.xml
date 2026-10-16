@@ -145,6 +145,16 @@
 					<dcsset:right xsi:type="xs:decimal">0</dcsset:right>
 				</dcsset:item>
 				<dcsset:item xsi:type="dcsset:FilterItemComparison">
+					<dcsset:left xsi:type="dcscor:Field">Сумма</dcsset:left>
+					<dcsset:comparisonType>Greater</dcsset:comparisonType>
+					<dcsset:right xsi:type="xs:decimal">-5</dcsset:right>
+				</dcsset:item>
+				<dcsset:item xsi:type="dcsset:FilterItemComparison">
+					<dcsset:left xsi:type="dcscor:Field">Статус</dcsset:left>
+					<dcsset:comparisonType>NotEqual</dcsset:comparisonType>
+					<dcsset:right xsi:type="xs:string">2024-01-01t00:00:00</dcsset:right>
+				</dcsset:item>
+				<dcsset:item xsi:type="dcsset:FilterItemComparison">
 					<dcsset:left xsi:type="dcscor:Field">Номенклатура</dcsset:left>
 					<dcsset:comparisonType>NotEqual</dcsset:comparisonType>
 					<dcsset:right xsi:type="dcscor:DesignTimeValue">Задача.ЗадачаИсполнителя.ПустаяСсылка</dcsset:right>
@@ -182,6 +192,17 @@
 					<dcsset:right xsi:type="v8:StandardBeginningDate">
 						<v8:variant xsi:type="v8:StandardBeginningDateVariant">Custom</v8:variant>
 						<v8:date>2024-01-01T00:00:00</v8:date>
+					</dcsset:right>
+				</dcsset:item>
+				<dcsset:item xsi:type="dcsset:FilterItemComparison">
+					<dcsset:left xsi:type="dcscor:Field">Дата</dcsset:left>
+					<dcsset:comparisonType>InList</dcsset:comparisonType>
+					<dcsset:right xsi:type="v8:StandardBeginningDate">
+						<v8:variant xsi:type="v8:StandardBeginningDateVariant">Custom</v8:variant>
+						<v8:date>2024-01-01T00:00:00</v8:date>
+					</dcsset:right>
+					<dcsset:right xsi:type="v8:StandardBeginningDate">
+						<v8:variant xsi:type="v8:StandardBeginningDateVariant">BeginningOfThisMonth</v8:variant>
 					</dcsset:right>
 				</dcsset:item>
 			</dcsset:filter>

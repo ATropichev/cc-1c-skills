@@ -1,4 +1,4 @@
-# skd-edit v1.47 — Atomic 1C DCS editor (Python port)
+# skd-edit v1.48 — Atomic 1C DCS editor (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -697,7 +697,7 @@ def parse_filter_shorthand(s):
             elif re.match(r'^\d{4}-\d{2}-\d{2}T', val_part):
                 result["value"] = val_part
                 result["valueType"] = "xs:dateTime"
-            elif re.match(r'^\d+(\.\d+)?$', val_part):
+            elif re.match(r'^-?\d+(\.\d+)?$', val_part):
                 result["value"] = val_part
                 result["valueType"] = "xs:decimal"
             elif is_ref_value_literal(val_part):

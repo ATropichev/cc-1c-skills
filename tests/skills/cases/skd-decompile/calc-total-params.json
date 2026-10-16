@@ -1,5 +1,5 @@
 {
-  "name": "calculatedFields, totalFields, parameters с autoDates/valueList/hidden/availableValues; availableValues поля набора и вычисляемого поля: xsi:nil — null, строка вида ссылки или даты — с valueType xs:string, ссылка — без valueType; null у параметра",
+  "name": "calculatedFields, totalFields, parameters с autoDates/valueList/hidden/availableValues; availableValues поля набора и вычисляемого поля: xsi:nil — null, строка вида ссылки или даты — с valueType xs:string, ссылка — без valueType; null у параметра; период в availableValues параметра — объектом; «_» у параметра — с valueType xs:string",
   "preRun": [
     {
       "script": "skd-compile/scripts/skd-compile",
@@ -40,6 +40,17 @@
               {"value": "Перечисление.Округления.Окр1", "presentation": "руб."},
               {"value": null, "presentation": "Не задано"}
             ]
+          },
+          {
+            "name": "Пер",
+            "type": "StandardPeriod",
+            "value": "ThisYear",
+            "availableValues": [{"value": {"variant": "ThisYear"}}, {"value": {"variant": "Custom", "startDate": "2024-01-01T00:00:00", "endDate": "2024-12-31T23:59:59"}}]
+          },
+          {
+            "name": "Метка",
+            "type": "string(5)",
+            "availableValues": [{"value": "_", "valueType": "xs:string"}, {"value": "a"}]
           }
         ]
       },

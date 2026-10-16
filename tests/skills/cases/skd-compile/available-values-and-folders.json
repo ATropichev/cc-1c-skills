@@ -1,5 +1,5 @@
 {
-  "name": "availableValues, denyIncompleteValues, Folder в selection; ссылка БизнесПроцесс.X.Y в availableValues — DesignTimeValue; availableValues поля набора (ссылка — DesignTimeValue, null — xsi:nil, дробное — decimal) и вычисляемого поля; null у параметра — xsi:nil",
+  "name": "availableValues, denyIncompleteValues, Folder в selection; ссылка БизнесПроцесс.X.Y в availableValues — DesignTimeValue; availableValues поля набора (ссылка — DesignTimeValue, null — xsi:nil, дробное — decimal) и вычисляемого поля; null у параметра — xsi:nil; значение-период в availableValues и значение параметра в любом регистре — узлами периода; «_» с valueType xs:string — строкой",
   "params": { "outputPath": "Template.xml" },
   "input": {
     "dataSets": [{
@@ -35,7 +35,16 @@
       "type": "string(50)",
       "availableValues": [
         {"value": "БизнесПроцесс.Задание.ПустаяСсылка", "presentation": "Без процесса"},
-        {"value": null, "presentation": "Не задан"}
+        {"value": null, "presentation": "Не задан"},
+        {"value": "_", "valueType": "xs:string", "presentation": "Подчёркивание"}
+      ]
+    }, {
+      "name": "Пер",
+      "type": "StandardPeriod",
+      "value": "lastmonth",
+      "availableValues": [
+        {"value": {"variant": "thisyear"}, "presentation": "Год"},
+        {"value": {"variant": "Custom", "startDate": "2024-01-01T00:00:00", "endDate": "2024-12-31T23:59:59"}, "presentation": "2024"}
       ]
     }],
     "settingsVariants": [{

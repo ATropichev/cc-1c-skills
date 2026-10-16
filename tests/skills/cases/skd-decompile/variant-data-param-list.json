@@ -1,5 +1,5 @@
 {
-  "name": "Списки значений параметров: краткая запись через запятую, «auto» при поэлементном совпадении, явный список — объектной формой; nil в списке, большие числа, строки-ключевые слова и строки вида ссылки у параметра данных, ключевое слово в параметре схемы — кратко (#119); тип из пространства имён не из корня (xmlns на узле) — valueType {uri, name}, в отборе и в параметре данных; значение-период в отборе — объектом {variant[, date | startDate, endDate]}, не текстом узлов; StandardBeginningDate Custom с нулевой датой — с date (иначе станет StandardPeriod); вариант Month — краткой записью; правая часть у filled, если есть в XML, сохраняется (без неё — краткая запись); строка вида ссылки/числа в отборе — с valueType xs:string; период у параметра, объявленного строкой, — объектом {variant}",
+  "name": "Списки значений параметров: краткая запись через запятую, «auto» при поэлементном совпадении, явный список — объектной формой; nil в списке, большие числа, строки-ключевые слова и строки вида ссылки у параметра данных, ключевое слово в параметре схемы — кратко (#119); тип из пространства имён не из корня (xmlns на узле) — valueType {uri, name}, в отборе и в параметре данных; значение-период в отборе — объектом {variant[, date | startDate, endDate]}, не текстом узлов; StandardBeginningDate Custom с нулевой датой — с date (иначе станет StandardPeriod); вариант Month — краткой записью; правая часть у filled, если есть в XML, сохраняется (без неё — краткая запись); строка вида ссылки/числа в отборе — с valueType xs:string; период у параметра, объявленного строкой, — объектом {variant}, и при имени в другом регистре; строки true и вида даты в отборе — с valueType xs:string; отрицательное число — краткой записью; список периодов в отборе — массивом объектов",
   "preRun": [
     {
       "script": "skd-compile/scripts/skd-compile",
@@ -28,12 +28,16 @@
             { "field": "А", "op": "filled", "value": { "variant": "Custom", "date": "0001-01-01T00:00:00" } },
             { "field": "А", "op": "=", "value": "Catalog.Валюты.Рубль", "valueType": "xs:string" },
             { "field": "А", "op": "<>", "value": "5", "valueType": "xs:string" },
+            { "field": "А", "op": "<>", "value": "true", "valueType": "xs:string" },
+            { "field": "А", "op": "<>", "value": "2024-01-01T00:00:00", "valueType": "xs:string" },
+            "А > -5",
+            { "field": "А", "op": "in", "value": [{ "variant": "Custom", "date": "2024-01-01T00:00:00" }, { "variant": "BeginningOfThisMonth" }] },
             "А notFilled"
           ], "dataParameters": [
             { "parameter": "Вид", "value": ["Active", "Passive"], "valueType": { "uri": "http://v8.1c.ru/8.1/data/enterprise", "name": "AccountType" } },
             { "parameter": "Начало", "value": { "variant": "Custom", "date": "0001-01-01T00:00:00" } },
             "Период = Month",
-            { "parameter": "Обозначение", "value": { "variant": "Today" } },
+            { "parameter": "обозначение", "value": { "variant": "Today" } },
             "Коды = A, B @user",
             { "parameter": "Суммы", "value": [3, 4.75], "valueType": "decimal(10,2)" },
             "Метка = 'одна, с запятой' @user",

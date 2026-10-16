@@ -1,5 +1,5 @@
 {
-  "name": "СКД с фильтрами в варианте; ссылки (Задача.X.Y, Catalog.X.Y, объектная форма) — DesignTimeValue; тип {uri, name} — xmlns на <right>; вариант периода в любом регистре — написанием платформы; значение-период в отборе ({variant} / {variant, date}) — StandardBeginningDate с узлами",
+  "name": "СКД с фильтрами в варианте; ссылки (Задача.X.Y, Catalog.X.Y, объектная форма) — DesignTimeValue; тип {uri, name} — xmlns на <right>; вариант периода в любом регистре — написанием платформы; значение-период в отборе ({variant} / {variant, date}) — StandardBeginningDate с узлами; отрицательное число в краткой записи — xs:decimal; дата со строчной t — строкой; список периодов в «in»",
   "params": { "outputPath": "Template.xml" },
   "input": {
     "dataSets": [{
@@ -21,13 +21,16 @@
           "Организация = _ @off @user",
           "Статус filled",
           "Сумма > 0",
+          "Сумма > -5",
+          "Статус <> 2024-01-01t00:00:00",
           "Номенклатура <> Задача.ЗадачаИсполнителя.ПустаяСсылка",
           "Организация <> Catalog.Организации.EmptyRef",
           "Организация <> справочник.Организации.ПустаяСсылка",
           { "field": "Номенклатура", "op": "<>", "value": "Справочник.Номенклатура.ПустаяСсылка" },
           { "field": "Статус", "op": "=", "value": "Active", "valueType": { "uri": "http://v8.1c.ru/8.1/data/enterprise", "name": "AccountType" } },
           { "field": "Дата", "op": ">=", "value": { "variant": "beginningofthismonth" } },
-          { "field": "Дата", "op": "<", "value": { "variant": "Custom", "date": "2024-01-01T00:00:00" } }
+          { "field": "Дата", "op": "<", "value": { "variant": "Custom", "date": "2024-01-01T00:00:00" } },
+          { "field": "Дата", "op": "in", "value": [{ "variant": "Custom", "date": "2024-01-01T00:00:00" }, { "variant": "BeginningOfThisMonth" }] }
         ],
         "dataParameters": ["Период = lastmonth @user"],
         "structure": "details"

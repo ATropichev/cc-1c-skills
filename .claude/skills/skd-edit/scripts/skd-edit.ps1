@@ -1,4 +1,4 @@
-﻿# skd-edit v1.47 — Atomic 1C DCS editor
+﻿# skd-edit v1.48 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: парный .py собирает выражения автодат вне f-string ради совместимости с python 3.9 (PEP 701).
 [CmdletBinding(PositionalBinding=$false)]
@@ -654,10 +654,10 @@ function Parse-FilterShorthand {
 			if ($valPart -eq "true" -or $valPart -eq "false") {
 				$result.value = $valPart
 				$result["valueType"] = "xs:boolean"
-			} elseif ($valPart -match '^\d{4}-\d{2}-\d{2}T') {
+			} elseif ($valPart -cmatch '^\d{4}-\d{2}-\d{2}T') {
 				$result.value = $valPart
 				$result["valueType"] = "xs:dateTime"
-			} elseif ($valPart -match '^\d+(\.\d+)?$') {
+			} elseif ($valPart -match '^-?\d+(\.\d+)?$') {
 				$result.value = $valPart
 				$result["valueType"] = "xs:decimal"
 			} elseif (Test-RefValueLiteral $valPart) {
@@ -1354,7 +1354,7 @@ function Build-ParamValueXml {
 	}
 	else {
 		# Type unknown or empty — guess from value
-		if ($valStr -match '^\d{4}-\d{2}-\d{2}T') { $xsi = "xs:dateTime" }
+		if ($valStr -cmatch '^\d{4}-\d{2}-\d{2}T') { $xsi = "xs:dateTime" }
 		elseif ($valStr -eq "true" -or $valStr -eq "false") { $xsi = "xs:boolean" }
 		elseif (Test-RefValueLiteral $valStr) {
 			$xsi = "dcscor:DesignTimeValue"
@@ -1595,7 +1595,7 @@ function Build-DataParamValueLines {
 				# Объявленный тип параметра главнее формы значения
 				$vStr = if ($declType -eq 'xs:boolean') { "$v".ToLowerInvariant() } else { "$v" }
 				$lines += "$vi<dcscor:value xsi:type=`"$declType`">$(Esc-XmlText $vStr)</dcscor:value>"
-			} elseif ("$v" -match '^\d{4}-\d{2}-\d{2}T') {
+			} elseif ("$v" -cmatch '^\d{4}-\d{2}-\d{2}T') {
 				$lines += "$vi<dcscor:value xsi:type=`"xs:dateTime`">$(Esc-XmlText "$v")</dcscor:value>"
 			} elseif ("$v" -eq "true" -or "$v" -eq "false") {
 				# Регистр не важен, как в skd-compile; xs:boolean — только строчными

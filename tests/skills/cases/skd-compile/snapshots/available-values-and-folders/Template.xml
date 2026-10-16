@@ -200,6 +200,49 @@
 				</v8:item>
 			</presentation>
 		</availableValue>
+		<availableValue>
+			<value xsi:type="xs:string">_</value>
+			<presentation xsi:type="v8:LocalStringType">
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Подчёркивание</v8:content>
+				</v8:item>
+			</presentation>
+		</availableValue>
+	</parameter>
+	<parameter>
+		<name>Пер</name>
+		<valueType>
+			<v8:Type>v8:StandardPeriod</v8:Type>
+		</valueType>
+		<value xsi:type="v8:StandardPeriod">
+			<v8:variant xsi:type="v8:StandardPeriodVariant">LastMonth</v8:variant>
+		</value>
+		<useRestriction>false</useRestriction>
+		<availableValue>
+			<value xsi:type="v8:StandardPeriod">
+				<v8:variant xsi:type="v8:StandardPeriodVariant">ThisYear</v8:variant>
+			</value>
+			<presentation xsi:type="v8:LocalStringType">
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Год</v8:content>
+				</v8:item>
+			</presentation>
+		</availableValue>
+		<availableValue>
+			<value xsi:type="v8:StandardPeriod">
+				<v8:variant xsi:type="v8:StandardPeriodVariant">Custom</v8:variant>
+				<v8:startDate>2024-01-01T00:00:00</v8:startDate>
+				<v8:endDate>2024-12-31T23:59:59</v8:endDate>
+			</value>
+			<presentation xsi:type="v8:LocalStringType">
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>2024</v8:content>
+				</v8:item>
+			</presentation>
+		</availableValue>
 	</parameter>
 	<settingsVariant>
 		<dcsset:name>Основной</dcsset:name>

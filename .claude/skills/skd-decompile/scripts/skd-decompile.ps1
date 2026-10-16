@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.102 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.103 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -891,7 +891,7 @@ function Format-ScalarShorthand {
 	param([string]$s, [bool]$asString = $false)
 	if ($s.Length -ge 2 -and ($s[0] -eq "'" -or $s[0] -eq '"') -and $s[-1] -eq $s[0]) { return $null }
 	if (Test-ShorthandUnsafe $s) { return $null }
-	if ($asString -and ($script:shorthandKeywords -contains $s -or $s -match '^\d{4}-\d{2}-\d{2}T' -or
+	if ($asString -and ($script:shorthandKeywords -contains $s -or $s -cmatch '^\d{4}-\d{2}-\d{2}T' -or
 		(Test-RefValueLiteral $s))) { return $null }
 	if ($s.Contains(',')) {
 		if ($s.Contains("'")) { return $null }
@@ -1684,23 +1684,32 @@ function Get-DslValueType($valNode) {
 }
 
 # <availableValue> поля, вычисляемого поля или параметра → {value[, valueType][, presentation]}.
-# xsi:nil → value null. valueType — только если compile вывел бы из значения другой тип:
-# ссылку он узнаёт по литералу, дату (кроме параметра) — по виду, остальное — xs:string.
+# xsi:nil → value null; период — объектом {variant[, date | startDate, endDate]}. valueType —
+# только если compile вывел бы из значения другой тип: ссылку он узнаёт по литералу, дату (кроме
+# параметра) — по виду, остальное — xs:string; у параметра ""/"_"/"null" без valueType — пустое
+# значение его типа, поэтому такой строке valueType пишется всегда.
 function ConvertTo-AvailableValueEntry {
 	param($av, [bool]$isParam = $false)
 	$vn = $av.SelectSingleNode("r:value", $ns)
 	$pn = $av.SelectSingleNode("r:presentation", $ns)
 	$entry = [ordered]@{}
 	if ($vn) {
-		$val = ConvertTo-ListItemValue $vn
-		$entry['value'] = $val
-		if ($val -is [string]) {
-			$dt = Get-DslValueType $vn
-			$inferred = if (Test-RefValueLiteral $val) { 'dcscor:DesignTimeValue' }
-				elseif (-not $isParam -and $val -match '^\d{4}-\d{2}-\d{2}T') { 'xs:dateTime' }
-				else { 'xs:string' }
-			if ($dt -and -not ($dt -is [string] -and [string]::Equals($dt, $inferred, [StringComparison]::Ordinal))) {
-				$entry['valueType'] = $dt
+		$vType = Get-LocalXsiType $vn
+		if ($vType -eq 'StandardPeriod' -or $vType -eq 'StandardBeginningDate') {
+			$entry['value'] = ConvertTo-StandardPeriodObject $vn
+		} else {
+			$val = ConvertTo-ListItemValue $vn
+			$entry['value'] = $val
+			if ($val -is [string]) {
+				$dt = Get-DslValueType $vn
+				$inferred = if (Test-RefValueLiteral $val) { 'dcscor:DesignTimeValue' }
+					elseif (-not $isParam -and $val -cmatch '^\d{4}-\d{2}-\d{2}T') { 'xs:dateTime' }
+					else { 'xs:string' }
+				$t = $val.Trim()
+				$looksEmpty = $isParam -and ($t -eq '' -or $t -eq '_' -or $t.ToLowerInvariant() -eq 'null')
+				if ($dt -and ($looksEmpty -or -not ($dt -is [string] -and [string]::Equals($dt, $inferred, [StringComparison]::Ordinal)))) {
+					$entry['valueType'] = $dt
+				}
 			}
 		}
 	}
@@ -1801,7 +1810,7 @@ function Build-FilterItem {
 			# тип сохраняем явно, иначе круг меняет её тип
 			$strLooksTyped = ((Get-LocalXsiType $rn) -eq 'string') -and ($vt.value -is [string]) -and
 				((Test-RefValueLiteral $vt.value) -or $vt.value -match '^-?\d+(\.\d+)?$' -or
-				 $vt.value -match '^\d{4}-\d{2}-\d{2}T' -or $vt.value -eq 'true' -or $vt.value -eq 'false')
+				 $vt.value -cmatch '^\d{4}-\d{2}-\d{2}T' -or $vt.value -eq 'true' -or $vt.value -eq 'false')
 			if (($vt.type -and $vt.type -notmatch '^xs:' -and -not $autoDetectsDTV) -or $strLooksTyped) {
 				$valueTypeAttr = Get-DslValueType $rn
 			}
@@ -1868,7 +1877,7 @@ function Build-FilterItem {
 	# - massivное value (multi-right или пустой ValueList),
 	# - явный valueType (например, dcscor:Field — field-to-field comparison),
 	# - presentation на item (multilang или просто текст),
-	# - значение-объект (период {variant, ...}, многоязычная строка) — краткой записью не выражается
+	# - значение-объект (период {variant, ...}; многоязычная строка — тоже, но compile её не восстанавливает) — краткой записью не выражается
 	$valueIsPeriod = $value -is [System.Collections.IDictionary]
 	if ($userPresNode -or $valueIsArrayFlag -or $valueTypeAttr -or $fiPres -or $valueIsPeriod -or $keepNoOpRight) {
 		$obj = [ordered]@{ field = $field; op = $op }

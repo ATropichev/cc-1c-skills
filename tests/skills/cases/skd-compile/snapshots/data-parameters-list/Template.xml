@@ -124,6 +124,18 @@
 		<useRestriction>false</useRestriction>
 	</parameter>
 	<parameter>
+		<name>Вид</name>
+		<valueType>
+			<v8:Type>xs:string</v8:Type>
+			<v8:StringQualifiers>
+				<v8:Length>10</v8:Length>
+				<v8:AllowedLength>Variable</v8:AllowedLength>
+			</v8:StringQualifiers>
+		</valueType>
+		<value xsi:type="xs:string"/>
+		<useRestriction>false</useRestriction>
+	</parameter>
+	<parameter>
 		<name>Отметки</name>
 		<valueType>
 			<v8:Type>xs:string</v8:Type>
@@ -201,10 +213,16 @@
 					<dcsset:userSettingID>UUID-008</dcsset:userSettingID>
 				</dcscor:item>
 				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:use>false</dcscor:use>
+					<dcscor:parameter>Вид</dcscor:parameter>
+					<dcscor:value xsi:nil="true"/>
+					<dcsset:userSettingID>UUID-009</dcsset:userSettingID>
+				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
 					<dcscor:parameter>Отметки</dcscor:parameter>
 					<dcscor:value xsi:nil="true"/>
 					<dcscor:value xsi:type="xs:string">a</dcscor:value>
-					<dcsset:userSettingID>UUID-009</dcsset:userSettingID>
+					<dcsset:userSettingID>UUID-010</dcsset:userSettingID>
 				</dcscor:item>
 			</dcsset:dataParameters>
 			<dcsset:item xsi:type="dcsset:StructureItemGroup">
@@ -236,7 +254,7 @@
 					<dcscor:parameter>Коды</dcscor:parameter>
 					<dcscor:value xsi:type="xs:string">X</dcscor:value>
 					<dcscor:value xsi:type="xs:string">Y, Z</dcscor:value>
-					<dcsset:userSettingID>UUID-010</dcsset:userSettingID>
+					<dcsset:userSettingID>UUID-011</dcsset:userSettingID>
 				</dcscor:item>
 				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
 					<dcscor:parameter>Суммы</dcscor:parameter>
@@ -261,6 +279,10 @@
 				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
 					<dcscor:parameter>Единица</dcscor:parameter>
 					<dcscor:value xsi:type="xs:string">month</dcscor:value>
+				</dcscor:item>
+				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
+					<dcscor:parameter>вид</dcscor:parameter>
+					<dcscor:value xsi:type="xs:string">Today</dcscor:value>
 				</dcscor:item>
 				<dcscor:item xsi:type="dcsset:SettingsParameterValue">
 					<dcscor:parameter>Отметки</dcscor:parameter>
