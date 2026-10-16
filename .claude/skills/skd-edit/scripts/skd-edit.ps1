@@ -1,4 +1,4 @@
-﻿# skd-edit v1.46 — Atomic 1C DCS editor
+﻿# skd-edit v1.47 — Atomic 1C DCS editor
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: парный .py собирает выражения автодат вне f-string ради совместимости с python 3.9 (PEP 701).
 [CmdletBinding(PositionalBinding=$false)]
@@ -1335,8 +1335,11 @@ function Build-ParamValueXml {
 		if ($pv) { $valStr = $pv }
 		$lines += "$i<$open xsi:type=`"v8:StandardPeriod`">"
 		$lines += "$i`t<v8:variant xsi:type=`"v8:StandardPeriodVariant`">$(Esc-XmlText $valStr)</v8:variant>"
-		$lines += "$i`t<v8:startDate>0001-01-01T00:00:00</v8:startDate>"
-		$lines += "$i`t<v8:endDate>0001-01-01T00:00:00</v8:endDate>"
+		# Даты — только у Custom, как у платформы и skd-compile
+		if ($valStr -eq 'Custom') {
+			$lines += "$i`t<v8:startDate>0001-01-01T00:00:00</v8:startDate>"
+			$lines += "$i`t<v8:endDate>0001-01-01T00:00:00</v8:endDate>"
+		}
 		$lines += "$i</$open>"
 		return $lines
 	}
@@ -1578,8 +1581,11 @@ function Build-DataParamValueLines {
 	if ($value -is [hashtable] -and $value.variant) {
 		$lines += "$vi<dcscor:value xsi:type=`"v8:StandardPeriod`">"
 		$lines += "$vi`t<v8:variant xsi:type=`"v8:StandardPeriodVariant`">$(Esc-XmlText $value.variant)</v8:variant>"
-		$lines += "$vi`t<v8:startDate>0001-01-01T00:00:00</v8:startDate>"
-		$lines += "$vi`t<v8:endDate>0001-01-01T00:00:00</v8:endDate>"
+		# Даты — только у Custom, как у платформы и skd-compile
+		if ($value.variant -eq 'Custom') {
+			$lines += "$vi`t<v8:startDate>0001-01-01T00:00:00</v8:startDate>"
+			$lines += "$vi`t<v8:endDate>0001-01-01T00:00:00</v8:endDate>"
+		}
 		$lines += "$vi</dcscor:value>"
 	} elseif (Test-EmptyValue $value) {
 		$lines += "$vi<dcscor:value xsi:nil=`"true`"/>"

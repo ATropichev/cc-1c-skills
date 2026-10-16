@@ -1,4 +1,4 @@
-# skd-edit v1.46 — Atomic 1C DCS editor (Python port)
+# skd-edit v1.47 — Atomic 1C DCS editor (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1301,8 +1301,10 @@ def build_param_value_xml(type_str, value, indent, tag_name="value", tag_ns=""):
             val_str = pv
         lines.append(f'{indent}<{open_tag} xsi:type="v8:StandardPeriod">')
         lines.append(f'{indent}\t<v8:variant xsi:type="v8:StandardPeriodVariant">{esc_xml_text(val_str)}</v8:variant>')
-        lines.append(f"{indent}\t<v8:startDate>0001-01-01T00:00:00</v8:startDate>")
-        lines.append(f"{indent}\t<v8:endDate>0001-01-01T00:00:00</v8:endDate>")
+        # Даты — только у Custom, как у платформы и skd-compile
+        if val_str.lower() == 'custom':
+            lines.append(f"{indent}\t<v8:startDate>0001-01-01T00:00:00</v8:startDate>")
+            lines.append(f"{indent}\t<v8:endDate>0001-01-01T00:00:00</v8:endDate>")
         lines.append(f"{indent}</{open_tag}>")
         return lines
 
@@ -1500,8 +1502,10 @@ def build_data_param_value_lines(value, vi, decl_type=""):
     if isinstance(value, dict) and value.get("variant"):
         lines.append(f'{vi}<dcscor:value xsi:type="v8:StandardPeriod">')
         lines.append(f'{vi}\t<v8:variant xsi:type="v8:StandardPeriodVariant">{esc_xml_text(value["variant"])}</v8:variant>')
-        lines.append(f"{vi}\t<v8:startDate>0001-01-01T00:00:00</v8:startDate>")
-        lines.append(f"{vi}\t<v8:endDate>0001-01-01T00:00:00</v8:endDate>")
+        # Даты — только у Custom, как у платформы и skd-compile
+        if str(value["variant"]).lower() == 'custom':
+            lines.append(f"{vi}\t<v8:startDate>0001-01-01T00:00:00</v8:startDate>")
+            lines.append(f"{vi}\t<v8:endDate>0001-01-01T00:00:00</v8:endDate>")
         lines.append(f"{vi}</dcscor:value>")
     elif is_empty_value(value):
         lines.append(f'{vi}<dcscor:value xsi:nil="true"/>')
