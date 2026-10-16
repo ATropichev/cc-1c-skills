@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.133 — Compile 1C DCS from JSON
+# skd-compile v1.134 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1231,6 +1231,44 @@ def has_restrict(restrict):
                for n in get_restrict_flag_names(restrict) if n)
 
 
+def emit_available_value(lines, av, indent, param_type=None, is_param=False):
+    """Элемент <availableValue> поля набора, вычисляемого поля или параметра: value null → xsi:nil;
+    valueType — строкой (xs:string) или {uri, name}, без него тип выводится из значения.
+    У параметра (is_param) пустое значение — пустое значение его типа, дата не угадывается."""
+    lines.append(f'{indent}<availableValue>')
+    v = av.get('value')
+    vt_src = av.get('valueType')
+    if v is None:
+        lines.append(f'{indent}\t<value xsi:nil="true"/>')
+    elif is_param and not vt_src and is_empty_value(v):
+        emit_empty_value(lines, param_type or '', f'{indent}\t', '', False)
+    else:
+        text = str(v).lower() if isinstance(v, bool) else esc_xml_text(str(v))
+        custom_type = get_custom_value_type(vt_src)
+        if custom_type:
+            type_attr = f'xmlns:dN="{custom_type["uri"]}" xsi:type="dN:{custom_type["name"]}"'
+        else:
+            av_type = str(vt_src) if vt_src else ''
+            if not av_type:
+                if isinstance(v, bool):
+                    av_type = 'xs:boolean'
+                elif isinstance(v, (int, float)):
+                    av_type = 'xs:decimal'
+                elif is_ref_value_literal(str(v)):
+                    av_type = 'dcscor:DesignTimeValue'
+                elif not is_param and re.match(r'^\d{4}-\d{2}-\d{2}T', str(v)):
+                    av_type = 'xs:dateTime'
+                else:
+                    av_type = 'xs:string'
+            type_attr = f'xsi:type="{av_type}"'
+        lines.append(f'{indent}\t<value {type_attr}>{text}</value>')
+    # `title` — синоним `presentation`
+    av_pres = av.get('presentation') or av.get('title') or ''
+    if av_pres:
+        emit_mltext(lines, f'{indent}\t', 'presentation', av_pres)
+    lines.append(f'{indent}</availableValue>')
+
+
 def emit_field(lines, field_def, indent):
     if isinstance(field_def, str):
         f = parse_field_shorthand(field_def)
@@ -1366,23 +1404,7 @@ def emit_field(lines, field_def, indent):
     # AvailableValues — после appearance (порядок XSD); список значений с необязательным представлением
     if f.get('availableValues'):
         for av in f['availableValues']:
-            lines.append(f'{indent}\t<availableValue>')
-            av_val = av.get('value')
-            av_type = str(av.get('valueType', '')) if av.get('valueType') else ''
-            if not av_type:
-                if isinstance(av_val, bool):
-                    av_type = 'xs:boolean'
-                elif isinstance(av_val, (int, float)):
-                    av_type = 'xs:decimal'
-                elif re.match(r'^\d{4}-\d{2}-\d{2}T', str(av_val)):
-                    av_type = 'xs:dateTime'
-                else:
-                    av_type = 'xs:string'
-            av_str = str(av_val).lower() if isinstance(av_val, bool) else esc_xml_text(str(av_val))
-            lines.append(f'{indent}\t\t<value xsi:type="{av_type}">{av_str}</value>')
-            if av.get('presentation'):
-                emit_mltext(lines, f'{indent}\t\t', 'presentation', av['presentation'])
-            lines.append(f'{indent}\t</availableValue>')
+            emit_available_value(lines, av, f'{indent}\t')
 
     # InputParameters — в конце field
     if f.get('inputParameters'):
@@ -1512,7 +1534,10 @@ def emit_calc_fields(lines, defn):
                 else:
                     emit_appearance_value(lines, k, v, '\t\t\t')
             lines.append('\t\t</appearance>')
-        # valueType — последним: после useRestriction и appearance (порядок XSD CalculatedField)
+        if not isinstance(cf, str) and cf.get('availableValues'):
+            for av in cf['availableValues']:
+                emit_available_value(lines, av, '\t\t')
+        # valueType — последним: после useRestriction, appearance и availableValue (порядок XSD CalculatedField)
         if type_str:
             lines.append('\t\t<valueType>')
             emit_value_type(lines, type_str, '\t\t\t')
@@ -1728,26 +1753,7 @@ def emit_single_param(lines, p, parsed):
     # AvailableValues
     if p is not None and not isinstance(p, str) and p.get('availableValues'):
         for av in p['availableValues']:
-            lines.append('\t\t<availableValue>')
-            if is_empty_value(av.get('value')):
-                emit_empty_value(lines, parsed.get('type', ''), '\t\t\t', '', False)
-            else:
-                av_v = av['value']
-                if isinstance(av_v, bool):
-                    lines.append(f'\t\t\t<value xsi:type="xs:boolean">{str(av_v).lower()}</value>')
-                elif isinstance(av_v, (int, float)):
-                    lines.append(f'\t\t\t<value xsi:type="xs:decimal">{av_v}</value>')
-                else:
-                    av_val = str(av_v)
-                    av_type = 'xs:string'
-                    if is_ref_value_literal(av_val):
-                        av_type = 'dcscor:DesignTimeValue'
-                    lines.append(f'\t\t\t<value xsi:type="{av_type}">{esc_xml_text(av_val)}</value>')
-            # `title` accepted as synonym of `presentation` — both map to the same UI label.
-            av_pres = av.get('presentation') or av.get('title') or ''
-            if av_pres:
-                emit_mltext(lines, '\t\t\t', 'presentation', av_pres)
-            lines.append('\t\t</availableValue>')
+            emit_available_value(lines, av, '\t\t', parsed.get('type', ''), True)
 
     # DenyIncompleteValues
     deny = parsed.get('denyIncompleteValues') is True or (

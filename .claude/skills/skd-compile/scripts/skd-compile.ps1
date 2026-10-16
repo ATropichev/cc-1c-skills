@@ -1,4 +1,4 @@
-﻿# skd-compile v1.133 — Compile 1C DCS from JSON
+﻿# skd-compile v1.134 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1306,6 +1306,44 @@ function Test-HasRestrict($restrict) {
 	return @($names | Where-Object { $_ -in @('field', 'condition', 'group', 'order') }).Count -gt 0
 }
 
+# Элемент <availableValue> поля набора, вычисляемого поля или параметра: value null → xsi:nil;
+# valueType — строкой (xs:string) или {uri, name}, без него тип выводится из значения.
+# У параметра ($isParam) пустое значение — пустое значение его типа, дата не угадывается.
+function Emit-AvailableValue {
+	param($av, [string]$indent, $paramType = $null, [bool]$isParam = $false)
+	X "$indent<availableValue>"
+	$v = $av.value
+	$vtSrc = $av.valueType
+	if ($null -eq $v) {
+		X "$indent`t<value xsi:nil=`"true`"/>"
+	} elseif ($isParam -and -not $vtSrc -and (Test-EmptyValue $v)) {
+		Emit-EmptyValue -type $paramType -indent "$indent`t" -tagPrefix "" -valueListAllowed $false
+	} else {
+		$text = if ($v -is [bool]) { "$v".ToLower() } else { Esc-XmlText "$v" }
+		$customType = Get-CustomValueType $vtSrc
+		if ($customType) {
+			$typeAttr = "xmlns:dN=`"$($customType.uri)`" xsi:type=`"dN:$($customType.name)`""
+		} else {
+			$avType = if ($vtSrc) { "$vtSrc" } else { '' }
+			if (-not $avType) {
+				if ($v -is [bool]) { $avType = 'xs:boolean' }
+				elseif ($v -is [int] -or $v -is [long] -or $v -is [double] -or $v -is [decimal]) { $avType = 'xs:decimal' }
+				elseif (Test-RefValueLiteral "$v") { $avType = 'dcscor:DesignTimeValue' }
+				elseif (-not $isParam -and "$v" -match '^\d{4}-\d{2}-\d{2}T') { $avType = 'xs:dateTime' }
+				else { $avType = 'xs:string' }
+			}
+			$typeAttr = "xsi:type=`"$avType`""
+		}
+		X "$indent`t<value $typeAttr>$text</value>"
+	}
+	# `title` — синоним `presentation`
+	$avPres = if ($av.presentation) { $av.presentation } elseif ($av.title) { $av.title } else { "" }
+	if ($avPres) {
+		Emit-MLText -tag "presentation" -text $avPres -indent "$indent`t"
+	}
+	X "$indent</availableValue>"
+}
+
 function Emit-Field {
 	param($fieldDef, [string]$indent)
 
@@ -1475,21 +1513,7 @@ function Emit-Field {
 	# AvailableValues — после appearance (порядок XSD); список значений с необязательным представлением
 	if ($f["availableValues"]) {
 		foreach ($av in $f["availableValues"]) {
-			X "$indent`t<availableValue>"
-			$avVal = $av.value
-			$avType = if ($av.valueType) { "$($av.valueType)" } else { '' }
-			if (-not $avType) {
-				if ($avVal -is [bool]) { $avType = 'xs:boolean' }
-				elseif ($avVal -is [int] -or $avVal -is [long] -or $avVal -is [double]) { $avType = 'xs:decimal' }
-				elseif ("$avVal" -match '^\d{4}-\d{2}-\d{2}T') { $avType = 'xs:dateTime' }
-				else { $avType = 'xs:string' }
-			}
-			$avStr = if ($avVal -is [bool]) { "$avVal".ToLower() } else { Esc-XmlText "$avVal" }
-			X "$indent`t`t<value xsi:type=`"$avType`">$avStr</value>"
-			if ($av.presentation) {
-				Emit-MLText -tag "presentation" -text $av.presentation -indent "$indent`t`t"
-			}
-			X "$indent`t</availableValue>"
+			Emit-AvailableValue -av $av -indent "$indent`t"
 		}
 	}
 
@@ -1639,7 +1663,12 @@ function Emit-CalcFields {
 			}
 			X "`t`t</appearance>"
 		}
-		# valueType — последним: после useRestriction и appearance (порядок XSD CalculatedField)
+		if ($cf -isnot [string] -and $cf.availableValues) {
+			foreach ($av in $cf.availableValues) {
+				Emit-AvailableValue -av $av -indent "`t`t"
+			}
+		}
+		# valueType — последним: после useRestriction, appearance и availableValue (порядок XSD CalculatedField)
 		if ($typeStr) {
 			X "`t`t<valueType>"
 			Emit-ValueType -typeStr $typeStr -indent "`t`t`t"
@@ -1763,31 +1792,7 @@ function Emit-SingleParam {
 	# AvailableValues
 	if ($p -isnot [string] -and $p.availableValues) {
 		foreach ($av in $p.availableValues) {
-			X "`t`t<availableValue>"
-			if (Test-EmptyValue $av.value) {
-				Emit-EmptyValue -type $parsed.type -indent "`t`t`t" -tagPrefix "" -valueListAllowed $false
-			} else {
-				$av_v = $av.value
-				if ($av_v -is [bool]) {
-					$bv = "$av_v".ToLower()
-					X "`t`t`t<value xsi:type=`"xs:boolean`">$bv</value>"
-				} elseif ($av_v -is [int] -or $av_v -is [long] -or $av_v -is [double]) {
-					X "`t`t`t<value xsi:type=`"xs:decimal`">$av_v</value>"
-				} else {
-					$avVal = "$av_v"
-					$avType = "xs:string"
-					if (Test-RefValueLiteral $avVal) {
-						$avType = "dcscor:DesignTimeValue"
-					}
-					X "`t`t`t<value xsi:type=`"$avType`">$(Esc-XmlText $avVal)</value>"
-				}
-			}
-			# `title` accepted as synonym of `presentation` — both map to the same UI label.
-			$avPres = if ($av.presentation) { $av.presentation } elseif ($av.title) { $av.title } else { "" }
-			if ($avPres) {
-				Emit-MLText -tag "presentation" -text $avPres -indent "`t`t`t"
-			}
-			X "`t`t</availableValue>"
+			Emit-AvailableValue -av $av -indent "`t`t" -paramType $parsed.type -isParam $true
 		}
 	}
 

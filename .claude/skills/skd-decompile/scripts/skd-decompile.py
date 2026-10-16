@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-decompile v0.101 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+# skd-decompile v0.102 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -887,26 +887,7 @@ def build_field(field_node, loc):
     av_nodes = field_node.select_nodes("r:availableValue")
     available_values = []
     for av in av_nodes:
-        av_vn = av.select_single_node("r:value")
-        av_pn = av.select_single_node("r:presentation")
-        av_entry = {}
-        if av_vn:
-            av_type = get_local_xsi_type(av_vn)
-            av_text = av_vn.inner_text
-            if av_type == 'boolean':
-                av_entry['value'] = (av_text == 'true')
-            elif av_type == 'decimal':
-                if re.match(r'^-?\d+$', av_text or ''):
-                    av_entry['value'] = int(av_text)
-                else:
-                    av_entry['value'] = float(av_text)
-            else:
-                av_entry['value'] = av_text
-        if av_pn:
-            av_pres = get_ml_text(av_pn)
-            if av_pres:
-                av_entry['presentation'] = av_pres
-        available_values.append(av_entry)
+        available_values.append(convert_available_value_entry(av))
 
     role_in_string = role_rendered and role_rendered['isString']
     needs_object = bool(title) or bool(appearance) or bool(pres_expr) or isinstance(type_short, list) \
@@ -965,9 +946,10 @@ def build_calc_field(cf_node, loc):
     restrict_tokens = get_restriction_tokens(cf_node.select_single_node("r:useRestriction"))
     app_node = cf_node.select_single_node("r:appearance")
     appearance = get_appearance_dict(app_node)
+    available_values = [convert_available_value_entry(av) for av in cf_node.select_nodes("r:availableValue")]
 
     title_needs_object = isinstance(title, dict) or isinstance(type_short, list)
-    needs_object = bool(appearance) or title_needs_object
+    needs_object = bool(appearance) or title_needs_object or len(available_values) > 0
 
     if not needs_object:
         s = data_path
@@ -992,6 +974,8 @@ def build_calc_field(cf_node, loc):
         obj['restrict'] = [re.sub(r'^#', '', t) for t in restrict_tokens]
     if appearance:
         obj['appearance'] = appearance
+    if len(available_values) > 0:
+        obj['availableValues'] = available_values
     return obj
 
 
@@ -1199,24 +1183,7 @@ def build_parameter(p_node, loc):
     av_nodes = p_node.select_nodes("r:availableValue")
     available_values = []
     for av in av_nodes:
-        av_val_node = av.select_single_node("r:value")
-        av_pres_node = av.select_single_node("r:presentation")
-        av_entry = {}
-        if av_val_node:
-            av_type = get_local_xsi_type(av_val_node)
-            av_text = av_val_node.inner_text
-            if av_type == 'boolean':
-                av_entry['value'] = (av_text == 'true')
-            elif av_type == 'decimal':
-                if re.match(r'^-?\d+$', av_text or ''):
-                    av_entry['value'] = int(av_text)
-                else:
-                    av_entry['value'] = float(av_text)
-            else:
-                av_entry['value'] = av_text
-        if av_pres_node:
-            av_entry['presentation'] = get_ml_text(av_pres_node)
-        available_values.append(av_entry)
+        available_values.append(convert_available_value_entry(av, True))
 
     result = {
         'name': name,
@@ -1910,6 +1877,33 @@ def get_dsl_value_type(val_node):
     if root_pfx:
         return f'{root_pfx}:{name}'
     return {'uri': uri, 'name': name}
+
+
+# <availableValue> поля, вычисляемого поля или параметра → {value[, valueType][, presentation]}.
+# xsi:nil → value None. valueType — только если compile вывел бы из значения другой тип:
+# ссылку он узнаёт по литералу, дату (кроме параметра) — по виду, остальное — xs:string.
+def convert_available_value_entry(av, is_param=False):
+    vn = av.select_single_node("r:value")
+    pn = av.select_single_node("r:presentation")
+    entry = {}
+    if vn:
+        val = convert_list_item_value(vn)
+        entry['value'] = val
+        if isinstance(val, str):
+            dt = get_dsl_value_type(vn)
+            if is_ref_value_literal(val):
+                inferred = 'dcscor:DesignTimeValue'
+            elif not is_param and re.match(r'^\d{4}-\d{2}-\d{2}T', val):
+                inferred = 'xs:dateTime'
+            else:
+                inferred = 'xs:string'
+            if dt and not (isinstance(dt, str) and dt == inferred):
+                entry['valueType'] = dt
+    if pn:
+        pres = get_ml_text(pn)
+        if pres:
+            entry['presentation'] = pres
+    return entry
 
 
 def get_filter_value_with_type(val_node):

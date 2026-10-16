@@ -1,5 +1,5 @@
 {
-  "name": "calculatedFields, totalFields, parameters с autoDates/valueList/hidden/availableValues",
+  "name": "calculatedFields, totalFields, parameters с autoDates/valueList/hidden/availableValues; availableValues поля набора и вычисляемого поля: xsi:nil — null, строка вида ссылки или даты — с valueType xs:string, ссылка — без valueType; null у параметра",
   "preRun": [
     {
       "script": "skd-compile/scripts/skd-compile",
@@ -7,12 +7,20 @@
         "dataSets": [{
           "name": "Тест",
           "query": "ВЫБРАТЬ * ИЗ Справочник.Номенклатура",
-          "fields": ["Цена: decimal(15,2)", "Закупка: decimal(15,2)"]
+          "fields": ["Цена: decimal(15,2)", "Закупка: decimal(15,2)", {"field": "Код", "type": "string(20)", "availableValues": [
+            {"value": "Справочник.Коды.Основной", "presentation": "Основной"},
+            {"value": "Справочник.Коды.Основной", "valueType": "xs:string"},
+            {"value": "2024-01-01T00:00:00", "valueType": "xs:string"},
+            {"value": "2024-01-01T00:00:00"},
+            {"value": null},
+            {"value": 2.5}
+          ]}]
         }],
         "calculatedFields": [
           "Маржа = Цена - Закупка",
           "Наценка [Наценка, %]: decimal(10,2) = Маржа / Закупка * 100",
-          "Служебное: string = \"\" #noField #noFilter #noGroup #noOrder"
+          "Служебное: string = \"\" #noField #noFilter #noGroup #noOrder",
+          {"name": "Признак", "expression": "1", "type": "decimal(1,0)", "availableValues": [{"value": 1, "presentation": "Да"}, {"value": null}]}
         ],
         "totalFields": [
           "Цена: Сумма",
@@ -29,7 +37,8 @@
             "value": "Перечисление.Округления.Окр1",
             "availableValues": [
               {"value": "Перечисление.Округления.Окр1_00", "presentation": "руб. коп"},
-              {"value": "Перечисление.Округления.Окр1", "presentation": "руб."}
+              {"value": "Перечисление.Округления.Окр1", "presentation": "руб."},
+              {"value": null, "presentation": "Не задано"}
             ]
           }
         ]

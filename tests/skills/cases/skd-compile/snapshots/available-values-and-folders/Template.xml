@@ -16,6 +16,24 @@
 					<v8:AllowedLength>Variable</v8:AllowedLength>
 				</v8:StringQualifiers>
 			</valueType>
+			<availableValue>
+				<value xsi:type="dcscor:DesignTimeValue">Справочник.Счета.Касса</value>
+				<presentation xsi:type="v8:LocalStringType">
+					<v8:item>
+						<v8:lang>ru</v8:lang>
+						<v8:content>Касса</v8:content>
+					</v8:item>
+				</presentation>
+			</availableValue>
+			<availableValue>
+				<value xsi:nil="true"/>
+				<presentation xsi:type="v8:LocalStringType">
+					<v8:item>
+						<v8:lang>ru</v8:lang>
+						<v8:content>Не указан</v8:content>
+					</v8:item>
+				</presentation>
+			</availableValue>
 		</field>
 		<field xsi:type="DataSetFieldField">
 			<dataPath>Остаток</dataPath>
@@ -28,6 +46,12 @@
 					<v8:AllowedSign>Any</v8:AllowedSign>
 				</v8:NumberQualifiers>
 			</valueType>
+			<availableValue>
+				<value xsi:type="xs:decimal">3.1</value>
+			</availableValue>
+			<availableValue>
+				<value xsi:type="xs:decimal">0</value>
+			</availableValue>
 		</field>
 		<field xsi:type="DataSetFieldField">
 			<dataPath>Поступление1</dataPath>
@@ -80,6 +104,36 @@
 		<dataSource>ИсточникДанных1</dataSource>
 		<query>ВЫБРАТЬ Т.Счет, Т.Остаток, Т.Поступление1, Т.Поступление2, Т.Выбытие1, Т.Выбытие2 ИЗ Регистр КАК Т</query>
 	</dataSet>
+	<calculatedField>
+		<dataPath>Признак</dataPath>
+		<expression>1</expression>
+		<availableValue>
+			<value xsi:type="xs:decimal">1</value>
+			<presentation xsi:type="v8:LocalStringType">
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Да</v8:content>
+				</v8:item>
+			</presentation>
+		</availableValue>
+		<availableValue>
+			<value xsi:nil="true"/>
+			<presentation xsi:type="v8:LocalStringType">
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Нет</v8:content>
+				</v8:item>
+			</presentation>
+		</availableValue>
+		<valueType>
+			<v8:Type>xs:decimal</v8:Type>
+			<v8:NumberQualifiers>
+				<v8:Digits>1</v8:Digits>
+				<v8:FractionDigits>0</v8:FractionDigits>
+				<v8:AllowedSign>Any</v8:AllowedSign>
+			</v8:NumberQualifiers>
+		</valueType>
+	</calculatedField>
 	<parameter>
 		<name>ПорядокОкругления</name>
 		<valueType>
@@ -134,6 +188,15 @@
 				<v8:item>
 					<v8:lang>ru</v8:lang>
 					<v8:content>Без процесса</v8:content>
+				</v8:item>
+			</presentation>
+		</availableValue>
+		<availableValue>
+			<value xsi:nil="true"/>
+			<presentation xsi:type="v8:LocalStringType">
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Не задан</v8:content>
 				</v8:item>
 			</presentation>
 		</availableValue>

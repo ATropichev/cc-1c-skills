@@ -152,7 +152,7 @@
 }
 ```
 
-`availableValues` — список допустимых значений поля с (опциональной multilang) подписью. Типы значений автоопределяются (`bool`/`decimal`/`dateTime`/`string`); можно указать `valueType` явно. Аналогичное поле существует на `parameters` — см. раздел 6.
+`availableValues` — список допустимых значений поля с (опциональной multilang) подписью. Типы значений автоопределяются (`bool`/`decimal`/`dateTime`/`string`, ссылка `Справочник.X.Y` и др. → `dcscor:DesignTimeValue`); `"value": null` — пустое значение (`xsi:nil`). Тип можно указать явно `valueType` — строкой (`"xs:string"` для строки вида ссылки или даты) или `{uri, name}` (тип с локальным xmlns). Аналогичное поле существует на `calculatedFields` (раздел 7) и `parameters` (раздел 6).
 
 ### Парсинг shorthand
 
@@ -412,7 +412,7 @@ XML-маппинг — по `<group>` на каждый элемент:
 | `useRestriction` | `true` — скрыть от пользователя |
 | `use` | `"Always"`, `"Auto"` |
 | `denyIncompleteValues` | `true` — запретить произвольные значения (только из availableValues) |
-| `availableValues` | Массив `[{value, presentation}]` — допустимые значения с представлениями. Типы (bool/int/decimal) сохраняются нативно в JSON |
+| `availableValues` | Массив `[{value, presentation, valueType?}]` — допустимые значения с представлениями. Типы (bool/int/decimal) сохраняются нативно в JSON; `null` — пустое значение (`xsi:nil`), пустая строка — пустое значение типа параметра; `valueType` — как у поля набора (раздел 4), дата по виду не угадывается |
 | `inputParameters` | Параметры ввода (например `ФорматРедактирования`) — массив `[{parameter, value, valueType?, choiceParameters?, choiceParameterLinks?, typeLink?}]`. `typeLink: {field, linkItem}` — связь по типу (`dcscor:TypeLink`, параметр `СвязьПоТипу`), оба поля необязательны. `valueType: {uri, name}` сохраняет кастомный xsi:type с локальным xmlns (например `d6p1:FoldersAndItemsUse`). В `choiceParameters[i].values` элементы — bool/int/double/string; compile эмитит соответствующий xsi:type (`xs:boolean` / `xs:decimal` / `dcscor:DesignTimeValue`) |
 | `nilValue` | `true` — эмитить `<value xsi:nil="true"/>` для параметров с явным типом (decimal/string/dateTime), где XML-сериализатор обычно ставит типизированный default. Bit-perfect round-trip |
 
@@ -472,9 +472,12 @@ XML-маппинг — по `<group>` на каждый элемент:
   "title": "Итого",
   "type": "decimal(15,2)",
   "restrict": ["noGroup"],
-  "appearance": { "Формат": "ЧДЦ=2" }
+  "appearance": { "Формат": "ЧДЦ=2" },
+  "availableValues": [{ "value": 1, "presentation": "Да" }, { "value": null, "presentation": "Нет" }]
 }
 ```
+
+`availableValues` — как у поля набора данных (раздел 4).
 
 Ключ `field` — алиас для `dataPath` (используется если `dataPath` не указан).
 

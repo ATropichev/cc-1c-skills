@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.101 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.102 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -691,24 +691,7 @@ function Build-Field {
 	$avNodes = $fieldNode.SelectNodes("r:availableValue", $ns)
 	$availableValues = @()
 	foreach ($av in $avNodes) {
-		$avVN = $av.SelectSingleNode("r:value", $ns)
-		$avPN = $av.SelectSingleNode("r:presentation", $ns)
-		$avEntry = [ordered]@{}
-		if ($avVN) {
-			$avType = Get-LocalXsiType $avVN
-			$avText = $avVN.InnerText
-			if ($avType -eq 'boolean') { $avEntry['value'] = ($avText -eq 'true') }
-			elseif ($avType -eq 'decimal') {
-				if ($avText -match '^-?\d+$') { $avEntry['value'] = [int]$avText }
-				else { $avEntry['value'] = [double]$avText }
-			}
-			else { $avEntry['value'] = $avText }
-		}
-		if ($avPN) {
-			$avPres = Get-MLText $avPN
-			if ($avPres) { $avEntry['presentation'] = $avPres }
-		}
-		$availableValues += $avEntry
+		$availableValues += (ConvertTo-AvailableValueEntry $av)
 	}
 
 	# Можно ли роль положить в shorthand-строку?
@@ -765,10 +748,14 @@ function Build-CalcField {
 	$restrictTokens = Get-RestrictionTokens $cfNode.SelectSingleNode("r:useRestriction", $ns)
 	$appNode = $cfNode.SelectSingleNode("r:appearance", $ns)
 	$appearance = Get-AppearanceDict $appNode
+	$availableValues = @()
+	foreach ($av in $cfNode.SelectNodes("r:availableValue", $ns)) {
+		$availableValues += (ConvertTo-AvailableValueEntry $av)
+	}
 
 	# multilingual title (non-ru) → object form
 	$titleNeedsObject = ($title -is [System.Collections.IDictionary]) -or ($typeShort -is [array])
-	$needsObject = $appearance -or $titleNeedsObject
+	$needsObject = $appearance -or $titleNeedsObject -or ($availableValues.Count -gt 0)
 
 	if (-not $needsObject) {
 		# shorthand: "Name [Title]: type = expression #restrict"
@@ -786,6 +773,7 @@ function Build-CalcField {
 	if ($expression) { $obj['expression'] = $expression }
 	if ($restrictTokens) { $obj['restrict'] = ($restrictTokens | ForEach-Object { $_ -replace '^#','' }) }
 	if ($appearance) { $obj['appearance'] = $appearance }
+	if ($availableValues.Count -gt 0) { $obj['availableValues'] = $availableValues }
 	return $obj
 }
 
@@ -977,21 +965,7 @@ function Build-Parameter {
 	$avNodes = $pNode.SelectNodes("r:availableValue", $ns)
 	$availableValues = @()
 	foreach ($av in $avNodes) {
-		$avValNode = $av.SelectSingleNode("r:value", $ns)
-		$avPresNode = $av.SelectSingleNode("r:presentation", $ns)
-		$avEntry = [ordered]@{}
-		if ($avValNode) {
-			$avType = Get-LocalXsiType $avValNode
-			$avText = $avValNode.InnerText
-			if ($avType -eq 'boolean') { $avEntry['value'] = ($avText -eq 'true') }
-			elseif ($avType -eq 'decimal') {
-				if ($avText -match '^-?\d+$') { $avEntry['value'] = [int]$avText }
-				else { $avEntry['value'] = [double]$avText }
-			}
-			else { $avEntry['value'] = $avText }
-		}
-		if ($avPresNode) { $avEntry['presentation'] = Get-MLText $avPresNode }
-		$availableValues += $avEntry
+		$availableValues += (ConvertTo-AvailableValueEntry $av $true)
 	}
 
 	$flags = @()
@@ -1707,6 +1681,34 @@ function Get-DslValueType($valNode) {
 	$rootPfx = $script:compileRootPrefixes[$uri]
 	if ($rootPfx) { return "${rootPfx}:$name" }
 	return [ordered]@{ uri = $uri; name = $name }
+}
+
+# <availableValue> поля, вычисляемого поля или параметра → {value[, valueType][, presentation]}.
+# xsi:nil → value null. valueType — только если compile вывел бы из значения другой тип:
+# ссылку он узнаёт по литералу, дату (кроме параметра) — по виду, остальное — xs:string.
+function ConvertTo-AvailableValueEntry {
+	param($av, [bool]$isParam = $false)
+	$vn = $av.SelectSingleNode("r:value", $ns)
+	$pn = $av.SelectSingleNode("r:presentation", $ns)
+	$entry = [ordered]@{}
+	if ($vn) {
+		$val = ConvertTo-ListItemValue $vn
+		$entry['value'] = $val
+		if ($val -is [string]) {
+			$dt = Get-DslValueType $vn
+			$inferred = if (Test-RefValueLiteral $val) { 'dcscor:DesignTimeValue' }
+				elseif (-not $isParam -and $val -match '^\d{4}-\d{2}-\d{2}T') { 'xs:dateTime' }
+				else { 'xs:string' }
+			if ($dt -and -not ($dt -is [string] -and [string]::Equals($dt, $inferred, [StringComparison]::Ordinal))) {
+				$entry['valueType'] = $dt
+			}
+		}
+	}
+	if ($pn) {
+		$pres = Get-MLText $pn
+		if ($pres) { $entry['presentation'] = $pres }
+	}
+	return $entry
 }
 
 # Same as Get-FilterValue, но дополнительно возвращает xsi:type значения,
