@@ -232,6 +232,68 @@ MAIN_ATTR_STANDARD_FIELDS = {k.upper(): {n.upper() for n in v.split()} for k, v 
 }.items()}
 
 
+REF_TYPE_RE = re.compile(r'^(?:\w+:)?(\w+?)Ref\.(.+)$')
+
+
+def md_type_list(el):
+    """Типы подобъекта метаданных: тексты <v8:Type>; определяемый тип и прочие наборы — меткой «#TypeSet»,
+    квалификаторы пропускаются."""
+    result = []
+    type_el = el.find(f'{{{NS["md"]}}}Properties/{{{NS["md"]}}}Type')
+    if type_el is not None:
+        for tn in type_el:
+            if not isinstance(tn.tag, str):
+                continue
+            ln = etree.QName(tn.tag).localname
+            if ln == 'Type':
+                result.append((tn.text or '').strip())
+            elif ln == 'TypeSet':
+                result.append('#TypeSet')
+    return result
+
+
+def ref_tail_error(types, segs, i, ext_obj_index, ext_obj_listed):
+    """Хвост пути после ссылочного реквизита: сегмент с номером i и дальше. Замер 8.3.24: сегмент
+    разрешается по целевому объекту в расширении (заимствованные и собственные подобъекты) и стандартным
+    реквизитам его типа; объекта в расширении нет — только стандартные; правило повторяется на каждом
+    шаге. У составного типа из одних ссылок дальше первого сегмента путь не разрешается вовсе — даже на
+    общий стандартный реквизит. Не замерено (определяемый, примитивный, смешанный тип, перечисление,
+    стандартный реквизит в середине пути) — не проверяем. Ошибка — (номер сегмента, текст), иначе None."""
+    while i < len(segs):
+        refs, other = [], 0
+        for tp in types:
+            rm = REF_TYPE_RE.match(tp)
+            if rm and rm.group(1).upper() in CHILD_TYPE_KINDS_CI:
+                refs.append((rm.group(1), rm.group(2)))
+            else:
+                other += 1
+        if len(refs) >= 2 and other == 0:
+            return i, f'у {segs[i - 1]} составной ссылочный тип — дальше него путь не разрешается'
+        if len(refs) != 1 or other > 0:
+            return None
+        t_key = f'{refs[0][0]}.{refs[0][1]}'
+        t_std = MAIN_ATTR_STANDARD_FIELDS.get(f'{refs[0][0]}Object'.upper())
+        if t_std is None:
+            return None
+        seg = segs[i]
+        seg_ci = seg.upper()
+        if seg_ci in t_std:
+            return None
+        t_entry = ext_obj_index.get(t_key.upper())
+        if t_entry is None:
+            if t_key.upper() in ext_obj_listed:
+                return None
+            return i, (f'у {t_key} нет в расширении реквизита {seg}: объект не заимствован, '
+                       f'без заимствования через ссылку видны только стандартные реквизиты')
+        if seg_ci not in t_entry['Names']:
+            return i, f'у {t_key} в расширении нет реквизита {seg} (незаимствованный реквизит источника форме расширения не виден)'
+        if seg_ci in t_entry['TSColumns']:
+            return None
+        types = t_entry['Names'][seg_ci]
+        i += 1
+    return None
+
+
 # Стандартные поля строки табличной части: в ChildObjects их нет, но пути Объект.<ТЧ>.<Стандартный>
 # законны. Имена зависят от варианта встроенного языка, поэтому держим оба написания.
 STANDARD_OBJECT_FIELDS = {
@@ -870,10 +932,11 @@ def main():
             obj_child_objects = obj_el.find(f'{{{MD}}}ChildObjects')
 
             # Объект таким, каким он описан в расширении: реквизиты (и реквизиты адресации задачи, признаки
-            # учёта плана счетов), измерения, ресурсы, ТЧ и колонки ТЧ — и заимствованные, и собственные. По этому описанию платформа разрешает пути любой формы
+            # учёта плана счетов), измерения, ресурсы, ТЧ и колонки ТЧ — и заимствованные, и собственные;
+            # значение — список типов (по нему разрешается путь через ссылочный реквизит). По этому описанию платформа разрешает пути любой формы
             # расширения (проверка 14) и таблицы <AdditionalColumns> (проверка 12); незаимствованный
             # подобъект источника она не видит. Имена (и ключ объекта) регистронезависимы, как в языке 1С: upper().
-            ix_names = set()
+            ix_names = {}
             ix_ts_columns = {}
             if obj_child_objects is not None:
                 for ix_sub in obj_child_objects:
@@ -887,14 +950,15 @@ def main():
                     if ix_name_el is None or not ix_name_el.text:
                         continue
                     ix_name = ix_name_el.text.strip().upper()
-                    ix_names.add(ix_name)
+                    ix_names[ix_name] = md_type_list(ix_sub)
                     if ix_ln != 'TabularSection':
                         continue
-                    ix_ts_columns[ix_name] = {
-                        c.text.strip().upper()
-                        for c in ix_sub.findall(f'{{{MD}}}ChildObjects/{{{MD}}}Attribute/{{{MD}}}Properties/{{{MD}}}Name')
-                        if c.text
-                    }
+                    ix_cols = {}
+                    for ix_col in ix_sub.findall(f'{{{MD}}}ChildObjects/{{{MD}}}Attribute'):
+                        ix_col_name = ix_col.find(f'{{{MD}}}Properties/{{{MD}}}Name')
+                        if ix_col_name is not None and ix_col_name.text:
+                            ix_cols[ix_col_name.text.strip().upper()] = md_type_list(ix_col)
+                    ix_ts_columns[ix_name] = ix_cols
             ext_obj_index[f'{type_name}.{child_name}'.upper()] = {'Names': ix_names, 'TSColumns': ix_ts_columns}
 
             if obj_child_objects is not None:
@@ -1200,7 +1264,7 @@ def main():
     # (индекс ext_obj_index, проверка 10). Незаимствованный реквизит источника она не видит даже
     # на заимствованной форме, где он был в исходной: «Неверный путь к данным». Имена — без учёта
     # регистра. Стандартные реквизиты — по типу основного реквизита (MAIN_ATTR_STANDARD_FIELDS).
-    # Второй сегмент проверяется только у табличной части: у ссылочного реквизита он ведёт в другой объект.
+    # После ссылочного реквизита или колонки путь продолжается по целевому объекту (ref_tail_error).
     if not r.stopped and forms_with_text:
         check14_ok = True
         path_check_count = 0
@@ -1242,12 +1306,12 @@ def main():
 
             # Колонки ТЧ — из описания в расширении плюс объявленные в самой форме через
             # <Columns>/<AdditionalColumns table="Объект.X">. Копия, чтобы не дописывать в индекс.
-            ts_columns = {ts: set(cols) for ts, cols in owner_entry['TSColumns'].items()}
+            ts_columns = {ts: dict(cols) for ts, cols in owner_entry['TSColumns'].items()}
             root_pat14 = re.escape(root_name14)
             for acm in re.finditer(r'<AdditionalColumns table="' + root_pat14 + r'\.(\w+)">(.*?)</AdditionalColumns>', own, re.DOTALL):
-                cols = ts_columns.setdefault(acm.group(1).upper(), set())
+                cols = ts_columns.setdefault(acm.group(1).upper(), {})
                 for cm in re.finditer(r'<Column name="(\w+)"', acm.group(2)):
-                    cols.add(cm.group(1).upper())
+                    cols[cm.group(1).upper()] = []
 
             # Ключ — путь без учёта регистра, как у хеш-таблицы PS-порта: первое написание остаётся
             bad_paths = {}
@@ -1265,7 +1329,13 @@ def main():
                         f'у {owner_key} в расширении нет такого реквизита или табличной части '
                         f'(незаимствованный реквизит источника форме расширения не виден)')
                     continue
-                if len(segments) < 2 or seg0_ci not in ts_columns:
+                if len(segments) < 2:
+                    continue
+                if seg0_ci not in ts_columns:
+                    tail = ref_tail_error(owner_entry['Names'][seg0_ci], segments, 1, ext_obj_index, ext_obj_listed)
+                    if tail:
+                        bad = f"{root_name14}.{'.'.join(segments[:tail[0] + 1])}"
+                        bad_paths.setdefault(bad.upper(), [bad, ''])[1] = tail[1]
                     continue
                 seg1 = segments[1]
                 seg1_ci = seg1.upper()
@@ -1278,6 +1348,13 @@ def main():
                     bad = f'{root_name14}.{seg0}.{seg1}'
                     bad_paths.setdefault(bad.upper(), [bad, ''])[1] = (
                         f'у табличной части {seg0} в расширении нет колонки {seg1}, и <Columns> формы её не объявляет')
+                    continue
+                # Дальше колонки — по её типу (Объект.Товары.Номенклатура.Артикул)
+                if len(segments) > 2:
+                    tail = ref_tail_error(ts_columns[seg0_ci][seg1_ci], segments, 2, ext_obj_index, ext_obj_listed)
+                    if tail:
+                        bad = f"{root_name14}.{'.'.join(segments[:tail[0] + 1])}"
+                        bad_paths.setdefault(bad.upper(), [bad, ''])[1] = tail[1]
 
             for bad, msg in sorted(bad_paths.values(), key=lambda bm: bm[0].upper()):
                 r.error(f"14. {ctx}: путь '{bad}' — {msg}")

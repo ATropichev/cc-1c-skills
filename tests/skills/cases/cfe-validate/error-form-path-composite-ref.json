@@ -1,0 +1,142 @@
+{
+  "name": "Ошибка: у составного ссылочного типа путь дальше реквизита не разрешается — даже на стандартный реквизит",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Склады",
+          "attributes": [
+            "Адрес: String(50)",
+            "Телефон: String(20)"
+          ]
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Склад: CatalogRef.Склады"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Catalogs/Склады.xml",
+        "-FormName": "ФормаЭлемента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Склад",
+        "elements": [
+          {
+            "input": "Наименование",
+            "path": "Объект.Description"
+          },
+          {
+            "input": "Адрес",
+            "path": "Объект.Адрес"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "CatalogObject.Склады",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Catalogs/Склады/Forms/ФормаЭлемента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/ЗаказКлиента.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Заказ",
+        "elements": [
+          {
+            "input": "Склад",
+            "path": "Объект.Склад"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.ЗаказКлиента",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Document.ЗаказКлиента.Form.ФормаДокумента",
+        "-BorrowMainAttribute": "Form"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml",
+        "-Operation": "add-attribute",
+        "-Value": "Тест_Ссылка: CatalogRef.Склады + DocumentRef.ЗаказКлиента"
+      }
+    },
+    {
+      "script": "form-edit/scripts/form-edit",
+      "input": {
+        "elements": [
+          {
+            "input": "Тест_Ссылка",
+            "path": "Объект.Тест_Ссылка.Ref",
+            "title": "Т"
+          }
+        ]
+      },
+      "args": {
+        "-FormPath": "{workDir}/cfe/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml",
+        "-JsonPath": "{inputFile}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "путь 'Объект.Тест_Ссылка.Ref' — у Тест_Ссылка составной ссылочный тип"
+  }
+}
