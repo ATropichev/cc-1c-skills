@@ -1,0 +1,146 @@
+{
+  "name": "Ошибка: путь через Родитель справочника, ТЧ цели, составной тип со строкой и ссылку на документ",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Комментарий: String(50)"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Document.ЗаказКлиента"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Тест_Склады",
+          "hierarchical": true,
+          "tabularSections": {
+            "Тест_Ячейки": [
+              "Тест_Номер: String(10)"
+            ]
+          }
+        },
+        {
+          "type": "DataProcessor",
+          "name": "Тест_Обработка",
+          "attributes": [
+            "Тест_Склад: CatalogRef.Тест_Склады",
+            "Тест_Сост: String(10) + CatalogRef.Тест_Склады",
+            "Тест_Заказ: DocumentRef.ЗаказКлиента"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/DataProcessors/Тест_Обработка.xml",
+        "-FormName": "Тест_Форма"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Т",
+        "elements": [
+          {
+            "input": "Тест_П0",
+            "path": "Объект.Тест_Склад.Тест_Ячейки.НетКолонки"
+          },
+          {
+            "input": "Тест_П1",
+            "path": "Объект.Тест_Сост.Code"
+          },
+          {
+            "input": "Тест_ПЗаказ",
+            "path": "Объект.Тест_Заказ.НетТакого"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DataProcessorObject.Тест_Обработка",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/cfe/DataProcessors/Тест_Обработка/Forms/Тест_Форма/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Catalogs/Тест_Склады.xml",
+        "-FormName": "Тест_ФормаЭлемента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Т",
+        "elements": [
+          {
+            "input": "Тест_К0",
+            "path": "Объект.Родитель.НетТакого"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "CatalogObject.Тест_Склады",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/cfe/Catalogs/Тест_Склады/Forms/Тест_ФормаЭлемента/Ext/Form.xml"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "путь 'Объект.Тест_Склад.Тест_Ячейки.НетКолонки' — у табличной части Тест_Ячейки объекта Catalog.Тест_Склады в расширении нет колонки НетКолонки",
+      "путь 'Объект.Тест_Сост.Code' — у Тест_Сост составной тип",
+      "путь 'Объект.Родитель.НетТакого' — у Catalog.Тест_Склады в расширении нет реквизита НетТакого",
+      "путь 'Объект.Тест_Заказ.НетТакого' — у Document.ЗаказКлиента в расширении нет реквизита НетТакого"
+    ]
+  }
+}

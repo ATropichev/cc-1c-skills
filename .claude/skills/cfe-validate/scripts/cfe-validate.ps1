@@ -242,8 +242,7 @@ $script:standardObjectFields = @(
 # Стандартные реквизиты, которые платформа принимает первым сегментом пути формы, — по типу
 # основного реквизита (замер 8.3.24 на собственных объектах расширения, оба написания). Набор
 # зависит и от свойств объекта (Parent — иерархия, Owner — владельцы, ExtDimensionDr — корреспонденция),
-# здесь — надмножество по типу. Типа нет в карте — пути формы не проверяются: у набора записей
-# регистра сведений платформа их на загрузке не проверяет вовсе, остальные не замерены.
+# здесь — надмножество по типу. Типа нет в карте (не замерен) — пути формы не проверяются.
 $script:mainAttrStandardFields = @{}
 foreach ($entry in @(
 	@("CatalogObject", "Code Description Ref Parent Owner DeletionMark Predefined PredefinedDataName IsFolder Код Наименование Ссылка Родитель Владелец ПометкаУдаления Предопределенный ИмяПредопределенныхДанных ЭтоГруппа"),
@@ -257,6 +256,7 @@ foreach ($entry in @(
 	@("DataProcessorObject", ""),
 	@("ReportObject", ""),
 	@("InformationRegisterRecordManager", "Period Recorder LineNumber Active Период Регистратор НомерСтроки Активность"),
+	@("InformationRegisterRecordSet", "Period Recorder LineNumber Active RowsCount Период Регистратор НомерСтроки Активность КоличествоСтрок"),
 	@("AccumulationRegisterRecordSet", "Period Recorder LineNumber Active RecordType RowsCount Период Регистратор НомерСтроки Активность ВидДвижения КоличествоСтрок"),
 	@("AccountingRegisterRecordSet", "Period Recorder LineNumber Active RecordType RowsCount Account AccountDr AccountCr ExtDimension1 ExtDimension2 ExtDimension3 ExtDimensionDr1 ExtDimensionDr2 ExtDimensionDr3 ExtDimensionCr1 ExtDimensionCr2 ExtDimensionCr3 Период Регистратор НомерСтроки Активность ВидДвижения КоличествоСтрок Счет СчетДт СчетКт Субконто1 Субконто2 Субконто3 СубконтоДт1 СубконтоДт2 СубконтоДт3 СубконтоКт1 СубконтоКт2 СубконтоКт3"),
 	@("CalculationRegisterRecordSet", "Recorder LineNumber Active RowsCount CalculationType RegistrationPeriod ReversingEntry ActionPeriod BegOfActionPeriod EndOfActionPeriod BegOfBasePeriod EndOfBasePeriod Регистратор НомерСтроки Активность КоличествоСтрок ВидРасчета ПериодРегистрации Сторно ПериодДействия ПериодДействияНачало ПериодДействияКонец БазовыйПериодНачало БазовыйПериодКонец")
@@ -695,30 +695,53 @@ function Get-MdTypeList {
 	return ,$list
 }
 
+# Типы стандартного ссылочного реквизита справочника, через который путь идёт дальше: Родитель — сам
+# справочник, Владелец — единственный владелец (несколько — не замерено). Иначе $null.
+function Get-StdRefTypes {
+	param([string]$kind, [string]$name, [string]$seg)
+	if ($kind -ne "Catalog") { return $null }
+	if ($seg -in @("Parent", "Родитель")) { return ,@("cfg:CatalogRef.$name") }
+	if ($seg -in @("Owner", "Владелец")) {
+		$entry = $script:extObjIndex["$kind.$name"]
+		if ($entry -and @($entry.Owners).Count -eq 1) {
+			$om = [regex]::Match(@($entry.Owners)[0], '^(\w+)\.(.+)$')
+			if ($om.Success) { return ,@("cfg:$($om.Groups[1].Value)Ref.$($om.Groups[2].Value)") }
+		}
+	}
+	return $null
+}
+
 # Хвост пути после ссылочного реквизита: сегмент с номером $i и дальше. Замер 8.3.24: сегмент
 # разрешается по целевому объекту в расширении (заимствованные и собственные подобъекты) и стандартным
-# реквизитам его типа; объекта в расширении нет — только стандартные; правило повторяется на каждом
-# шаге. У составного типа из одних ссылок дальше первого сегмента путь не разрешается вовсе — даже на
-# общий стандартный реквизит. Не замерено (определяемый, примитивный, смешанный тип, перечисление,
-# стандартный реквизит в середине пути) — не проверяем. Ошибка — @(номер сегмента, текст), иначе $null.
+# реквизитам вида — набор тот же, что у объекта ($script:mainAttrStandardFields); объекта в расширении
+# нет — только стандартные.
+# ТЧ цели — дальше колонка этой ТЧ; Родитель и Владелец справочника — дальше по их типу. Правило
+# повторяется на каждом шаге. У составного типа (любой состав) дальше реквизита путь не разрешается.
+# Не замерено (определяемый, примитивный тип, перечисление, прочие стандартные реквизиты в середине
+# пути) — не проверяем. Ошибка — @(номер сегмента, текст), иначе $null.
 function Get-RefTailError {
 	param($types, [string[]]$segs, [int]$i)
 	while ($i -lt $segs.Count) {
-		$refs = @(); $other = 0
-		foreach ($tp in @($types)) {
-			$rm = [regex]::Match([string]$tp, '^(?:\w+:)?(\w+?)Ref\.(.+)$')
-			if ($rm.Success -and $childTypeDirMap.ContainsKey($rm.Groups[1].Value)) { $refs += ,@($rm.Groups[1].Value, $rm.Groups[2].Value) }
-			else { $other++ }
+		$types = @($types)
+		if ($types -contains '#TypeSet') { return $null }
+		if ($types.Count -ge 2) {
+			return @($i, "у $($segs[$i - 1]) составной тип — дальше него путь не разрешается")
 		}
-		if ($refs.Count -ge 2 -and $other -eq 0) {
-			return @($i, "у $($segs[$i - 1]) составной ссылочный тип — дальше него путь не разрешается")
-		}
-		if ($refs.Count -ne 1 -or $other -gt 0) { return $null }
-		$tKey = "$($refs[0][0]).$($refs[0][1])"
-		$tStd = $script:mainAttrStandardFields["$($refs[0][0])Object"]
+		if ($types.Count -ne 1) { return $null }
+		$rm = [regex]::Match([string]$types[0], '^(?:\w+:)?(\w+?)Ref\.(.+)$')
+		if (-not $rm.Success) { return $null }
+		$tKind = $rm.Groups[1].Value; $tName = $rm.Groups[2].Value
+		$tStd = $script:mainAttrStandardFields["${tKind}Object"]
 		if ($null -eq $tStd) { return $null }
+		$tKey = "$tKind.$tName"
 		$seg = $segs[$i]
-		if ($tStd.ContainsKey($seg)) { return $null }
+		if ($tStd.ContainsKey($seg)) {
+			$stdTypes = Get-StdRefTypes $tKind $tName $seg
+			if ($null -eq $stdTypes) { return $null }
+			$types = $stdTypes
+			$i++
+			continue
+		}
 		$tEntry = $script:extObjIndex[$tKey]
 		if (-not $tEntry) {
 			if ($script:extObjListed.ContainsKey($tKey)) { return $null }
@@ -727,11 +750,28 @@ function Get-RefTailError {
 		if (-not $tEntry.Names.ContainsKey($seg)) {
 			return @($i, "у $tKey в расширении нет реквизита ${seg} (незаимствованный реквизит источника форме расширения не виден)")
 		}
-		if ($tEntry.TSColumns.ContainsKey($seg)) { return $null }
+		if ($tEntry.TSColumns.ContainsKey($seg)) {
+			if ($i + 1 -ge $segs.Count) { return $null }
+			$col = $segs[$i + 1]
+			if ($script:standardObjectFields -contains $col) { return $null }
+			if (-not $tEntry.TSColumns[$seg].ContainsKey($col)) {
+				return @(($i + 1), "у табличной части $seg объекта $tKey в расширении нет колонки $col")
+			}
+			$types = $tEntry.TSColumns[$seg][$col]
+			$i += 2
+			continue
+		}
 		$types = $tEntry.Names[$seg]
 		$i++
 	}
 	return $null
+}
+
+# Хвост пути через ссылку — в список висячих путей формы (ключ — путь до сегмента с ошибкой).
+function Add-RefTailBadPath {
+	param($badPaths, [string]$rootName, [string[]]$segs, $types, [int]$i)
+	$tail = Get-RefTailError $types $segs $i
+	if ($tail) { $badPaths["${rootName}." + ($segs[0..$tail[0]] -join '.')] = $tail[1] }
 }
 
 # --- Check 9: Borrowed objects validation + Check 10: Sub-items ---
@@ -891,7 +931,8 @@ if ($childObjNode) {
 				$ixTSColumns[$ixName] = $ixCols
 			}
 		}
-		$script:extObjIndex["${typeName}.${childName}"] = @{ Names = $ixNames; TSColumns = $ixTSColumns }
+		$ixOwners = @(foreach ($ixOwner in $objEl.SelectNodes("md:Properties/md:Owners/xr:Item", $objNs)) { $ixOwner.InnerText.Trim() })
+		$script:extObjIndex["${typeName}.${childName}"] = @{ Names = $ixNames; TSColumns = $ixTSColumns; Owners = $ixOwners }
 
 		if ($objChildObjects) {
 			$ctx = "${typeName}.${childName}"
@@ -1289,7 +1330,7 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 			$tbl = $acm.Groups[1].Value
 			if (-not $tsColumns.ContainsKey($tbl)) { $tsColumns[$tbl] = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase) }
 			foreach ($cm in [regex]::Matches($acm.Groups[2].Value, '<Column name="(\w+)"')) {
-				$tsColumns[$tbl][$cm.Groups[1].Value] = @()
+				if (-not $tsColumns[$tbl].ContainsKey($cm.Groups[1].Value)) { $tsColumns[$tbl][$cm.Groups[1].Value] = @() }
 			}
 		}
 
@@ -1299,15 +1340,21 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 			$segments = @(($m.Groups[1].Value -split '\.') | ForEach-Object { $_ -replace '\[.*$', '' })
 			$seg0 = $segments[0]
 			$pathCheckCount++
-			if ($stdFields.ContainsKey($seg0)) { continue }
+			if ($stdFields.ContainsKey($seg0)) {
+				if ($segments.Count -ge 2) {
+					$targetParts = $ownerKey -split '\.', 2
+					$stdTypes = Get-StdRefTypes $targetParts[0] $targetParts[1] $seg0
+					if ($stdTypes) { Add-RefTailBadPath $badPaths $rootName $segments $stdTypes 1 }
+				}
+				continue
+			}
 			if (-not $ownerEntry.Names.ContainsKey($seg0)) {
 				$badPaths["${rootName}.${seg0}"] = "у ${ownerKey} в расширении нет такого реквизита или табличной части (незаимствованный реквизит источника форме расширения не виден)"
 				continue
 			}
 			if ($segments.Count -lt 2) { continue }
 			if (-not $tsColumns.ContainsKey($seg0)) {
-				$tail = Get-RefTailError $ownerEntry.Names[$seg0] $segments 1
-				if ($tail) { $badPaths["${rootName}." + ($segments[0..$tail[0]] -join '.')] = $tail[1] }
+				Add-RefTailBadPath $badPaths $rootName $segments $ownerEntry.Names[$seg0] 1
 				continue
 			}
 			$seg1 = $segments[1]
@@ -1320,8 +1367,7 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 			}
 			# Дальше колонки — по её типу (Объект.Товары.Номенклатура.Артикул)
 			if ($segments.Count -gt 2) {
-				$tail = Get-RefTailError $tsColumns[$seg0][$seg1] $segments 2
-				if ($tail) { $badPaths["${rootName}." + ($segments[0..$tail[0]] -join '.')] = $tail[1] }
+				Add-RefTailBadPath $badPaths $rootName $segments $tsColumns[$seg0][$seg1] 2
 			}
 		}
 		foreach ($bad in ($badPaths.Keys | Sort-Object)) {
