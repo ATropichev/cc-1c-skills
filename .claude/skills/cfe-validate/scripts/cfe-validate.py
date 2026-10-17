@@ -191,16 +191,19 @@ GENERATED_TYPE_CATEGORIES = {
 MAIN_ATTR_RE = re.compile(
     r'<Attribute name=\"([^\"]+)\"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>', re.DOTALL)
 
-MAIN_ATTR_TYPE_RE = re.compile(r'<v8:Type>(?:\w+:)?(\w+?)(Object|RecordManager|RecordSet)\.([^<]+)</v8:Type>')
+MAIN_ATTR_TYPE_RE = re.compile(r'<v8:Type[^>]*>(?:\w+:)?(\w+?)(Object|RecordManager|RecordSet)\.([^<]+)</v8:Type>')
+# Вид объекта без учёта регистра — как у хеш-таблицы PS-порта
+CHILD_TYPE_KINDS_CI = {k.upper() for k in CHILD_TYPE_DIR_MAP}
 
 
 def main_attribute_target(main_attr_xml):
     """Объект, по которому разрешаются пути формы, — тип её основного реквизита, а не владелец формы:
     форма обработки бывает с основным реквизитом DocumentObject.X. Берётся первый тип, который
-    является объектом метаданных (префикс пространства имён любой). Нет такого (динамический список,
+    является объектом метаданных (префикс пространства имён любой, в т.ч. объявленный на самом
+    <v8:Type>). Нет такого (динамический список,
     таблица значений) — None: путь не по составу объекта."""
     for tm in MAIN_ATTR_TYPE_RE.finditer(main_attr_xml):
-        if tm.group(1) in CHILD_TYPE_DIR_MAP:
+        if tm.group(1).upper() in CHILD_TYPE_KINDS_CI:
             return {'Key': f'{tm.group(1)}.{tm.group(3)}', 'Category': tm.group(1) + tm.group(2),
                     'TypeName': f'{tm.group(1)}{tm.group(2)}.{tm.group(3)}'}
     return None
@@ -211,7 +214,7 @@ def main_attribute_target(main_attr_xml):
 # зависит и от свойств объекта (Parent — иерархия, Owner — владельцы, ExtDimensionDr — корреспонденция),
 # здесь — надмножество по типу. Типа нет в карте — пути формы не проверяются: у набора записей
 # регистра сведений платформа их на загрузке не проверяет вовсе, остальные не замерены.
-MAIN_ATTR_STANDARD_FIELDS = {k: {n.upper() for n in v.split()} for k, v in {
+MAIN_ATTR_STANDARD_FIELDS = {k.upper(): {n.upper() for n in v.split()} for k, v in {
     'CatalogObject': 'Code Description Ref Parent Owner DeletionMark Predefined PredefinedDataName IsFolder Код Наименование Ссылка Родитель Владелец ПометкаУдаления Предопределенный ИмяПредопределенныхДанных ЭтоГруппа',
     'DocumentObject': 'Number Date Posted Ref DeletionMark RegisterRecords Номер Дата Проведен Ссылка ПометкаУдаления Движения',
     'ChartOfCharacteristicTypesObject': 'Code Description Ref Parent IsFolder DeletionMark Predefined PredefinedDataName ValueType Код Наименование Ссылка Родитель ЭтоГруппа ПометкаУдаления Предопределенный ИмяПредопределенныхДанных ТипЗначения',
@@ -744,6 +747,8 @@ def main():
     XR = NS['xr']
     enum_values_index = {}
     ext_obj_index = {}
+    # Все объекты состава расширения, и те, чей файл не прочитан: отличить «объекта нет» от «не разобран»
+    ext_obj_listed = set()
     form_list = []
 
     def is_borrowed_sub_item(sub_item):
@@ -800,6 +805,7 @@ def main():
             if type_name not in CHILD_TYPE_DIR_MAP:
                 continue
             dir_name = CHILD_TYPE_DIR_MAP[type_name]
+            ext_obj_listed.add(f'{type_name}.{child_name}'.upper())
             obj_file = os.path.join(config_dir, dir_name, child_name + '.xml')
 
             if not os.path.exists(obj_file):
@@ -1129,10 +1135,17 @@ def main():
         if root_name:
             own_part = raw.split('<BaseForm', 1)[0]
             ac_tables = set(re.findall(r'<AdditionalColumns table="' + re.escape(root_name) + r'\.(\w+)"', own_part))
-        # ТЧ ищется у объекта основного реквизита; тип не объект — у владельца формы.
+        # ТЧ ищется у объекта основного реквизита; типа у реквизита нет — у владельца формы; тип не объект
+        # метаданных (таблица значений, список) — ТЧ объекта тут ни при чём. Объекта основного реквизита
+        # в расширении нет — об этом скажет проверка 14, здесь бы вышла ложная подсказка про ТЧ.
         ac_target = main_attribute_target(root_match.group(0)) if root_match else None
-        owner_key = ac_target['Key'] if ac_target else ctx.split('.Form.')[0]
-        if ac_tables:
+        owner_key = None
+        if ac_target:
+            if ac_target['Key'].upper() in ext_obj_index:
+                owner_key = ac_target['Key']
+        elif '<v8:Type' not in (root_match.group(0) if root_match else ''):
+            owner_key = ctx.split('.Form.')[0]
+        if ac_tables and owner_key:
             owner_ts = ext_obj_index.get(owner_key.upper(), {}).get('TSColumns', {})
             for tbl_name in sorted(ac_tables):
                 dep_check_count += 1
@@ -1214,12 +1227,16 @@ def main():
             owner_key = target['Key']
             owner_entry = ext_obj_index.get(owner_key.upper())
             if owner_entry is None:
+                # Объект в составе расширения есть, но его файл не прочитан — об этом уже сказала проверка 9.
+                if owner_key.upper() in ext_obj_listed:
+                    continue
                 # Объекта основного реквизита в расширении нет — тип не разрешается, и платформа не читает
-                # форму целиком: «Исключение XDTO произошло при чтении файла».
+                # форму целиком: «Исключение XDTO произошло при чтении файла». Это ошибка типа, а не путей,
+                # поэтому она не зависит от того, замерен ли набор стандартных реквизитов этого типа (ниже).
                 r.error(f"14. {ctx}: основной реквизит '{root_name14}' типа {target['TypeName']} — объекта {owner_key} в расширении нет (заимствуйте его)")
                 check14_ok = False
                 continue
-            std_fields = MAIN_ATTR_STANDARD_FIELDS.get(target['Category'])
+            std_fields = MAIN_ATTR_STANDARD_FIELDS.get(target['Category'].upper())
             if std_fields is None:
                 continue
 

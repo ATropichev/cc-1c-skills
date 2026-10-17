@@ -268,11 +268,11 @@ foreach ($entry in @(
 
 # Объект, по которому разрешаются пути формы, — тип её основного реквизита, а не владелец формы:
 # форма обработки бывает с основным реквизитом DocumentObject.X. Берётся первый тип, который
-# является объектом метаданных (префикс пространства имён любой). Нет такого (динамический список,
+# является объектом метаданных (префикс пространства имён любой, в т.ч. объявленный на самом <v8:Type>). Нет такого (динамический список,
 # таблица значений) — $null: путь не по составу объекта.
 function Get-MainAttributeTarget {
 	param([string]$mainAttrXml)
-	foreach ($tm in [regex]::Matches($mainAttrXml, '<v8:Type>(?:\w+:)?(\w+?)(Object|RecordManager|RecordSet)\.([^<]+)</v8:Type>')) {
+	foreach ($tm in [regex]::Matches($mainAttrXml, '<v8:Type[^>]*>(?:\w+:)?(\w+?)(Object|RecordManager|RecordSet)\.([^<]+)</v8:Type>')) {
 		if ($childTypeDirMap.ContainsKey($tm.Groups[1].Value)) {
 			return @{
 				Key = "$($tm.Groups[1].Value).$($tm.Groups[3].Value)"
@@ -682,6 +682,8 @@ if ($script:stopped) { & $finalize; exit 1 }
 # --- Check 9: Borrowed objects validation + Check 10: Sub-items ---
 $script:enumValuesIndex = @{}
 $script:extObjIndex = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+# Все объекты состава расширения, и те, чей файл не прочитан: отличить «объекта нет» от «не разобран»
+$script:extObjListed = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
 $script:formList = @()
 
 # Helper: check if sub-item has explicit borrowed metadata
@@ -740,6 +742,7 @@ if ($childObjNode) {
 
 		if (-not $childTypeDirMap.ContainsKey($typeName)) { continue }
 		$dirName = $childTypeDirMap[$typeName]
+		$script:extObjListed["${typeName}.${childName}"] = $true
 		$objFile = Join-Path (Join-Path $configDir $dirName) "$childName.xml"
 
 		if (-not (Test-Path $objFile)) { continue }
@@ -1111,10 +1114,17 @@ foreach ($bf in $script:borrowedFormsWithTree) {
 	}
 	# Соседние проверки этого блока эвристичны (имя стиля добывается регуляркой), поэтому там
 	# предупреждение. Здесь сигнал точный — имя ТЧ берётся из атрибута, — а последствие жёсткое,
-	# поэтому ошибка. ТЧ ищется у объекта основного реквизита; тип не объект — у владельца формы.
+	# поэтому ошибка. ТЧ ищется у объекта основного реквизита; типа у реквизита нет — у владельца формы;
+	# тип не объект метаданных (таблица значений, список) — ТЧ объекта тут ни при чём. Объекта основного
+	# реквизита в расширении нет — об этом скажет проверка 14, здесь бы вышла ложная подсказка про ТЧ.
 	$acTarget = Get-MainAttributeTarget $rootMatch.Value
-	$ownerKey = if ($acTarget) { $acTarget.Key } else { ($ctx -split '\.Form\.')[0] }
-	if ($acTables.Count -gt 0) {
+	$ownerKey = $null
+	if ($acTarget) {
+		if ($script:extObjIndex.ContainsKey($acTarget.Key)) { $ownerKey = $acTarget.Key }
+	} elseif ($rootMatch.Value -notmatch '<v8:Type') {
+		$ownerKey = ($ctx -split '\.Form\.')[0]
+	}
+	if ($acTables.Count -gt 0 -and $ownerKey) {
 		$ownerEntry = $script:extObjIndex[$ownerKey]
 		foreach ($tblName in $acTables.Keys) {
 			$depCheckCount++
@@ -1199,8 +1209,11 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 		$ownerKey = $target.Key
 		$ownerEntry = $script:extObjIndex[$ownerKey]
 		if (-not $ownerEntry) {
+			# Объект в составе расширения есть, но его файл не прочитан — об этом уже сказала проверка 9.
+			if ($script:extObjListed.ContainsKey($ownerKey)) { continue }
 			# Объекта основного реквизита в расширении нет — тип не разрешается, и платформа не читает
-			# форму целиком: «Исключение XDTO произошло при чтении файла».
+			# форму целиком: «Исключение XDTO произошло при чтении файла». Это ошибка типа, а не путей,
+			# поэтому она не зависит от того, замерен ли набор стандартных реквизитов этого типа (ниже).
 			Report-Error "14. ${ctx}: основной реквизит '${rootName}' типа $($target.TypeName) — объекта $ownerKey в расширении нет (заимствуйте его)"
 			$check14Ok = $false
 			continue
