@@ -1,0 +1,143 @@
+{
+  "name": "Стандартные реквизиты в путях собственных форм — по типу основного реквизита: иерархия справочника, период регистра сведений",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Тест_Склады",
+          "hierarchical": true
+        },
+        {
+          "type": "InformationRegister",
+          "name": "Тест_Цены",
+          "periodicity": "Day",
+          "dimensions": [
+            "Склад: String(10)"
+          ],
+          "resources": [
+            "Цена: Number(15,2)"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Catalogs/Тест_Склады.xml",
+        "-FormName": "Тест_ФормаЭлемента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Склад",
+        "elements": [
+          {
+            "input": "Тест_Наименование",
+            "path": "Объект.Description"
+          },
+          {
+            "input": "Тест_Код",
+            "path": "Объект.Код"
+          },
+          {
+            "input": "Тест_Родитель",
+            "path": "Объект.Parent"
+          },
+          {
+            "input": "Тест_РодительРус",
+            "path": "Объект.Родитель"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "CatalogObject.Тест_Склады",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/cfe/Catalogs/Тест_Склады/Forms/Тест_ФормаЭлемента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/InformationRegisters/Тест_Цены.xml",
+        "-FormName": "Тест_ФормаЗаписи",
+        "-Purpose": "Record"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Цена",
+        "elements": [
+          {
+            "input": "Тест_Период",
+            "path": "Запись.Период"
+          },
+          {
+            "input": "Тест_Склад",
+            "path": "Запись.Склад"
+          },
+          {
+            "input": "Тест_Цена",
+            "path": "Запись.Цена"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Запись",
+            "type": "InformationRegisterRecordManager.Тест_Цены",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/cfe/InformationRegisters/Тест_Цены/Forms/Тест_ФормаЗаписи/Ext/Form.xml"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expect": {
+    "stdoutContains": "=== Validation OK: Extension.Тест"
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "name": "Ошибка: основной реквизит собственной формы — объект, которого нет в расширении (платформа не читает форму)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Комментарий: String(50)"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DataProcessor",
+        "name": "Тест_Обработка"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/DataProcessors/Тест_Обработка.xml",
+        "-FormName": "Тест_Форма"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Т",
+        "elements": [
+          {
+            "input": "Тест_Номер",
+            "path": "Объект.Number"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.ЗаказКлиента",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/cfe/DataProcessors/Тест_Обработка/Forms/Тест_Форма/Ext/Form.xml"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "основной реквизит 'Объект' типа DocumentObject.ЗаказКлиента — объекта Document.ЗаказКлиента в расширении нет"
+  }
+}

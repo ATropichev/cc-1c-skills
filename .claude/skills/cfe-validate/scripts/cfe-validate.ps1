@@ -229,8 +229,8 @@ $generatedTypeCategories = @{
 	"DefinedType"                = @("DefinedType")
 }
 
-# Стандартные реквизиты объектов: в ChildObjects их нет, но пути Объект.<Стандартный> законны.
-# Имена зависят от варианта встроенного языка, поэтому держим оба написания.
+# Стандартные поля строки табличной части: в ChildObjects их нет, но пути Объект.<ТЧ>.<Стандартный>
+# законны. Имена зависят от варианта встроенного языка, поэтому держим оба написания.
 $script:standardObjectFields = @(
 	"Code","Description","Ref","Parent","Owner","DeletionMark","Predefined","IsFolder","LineNumber",
 	"Number","Date","Posted","PredefinedDataName","RegisterRecords","DataVersion","RowsCount",
@@ -239,15 +239,47 @@ $script:standardObjectFields = @(
 	"Движения","ВерсияДанных","КоличествоСтрок"
 )
 
+# Стандартные реквизиты, которые платформа принимает первым сегментом пути формы, — по типу
+# основного реквизита (замер 8.3.24 на собственных объектах расширения, оба написания). Набор
+# зависит и от свойств объекта (Parent — иерархия, Owner — владельцы, ExtDimensionDr — корреспонденция),
+# здесь — надмножество по типу. Типа нет в карте — пути формы не проверяются: у набора записей
+# регистра сведений платформа их на загрузке не проверяет вовсе, остальные не замерены.
+$script:mainAttrStandardFields = @{}
+foreach ($entry in @(
+	@("CatalogObject", "Code Description Ref Parent Owner DeletionMark Predefined PredefinedDataName IsFolder Код Наименование Ссылка Родитель Владелец ПометкаУдаления Предопределенный ИмяПредопределенныхДанных ЭтоГруппа"),
+	@("DocumentObject", "Number Date Posted Ref DeletionMark RegisterRecords Номер Дата Проведен Ссылка ПометкаУдаления Движения"),
+	@("ChartOfCharacteristicTypesObject", "Code Description Ref Parent IsFolder DeletionMark Predefined PredefinedDataName ValueType Код Наименование Ссылка Родитель ЭтоГруппа ПометкаУдаления Предопределенный ИмяПредопределенныхДанных ТипЗначения"),
+	@("ChartOfAccountsObject", "Code Description Ref Parent DeletionMark Predefined PredefinedDataName OffBalance Order Type ExtDimensionTypes Код Наименование Ссылка Родитель ПометкаУдаления Предопределенный ИмяПредопределенныхДанных Забалансовый Порядок Вид ВидыСубконто"),
+	@("ChartOfCalculationTypesObject", "Code Description Ref DeletionMark Predefined PredefinedDataName ActionPeriodIsBasic BaseCalculationTypes LeadingCalculationTypes DisplacingCalculationTypes Код Наименование Ссылка ПометкаУдаления Предопределенный ИмяПредопределенныхДанных ПериодДействияБазовый БазовыеВидыРасчета ВедущиеВидыРасчета ВытесняющиеВидыРасчета"),
+	@("ExchangePlanObject", "Code Description Ref DeletionMark ThisNode SentNo ReceivedNo Код Наименование Ссылка ПометкаУдаления ЭтотУзел НомерОтправленного НомерПринятого"),
+	@("TaskObject", "Number Date Description Ref DeletionMark BusinessProcess RoutePoint Executed Номер Дата Наименование Ссылка ПометкаУдаления БизнесПроцесс ТочкаМаршрута Выполнена"),
+	@("BusinessProcessObject", "Number Date Ref DeletionMark Started Completed HeadTask Номер Дата Ссылка ПометкаУдаления Стартован Завершен ВедущаяЗадача"),
+	@("DataProcessorObject", ""),
+	@("ReportObject", ""),
+	@("InformationRegisterRecordManager", "Period Recorder LineNumber Active Период Регистратор НомерСтроки Активность"),
+	@("AccumulationRegisterRecordSet", "Period Recorder LineNumber Active RecordType RowsCount Период Регистратор НомерСтроки Активность ВидДвижения КоличествоСтрок"),
+	@("AccountingRegisterRecordSet", "Period Recorder LineNumber Active RecordType RowsCount Account AccountDr AccountCr ExtDimension1 ExtDimension2 ExtDimension3 ExtDimensionDr1 ExtDimensionDr2 ExtDimensionDr3 ExtDimensionCr1 ExtDimensionCr2 ExtDimensionCr3 Период Регистратор НомерСтроки Активность ВидДвижения КоличествоСтрок Счет СчетДт СчетКт Субконто1 Субконто2 Субконто3 СубконтоДт1 СубконтоДт2 СубконтоДт3 СубконтоКт1 СубконтоКт2 СубконтоКт3"),
+	@("CalculationRegisterRecordSet", "Recorder LineNumber Active RowsCount CalculationType RegistrationPeriod ReversingEntry ActionPeriod BegOfActionPeriod EndOfActionPeriod BegOfBasePeriod EndOfBasePeriod Регистратор НомерСтроки Активность КоличествоСтрок ВидРасчета ПериодРегистрации Сторно ПериодДействия ПериодДействияНачало ПериодДействияКонец БазовыйПериодНачало БазовыйПериодКонец")
+)) {
+	$set = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+	foreach ($n in ($entry[1] -split ' ' | Where-Object { $_ })) { $set[$n] = $true }
+	$script:mainAttrStandardFields[$entry[0]] = $set
+}
+
 # Объект, по которому разрешаются пути формы, — тип её основного реквизита, а не владелец формы:
-# форма обработки бывает с основным реквизитом DocumentObject.X. Тип не объект метаданных
-# (таблица значений и т.п.) — $null, путь не по составу объекта; типа нет — владелец формы.
-function Get-MainAttributeOwnerKey {
-	param([string]$mainAttrXml, [string]$formOwnerKey)
-	if ($mainAttrXml -notmatch '<v8:Type>') { return $formOwnerKey }
-	$tm = [regex]::Match($mainAttrXml, '<v8:Type>cfg:(\w+?)(?:Object|RecordManager|RecordSet)\.([^<]+)</v8:Type>')
-	if ($tm.Success -and $childTypeDirMap.ContainsKey($tm.Groups[1].Value)) {
-		return "$($tm.Groups[1].Value).$($tm.Groups[2].Value)"
+# форма обработки бывает с основным реквизитом DocumentObject.X. Берётся первый тип, который
+# является объектом метаданных (префикс пространства имён любой). Нет такого (динамический список,
+# таблица значений) — $null: путь не по составу объекта.
+function Get-MainAttributeTarget {
+	param([string]$mainAttrXml)
+	foreach ($tm in [regex]::Matches($mainAttrXml, '<v8:Type>(?:\w+:)?(\w+?)(Object|RecordManager|RecordSet)\.([^<]+)</v8:Type>')) {
+		if ($childTypeDirMap.ContainsKey($tm.Groups[1].Value)) {
+			return @{
+				Key = "$($tm.Groups[1].Value).$($tm.Groups[3].Value)"
+				Category = "$($tm.Groups[1].Value)$($tm.Groups[2].Value)"
+				TypeName = "$($tm.Groups[1].Value)$($tm.Groups[2].Value).$($tm.Groups[3].Value)"
+			}
+		}
 	}
 	return $null
 }
@@ -649,7 +681,7 @@ if ($script:stopped) { & $finalize; exit 1 }
 
 # --- Check 9: Borrowed objects validation + Check 10: Sub-items ---
 $script:enumValuesIndex = @{}
-$script:extObjIndex = @{}
+$script:extObjIndex = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
 $script:formList = @()
 
 # Helper: check if sub-item has explicit borrowed metadata
@@ -777,8 +809,8 @@ if ($childObjNode) {
 		# --- Check 10: Sub-items (Attribute, TabularSection, EnumValue, Form) ---
 		$objChildObjects = $objEl.SelectSingleNode("md:ChildObjects", $objNs)
 
-		# Объект таким, каким он описан в расширении: реквизиты, измерения, ресурсы, ТЧ и колонки ТЧ —
-		# и заимствованные, и собственные. По этому описанию платформа разрешает пути любой формы
+		# Объект таким, каким он описан в расширении: реквизиты (и реквизиты адресации задачи, признаки
+		# учёта плана счетов), измерения, ресурсы, ТЧ и колонки ТЧ — и заимствованные, и собственные. По этому описанию платформа разрешает пути любой формы
 		# расширения (проверка 14) и таблицы <AdditionalColumns> (проверка 12); незаимствованный
 		# подобъект источника она не видит. Имена регистронезависимы, как в языке 1С.
 		$ixNames = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
@@ -786,7 +818,7 @@ if ($childObjNode) {
 		if ($objChildObjects) {
 			foreach ($ixSub in $objChildObjects.ChildNodes) {
 				if ($ixSub.NodeType -ne 'Element') { continue }
-				if ($ixSub.LocalName -notin @('Attribute','Dimension','Resource','TabularSection')) { continue }
+				if ($ixSub.LocalName -notin @('Attribute','Dimension','Resource','TabularSection','AddressingAttribute','AccountingFlag','ExtDimensionAccountingFlag')) { continue }
 				$ixNameNode = $ixSub.SelectSingleNode("md:Properties/md:Name", $objNs)
 				if (-not $ixNameNode) { continue }
 				$ixName = $ixNameNode.InnerText.Trim()
@@ -1068,18 +1100,21 @@ foreach ($bf in $script:borrowedFormsWithTree) {
 	# <AdditionalColumns table="Объект.X"> — доп. колонки табличной части, объявленные в самой форме.
 	# Колонки есть, а самой ТЧ в расширении нет (ни заимствованной, ни собственной) → платформа
 	# отвергает загрузку: «Неверный путь к данным» плюс «Колонки не могут быть добавлены к реквизиту».
+	# Только своя часть формы: <BaseForm> — снимок исходной формы, его платформа разрешает по конфигурации.
 	$acTables = @{}
 	if ($rootName) {
 		$rootPat = [regex]::Escape($rootName)
-		foreach ($m in [regex]::Matches($raw, "<AdditionalColumns table=`"${rootPat}\.(\w+)`"")) {
+		$ownPart = ($raw -split '<BaseForm', 2)[0]
+		foreach ($m in [regex]::Matches($ownPart, "<AdditionalColumns table=`"${rootPat}\.(\w+)`"")) {
 			$acTables[$m.Groups[1].Value] = $true
 		}
 	}
 	# Соседние проверки этого блока эвристичны (имя стиля добывается регуляркой), поэтому там
 	# предупреждение. Здесь сигнал точный — имя ТЧ берётся из атрибута, — а последствие жёсткое,
-	# поэтому ошибка.
-	$ownerKey = Get-MainAttributeOwnerKey $rootMatch.Value (($ctx -split '\.Form\.')[0])
-	if ($acTables.Count -gt 0 -and $ownerKey) {
+	# поэтому ошибка. ТЧ ищется у объекта основного реквизита; тип не объект — у владельца формы.
+	$acTarget = Get-MainAttributeTarget $rootMatch.Value
+	$ownerKey = if ($acTarget) { $acTarget.Key } else { ($ctx -split '\.Form\.')[0] }
+	if ($acTables.Count -gt 0) {
 		$ownerEntry = $script:extObjIndex[$ownerKey]
 		foreach ($tblName in $acTables.Keys) {
 			$depCheckCount++
@@ -1139,8 +1174,8 @@ function Get-SourceConfigRoot {
 # таким, каким он описан в расширении: заимствованные и собственные реквизиты, ТЧ и их колонки
 # (индекс $script:extObjIndex, проверка 10). Незаимствованный реквизит источника она не видит даже
 # на заимствованной форме, где он был в исходной: «Неверный путь к данным». Имена — без учёта
-# регистра. Второй сегмент проверяется только у табличной части: у ссылочного реквизита он ведёт в
-# другой объект.
+# регистра. Стандартные реквизиты — по типу основного реквизита ($script:mainAttrStandardFields).
+# Второй сегмент проверяется только у табличной части: у ссылочного реквизита он ведёт в другой объект.
 if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 	$check14Ok = $true
 	$pathCheckCount = 0
@@ -1148,20 +1183,30 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 	foreach ($fw in $script:formsWithText) {
 		$raw = $fw.RawText
 		$ctx = $fw.Context
+		# Только своя часть формы: <BaseForm> — снимок исходной формы, его платформа разрешает по
+		# конфигурации, а не по расширению.
+		$own = ($raw -split '<BaseForm', 2)[0]
 		# Корень путей — имя основного реквизита формы (см. проверку 12). Нет его в <Attributes>
 		# формы — путей с корнем не бывает, проверять нечего.
-		$rootMatch14 = [regex]::Match($raw, '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
+		$rootMatch14 = [regex]::Match($own, '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
 		if (-not $rootMatch14.Success) { continue }
 		$rootName = $rootMatch14.Groups[1].Value
-		# У динамического списка набор полей — результат его запроса, а не состав объекта:
-		# туда входят и стандартные поля списка (Ref, Date, DefaultPicture), и псевдонимы
-		# запроса. Сверять такие пути с ChildObjects объекта нельзя — будут ложные ошибки
+		# Тип не объект метаданных — пути не по составу объекта. Так и у динамического списка: его поля —
+		# результат запроса, туда входят стандартные поля списка (Ref, Date, DefaultPicture) и псевдонимы
 		# (корпусная проверка: 3383 таких сегмента на 1094 формах списка УТ).
-		if ($rootMatch14.Value -match '>cfg:DynamicList<') { continue }
-		$ownerKey = Get-MainAttributeOwnerKey $rootMatch14.Value $fw.OwnerKey
-		if (-not $ownerKey) { continue }
+		$target = Get-MainAttributeTarget $rootMatch14.Value
+		if (-not $target) { continue }
+		$ownerKey = $target.Key
 		$ownerEntry = $script:extObjIndex[$ownerKey]
-		if (-not $ownerEntry) { continue }
+		if (-not $ownerEntry) {
+			# Объекта основного реквизита в расширении нет — тип не разрешается, и платформа не читает
+			# форму целиком: «Исключение XDTO произошло при чтении файла».
+			Report-Error "14. ${ctx}: основной реквизит '${rootName}' типа $($target.TypeName) — объекта $ownerKey в расширении нет (заимствуйте его)"
+			$check14Ok = $false
+			continue
+		}
+		$stdFields = $script:mainAttrStandardFields[$target.Category]
+		if ($null -eq $stdFields) { continue }
 
 		# Колонки ТЧ — из описания в расширении плюс объявленные в самой форме через
 		# <Columns>/<AdditionalColumns table="Объект.X">. Копия, чтобы не дописывать в индекс.
@@ -1170,7 +1215,7 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 			$tsColumns[$tsName] = New-Object System.Collections.Hashtable ($ownerEntry.TSColumns[$tsName], [StringComparer]::OrdinalIgnoreCase)
 		}
 		$rootPat14 = [regex]::Escape($rootName)
-		foreach ($acm in [regex]::Matches($raw, "(?s)<AdditionalColumns table=`"${rootPat14}\.(\w+)`">(.*?)</AdditionalColumns>")) {
+		foreach ($acm in [regex]::Matches($own, "(?s)<AdditionalColumns table=`"${rootPat14}\.(\w+)`">(.*?)</AdditionalColumns>")) {
 			$tbl = $acm.Groups[1].Value
 			if (-not $tsColumns.ContainsKey($tbl)) { $tsColumns[$tbl] = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase) }
 			foreach ($cm in [regex]::Matches($acm.Groups[2].Value, '<Column name="(\w+)"')) {
@@ -1179,12 +1224,12 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 		}
 
 		$badPaths = @{}
-		foreach ($m in [regex]::Matches($raw, "<(?:\w+:)?\w*DataPath[^>]*>${rootPat14}\.([^<]+)</(?:\w+:)?\w*DataPath>")) {
+		foreach ($m in [regex]::Matches($own, "<(?:\w+:)?\w*DataPath[^>]*>${rootPat14}\.([^<]+)</(?:\w+:)?\w*DataPath>")) {
 			# Индекс строки ТЧ (Объект.Товары[0].Цена) к имени не относится
 			$segments = @(($m.Groups[1].Value -split '\.') | ForEach-Object { $_ -replace '\[.*$', '' })
 			$seg0 = $segments[0]
 			$pathCheckCount++
-			if ($script:standardObjectFields -contains $seg0) { continue }
+			if ($stdFields.ContainsKey($seg0)) { continue }
 			if (-not $ownerEntry.Names.ContainsKey($seg0)) {
 				$badPaths["${rootName}.${seg0}"] = "у ${ownerKey} в расширении нет такого реквизита или табличной части (незаимствованный реквизит источника форме расширения не виден)"
 				continue

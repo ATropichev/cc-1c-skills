@@ -191,21 +191,46 @@ GENERATED_TYPE_CATEGORIES = {
 MAIN_ATTR_RE = re.compile(
     r'<Attribute name=\"([^\"]+)\"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>', re.DOTALL)
 
-MAIN_ATTR_TYPE_RE = re.compile(r'<v8:Type>cfg:(\w+?)(?:Object|RecordManager|RecordSet)\.([^<]+)</v8:Type>')
+MAIN_ATTR_TYPE_RE = re.compile(r'<v8:Type>(?:\w+:)?(\w+?)(Object|RecordManager|RecordSet)\.([^<]+)</v8:Type>')
 
 
-def main_attribute_owner_key(main_attr_xml, form_owner_key):
+def main_attribute_target(main_attr_xml):
     """Объект, по которому разрешаются пути формы, — тип её основного реквизита, а не владелец формы:
-    форма обработки бывает с основным реквизитом DocumentObject.X. Тип не объект метаданных
-    (таблица значений и т.п.) — None, путь не по составу объекта; типа нет — владелец формы."""
-    if '<v8:Type>' not in main_attr_xml:
-        return form_owner_key
-    tm = MAIN_ATTR_TYPE_RE.search(main_attr_xml)
-    if tm and tm.group(1) in CHILD_TYPE_DIR_MAP:
-        return f'{tm.group(1)}.{tm.group(2)}'
+    форма обработки бывает с основным реквизитом DocumentObject.X. Берётся первый тип, который
+    является объектом метаданных (префикс пространства имён любой). Нет такого (динамический список,
+    таблица значений) — None: путь не по составу объекта."""
+    for tm in MAIN_ATTR_TYPE_RE.finditer(main_attr_xml):
+        if tm.group(1) in CHILD_TYPE_DIR_MAP:
+            return {'Key': f'{tm.group(1)}.{tm.group(3)}', 'Category': tm.group(1) + tm.group(2),
+                    'TypeName': f'{tm.group(1)}{tm.group(2)}.{tm.group(3)}'}
     return None
 
 
+# Стандартные реквизиты, которые платформа принимает первым сегментом пути формы, — по типу
+# основного реквизита (замер 8.3.24 на собственных объектах расширения, оба написания). Набор
+# зависит и от свойств объекта (Parent — иерархия, Owner — владельцы, ExtDimensionDr — корреспонденция),
+# здесь — надмножество по типу. Типа нет в карте — пути формы не проверяются: у набора записей
+# регистра сведений платформа их на загрузке не проверяет вовсе, остальные не замерены.
+MAIN_ATTR_STANDARD_FIELDS = {k: {n.upper() for n in v.split()} for k, v in {
+    'CatalogObject': 'Code Description Ref Parent Owner DeletionMark Predefined PredefinedDataName IsFolder Код Наименование Ссылка Родитель Владелец ПометкаУдаления Предопределенный ИмяПредопределенныхДанных ЭтоГруппа',
+    'DocumentObject': 'Number Date Posted Ref DeletionMark RegisterRecords Номер Дата Проведен Ссылка ПометкаУдаления Движения',
+    'ChartOfCharacteristicTypesObject': 'Code Description Ref Parent IsFolder DeletionMark Predefined PredefinedDataName ValueType Код Наименование Ссылка Родитель ЭтоГруппа ПометкаУдаления Предопределенный ИмяПредопределенныхДанных ТипЗначения',
+    'ChartOfAccountsObject': 'Code Description Ref Parent DeletionMark Predefined PredefinedDataName OffBalance Order Type ExtDimensionTypes Код Наименование Ссылка Родитель ПометкаУдаления Предопределенный ИмяПредопределенныхДанных Забалансовый Порядок Вид ВидыСубконто',
+    'ChartOfCalculationTypesObject': 'Code Description Ref DeletionMark Predefined PredefinedDataName ActionPeriodIsBasic BaseCalculationTypes LeadingCalculationTypes DisplacingCalculationTypes Код Наименование Ссылка ПометкаУдаления Предопределенный ИмяПредопределенныхДанных ПериодДействияБазовый БазовыеВидыРасчета ВедущиеВидыРасчета ВытесняющиеВидыРасчета',
+    'ExchangePlanObject': 'Code Description Ref DeletionMark ThisNode SentNo ReceivedNo Код Наименование Ссылка ПометкаУдаления ЭтотУзел НомерОтправленного НомерПринятого',
+    'TaskObject': 'Number Date Description Ref DeletionMark BusinessProcess RoutePoint Executed Номер Дата Наименование Ссылка ПометкаУдаления БизнесПроцесс ТочкаМаршрута Выполнена',
+    'BusinessProcessObject': 'Number Date Ref DeletionMark Started Completed HeadTask Номер Дата Ссылка ПометкаУдаления Стартован Завершен ВедущаяЗадача',
+    'DataProcessorObject': '',
+    'ReportObject': '',
+    'InformationRegisterRecordManager': 'Period Recorder LineNumber Active Период Регистратор НомерСтроки Активность',
+    'AccumulationRegisterRecordSet': 'Period Recorder LineNumber Active RecordType RowsCount Период Регистратор НомерСтроки Активность ВидДвижения КоличествоСтрок',
+    'AccountingRegisterRecordSet': 'Period Recorder LineNumber Active RecordType RowsCount Account AccountDr AccountCr ExtDimension1 ExtDimension2 ExtDimension3 ExtDimensionDr1 ExtDimensionDr2 ExtDimensionDr3 ExtDimensionCr1 ExtDimensionCr2 ExtDimensionCr3 Период Регистратор НомерСтроки Активность ВидДвижения КоличествоСтрок Счет СчетДт СчетКт Субконто1 Субконто2 Субконто3 СубконтоДт1 СубконтоДт2 СубконтоДт3 СубконтоКт1 СубконтоКт2 СубконтоКт3',
+    'CalculationRegisterRecordSet': 'Recorder LineNumber Active RowsCount CalculationType RegistrationPeriod ReversingEntry ActionPeriod BegOfActionPeriod EndOfActionPeriod BegOfBasePeriod EndOfBasePeriod Регистратор НомерСтроки Активность КоличествоСтрок ВидРасчета ПериодРегистрации Сторно ПериодДействия ПериодДействияНачало ПериодДействияКонец БазовыйПериодНачало БазовыйПериодКонец',
+}.items()}
+
+
+# Стандартные поля строки табличной части: в ChildObjects их нет, но пути Объект.<ТЧ>.<Стандартный>
+# законны. Имена зависят от варианта встроенного языка, поэтому держим оба написания.
 STANDARD_OBJECT_FIELDS = {
     'Code', 'Description', 'Ref', 'Parent', 'Owner', 'DeletionMark', 'Predefined', 'IsFolder', 'LineNumber',
     'Number', 'Date', 'Posted', 'PredefinedDataName', 'RegisterRecords', 'DataVersion', 'RowsCount',
@@ -838,10 +863,10 @@ def main():
             # --- Check 10: Sub-items (Attribute, TabularSection, EnumValue, Form) ---
             obj_child_objects = obj_el.find(f'{{{MD}}}ChildObjects')
 
-            # Объект таким, каким он описан в расширении: реквизиты, измерения, ресурсы, ТЧ и колонки ТЧ —
-            # и заимствованные, и собственные. По этому описанию платформа разрешает пути любой формы
+            # Объект таким, каким он описан в расширении: реквизиты (и реквизиты адресации задачи, признаки
+            # учёта плана счетов), измерения, ресурсы, ТЧ и колонки ТЧ — и заимствованные, и собственные. По этому описанию платформа разрешает пути любой формы
             # расширения (проверка 14) и таблицы <AdditionalColumns> (проверка 12); незаимствованный
-            # подобъект источника она не видит. Имена регистронезависимы, как в языке 1С: ключи — upper().
+            # подобъект источника она не видит. Имена (и ключ объекта) регистронезависимы, как в языке 1С: upper().
             ix_names = set()
             ix_ts_columns = {}
             if obj_child_objects is not None:
@@ -849,7 +874,8 @@ def main():
                     if not isinstance(ix_sub.tag, str):
                         continue
                     ix_ln = etree.QName(ix_sub.tag).localname
-                    if ix_ln not in ('Attribute', 'Dimension', 'Resource', 'TabularSection'):
+                    if ix_ln not in ('Attribute', 'Dimension', 'Resource', 'TabularSection',
+                                     'AddressingAttribute', 'AccountingFlag', 'ExtDimensionAccountingFlag'):
                         continue
                     ix_name_el = ix_sub.find(f'{{{MD}}}Properties/{{{MD}}}Name')
                     if ix_name_el is None or not ix_name_el.text:
@@ -863,7 +889,7 @@ def main():
                         for c in ix_sub.findall(f'{{{MD}}}ChildObjects/{{{MD}}}Attribute/{{{MD}}}Properties/{{{MD}}}Name')
                         if c.text
                     }
-            ext_obj_index[f'{type_name}.{child_name}'] = {'Names': ix_names, 'TSColumns': ix_ts_columns}
+            ext_obj_index[f'{type_name}.{child_name}'.upper()] = {'Names': ix_names, 'TSColumns': ix_ts_columns}
 
             if obj_child_objects is not None:
                 ctx = f'{type_name}.{child_name}'
@@ -1098,12 +1124,16 @@ def main():
         # таких формах молча не срабатывали. Ищем сначала в <Attributes> формы, потом в <BaseForm>.
         root_match = MAIN_ATTR_RE.search(raw)
         root_name = root_match.group(1) if root_match else ""
+        # Только своя часть формы: <BaseForm> — снимок исходной формы, его платформа разрешает по конфигурации.
         ac_tables = set()
         if root_name:
-            ac_tables = set(re.findall(r'<AdditionalColumns table="' + re.escape(root_name) + r'\.(\w+)"', raw))
-        owner_key = main_attribute_owner_key(root_match.group(0) if root_match else '', ctx.split('.Form.')[0])
-        if ac_tables and owner_key:
-            owner_ts = ext_obj_index.get(owner_key, {}).get('TSColumns', {})
+            own_part = raw.split('<BaseForm', 1)[0]
+            ac_tables = set(re.findall(r'<AdditionalColumns table="' + re.escape(root_name) + r'\.(\w+)"', own_part))
+        # ТЧ ищется у объекта основного реквизита; тип не объект — у владельца формы.
+        ac_target = main_attribute_target(root_match.group(0)) if root_match else None
+        owner_key = ac_target['Key'] if ac_target else ctx.split('.Form.')[0]
+        if ac_tables:
+            owner_ts = ext_obj_index.get(owner_key.upper(), {}).get('TSColumns', {})
             for tbl_name in sorted(ac_tables):
                 dep_check_count += 1
                 if tbl_name.upper() not in owner_ts:
@@ -1156,8 +1186,8 @@ def main():
     # таким, каким он описан в расширении: заимствованные и собственные реквизиты, ТЧ и их колонки
     # (индекс ext_obj_index, проверка 10). Незаимствованный реквизит источника она не видит даже
     # на заимствованной форме, где он был в исходной: «Неверный путь к данным». Имена — без учёта
-    # регистра. Второй сегмент проверяется только у табличной части: у ссылочного реквизита он ведёт в
-    # другой объект.
+    # регистра. Стандартные реквизиты — по типу основного реквизита (MAIN_ATTR_STANDARD_FIELDS).
+    # Второй сегмент проверяется только у табличной части: у ссылочного реквизита он ведёт в другой объект.
     if not r.stopped and forms_with_text:
         check14_ok = True
         path_check_count = 0
@@ -1166,43 +1196,51 @@ def main():
         for fw in forms_with_text:
             raw = fw['RawText']
             ctx = fw['Context']
+            # Только своя часть формы: <BaseForm> — снимок исходной формы, его платформа разрешает по
+            # конфигурации, а не по расширению.
+            own = raw.split('<BaseForm', 1)[0]
             # Корень путей — имя основного реквизита формы (см. проверку 12). Нет его в <Attributes>
             # формы — путей с корнем не бывает, проверять нечего.
-            root_match14 = MAIN_ATTR_RE.search(raw)
+            root_match14 = MAIN_ATTR_RE.search(own)
             if not root_match14:
                 continue
             root_name14 = root_match14.group(1)
-            # У динамического списка набор полей — результат его запроса, а не состав объекта:
-            # туда входят и стандартные поля списка (Ref, Date, DefaultPicture), и псевдонимы
-            # запроса. Сверять такие пути с ChildObjects объекта нельзя — будут ложные ошибки
+            # Тип не объект метаданных — пути не по составу объекта. Так и у динамического списка: его поля —
+            # результат запроса, туда входят стандартные поля списка (Ref, Date, DefaultPicture) и псевдонимы
             # (корпусная проверка: 3383 таких сегмента на 1094 формах списка УТ).
-            if '>cfg:DynamicList<' in root_match14.group(0):
+            target = main_attribute_target(root_match14.group(0))
+            if target is None:
                 continue
-            owner_key = main_attribute_owner_key(root_match14.group(0), fw['OwnerKey'])
-            if not owner_key:
-                continue
-            owner_entry = ext_obj_index.get(owner_key)
+            owner_key = target['Key']
+            owner_entry = ext_obj_index.get(owner_key.upper())
             if owner_entry is None:
+                # Объекта основного реквизита в расширении нет — тип не разрешается, и платформа не читает
+                # форму целиком: «Исключение XDTO произошло при чтении файла».
+                r.error(f"14. {ctx}: основной реквизит '{root_name14}' типа {target['TypeName']} — объекта {owner_key} в расширении нет (заимствуйте его)")
+                check14_ok = False
+                continue
+            std_fields = MAIN_ATTR_STANDARD_FIELDS.get(target['Category'])
+            if std_fields is None:
                 continue
 
             # Колонки ТЧ — из описания в расширении плюс объявленные в самой форме через
             # <Columns>/<AdditionalColumns table="Объект.X">. Копия, чтобы не дописывать в индекс.
             ts_columns = {ts: set(cols) for ts, cols in owner_entry['TSColumns'].items()}
             root_pat14 = re.escape(root_name14)
-            for acm in re.finditer(r'<AdditionalColumns table="' + root_pat14 + r'\.(\w+)">(.*?)</AdditionalColumns>', raw, re.DOTALL):
+            for acm in re.finditer(r'<AdditionalColumns table="' + root_pat14 + r'\.(\w+)">(.*?)</AdditionalColumns>', own, re.DOTALL):
                 cols = ts_columns.setdefault(acm.group(1).upper(), set())
                 for cm in re.finditer(r'<Column name="(\w+)"', acm.group(2)):
                     cols.add(cm.group(1).upper())
 
             # Ключ — путь без учёта регистра, как у хеш-таблицы PS-порта: первое написание остаётся
             bad_paths = {}
-            for m in re.finditer(r'<(?:\w+:)?\w*DataPath[^>]*>' + root_pat14 + r'\.([^<]+)</(?:\w+:)?\w*DataPath>', raw):
+            for m in re.finditer(r'<(?:\w+:)?\w*DataPath[^>]*>' + root_pat14 + r'\.([^<]+)</(?:\w+:)?\w*DataPath>', own):
                 # Индекс строки ТЧ (Объект.Товары[0].Цена) к имени не относится
                 segments = [re.sub(r'\[.*$', '', s) for s in m.group(1).split('.')]
                 seg0 = segments[0]
                 seg0_ci = seg0.upper()
                 path_check_count += 1
-                if seg0_ci in std_fields_ci:
+                if seg0_ci in std_fields:
                     continue
                 if seg0_ci not in owner_entry['Names']:
                     bad = f'{root_name14}.{seg0}'
