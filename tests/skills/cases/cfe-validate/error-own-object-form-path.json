@@ -1,0 +1,76 @@
+{
+  "name": "Ошибка: висячий путь в форме собственного объекта расширения — ловится и без -ConfigPath",
+  "preRun": [
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Catalog",
+        "name": "Тест_Справочник",
+        "attributes": [
+          "Тест_Код: String(10)"
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Catalogs/Тест_Справочник.xml",
+        "-FormName": "Тест_ФормаЭлемента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Т",
+        "elements": [
+          {
+            "input": "Тест_Код",
+            "path": "Объект.Тест_Код"
+          },
+          {
+            "input": "Тест_Наименование",
+            "path": "Объект.Description"
+          },
+          {
+            "input": "Тест_Нет",
+            "path": "Объект.НетТакого"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "CatalogObject.Тест_Справочник",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/cfe/Catalogs/Тест_Справочник/Forms/Тест_ФормаЭлемента/Ext/Form.xml"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "путь 'Объект.НетТакого'",
+    "stdoutNotContains": [
+      "путь 'Объект.Тест_Код'",
+      "путь 'Объект.Description'"
+    ]
+  }
+}

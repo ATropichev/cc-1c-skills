@@ -1,0 +1,252 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Form xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:dcscor="http://v8.1c.ru/8.1/data-composition-system/core" xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:dcsset="http://v8.1c.ru/8.1/data-composition-system/settings" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17">
+	<Title>
+		<v8:item>
+			<v8:lang>ru</v8:lang>
+			<v8:content>Заказ клиента</v8:content>
+		</v8:item>
+	</Title>
+	<AutoTitle>false</AutoTitle>
+	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
+	<ChildItems>
+		<InputField name="Комментарий" id="1">
+			<DataPath>Объект.Комментарий</DataPath>
+			<ContextMenu name="КомментарийКонтекстноеМеню" id="2"/>
+			<ExtendedTooltip name="КомментарийРасширеннаяПодсказка" id="3"/>
+		</InputField>
+		<InputField name="Статус" id="4">
+			<DataPath>Объект.Статус</DataPath>
+			<ContextMenu name="СтатусКонтекстноеМеню" id="5"/>
+			<ExtendedTooltip name="СтатусРасширеннаяПодсказка" id="6"/>
+		</InputField>
+		<Table name="Товары" id="7">
+			<DataPath>Объект.Товары</DataPath>
+			<ContextMenu name="ТоварыКонтекстноеМеню" id="8"/>
+			<AutoCommandBar name="ТоварыКоманднаяПанель" id="9"/>
+			<ExtendedTooltip name="ТоварыРасширеннаяПодсказка" id="10"/>
+			<SearchStringAddition name="ТоварыСтрокаПоиска" id="11">
+				<AdditionSource>
+					<Item>Товары</Item>
+					<Type>SearchStringRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="ТоварыСтрокаПоискаКонтекстноеМеню" id="12"/>
+				<ExtendedTooltip name="ТоварыСтрокаПоискаРасширеннаяПодсказка" id="13"/>
+			</SearchStringAddition>
+			<ViewStatusAddition name="ТоварыСостояниеПросмотра" id="14">
+				<AdditionSource>
+					<Item>Товары</Item>
+					<Type>ViewStatusRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="ТоварыСостояниеПросмотраКонтекстноеМеню" id="15"/>
+				<ExtendedTooltip name="ТоварыСостояниеПросмотраРасширеннаяПодсказка" id="16"/>
+			</ViewStatusAddition>
+			<SearchControlAddition name="ТоварыУправлениеПоиском" id="17">
+				<AdditionSource>
+					<Item>Товары</Item>
+					<Type>SearchControl</Type>
+				</AdditionSource>
+				<ContextMenu name="ТоварыУправлениеПоискомКонтекстноеМеню" id="18"/>
+				<ExtendedTooltip name="ТоварыУправлениеПоискомРасширеннаяПодсказка" id="19"/>
+			</SearchControlAddition>
+			<ChildItems>
+				<InputField name="ТоварыКоличество" id="20">
+					<DataPath>Объект.Товары.Количество</DataPath>
+					<ContextMenu name="ТоварыКоличествоКонтекстноеМеню" id="21"/>
+					<ExtendedTooltip name="ТоварыКоличествоРасширеннаяПодсказка" id="22"/>
+				</InputField>
+				<InputField name="Тест_ТоварыЦена" id="1000009">
+					<DataPath>Объект.Товары.Тест_Цена</DataPath>
+					<Title>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Цена</v8:content>
+						</v8:item>
+					</Title>
+					<ContextMenu name="Тест_ТоварыЦенаКонтекстноеМеню" id="1000010"/>
+					<ExtendedTooltip name="Тест_ТоварыЦенаРасширеннаяПодсказка" id="1000011"/>
+				</InputField>
+				<InputField name="Тест_ТоварыКоличествоРегистр" id="1000012">
+					<DataPath>Объект.Товары.количество</DataPath>
+					<Title>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Количество</v8:content>
+						</v8:item>
+					</Title>
+					<ContextMenu name="Тест_ТоварыКоличествоРегистрКонтекстноеМеню" id="1000013"/>
+					<ExtendedTooltip name="Тест_ТоварыКоличествоРегистрРасширеннаяПодсказка" id="1000014"/>
+				</InputField>
+			</ChildItems>
+		</Table>
+		<InputField name="Тест_Склад" id="1000000">
+			<DataPath>Объект.Тест_Склад</DataPath>
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Склад</v8:content>
+				</v8:item>
+			</Title>
+			<ContextMenu name="Тест_СкладКонтекстноеМеню" id="1000001"/>
+			<ExtendedTooltip name="Тест_СкладРасширеннаяПодсказка" id="1000002"/>
+		</InputField>
+		<InputField name="Тест_СкладРегистр" id="1000003">
+			<DataPath>Объект.тест_склад</DataPath>
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Склад</v8:content>
+				</v8:item>
+			</Title>
+			<ContextMenu name="Тест_СкладРегистрКонтекстноеМеню" id="1000004"/>
+			<ExtendedTooltip name="Тест_СкладРегистрРасширеннаяПодсказка" id="1000005"/>
+		</InputField>
+		<InputField name="Тест_КомментарийРегистр" id="1000006">
+			<DataPath>Объект.КОММЕНТАРИЙ</DataPath>
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Комментарий</v8:content>
+				</v8:item>
+			</Title>
+			<ContextMenu name="Тест_КомментарийРегистрКонтекстноеМеню" id="1000007"/>
+			<ExtendedTooltip name="Тест_КомментарийРегистрРасширеннаяПодсказка" id="1000008"/>
+		</InputField>
+		<Table name="Тест_Услуги" id="1000015">
+			<DataPath>Объект.Тест_Услуги</DataPath>
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Услуги</v8:content>
+				</v8:item>
+			</Title>
+			<ContextMenu name="Тест_УслугиКонтекстноеМеню" id="1000016"/>
+			<AutoCommandBar name="Тест_УслугиКоманднаяПанель" id="1000017"/>
+			<ExtendedTooltip name="Тест_УслугиРасширеннаяПодсказка" id="1000018"/>
+			<SearchStringAddition name="Тест_УслугиСтрокаПоиска" id="1000019">
+				<AdditionSource>
+					<Item>Тест_Услуги</Item>
+					<Type>SearchStringRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_УслугиСтрокаПоискаКонтекстноеМеню" id="1000020"/>
+				<ExtendedTooltip name="Тест_УслугиСтрокаПоискаРасширеннаяПодсказка" id="1000021"/>
+			</SearchStringAddition>
+			<ViewStatusAddition name="Тест_УслугиСостояниеПросмотра" id="1000022">
+				<AdditionSource>
+					<Item>Тест_Услуги</Item>
+					<Type>ViewStatusRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_УслугиСостояниеПросмотраКонтекстноеМеню" id="1000023"/>
+				<ExtendedTooltip name="Тест_УслугиСостояниеПросмотраРасширеннаяПодсказка" id="1000024"/>
+			</ViewStatusAddition>
+			<SearchControlAddition name="Тест_УслугиУправлениеПоиском" id="1000025">
+				<AdditionSource>
+					<Item>Тест_Услуги</Item>
+					<Type>SearchControl</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_УслугиУправлениеПоискомКонтекстноеМеню" id="1000026"/>
+				<ExtendedTooltip name="Тест_УслугиУправлениеПоискомРасширеннаяПодсказка" id="1000027"/>
+			</SearchControlAddition>
+			<ChildItems>
+				<InputField name="Тест_УслугиНомерСтроки" id="1000028">
+					<DataPath>Объект.Тест_Услуги.LineNumber</DataPath>
+					<Title>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>N</v8:content>
+						</v8:item>
+					</Title>
+					<ContextMenu name="Тест_УслугиНомерСтрокиКонтекстноеМеню" id="1000029"/>
+					<ExtendedTooltip name="Тест_УслугиНомерСтрокиРасширеннаяПодсказка" id="1000030"/>
+				</InputField>
+				<InputField name="Тест_УслугиСумма" id="1000031">
+					<DataPath>Объект.Тест_Услуги.Тест_Сумма</DataPath>
+					<Title>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Сумма</v8:content>
+						</v8:item>
+					</Title>
+					<ContextMenu name="Тест_УслугиСуммаКонтекстноеМеню" id="1000032"/>
+					<ExtendedTooltip name="Тест_УслугиСуммаРасширеннаяПодсказка" id="1000033"/>
+				</InputField>
+			</ChildItems>
+		</Table>
+	</ChildItems>
+	<Attributes>
+		<Attribute name="Объект" id="1000001">
+			<Type>
+				<v8:Type>cfg:DocumentObject.ЗаказКлиента</v8:Type>
+			</Type>
+			<MainAttribute>true</MainAttribute>
+			<SavedData>true</SavedData>
+		</Attribute>
+	</Attributes>
+	<BaseForm version="2.17">
+		<Title>
+			<v8:item>
+				<v8:lang>ru</v8:lang>
+				<v8:content>Заказ клиента</v8:content>
+			</v8:item>
+		</Title>
+		<AutoTitle>false</AutoTitle>
+		<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
+		<ChildItems>
+			<InputField name="Комментарий" id="1">
+				<DataPath>Объект.Комментарий</DataPath>
+				<ContextMenu name="КомментарийКонтекстноеМеню" id="2"/>
+				<ExtendedTooltip name="КомментарийРасширеннаяПодсказка" id="3"/>
+			</InputField>
+			<InputField name="Статус" id="4">
+				<DataPath>Объект.Статус</DataPath>
+				<ContextMenu name="СтатусКонтекстноеМеню" id="5"/>
+				<ExtendedTooltip name="СтатусРасширеннаяПодсказка" id="6"/>
+			</InputField>
+			<Table name="Товары" id="7">
+				<DataPath>Объект.Товары</DataPath>
+				<ContextMenu name="ТоварыКонтекстноеМеню" id="8"/>
+				<AutoCommandBar name="ТоварыКоманднаяПанель" id="9"/>
+				<ExtendedTooltip name="ТоварыРасширеннаяПодсказка" id="10"/>
+				<SearchStringAddition name="ТоварыСтрокаПоиска" id="11">
+					<AdditionSource>
+						<Item>Товары</Item>
+						<Type>SearchStringRepresentation</Type>
+					</AdditionSource>
+					<ContextMenu name="ТоварыСтрокаПоискаКонтекстноеМеню" id="12"/>
+					<ExtendedTooltip name="ТоварыСтрокаПоискаРасширеннаяПодсказка" id="13"/>
+				</SearchStringAddition>
+				<ViewStatusAddition name="ТоварыСостояниеПросмотра" id="14">
+					<AdditionSource>
+						<Item>Товары</Item>
+						<Type>ViewStatusRepresentation</Type>
+					</AdditionSource>
+					<ContextMenu name="ТоварыСостояниеПросмотраКонтекстноеМеню" id="15"/>
+					<ExtendedTooltip name="ТоварыСостояниеПросмотраРасширеннаяПодсказка" id="16"/>
+				</ViewStatusAddition>
+				<SearchControlAddition name="ТоварыУправлениеПоиском" id="17">
+					<AdditionSource>
+						<Item>Товары</Item>
+						<Type>SearchControl</Type>
+					</AdditionSource>
+					<ContextMenu name="ТоварыУправлениеПоискомКонтекстноеМеню" id="18"/>
+					<ExtendedTooltip name="ТоварыУправлениеПоискомРасширеннаяПодсказка" id="19"/>
+				</SearchControlAddition>
+				<ChildItems>
+					<InputField name="ТоварыКоличество" id="20">
+						<DataPath>Объект.Товары.Количество</DataPath>
+						<ContextMenu name="ТоварыКоличествоКонтекстноеМеню" id="21"/>
+						<ExtendedTooltip name="ТоварыКоличествоРасширеннаяПодсказка" id="22"/>
+					</InputField>
+				</ChildItems>
+			</Table>
+		</ChildItems>
+		<Attributes>
+			<Attribute name="Объект" id="1000001">
+				<Type>
+					<v8:Type>cfg:DocumentObject.ЗаказКлиента</v8:Type>
+				</Type>
+				<MainAttribute>true</MainAttribute>
+				<SavedData>true</SavedData>
+			</Attribute>
+		</Attributes>
+	</BaseForm>
+</Form>

@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.19 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.20 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -238,6 +238,19 @@ $script:standardObjectFields = @(
 	"ЭтоГруппа","НомерСтроки","Номер","Дата","Проведен","ИмяПредопределенныхДанных",
 	"Движения","ВерсияДанных","КоличествоСтрок"
 )
+
+# Объект, по которому разрешаются пути формы, — тип её основного реквизита, а не владелец формы:
+# форма обработки бывает с основным реквизитом DocumentObject.X. Тип не объект метаданных
+# (таблица значений и т.п.) — $null, путь не по составу объекта; типа нет — владелец формы.
+function Get-MainAttributeOwnerKey {
+	param([string]$mainAttrXml, [string]$formOwnerKey)
+	if ($mainAttrXml -notmatch '<v8:Type>') { return $formOwnerKey }
+	$tm = [regex]::Match($mainAttrXml, '<v8:Type>cfg:(\w+?)(?:Object|RecordManager|RecordSet)\.([^<]+)</v8:Type>')
+	if ($tm.Success -and $childTypeDirMap.ContainsKey($tm.Groups[1].Value)) {
+		return "$($tm.Groups[1].Value).$($tm.Groups[2].Value)"
+	}
+	return $null
+}
 
 # Valid enum values for extension properties
 $validEnumValues = @{
@@ -636,7 +649,7 @@ if ($script:stopped) { & $finalize; exit 1 }
 
 # --- Check 9: Borrowed objects validation + Check 10: Sub-items ---
 $script:enumValuesIndex = @{}
-$script:borrowedTSIndex = @{}
+$script:extObjIndex = @{}
 $script:formList = @()
 
 # Helper: check if sub-item has explicit borrowed metadata
@@ -763,6 +776,31 @@ if ($childObjNode) {
 
 		# --- Check 10: Sub-items (Attribute, TabularSection, EnumValue, Form) ---
 		$objChildObjects = $objEl.SelectSingleNode("md:ChildObjects", $objNs)
+
+		# Объект таким, каким он описан в расширении: реквизиты, измерения, ресурсы, ТЧ и колонки ТЧ —
+		# и заимствованные, и собственные. По этому описанию платформа разрешает пути любой формы
+		# расширения (проверка 14) и таблицы <AdditionalColumns> (проверка 12); незаимствованный
+		# подобъект источника она не видит. Имена регистронезависимы, как в языке 1С.
+		$ixNames = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+		$ixTSColumns = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+		if ($objChildObjects) {
+			foreach ($ixSub in $objChildObjects.ChildNodes) {
+				if ($ixSub.NodeType -ne 'Element') { continue }
+				if ($ixSub.LocalName -notin @('Attribute','Dimension','Resource','TabularSection')) { continue }
+				$ixNameNode = $ixSub.SelectSingleNode("md:Properties/md:Name", $objNs)
+				if (-not $ixNameNode) { continue }
+				$ixName = $ixNameNode.InnerText.Trim()
+				$ixNames[$ixName] = $true
+				if ($ixSub.LocalName -ne 'TabularSection') { continue }
+				$ixCols = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+				foreach ($ixColName in $ixSub.SelectNodes("md:ChildObjects/md:Attribute/md:Properties/md:Name", $objNs)) {
+					$ixCols[$ixColName.InnerText.Trim()] = $true
+				}
+				$ixTSColumns[$ixName] = $ixCols
+			}
+		}
+		$script:extObjIndex["${typeName}.${childName}"] = @{ Names = $ixNames; TSColumns = $ixTSColumns }
+
 		if ($objChildObjects) {
 			$ctx = "${typeName}.${childName}"
 			foreach ($subItem in $objChildObjects.ChildNodes) {
@@ -786,12 +824,6 @@ if ($childObjNode) {
 						$tsInfo = $subItem.SelectSingleNode("md:InternalInfo", $objNs)
 						$tsName = $subItem.SelectSingleNode("md:Properties/md:Name", $objNs)
 						$tsLabel = if ($tsName) { $tsName.InnerText } else { "?" }
-						# Индекс заимствованных ТЧ — по нему Check 12 сверяет <AdditionalColumns table="Объект.X">
-						if ($tsName) {
-							$tsKey = "${typeName}.${childName}"
-							if (-not $script:borrowedTSIndex.ContainsKey($tsKey)) { $script:borrowedTSIndex[$tsKey] = @{} }
-							$script:borrowedTSIndex[$tsKey][$tsName.InnerText] = $true
-						}
 						if (-not $tsInfo) {
 							Report-Error "10. ${ctx}: TabularSection.${tsLabel} missing InternalInfo"
 							$check10Ok = $false
@@ -875,6 +907,8 @@ if ($script:stopped) { & $finalize; exit 1 }
 
 # --- Check 11: Borrowed form structure ---
 $script:borrowedFormsWithTree = @()
+# Все формы объектов расширения с текстом Form.xml — заимствованные и собственные (проверка 14)
+$script:formsWithText = @()
 $check11Ok = $true
 $formCount = 0
 
@@ -937,6 +971,9 @@ foreach ($fi in $script:formList) {
 
 	# Read Form.xml as raw text for BaseForm checks
 	$formRawText = [System.IO.File]::ReadAllText($formXmlFile, [System.Text.Encoding]::UTF8)
+	$script:formsWithText += @{
+		RawText = $formRawText; Context = $ctx; OwnerKey = "$($fi.TypeName).$($fi.ObjName)"
+	}
 
 	if ($formRawText -match '<BaseForm') {
 		# Check BaseForm has version
@@ -1029,8 +1066,8 @@ foreach ($bf in $script:borrowedFormsWithTree) {
 	if ($rootMatch.Success) { $rootName = $rootMatch.Groups[1].Value }
 
 	# <AdditionalColumns table="Объект.X"> — доп. колонки табличной части, объявленные в самой форме.
-	# Колонки есть, а самой ТЧ в расширении нет → платформа отвергает загрузку: «Неверный путь к
-	# данным» плюс «Колонки не могут быть добавлены к реквизиту».
+	# Колонки есть, а самой ТЧ в расширении нет (ни заимствованной, ни собственной) → платформа
+	# отвергает загрузку: «Неверный путь к данным» плюс «Колонки не могут быть добавлены к реквизиту».
 	$acTables = @{}
 	if ($rootName) {
 		$rootPat = [regex]::Escape($rootName)
@@ -1041,13 +1078,13 @@ foreach ($bf in $script:borrowedFormsWithTree) {
 	# Соседние проверки этого блока эвристичны (имя стиля добывается регуляркой), поэтому там
 	# предупреждение. Здесь сигнал точный — имя ТЧ берётся из атрибута, — а последствие жёсткое,
 	# поэтому ошибка.
-	if ($acTables.Count -gt 0) {
-		$ownerKey = ($ctx -split '\.Form\.')[0]
-		$ownerTS = $script:borrowedTSIndex[$ownerKey]
+	$ownerKey = Get-MainAttributeOwnerKey $rootMatch.Value (($ctx -split '\.Form\.')[0])
+	if ($acTables.Count -gt 0 -and $ownerKey) {
+		$ownerEntry = $script:extObjIndex[$ownerKey]
 		foreach ($tblName in $acTables.Keys) {
 			$depCheckCount++
-			if (-not $ownerTS -or -not $ownerTS.ContainsKey($tblName)) {
-				Report-Error "12. ${ctx}: <AdditionalColumns table=`"${rootName}.${tblName}`"> — TabularSection.${tblName} not borrowed in extension"
+			if (-not $ownerEntry -or -not $ownerEntry.TSColumns.ContainsKey($tblName)) {
+				Report-Error "12. ${ctx}: <AdditionalColumns table=`"${rootName}.${tblName}`"> — TabularSection.${tblName} is neither borrowed nor added in extension"
 				$check12Ok = $false
 			}
 		}
@@ -1088,8 +1125,8 @@ if ($script:borrowedFormsWithTree.Count -eq 0) {
 	Report-OK "13. TypeLink: clean"
 }
 
-# Каталог конфигурации-источника из -ConfigPath (каталог или путь к Configuration.xml). Общий для
-# проверок 14 и 18; есть ли там Configuration.xml, каждая проверка решает и сообщает сама.
+# Каталог конфигурации-источника из -ConfigPath (каталог или путь к Configuration.xml) для
+# проверки 18; есть ли там Configuration.xml, она решает и сообщает сама.
 function Get-SourceConfigRoot {
 	$root = $ConfigPath
 	if (-not [System.IO.Path]::IsPathRooted($root)) { $root = Join-Path (Get-Location).Path $root }
@@ -1097,121 +1134,78 @@ function Get-SourceConfigRoot {
 	return $root
 }
 
-# --- Check 14: пути Объект.* заимствованных форм против конфигурации-источника ---
-# Требует -ConfigPath: отличить живой путь от висячего можно только по исходному объекту.
-# «Объект.Партнер» валиден и без заимствования реквизита (наследуется от базы), а «Объект.Товары.Артикул»
-# не разрешится нигде, если Артикул — не реквизит объекта и не колонка из <Columns> самой формы.
-# Такой путь платформа отвергает на загрузке: «Неверный путь к данным».
-if (-not $script:stopped -and $script:borrowedFormsWithTree.Count -gt 0) {
-	if (-not $ConfigPath) {
-		Out-Line "[INFO]  14. Пути Объект.* против конфигурации-источника не проверялись: не задан -ConfigPath"
-	} else {
-		$cfgRoot = Get-SourceConfigRoot
+# --- Check 14: пути <Основной реквизит>.* форм расширения против объекта в расширении ---
+# Платформа разрешает путь любой формы расширения — и заимствованной, и собственной — по объекту
+# таким, каким он описан в расширении: заимствованные и собственные реквизиты, ТЧ и их колонки
+# (индекс $script:extObjIndex, проверка 10). Незаимствованный реквизит источника она не видит даже
+# на заимствованной форме, где он был в исходной: «Неверный путь к данным». Имена — без учёта
+# регистра. Второй сегмент проверяется только у табличной части: у ссылочного реквизита он ведёт в
+# другой объект.
+if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
+	$check14Ok = $true
+	$pathCheckCount = 0
 
-		if (-not (Test-Path (Join-Path $cfgRoot "Configuration.xml"))) {
-			Report-Warn "14. -ConfigPath '$ConfigPath': Configuration.xml не найден — проверка путей пропущена"
-			$script:srcRootWarned = $true
-		} else {
-			$check14Ok = $true
-			$pathCheckCount = 0
+	foreach ($fw in $script:formsWithText) {
+		$raw = $fw.RawText
+		$ctx = $fw.Context
+		# Корень путей — имя основного реквизита формы (см. проверку 12). Нет его в <Attributes>
+		# формы — путей с корнем не бывает, проверять нечего.
+		$rootMatch14 = [regex]::Match($raw, '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
+		if (-not $rootMatch14.Success) { continue }
+		$rootName = $rootMatch14.Groups[1].Value
+		# У динамического списка набор полей — результат его запроса, а не состав объекта:
+		# туда входят и стандартные поля списка (Ref, Date, DefaultPicture), и псевдонимы
+		# запроса. Сверять такие пути с ChildObjects объекта нельзя — будут ложные ошибки
+		# (корпусная проверка: 3383 таких сегмента на 1094 формах списка УТ).
+		if ($rootMatch14.Value -match '>cfg:DynamicList<') { continue }
+		$ownerKey = Get-MainAttributeOwnerKey $rootMatch14.Value $fw.OwnerKey
+		if (-not $ownerKey) { continue }
+		$ownerEntry = $script:extObjIndex[$ownerKey]
+		if (-not $ownerEntry) { continue }
 
-			foreach ($bf in $script:borrowedFormsWithTree) {
-				$raw = $bf.RawText
-				$ctx = $bf.Context
-				# Корень путей — имя основного реквизита формы (см. проверку 12). Нет его ни в
-				# <Attributes> формы, ни в <BaseForm> — путей с корнем не бывает, проверять нечего.
-				$rootMatch14 = [regex]::Match($raw, '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
-				if (-not $rootMatch14.Success) { continue }
-				$rootName = $rootMatch14.Groups[1].Value
-				# У динамического списка набор полей — результат его запроса, а не состав объекта:
-				# туда входят и стандартные поля списка (Ref, Date, DefaultPicture), и псевдонимы
-				# запроса. Сверять такие пути с ChildObjects объекта нельзя — будут ложные ошибки
-				# (корпусная проверка: 3383 таких сегмента на 1094 формах списка УТ).
-				if ($rootMatch14.Value -match '>cfg:DynamicList<') { continue }
-				$ownerKey = ($ctx -split '\.Form\.')[0]
-				$ownerParts = $ownerKey -split '\.', 2
-				if ($ownerParts.Count -lt 2) { continue }
-				$ownerType = $ownerParts[0]; $ownerName = $ownerParts[1]
-				$ownerDir = $childTypeDirMap[$ownerType]
-				if (-not $ownerDir) { continue }
-				$srcObjFile = Join-Path (Join-Path $cfgRoot $ownerDir) "${ownerName}.xml"
-				if (-not (Test-Path $srcObjFile)) {
-					Report-Warn "14. ${ctx}: объект-источник не найден в конфигурации ($ownerDir/${ownerName}.xml)"
-					continue
-				}
-
-				# Имена, доступные первым сегментом пути: реквизиты и ТЧ объекта-источника.
-				# Плюс для каждой ТЧ — её колонки: второй сегмент проверяем по ним (именно там
-				# и жил дефект — Объект.Товары.Артикул при живой ТЧ Товары).
-				$srcNames = @{}
-				$srcTSColumns = @{}
-				$srcDoc = New-Object System.Xml.XmlDocument
-				$srcDoc.PreserveWhitespace = $false
-				$srcDoc.Load($srcObjFile)
-				$srcObjEl = $null
-				foreach ($c in $srcDoc.DocumentElement.ChildNodes) {
-					if ($c.NodeType -eq 'Element') { $srcObjEl = $c; break }
-				}
-				$srcChildObjects = if ($srcObjEl) { $srcObjEl.SelectSingleNode("*[local-name()='ChildObjects']") } else { $null }
-				if ($srcChildObjects) {
-					foreach ($sub in $srcChildObjects.ChildNodes) {
-						if ($sub.NodeType -ne 'Element') { continue }
-						# У регистра дочерние объекты — Dimension/Resource, а не Attribute: без них замена
-						# корня превратила бы тихий пропуск в ложные ошибки на форме записи.
-						if ($sub.LocalName -notin @('Attribute','Dimension','Resource','TabularSection')) { continue }
-						$nameNode = $sub.SelectSingleNode("*[local-name()='Properties']/*[local-name()='Name']")
-						if (-not $nameNode) { continue }
-						$subName = $nameNode.InnerText.Trim()
-						$srcNames[$subName] = $true
-						if ($sub.LocalName -ne 'TabularSection') { continue }
-						$cols = @{}
-						foreach ($colName in $sub.SelectNodes("*[local-name()='ChildObjects']/*[local-name()='Attribute']/*[local-name()='Properties']/*[local-name()='Name']")) {
-							$cols[$colName.InnerText.Trim()] = $true
-						}
-						$srcTSColumns[$subName] = $cols
-					}
-				}
-				# Плюс колонки, объявленные в самой форме через <Columns>/<AdditionalColumns table="Объект.X">
-				$rootPat14 = [regex]::Escape($rootName)
-				foreach ($acm in [regex]::Matches($raw, "(?s)<AdditionalColumns table=`"${rootPat14}\.(\w+)`">(.*?)</AdditionalColumns>")) {
-					$tbl = $acm.Groups[1].Value
-					if (-not $srcTSColumns.ContainsKey($tbl)) { $srcTSColumns[$tbl] = @{} }
-					foreach ($cm in [regex]::Matches($acm.Groups[2].Value, '<Column name="(\w+)"')) {
-						$srcTSColumns[$tbl][$cm.Groups[1].Value] = $true
-					}
-				}
-
-				$badPaths = @{}
-				foreach ($m in [regex]::Matches($raw, "<(?:\w+:)?\w*DataPath[^>]*>${rootPat14}\.([^<]+)</(?:\w+:)?\w*DataPath>")) {
-					$segments = $m.Groups[1].Value -split '\.'
-					$seg0 = $segments[0]
-					$pathCheckCount++
-					if ($script:standardObjectFields -contains $seg0) { continue }
-					if (-not $srcNames.ContainsKey($seg0)) {
-						$badPaths["${rootName}.${seg0}"] = "у ${ownerKey} нет такого реквизита или табличной части"
-						continue
-					}
-					# Второй сегмент проверяем только для табличных частей: у ссылочного реквизита
-					# он ведёт в чужой объект, и это уже другая проверка.
-					if ($segments.Count -lt 2 -or -not $srcTSColumns.ContainsKey($seg0)) { continue }
-					$seg1 = $segments[1]
-					if ($script:standardObjectFields -contains $seg1) { continue }
-					# Итог колонки — псевдополе платформы: Total<Колонка> при живой колонке законен
-					if ($seg1 -like "Total*" -and $srcTSColumns[$seg0].ContainsKey($seg1.Substring(5))) { continue }
-					if (-not $srcTSColumns[$seg0].ContainsKey($seg1)) {
-						$badPaths["${rootName}.${seg0}.${seg1}"] = "у табличной части ${seg0} нет колонки ${seg1}, и <Columns> формы её не объявляет"
-					}
-				}
-				foreach ($bad in ($badPaths.Keys | Sort-Object)) {
-					Report-Error "14. ${ctx}: путь '${bad}' — $($badPaths[$bad])"
-					$check14Ok = $false
-				}
-			}
-
-			if ($check14Ok) {
-				Report-OK "14. Object paths vs source config: $pathCheckCount checked"
+		# Колонки ТЧ — из описания в расширении плюс объявленные в самой форме через
+		# <Columns>/<AdditionalColumns table="Объект.X">. Копия, чтобы не дописывать в индекс.
+		$tsColumns = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+		foreach ($tsName in $ownerEntry.TSColumns.Keys) {
+			$tsColumns[$tsName] = New-Object System.Collections.Hashtable ($ownerEntry.TSColumns[$tsName], [StringComparer]::OrdinalIgnoreCase)
+		}
+		$rootPat14 = [regex]::Escape($rootName)
+		foreach ($acm in [regex]::Matches($raw, "(?s)<AdditionalColumns table=`"${rootPat14}\.(\w+)`">(.*?)</AdditionalColumns>")) {
+			$tbl = $acm.Groups[1].Value
+			if (-not $tsColumns.ContainsKey($tbl)) { $tsColumns[$tbl] = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase) }
+			foreach ($cm in [regex]::Matches($acm.Groups[2].Value, '<Column name="(\w+)"')) {
+				$tsColumns[$tbl][$cm.Groups[1].Value] = $true
 			}
 		}
+
+		$badPaths = @{}
+		foreach ($m in [regex]::Matches($raw, "<(?:\w+:)?\w*DataPath[^>]*>${rootPat14}\.([^<]+)</(?:\w+:)?\w*DataPath>")) {
+			# Индекс строки ТЧ (Объект.Товары[0].Цена) к имени не относится
+			$segments = @(($m.Groups[1].Value -split '\.') | ForEach-Object { $_ -replace '\[.*$', '' })
+			$seg0 = $segments[0]
+			$pathCheckCount++
+			if ($script:standardObjectFields -contains $seg0) { continue }
+			if (-not $ownerEntry.Names.ContainsKey($seg0)) {
+				$badPaths["${rootName}.${seg0}"] = "у ${ownerKey} в расширении нет такого реквизита или табличной части (незаимствованный реквизит источника форме расширения не виден)"
+				continue
+			}
+			if ($segments.Count -lt 2 -or -not $tsColumns.ContainsKey($seg0)) { continue }
+			$seg1 = $segments[1]
+			if ($script:standardObjectFields -contains $seg1) { continue }
+			# Итог колонки — псевдополе платформы: Total<Колонка> при живой колонке законен
+			if ($seg1 -like "Total*" -and $tsColumns[$seg0].ContainsKey($seg1.Substring(5))) { continue }
+			if (-not $tsColumns[$seg0].ContainsKey($seg1)) {
+				$badPaths["${rootName}.${seg0}.${seg1}"] = "у табличной части ${seg0} в расширении нет колонки ${seg1}, и <Columns> формы её не объявляет"
+			}
+		}
+		foreach ($bad in ($badPaths.Keys | Sort-Object)) {
+			Report-Error "14. ${ctx}: путь '${bad}' — $($badPaths[$bad])"
+			$check14Ok = $false
+		}
+	}
+
+	if ($check14Ok) {
+		Report-OK "14. Form object paths: $pathCheckCount checked"
 	}
 }
 
@@ -1480,10 +1474,7 @@ if (-not $script:stopped -and $childObjNode) {
 		$srcRoot = Get-SourceConfigRoot
 		$srcCfgFile = Join-Path $srcRoot "Configuration.xml"
 		if (-not (Test-Path $srcCfgFile)) {
-			# Проверка 14 об этом уже сказала — второй раз не повторяем.
-			if (-not $script:srcRootWarned) {
-				Report-Warn "18. -ConfigPath '$ConfigPath': Configuration.xml не найден — сверка с конфигурацией-источником пропущена"
-			}
+			Report-Warn "18. -ConfigPath '$ConfigPath': Configuration.xml не найден — сверка с конфигурацией-источником пропущена"
 			$srcRoot = $null
 		} else {
 			try {

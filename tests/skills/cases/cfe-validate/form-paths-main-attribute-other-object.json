@@ -1,0 +1,120 @@
+{
+  "name": "Пути формы разрешаются по типу основного реквизита, а не по владельцу формы: форма обработки с основным реквизитом DocumentObject",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Document",
+          "name": "Распознанный",
+          "attributes": [
+            "Направление: String(10)"
+          ],
+          "tabularSections": {
+            "Реквизиты": [
+              "Значение: String(10)"
+            ]
+          }
+        },
+        {
+          "type": "DataProcessor",
+          "name": "Распознавание"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/Распознанный.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "args": {
+        "-FromObject": true,
+        "-OutputPath": "{workDir}/Documents/Распознанный/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/DataProcessors/Распознавание.xml",
+        "-FormName": "Форма"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Распознавание",
+        "elements": [
+          {
+            "input": "Направление",
+            "path": "Объект.Направление"
+          },
+          {
+            "table": "Реквизиты",
+            "path": "Объект.Реквизиты",
+            "columns": [
+              {
+                "input": "РеквизитыЗначение",
+                "path": "Объект.Реквизиты.Значение"
+              }
+            ]
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.Распознанный",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/DataProcessors/Распознавание/Forms/Форма/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Document.Распознанный.Form.ФормаДокумента",
+        "-BorrowMainAttribute": "All"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "DataProcessor.Распознавание.Form.Форма",
+        "-BorrowMainAttribute": "Form"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expect": {
+    "stdoutContains": "=== Validation OK: Extension.Тест"
+  }
+}

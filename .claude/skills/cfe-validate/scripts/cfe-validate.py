@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.19 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.20 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -190,6 +190,21 @@ GENERATED_TYPE_CATEGORIES = {
 # Основной реквизит формы: <Attribute name="X"> с <MainAttribute>true</MainAttribute> внутри
 MAIN_ATTR_RE = re.compile(
     r'<Attribute name=\"([^\"]+)\"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>', re.DOTALL)
+
+MAIN_ATTR_TYPE_RE = re.compile(r'<v8:Type>cfg:(\w+?)(?:Object|RecordManager|RecordSet)\.([^<]+)</v8:Type>')
+
+
+def main_attribute_owner_key(main_attr_xml, form_owner_key):
+    """Объект, по которому разрешаются пути формы, — тип её основного реквизита, а не владелец формы:
+    форма обработки бывает с основным реквизитом DocumentObject.X. Тип не объект метаданных
+    (таблица значений и т.п.) — None, путь не по составу объекта; типа нет — владелец формы."""
+    if '<v8:Type>' not in main_attr_xml:
+        return form_owner_key
+    tm = MAIN_ATTR_TYPE_RE.search(main_attr_xml)
+    if tm and tm.group(1) in CHILD_TYPE_DIR_MAP:
+        return f'{tm.group(1)}.{tm.group(2)}'
+    return None
+
 
 STANDARD_OBJECT_FIELDS = {
     'Code', 'Description', 'Ref', 'Parent', 'Owner', 'DeletionMark', 'Predefined', 'IsFolder', 'LineNumber',
@@ -703,7 +718,7 @@ def main():
     MD = NS['md']
     XR = NS['xr']
     enum_values_index = {}
-    borrowed_ts_index = {}
+    ext_obj_index = {}
     form_list = []
 
     def is_borrowed_sub_item(sub_item):
@@ -822,6 +837,34 @@ def main():
 
             # --- Check 10: Sub-items (Attribute, TabularSection, EnumValue, Form) ---
             obj_child_objects = obj_el.find(f'{{{MD}}}ChildObjects')
+
+            # Объект таким, каким он описан в расширении: реквизиты, измерения, ресурсы, ТЧ и колонки ТЧ —
+            # и заимствованные, и собственные. По этому описанию платформа разрешает пути любой формы
+            # расширения (проверка 14) и таблицы <AdditionalColumns> (проверка 12); незаимствованный
+            # подобъект источника она не видит. Имена регистронезависимы, как в языке 1С: ключи — upper().
+            ix_names = set()
+            ix_ts_columns = {}
+            if obj_child_objects is not None:
+                for ix_sub in obj_child_objects:
+                    if not isinstance(ix_sub.tag, str):
+                        continue
+                    ix_ln = etree.QName(ix_sub.tag).localname
+                    if ix_ln not in ('Attribute', 'Dimension', 'Resource', 'TabularSection'):
+                        continue
+                    ix_name_el = ix_sub.find(f'{{{MD}}}Properties/{{{MD}}}Name')
+                    if ix_name_el is None or not ix_name_el.text:
+                        continue
+                    ix_name = ix_name_el.text.strip().upper()
+                    ix_names.add(ix_name)
+                    if ix_ln != 'TabularSection':
+                        continue
+                    ix_ts_columns[ix_name] = {
+                        c.text.strip().upper()
+                        for c in ix_sub.findall(f'{{{MD}}}ChildObjects/{{{MD}}}Attribute/{{{MD}}}Properties/{{{MD}}}Name')
+                        if c.text
+                    }
+            ext_obj_index[f'{type_name}.{child_name}'] = {'Names': ix_names, 'TSColumns': ix_ts_columns}
+
             if obj_child_objects is not None:
                 ctx = f'{type_name}.{child_name}'
                 for sub_item in obj_child_objects:
@@ -847,9 +890,6 @@ def main():
                             ts_info = sub_item.find(f'{{{MD}}}InternalInfo')
                             ts_name_el = sub_item.find(f'{{{MD}}}Properties/{{{MD}}}Name')
                             ts_label = (ts_name_el.text or '?') if ts_name_el is not None else '?'
-                            # Индекс заимствованных ТЧ — по нему Check 12 сверяет <AdditionalColumns table="Объект.X">
-                            if ts_name_el is not None and ts_name_el.text:
-                                borrowed_ts_index.setdefault(f'{type_name}.{child_name}', {})[ts_name_el.text.strip()] = True
                             if ts_info is None:
                                 r.error(f'10. {ctx}: TabularSection.{ts_label} missing InternalInfo')
                                 check10_ok = False
@@ -919,6 +959,8 @@ def main():
 
     # --- Check 11: Borrowed form structure ---
     borrowed_forms_with_tree = []
+    # Все формы объектов расширения с текстом Form.xml — заимствованные и собственные (проверка 14)
+    forms_with_text = []
     check11_ok = True
     form_count = 0
 
@@ -970,6 +1012,9 @@ def main():
         # Read Form.xml as raw text for BaseForm checks
         with open(form_xml_file, 'r', encoding='utf-8-sig') as f:
             form_raw_text = f.read()
+        forms_with_text.append({
+            'RawText': form_raw_text, 'Context': ctx, 'OwnerKey': f"{fi['TypeName']}.{fi['ObjName']}",
+        })
 
         if '<BaseForm' in form_raw_text:
             if not re.search(r'<BaseForm[^>]+version=', form_raw_text):
@@ -1043,8 +1088,8 @@ def main():
                 missing_items.append(f"Enum.{entry['Enum']}.EnumValue.{entry['Value']}")
 
         # <AdditionalColumns table="Объект.X"> — доп. колонки табличной части, объявленные в самой форме.
-        # Колонки есть, а самой ТЧ в расширении нет → платформа отвергает загрузку: «Неверный путь к
-        # данным» плюс «Колонки не могут быть добавлены к реквизиту».
+        # Колонки есть, а самой ТЧ в расширении нет (ни заимствованной, ни собственной) → платформа
+        # отвергает загрузку: «Неверный путь к данным» плюс «Колонки не могут быть добавлены к реквизиту».
         # Соседние проверки этого блока эвристичны (имя стиля добывается регуляркой), поэтому там
         # предупреждение. Здесь сигнал точный — имя ТЧ берётся из атрибута, — а последствие жёсткое,
         # поэтому ошибка.
@@ -1056,13 +1101,13 @@ def main():
         ac_tables = set()
         if root_name:
             ac_tables = set(re.findall(r'<AdditionalColumns table="' + re.escape(root_name) + r'\.(\w+)"', raw))
-        if ac_tables:
-            owner_key = ctx.split('.Form.')[0]
-            owner_ts = borrowed_ts_index.get(owner_key, {})
+        owner_key = main_attribute_owner_key(root_match.group(0) if root_match else '', ctx.split('.Form.')[0])
+        if ac_tables and owner_key:
+            owner_ts = ext_obj_index.get(owner_key, {}).get('TSColumns', {})
             for tbl_name in sorted(ac_tables):
                 dep_check_count += 1
-                if tbl_name not in owner_ts:
-                    r.error(f'12. {ctx}: <AdditionalColumns table="{root_name}.{tbl_name}"> — TabularSection.{tbl_name} not borrowed in extension')
+                if tbl_name.upper() not in owner_ts:
+                    r.error(f'12. {ctx}: <AdditionalColumns table="{root_name}.{tbl_name}"> — TabularSection.{tbl_name} is neither borrowed nor added in extension')
                     check12_ok = False
 
         for mi in missing_items:
@@ -1096,8 +1141,8 @@ def main():
     elif check13_ok:
         r.ok('13. TypeLink: clean')
 
-    # Каталог конфигурации-источника из -ConfigPath (каталог или путь к Configuration.xml). Общий для
-    # проверок 14 и 18; есть ли там Configuration.xml, каждая проверка решает и сообщает сама.
+    # Каталог конфигурации-источника из -ConfigPath (каталог или путь к Configuration.xml) для
+    # проверки 18; есть ли там Configuration.xml, она решает и сообщает сама.
     def source_config_root():
         root = config_path_arg
         if not os.path.isabs(root):
@@ -1106,124 +1151,85 @@ def main():
             root = os.path.dirname(root)
         return root
 
-    src_root_warned = False
+    # --- Check 14: пути <Основной реквизит>.* форм расширения против объекта в расширении ---
+    # Платформа разрешает путь любой формы расширения — и заимствованной, и собственной — по объекту
+    # таким, каким он описан в расширении: заимствованные и собственные реквизиты, ТЧ и их колонки
+    # (индекс ext_obj_index, проверка 10). Незаимствованный реквизит источника она не видит даже
+    # на заимствованной форме, где он был в исходной: «Неверный путь к данным». Имена — без учёта
+    # регистра. Второй сегмент проверяется только у табличной части: у ссылочного реквизита он ведёт в
+    # другой объект.
+    if not r.stopped and forms_with_text:
+        check14_ok = True
+        path_check_count = 0
+        std_fields_ci = {f.upper() for f in STANDARD_OBJECT_FIELDS}
 
-    # --- Check 14: пути Объект.* заимствованных форм против конфигурации-источника ---
-    # Требует -ConfigPath: отличить живой путь от висячего можно только по исходному объекту.
-    # «Объект.Партнер» валиден и без заимствования реквизита (наследуется от базы), а «Объект.Товары.Артикул»
-    # не разрешится нигде, если Артикул — не колонка ТЧ и не колонка из <Columns> самой формы.
-    # Такой путь платформа отвергает на загрузке: «Неверный путь к данным».
-    if not r.stopped and borrowed_forms_with_tree:
-        if not config_path_arg:
-            r.out('[INFO]  14. Пути Объект.* против конфигурации-источника не проверялись: не задан -ConfigPath')
-        else:
-            cfg_root = source_config_root()
+        for fw in forms_with_text:
+            raw = fw['RawText']
+            ctx = fw['Context']
+            # Корень путей — имя основного реквизита формы (см. проверку 12). Нет его в <Attributes>
+            # формы — путей с корнем не бывает, проверять нечего.
+            root_match14 = MAIN_ATTR_RE.search(raw)
+            if not root_match14:
+                continue
+            root_name14 = root_match14.group(1)
+            # У динамического списка набор полей — результат его запроса, а не состав объекта:
+            # туда входят и стандартные поля списка (Ref, Date, DefaultPicture), и псевдонимы
+            # запроса. Сверять такие пути с ChildObjects объекта нельзя — будут ложные ошибки
+            # (корпусная проверка: 3383 таких сегмента на 1094 формах списка УТ).
+            if '>cfg:DynamicList<' in root_match14.group(0):
+                continue
+            owner_key = main_attribute_owner_key(root_match14.group(0), fw['OwnerKey'])
+            if not owner_key:
+                continue
+            owner_entry = ext_obj_index.get(owner_key)
+            if owner_entry is None:
+                continue
 
-            if not os.path.isfile(os.path.join(cfg_root, 'Configuration.xml')):
-                r.warn(f"14. -ConfigPath '{config_path_arg}': Configuration.xml не найден — проверка путей пропущена")
-                src_root_warned = True
-            else:
-                check14_ok = True
-                path_check_count = 0
+            # Колонки ТЧ — из описания в расширении плюс объявленные в самой форме через
+            # <Columns>/<AdditionalColumns table="Объект.X">. Копия, чтобы не дописывать в индекс.
+            ts_columns = {ts: set(cols) for ts, cols in owner_entry['TSColumns'].items()}
+            root_pat14 = re.escape(root_name14)
+            for acm in re.finditer(r'<AdditionalColumns table="' + root_pat14 + r'\.(\w+)">(.*?)</AdditionalColumns>', raw, re.DOTALL):
+                cols = ts_columns.setdefault(acm.group(1).upper(), set())
+                for cm in re.finditer(r'<Column name="(\w+)"', acm.group(2)):
+                    cols.add(cm.group(1).upper())
 
-                for bf in borrowed_forms_with_tree:
-                    raw = bf['RawText']
-                    ctx = bf['Context']
-                    # Корень путей — имя основного реквизита формы (см. проверку 12). Нет его ни в
-                    # <Attributes> формы, ни в <BaseForm> — путей с корнем не бывает, проверять нечего.
-                    root_match14 = MAIN_ATTR_RE.search(raw)
-                    if root_match14 is None:
-                        continue
-                    root_name14 = root_match14.group(1)
-                    # У динамического списка набор полей — результат его запроса, а не состав объекта:
-                    # туда входят и стандартные поля списка (Ref, Date, DefaultPicture), и псевдонимы
-                    # запроса. Сверять такие пути с ChildObjects объекта нельзя — будут ложные ошибки
-                    # (корпусная проверка: 3383 таких сегмента на 1094 формах списка УТ).
-                    if '>cfg:DynamicList<' in root_match14.group(0):
-                        continue
-                    owner_key = ctx.split('.Form.')[0]
-                    owner_parts = owner_key.split('.', 1)
-                    if len(owner_parts) < 2:
-                        continue
-                    owner_type, owner_name = owner_parts
-                    owner_dir = CHILD_TYPE_DIR_MAP.get(owner_type)
-                    if not owner_dir:
-                        continue
-                    src_obj_file = os.path.join(cfg_root, owner_dir, f'{owner_name}.xml')
-                    if not os.path.isfile(src_obj_file):
-                        r.warn(f'14. {ctx}: объект-источник не найден в конфигурации ({owner_dir}/{owner_name}.xml)')
-                        continue
+            # Ключ — путь без учёта регистра, как у хеш-таблицы PS-порта: первое написание остаётся
+            bad_paths = {}
+            for m in re.finditer(r'<(?:\w+:)?\w*DataPath[^>]*>' + root_pat14 + r'\.([^<]+)</(?:\w+:)?\w*DataPath>', raw):
+                # Индекс строки ТЧ (Объект.Товары[0].Цена) к имени не относится
+                segments = [re.sub(r'\[.*$', '', s) for s in m.group(1).split('.')]
+                seg0 = segments[0]
+                seg0_ci = seg0.upper()
+                path_check_count += 1
+                if seg0_ci in std_fields_ci:
+                    continue
+                if seg0_ci not in owner_entry['Names']:
+                    bad = f'{root_name14}.{seg0}'
+                    bad_paths.setdefault(bad.upper(), [bad, ''])[1] = (
+                        f'у {owner_key} в расширении нет такого реквизита или табличной части '
+                        f'(незаимствованный реквизит источника форме расширения не виден)')
+                    continue
+                if len(segments) < 2 or seg0_ci not in ts_columns:
+                    continue
+                seg1 = segments[1]
+                seg1_ci = seg1.upper()
+                if seg1_ci in std_fields_ci:
+                    continue
+                # Итог колонки — псевдополе платформы: Total<Колонка> при живой колонке законен
+                if seg1_ci.startswith('TOTAL') and seg1_ci[5:] in ts_columns[seg0_ci]:
+                    continue
+                if seg1_ci not in ts_columns[seg0_ci]:
+                    bad = f'{root_name14}.{seg0}.{seg1}'
+                    bad_paths.setdefault(bad.upper(), [bad, ''])[1] = (
+                        f'у табличной части {seg0} в расширении нет колонки {seg1}, и <Columns> формы её не объявляет')
 
-                    # Имена, доступные первым сегментом пути: реквизиты и ТЧ объекта-источника.
-                    # Плюс для каждой ТЧ — её колонки: второй сегмент проверяем по ним (именно там
-                    # и жил дефект — Объект.Товары.Артикул при живой ТЧ Товары).
-                    src_names = set()
-                    src_ts_columns = {}
-                    src_tree = etree.parse(src_obj_file, etree.XMLParser(remove_blank_text=True))
-                    src_obj_el = None
-                    for c in src_tree.getroot():
-                        if isinstance(c.tag, str):
-                            src_obj_el = c
-                            break
-                    src_child_objects = src_obj_el.find(f'{{{MD}}}ChildObjects') if src_obj_el is not None else None
-                    if src_child_objects is not None:
-                        for sub in src_child_objects:
-                            if not isinstance(sub.tag, str):
-                                continue
-                            sub_ln = etree.QName(sub.tag).localname
-                            # У регистра дочерние объекты — Dimension/Resource, а не Attribute: без них
-                            # замена корня превратила бы тихий пропуск в ложные ошибки на форме записи.
-                            if sub_ln not in ('Attribute', 'Dimension', 'Resource', 'TabularSection'):
-                                continue
-                            name_el = sub.find(f'{{{MD}}}Properties/{{{MD}}}Name')
-                            if name_el is None or not name_el.text:
-                                continue
-                            sub_name = name_el.text.strip()
-                            src_names.add(sub_name)
-                            if sub_ln != 'TabularSection':
-                                continue
-                            cols = set()
-                            for col_name in sub.findall(f'{{{MD}}}ChildObjects/{{{MD}}}Attribute/{{{MD}}}Properties/{{{MD}}}Name'):
-                                if col_name.text:
-                                    cols.add(col_name.text.strip())
-                            src_ts_columns[sub_name] = cols
-                    # Плюс колонки, объявленные в самой форме через <Columns>/<AdditionalColumns table="Объект.X">
-                    root_pat14 = re.escape(root_name14)
-                    for acm in re.finditer(r'<AdditionalColumns table="' + root_pat14 + r'\.(\w+)">(.*?)</AdditionalColumns>', raw, re.DOTALL):
-                        tbl = acm.group(1)
-                        cols = src_ts_columns.setdefault(tbl, set())
-                        for cm in re.finditer(r'<Column name="(\w+)"', acm.group(2)):
-                            cols.add(cm.group(1))
+            for bad, msg in sorted(bad_paths.values(), key=lambda bm: bm[0].upper()):
+                r.error(f"14. {ctx}: путь '{bad}' — {msg}")
+                check14_ok = False
 
-                    bad_paths = {}
-                    for m in re.finditer(r'<(?:\w+:)?\w*DataPath[^>]*>' + root_pat14 + r'\.([^<]+)</(?:\w+:)?\w*DataPath>', raw):
-                        segments = m.group(1).split('.')
-                        seg0 = segments[0]
-                        path_check_count += 1
-                        if seg0 in STANDARD_OBJECT_FIELDS:
-                            continue
-                        if seg0 not in src_names:
-                            bad_paths[f'{root_name14}.{seg0}'] = f'у {owner_key} нет такого реквизита или табличной части'
-                            continue
-                        # Второй сегмент проверяем только для табличных частей: у ссылочного реквизита
-                        # он ведёт в чужой объект, и это уже другая проверка.
-                        if len(segments) < 2 or seg0 not in src_ts_columns:
-                            continue
-                        seg1 = segments[1]
-                        if seg1 in STANDARD_OBJECT_FIELDS:
-                            continue
-                        # Итог колонки — псевдополе платформы: Total<Колонка> при живой колонке законен
-                        if seg1.startswith('Total') and seg1[5:] in src_ts_columns[seg0]:
-                            continue
-                        if seg1 not in src_ts_columns[seg0]:
-                            bad_paths[f'{root_name14}.{seg0}.{seg1}'] = f'у табличной части {seg0} нет колонки {seg1}, и <Columns> формы её не объявляет'
-
-                    for bad in sorted(bad_paths):
-                        r.error(f"14. {ctx}: путь '{bad}' — {bad_paths[bad]}")
-                        check14_ok = False
-
-                if check14_ok:
-                    r.ok(f'14. Object paths vs source config: {path_check_count} checked')
+        if check14_ok:
+            r.ok(f'14. Form object paths: {path_check_count} checked')
 
     # --- Check 15: основные роли расширения не дают прав на заимствованные объекты ---
     # Платформа: «Назначение прав доступа на заимствованные объекты основными ролями в
@@ -1499,9 +1505,7 @@ def main():
             src_root = source_config_root()
             src_cfg_file = os.path.join(src_root, 'Configuration.xml')
             if not os.path.isfile(src_cfg_file):
-                # Проверка 14 об этом уже сказала — второй раз не повторяем.
-                if not src_root_warned:
-                    r.warn(f"18. -ConfigPath '{config_path_arg}': Configuration.xml не найден — сверка с конфигурацией-источником пропущена")
+                r.warn(f"18. -ConfigPath '{config_path_arg}': Configuration.xml не найден — сверка с конфигурацией-источником пропущена")
                 src_root = None
             else:
                 try:

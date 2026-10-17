@@ -1,0 +1,146 @@
+{
+  "name": "Ошибка: висячая колонка собственной ТЧ ловится сама, а не заслоняется ошибкой на ТЧ",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Document",
+        "name": "ЗаказКлиента",
+        "attributes": [
+          "Комментарий: String(50)",
+          "Статус: String(10)"
+        ],
+        "tabularSections": {
+          "Товары": [
+            "Количество: Number(10,3)"
+          ]
+        }
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/ЗаказКлиента.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Заказ клиента",
+        "elements": [
+          {
+            "input": "Комментарий",
+            "path": "Объект.Комментарий"
+          },
+          {
+            "input": "Статус",
+            "path": "Объект.Статус"
+          },
+          {
+            "table": "Товары",
+            "path": "Объект.Товары",
+            "columns": [
+              {
+                "input": "ТоварыКоличество",
+                "path": "Объект.Товары.Количество"
+              }
+            ]
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.ЗаказКлиента",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Document.ЗаказКлиента.Form.ФормаДокумента",
+        "-BorrowMainAttribute": "Form"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml",
+        "-Operation": "add-attribute",
+        "-Value": "Тест_Склад: String(50)"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml",
+        "-Operation": "add-ts",
+        "-Value": "Тест_Услуги: Тест_Сумма: Number(15,2)"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml",
+        "-Operation": "add-ts-attribute",
+        "-Value": "Товары.Тест_Цена: Number(15,2)"
+      }
+    },
+    {
+      "script": "form-edit/scripts/form-edit",
+      "input": {
+        "elements": [
+          {
+            "table": "Тест_Услуги",
+            "path": "Объект.Тест_Услуги",
+            "title": "Услуги",
+            "columns": [
+              {
+                "input": "Тест_УслугиНет",
+                "path": "Объект.Тест_Услуги.НетКолонки",
+                "title": "Нет"
+              }
+            ]
+          }
+        ]
+      },
+      "args": {
+        "-FormPath": "{workDir}/cfe/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml",
+        "-JsonPath": "{inputFile}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "путь 'Объект.Тест_Услуги.НетКолонки'",
+    "stdoutNotContains": "путь 'Объект.Тест_Услуги' —"
+  }
+}

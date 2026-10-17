@@ -1,0 +1,176 @@
+{
+  "name": "Собственные реквизит, ТЧ и колонка заимствованной ТЧ на заимствованной форме — не висячие; регистр букв в пути не важен",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Document",
+        "name": "ЗаказКлиента",
+        "attributes": [
+          "Комментарий: String(50)",
+          "Статус: String(10)"
+        ],
+        "tabularSections": {
+          "Товары": [
+            "Количество: Number(10,3)"
+          ]
+        }
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/ЗаказКлиента.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Заказ клиента",
+        "elements": [
+          {
+            "input": "Комментарий",
+            "path": "Объект.Комментарий"
+          },
+          {
+            "input": "Статус",
+            "path": "Объект.Статус"
+          },
+          {
+            "table": "Товары",
+            "path": "Объект.Товары",
+            "columns": [
+              {
+                "input": "ТоварыКоличество",
+                "path": "Объект.Товары.Количество"
+              }
+            ]
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.ЗаказКлиента",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Document.ЗаказКлиента.Form.ФормаДокумента",
+        "-BorrowMainAttribute": "Form"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml",
+        "-Operation": "add-attribute",
+        "-Value": "Тест_Склад: String(50)"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml",
+        "-Operation": "add-ts",
+        "-Value": "Тест_Услуги: Тест_Сумма: Number(15,2)"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml",
+        "-Operation": "add-ts-attribute",
+        "-Value": "Товары.Тест_Цена: Number(15,2)"
+      }
+    },
+    {
+      "script": "form-edit/scripts/form-edit",
+      "input": {
+        "elements": [
+          {
+            "input": "Тест_Склад",
+            "path": "Объект.Тест_Склад",
+            "title": "Склад"
+          },
+          {
+            "input": "Тест_СкладРегистр",
+            "path": "Объект.тест_склад",
+            "title": "Склад"
+          },
+          {
+            "input": "Тест_КомментарийРегистр",
+            "path": "Объект.КОММЕНТАРИЙ",
+            "title": "Комментарий"
+          },
+          {
+            "input": "Тест_ТоварыЦена",
+            "path": "Объект.Товары.Тест_Цена",
+            "title": "Цена",
+            "into": "Товары"
+          },
+          {
+            "input": "Тест_ТоварыКоличествоРегистр",
+            "path": "Объект.Товары.количество",
+            "title": "Количество",
+            "into": "Товары"
+          },
+          {
+            "table": "Тест_Услуги",
+            "path": "Объект.Тест_Услуги",
+            "title": "Услуги",
+            "columns": [
+              {
+                "input": "Тест_УслугиНомерСтроки",
+                "path": "Объект.Тест_Услуги.LineNumber",
+                "title": "N"
+              },
+              {
+                "input": "Тест_УслугиСумма",
+                "path": "Объект.Тест_Услуги.Тест_Сумма",
+                "title": "Сумма"
+              }
+            ]
+          }
+        ]
+      },
+      "args": {
+        "-FormPath": "{workDir}/cfe/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml",
+        "-JsonPath": "{inputFile}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expect": {
+    "stdoutContains": "=== Validation OK: Extension.Тест"
+  }
+}
