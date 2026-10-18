@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.22 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.23 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -946,8 +946,9 @@ if ($childObjNode) {
 		}
 		$ixOwners = @(foreach ($ixOwner in $objEl.SelectNodes("md:Properties/md:Owners/xr:Item", $objNs)) { $ixOwner.InnerText.Trim() })
 		$ixExtDim = $objEl.SelectSingleNode("md:Properties/md:ExtDimensionTypes", $objNs)
+		$ixMaxExtDim = $objEl.SelectSingleNode("md:Properties/md:MaxExtDimensionCount", $objNs)
 		$script:extObjIndex["${typeName}.${childName}"] = @{ Names = $ixNames; TSColumns = $ixTSColumns; Owners = $ixOwners
-			ExtDimTypes = [bool]($ixExtDim -and $ixExtDim.InnerText.Trim()) }
+			ExtDimTypes = [bool]($ixExtDim -and $ixExtDim.InnerText.Trim() -and $ixMaxExtDim -and $ixMaxExtDim.InnerText.Trim()) }
 
 		# Собственные подобъекты данных в заимствованном объекте вида, где они запрещены
 		$ownRule = $null
@@ -1385,11 +1386,11 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 			$pathCheckCount++
 			if ($stdFields.ContainsKey($seg0)) {
 				# Стандартная ТЧ видов субконто плана счетов видна, только если в описании объекта в расширении
-				# задано свойство ExtDimensionTypes: у заимствованной оболочки без него — «Неверный путь к данным»,
-				# заимствованная форма грузится, когда в оболочке есть ExtDimensionTypes и MaxExtDimensionCount, а
-				# ПВХ видов субконто заимствован (замер 8.3.24)
+				# заданы свойства ExtDimensionTypes и MaxExtDimensionCount: без любого из них — «Неверный путь к
+				# данным» (замер 8.3.24). ПВХ видов субконто ещё должен быть заимствован — иначе «Неизвестный объект
+				# метаданных», это не про пути.
 				if ($target.Category -eq 'ChartOfAccountsObject' -and $seg0 -in @('ExtDimensionTypes','ВидыСубконто') -and -not $ownerEntry.ExtDimTypes) {
-					$badPaths["${rootName}.${seg0}"] = "у ${ownerKey} в расширении не задано свойство ExtDimensionTypes — стандартная ТЧ видов субконто форме не видна (перенесите ExtDimensionTypes и MaxExtDimensionCount и заимствуйте ПВХ видов субконто)"
+					$badPaths["${rootName}.${seg0}"] = "у ${ownerKey} в расширении не заданы свойства ExtDimensionTypes и MaxExtDimensionCount — стандартная ТЧ видов субконто форме не видна (перенесите их и заимствуйте ПВХ видов субконто)"
 					continue
 				}
 				if ($segments.Count -ge 2) {
@@ -1831,9 +1832,11 @@ if (-not $script:stopped -and $childObjNode) {
 			if ($script:stopped) { break }
 		}
 		if ($script:stopped) { break }
-		# Там, где собственных подобъектов быть не может, о них уже сказала проверка 10
-		if ($script:ownChildRestricted[$typeName] -eq "Error") { continue }
+		# Там, где собственных подобъектов данных быть не может, о них уже сказала проверка 10 — остаются
+		# формы, команды и макеты (их добавлять можно)
+		$dataBanned = $script:ownChildRestricted[$typeName] -eq "Error"
 		foreach ($nc in @(Get-OwnNameCollisions (Join-Path (Join-Path $configDir $dirName) "$objName18.xml") "$typeName.$objName18" $extIdx $srcIdx)) {
+			if ($dataBanned -and ($nc.Own -split '\.')[2] -notin @('Form','Command','Template')) { continue }
 			Report-Error "18. $($nc.Own): собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем ($($nc.Src)) — платформа загрузит расширение, но базу не обновит («Уже существует объект с именем …»)"
 			$check18Ok = $false
 			if ($script:stopped) { break }

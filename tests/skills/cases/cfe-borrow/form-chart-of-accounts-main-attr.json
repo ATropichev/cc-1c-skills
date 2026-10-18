@@ -1,5 +1,5 @@
 {
-  "name": "Форма элемента плана счетов с -BorrowMainAttribute Form: признак учёта заимствуется, для ТЧ видов субконто — свойства ExtDimensionTypes/MaxExtDimensionCount и ПВХ оболочкой",
+  "name": "Форма элемента плана счетов с -BorrowMainAttribute Form: признаки учёта (и субконто — с ТЧ видов субконто) заимствуются, для ТЧ видов субконто — свойства ExtDimensionTypes/MaxExtDimensionCount и ПВХ оболочкой",
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
@@ -23,6 +23,9 @@
           ],
           "accountingFlags": [
             "Количественный"
+          ],
+          "extDimensionAccountingFlags": [
+            "Суммовой"
           ]
         }
       ],
@@ -70,7 +73,9 @@
           "<AccountingFlag uuid=",
           "<Name>Количественный</Name>",
           "<ExtDimensionTypes>ChartOfCharacteristicTypes.ВидыСубконто</ExtDimensionTypes>",
-          "<MaxExtDimensionCount>1</MaxExtDimensionCount>"
+          "<MaxExtDimensionCount>1</MaxExtDimensionCount>",
+          "<ExtDimensionAccountingFlag uuid=",
+          "<Name>Суммовой</Name>"
         ]
       },
       {

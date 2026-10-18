@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.22 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.23 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -1010,8 +1010,10 @@ def main():
                     ix_ts_columns[ix_name] = ix_cols
             ix_owners = [o.text.strip() for o in obj_el.findall(f'{{{MD}}}Properties/{{{MD}}}Owners/{{{XR}}}Item') if o.text]
             ix_ext_dim = obj_el.find(f'{{{MD}}}Properties/{{{MD}}}ExtDimensionTypes')
+            ix_max_ext_dim = obj_el.find(f'{{{MD}}}Properties/{{{MD}}}MaxExtDimensionCount')
             ext_obj_index[f'{type_name}.{child_name}'.upper()] = {'Names': ix_names, 'TSColumns': ix_ts_columns, 'Owners': ix_owners,
-                                                                  'ExtDimTypes': ix_ext_dim is not None and bool((ix_ext_dim.text or '').strip())}
+                                                                  'ExtDimTypes': (ix_ext_dim is not None and bool((ix_ext_dim.text or '').strip())
+                                                                                  and ix_max_ext_dim is not None and bool((ix_max_ext_dim.text or '').strip()))}
 
             # Собственные подобъекты данных в заимствованном объекте вида, где они запрещены
             own_rule = None
@@ -1407,15 +1409,15 @@ def main():
                 path_check_count += 1
                 if seg0_ci in std_fields:
                     # Стандартная ТЧ видов субконто плана счетов видна, только если в описании объекта в расширении
-                    # задано свойство ExtDimensionTypes: у заимствованной оболочки без него — «Неверный путь к данным»,
-                    # заимствованная форма грузится, когда в оболочке есть ExtDimensionTypes и MaxExtDimensionCount, а
-                    # ПВХ видов субконто заимствован (замер 8.3.24)
+                    # заданы свойства ExtDimensionTypes и MaxExtDimensionCount: без любого из них — «Неверный путь к
+                    # данным» (замер 8.3.24). ПВХ видов субконто ещё должен быть заимствован — иначе «Неизвестный объект
+                    # метаданных», это не про пути.
                     if (target['Category'] == 'ChartOfAccountsObject' and seg0_ci in ('EXTDIMENSIONTYPES', 'ВИДЫСУБКОНТО')
                             and not owner_entry['ExtDimTypes']):
                         bad = f'{root_name14}.{seg0}'
                         bad_paths.setdefault(bad.upper(), [bad, ''])[1] = (
-                            f'у {owner_key} в расширении не задано свойство ExtDimensionTypes — стандартная ТЧ видов субконто '
-                            f'форме не видна (перенесите ExtDimensionTypes и MaxExtDimensionCount и заимствуйте ПВХ видов субконто)')
+                            f'у {owner_key} в расширении не заданы свойства ExtDimensionTypes и MaxExtDimensionCount — стандартная ТЧ '
+                            f'видов субконто форме не видна (перенесите их и заимствуйте ПВХ видов субконто)')
                         continue
                     if len(segments) >= 2:
                         target_kind, target_name = owner_key.split('.', 1)
@@ -1860,10 +1862,12 @@ def main():
                     break
             if r.stopped:
                 break
-            # Там, где собственных подобъектов быть не может, о них уже сказала проверка 10
-            if own_child_restricted.get(type_name) == 'Error':
-                continue
+            # Там, где собственных подобъектов данных быть не может, о них уже сказала проверка 10 — остаются
+            # формы, команды и макеты (их добавлять можно)
+            data_banned = own_child_restricted.get(type_name) == 'Error'
             for nc in get_own_name_collisions(os.path.join(config_dir, dir_name, f'{obj_name18}.xml'), f'{type_name}.{obj_name18}', ext_idx, src_idx):
+                if data_banned and nc['Own'].split('.')[2] not in ('Form', 'Command', 'Template'):
+                    continue
                 r.error(f"18. {nc['Own']}: собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем ({nc['Src']}) — платформа загрузит расширение, но базу не обновит («Уже существует объект с именем …»)")
                 check18_ok = False
                 if r.stopped:

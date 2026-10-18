@@ -1,0 +1,67 @@
+{
+  "name": "С -ConfigPath: собственная форма заимствованного регистра с именем незаимствованной формы источника — ошибка 18 (формы в регистрах добавлять можно, имя занято)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "InformationRegister",
+          "name": "Цены",
+          "dimensions": [
+            "Номенклатура: String(20)"
+          ],
+          "resources": [
+            "Цена: Number(15,2)"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/InformationRegisters/Цены.xml",
+        "-FormName": "ФормаЗаписи"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "InformationRegister.Цены"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/InformationRegisters/Цены.xml",
+        "-FormName": "ФормаЗаписи"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expectError": true,
+  "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
+  "expect": {
+    "stdoutContains": "18. InformationRegister.Цены.Form.ФормаЗаписи: собственный подобъект"
+  }
+}

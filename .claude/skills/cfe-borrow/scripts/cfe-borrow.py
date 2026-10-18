@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.49 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.50 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1936,6 +1936,10 @@ def main():
 
         attrs = []
         tab_sections = []
+        # Стандартная ТЧ видов субконто плана счетов: нужна форме (или режим All) — переносятся свойства
+        # ExtDimensionTypes/MaxExtDimensionCount и признаки учёта субконто
+        want_ext_dim = type_name == "ChartOfAccounts" and (fl_keys is None or query_key("ExtDimensionTypes") in fl_keys
+                                                           or query_key("ВидыСубконто") in fl_keys)
 
         for child in child_objs:
             if not isinstance(child.tag, str):
@@ -1951,7 +1955,12 @@ def main():
                 if name_node is None:
                     continue
                 attr_name = (name_node.text or "").strip()
-                if fl_keys is not None and query_key(attr_name) not in fl_keys:
+                # Признак учёта субконто — колонка стандартной ТЧ видов субконто (Объект.ВидыСубконто.<Признак>):
+                # идёт вместе с ней, а не по первому сегменту пути
+                if ln == "ExtDimensionAccountingFlag":
+                    if not want_ext_dim:
+                        continue
+                elif fl_keys is not None and query_key(attr_name) not in fl_keys:
                     continue
 
                 attr_uuid = child.get("uuid", "")
@@ -2040,13 +2049,19 @@ def main():
                     extra_props[p_name] = (p_node.text or "").strip()
             # Стандартная ТЧ видов субконто плана счетов видна форме расширения, только если в оболочке есть
             # ExtDimensionTypes и MaxExtDimensionCount, а ПВХ видов субконто заимствован (замер 8.3.24, 8.3.27).
-            # Переносим, когда форма к ней обращается (или режим All).
-            if type_name == "ChartOfAccounts" and (fl_keys is None or query_key("ExtDimensionTypes") in fl_keys
-                                                   or query_key("ВидыСубконто") in fl_keys):
-                for p_name in ("ExtDimensionTypes", "MaxExtDimensionCount"):
-                    p_node = props_node.find(f"{{{MD_NS}}}{p_name}")
-                    if p_node is not None and (p_node.text or "").strip():
-                        extra_props[p_name] = p_node.text.strip()
+            # ПВХ нет в источнике — свойства не переносим: ссылка на незаимствованный объект не загрузится.
+            edt_node = props_node.find(f"{{{MD_NS}}}ExtDimensionTypes")
+            max_node = props_node.find(f"{{{MD_NS}}}MaxExtDimensionCount")
+            if want_ext_dim and edt_node is not None and max_node is not None and (edt_node.text or "").strip():
+                edm = re.match(r'^(\w+)\.(.+)$', edt_node.text.strip())
+                ed_found = (edm is not None and edm.group(1) in CHILD_TYPE_DIR_MAP and
+                            os.path.isfile(os.path.join(cfg_dir, CHILD_TYPE_DIR_MAP[edm.group(1)], f"{edm.group(2)}.xml")))
+                if ed_found:
+                    extra_props["ExtDimensionTypes"] = edt_node.text.strip()
+                    extra_props["MaxExtDimensionCount"] = (max_node.text or "").strip()
+                else:
+                    warn(f"  {type_name}.{obj_name}: виды субконто {edt_node.text.strip()} не найдены в конфигурации-источнике — "
+                         f"ТЧ видов субконто форме расширения не будет видна")
 
         return {"Attributes": attrs, "TabularSections": tab_sections, "ExtraProps": extra_props}
 
@@ -2342,10 +2357,18 @@ def main():
 
         # Generate full object XML with attributes and TS
         content_parts = []
+        # Порядок как у платформы: реквизиты (измерения, ресурсы), ТЧ, затем признаки учёта плана счетов
+        flag_kinds = ("AccountingFlag", "ExtDimensionAccountingFlag")
         for attr in insert_attrs:
+            if attr.get("Kind") in flag_kinds:
+                continue
             content_parts.append(build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t", attr.get("Kind", "Attribute")))
         for ts in insert_ts:
             content_parts.append(build_adopted_tabular_section_xml(ts["Name"], ts["Uuid"], ts["GeneratedTypes"], ts["Attributes"], "\t\t\t"))
+        for fk in flag_kinds:
+            for attr in insert_attrs:
+                if attr.get("Kind") == fk:
+                    content_parts.append(build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t", fk))
         adopted_content = "\n".join(content_parts).rstrip()
 
         # Inject extra properties into the object's OWN Properties only — idempotent and anchored to the
@@ -3099,62 +3122,17 @@ def main():
     # --- 10. Process each item ---
     borrowed_count = 0
 
-    # С -BorrowMainAttribute реквизиты берутся у объекта из типа основного реквизита формы. Если это не
-    # владелец формы и его нет в конфигурации-источнике, форма в расширении не загрузится — отказываем
-    # до записи, расширение не трогаем.
-    if borrow_main_attribute_mode is not None:
-        for item in items:
-            dot_idx = item.find(".")
-            if dot_idx < 1:
-                continue
-            p_type = item[:dot_idx]
-            p_type = SYNONYM_MAP.get(p_type, p_type)
-            if p_type not in CHILD_TYPE_DIR_MAP:
-                continue
-            p_rem = item[dot_idx + 1:]
-            if p_type == "CommonForm":
-                p_obj = p_rem
-                p_form = os.path.join(cfg_dir, CHILD_TYPE_DIR_MAP[p_type], p_obj, "Ext", "Form.xml")
-            else:
-                p_idx = p_rem.find(".Form.")
-                if p_idx <= 0:
-                    continue
-                p_obj = p_rem[:p_idx]
-                p_form = os.path.join(cfg_dir, CHILD_TYPE_DIR_MAP[p_type], p_obj, "Forms", p_rem[p_idx + 6:], "Ext", "Form.xml")
-            # Нет самой формы — об этом скажет основной цикл
-            if not os.path.isfile(p_form):
-                continue
-            p_root = etree.parse(p_form).getroot()
-            if p_type == "CommonForm":
-                p_owner = resolve_common_form_owner(p_root)
-                if not p_owner or p_owner["Kind"] != "Object":
-                    continue
-            else:
-                p_owner = resolve_main_attribute_object(p_root, p_type, p_obj)
-                if p_owner["TypeName"] == p_type and p_owner["ObjName"] == p_obj:
-                    continue
-            p_found = (p_owner["TypeName"] in CHILD_TYPE_DIR_MAP and
-                       os.path.isfile(os.path.join(cfg_dir, CHILD_TYPE_DIR_MAP[p_owner["TypeName"]], f"{p_owner['ObjName']}.xml")))
-            if not p_found:
-                print(f"Основной реквизит формы {item} ссылается на {p_owner['TypeName']}.{p_owner['ObjName']}, а его нет в "
-                      f"конфигурации-источнике — форма в расширении не загрузится. Расширение не изменено", file=sys.stderr)
-                sys.exit(1)
-
-    for item in items:
+    def split_borrow_item(item):
+        """Элемент -Object: тип (синоним → английское имя), объект, форма и путь к её Form.xml в источнике.
+        Error — текст отказа для неверного элемента."""
         dot_idx = item.find(".")
         if dot_idx < 1:
-            print(f"Invalid format '{item}', expected 'Type.Name' or 'Type.Name.Form.FormName'", file=sys.stderr)
-            sys.exit(1)
+            return {"Error": f"Invalid format '{item}', expected 'Type.Name' or 'Type.Name.Form.FormName'"}
         type_name = item[:dot_idx]
         remainder = item[dot_idx + 1:]
-
-        if type_name in SYNONYM_MAP:
-            type_name = SYNONYM_MAP[type_name]
-
+        type_name = SYNONYM_MAP.get(type_name, type_name)
         if type_name not in CHILD_TYPE_DIR_MAP:
-            print(f"Unknown type '{type_name}'", file=sys.stderr)
-            sys.exit(1)
-
+            return {"Error": f"Unknown type '{type_name}'"}
         form_name = None
         form_idx = remainder.find(".Form.")
         if form_idx > 0:
@@ -3166,9 +3144,48 @@ def main():
         is_common_form = type_name == "CommonForm"
         if is_common_form:
             if form_name:
-                print(f"Invalid format '{item}': общая форма задаётся как 'CommonForm.Имя'", file=sys.stderr)
-                sys.exit(1)
+                return {"Error": f"Invalid format '{item}': общая форма задаётся как 'CommonForm.Имя'"}
             form_name = obj_name
+        dir_name = CHILD_TYPE_DIR_MAP[type_name]
+        src_form_xml = None
+        if is_common_form:
+            src_form_xml = os.path.join(cfg_dir, dir_name, obj_name, "Ext", "Form.xml")
+        elif form_name:
+            src_form_xml = os.path.join(cfg_dir, dir_name, obj_name, "Forms", form_name, "Ext", "Form.xml")
+        return {"TypeName": type_name, "ObjName": obj_name, "FormName": form_name, "IsCommonForm": is_common_form,
+                "DirName": dir_name, "SrcFormXml": src_form_xml}
+
+    # С -BorrowMainAttribute реквизиты берутся у объекта из типа основного реквизита формы. Если это не
+    # владелец формы и его нет в конфигурации-источнике, форма в расширении не загрузится — отказываем
+    # до записи, расширение не трогаем.
+    if borrow_main_attribute_mode is not None:
+        for item in items:
+            pi = split_borrow_item(item)
+            # Неверный элемент и нет самой формы — об этом скажет основной цикл
+            if pi.get("Error") or not pi["SrcFormXml"] or not os.path.isfile(pi["SrcFormXml"]):
+                continue
+            p_root = etree.parse(pi["SrcFormXml"]).getroot()
+            if pi["IsCommonForm"]:
+                p_owner = resolve_common_form_owner(p_root)
+                if not p_owner or p_owner["Kind"] != "Object":
+                    continue
+            else:
+                p_owner = resolve_main_attribute_object(p_root, pi["TypeName"], pi["ObjName"])
+                if p_owner["TypeName"].lower() == pi["TypeName"].lower() and p_owner["ObjName"].lower() == pi["ObjName"].lower():
+                    continue
+            p_found = (p_owner["TypeName"] in CHILD_TYPE_DIR_MAP and
+                       os.path.isfile(os.path.join(cfg_dir, CHILD_TYPE_DIR_MAP[p_owner["TypeName"]], f"{p_owner['ObjName']}.xml")))
+            if not p_found:
+                print(f"Основной реквизит формы {item} ссылается на {p_owner['TypeName']}.{p_owner['ObjName']}, а его нет в "
+                      f"конфигурации-источнике — форма в расширении не загрузится. Расширение не изменено", file=sys.stderr)
+                sys.exit(1)
+
+    for item in items:
+        pi = split_borrow_item(item)
+        if pi.get("Error"):
+            print(pi["Error"], file=sys.stderr)
+            sys.exit(1)
+        type_name, obj_name, form_name, is_common_form = pi["TypeName"], pi["ObjName"], pi["FormName"], pi["IsCommonForm"]
 
         dir_name = CHILD_TYPE_DIR_MAP[type_name]
 
@@ -3206,7 +3223,7 @@ def main():
             # Borrow main attribute if requested
             if has_bma and is_common_form:
                 # У общей формы владельца нет — он выводится из типа основного реквизита
-                cf_src_form_xml_path = os.path.join(cfg_dir, dir_name, obj_name, "Ext", "Form.xml")
+                cf_src_form_xml_path = pi["SrcFormXml"]
                 cf_owner = resolve_common_form_owner(etree.parse(cf_src_form_xml_path).getroot())
                 if not cf_owner:
                     info("  Основной реквизит общей формы не ссылается на объект — заимствуется только сам реквизит")
@@ -3219,11 +3236,11 @@ def main():
             elif has_bma:
                 # Реквизиты заимствуются у объекта из типа основного реквизита: у формы обработки с
                 # DocumentObject.X это X, и его нужно заимствовать — иначе форма не загрузится
-                src_form_xml_path = os.path.join(cfg_dir, dir_name, obj_name, "Forms", form_name, "Ext", "Form.xml")
+                src_form_xml_path = pi["SrcFormXml"]
                 ma_obj = {"TypeName": type_name, "ObjName": obj_name}
                 if os.path.isfile(src_form_xml_path):
                     ma_obj = resolve_main_attribute_object(etree.parse(src_form_xml_path).getroot(), type_name, obj_name)
-                if ma_obj["TypeName"] == type_name and ma_obj["ObjName"] == obj_name:
+                if ma_obj["TypeName"].lower() == type_name.lower() and ma_obj["ObjName"].lower() == obj_name.lower():
                     borrow_main_attribute(type_name, obj_name, form_name, borrow_main_attribute_mode)
                 else:
                     info(f"  Основной реквизит формы — {ma_obj['TypeName']}.{ma_obj['ObjName']}: реквизиты заимствуются у него")

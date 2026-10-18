@@ -120,12 +120,19 @@
 					<ContextMenu name="ВидыСубконтоТолькоОборотыКонтекстноеМеню" id="41"/>
 					<ExtendedTooltip name="ВидыСубконтоТолькоОборотыРасширеннаяПодсказка" id="42"/>
 				</CheckBoxField>
+				<CheckBoxField name="ВидыСубконтоСуммовой" id="43">
+					<DataPath>Объект.ExtDimensionTypes.Суммовой</DataPath>
+					<TitleLocation>Right</TitleLocation>
+					<CheckBoxType>Auto</CheckBoxType>
+					<ContextMenu name="ВидыСубконтоСуммовойКонтекстноеМеню" id="44"/>
+					<ExtendedTooltip name="ВидыСубконтоСуммовойРасширеннаяПодсказка" id="45"/>
+				</CheckBoxField>
 			</ChildItems>
 		</Table>
-		<InputField name="Примечание" id="43">
+		<InputField name="Примечание" id="46">
 			<DataPath>Объект.Примечание</DataPath>
-			<ContextMenu name="ПримечаниеКонтекстноеМеню" id="44"/>
-			<ExtendedTooltip name="ПримечаниеРасширеннаяПодсказка" id="45"/>
+			<ContextMenu name="ПримечаниеКонтекстноеМеню" id="47"/>
+			<ExtendedTooltip name="ПримечаниеРасширеннаяПодсказка" id="48"/>
 		</InputField>
 	</ChildItems>
 	<Attributes>
@@ -258,12 +265,19 @@
 						<ContextMenu name="ВидыСубконтоТолькоОборотыКонтекстноеМеню" id="41"/>
 						<ExtendedTooltip name="ВидыСубконтоТолькоОборотыРасширеннаяПодсказка" id="42"/>
 					</CheckBoxField>
+					<CheckBoxField name="ВидыСубконтоСуммовой" id="43">
+						<DataPath>Объект.ExtDimensionTypes.Суммовой</DataPath>
+						<TitleLocation>Right</TitleLocation>
+						<CheckBoxType>Auto</CheckBoxType>
+						<ContextMenu name="ВидыСубконтоСуммовойКонтекстноеМеню" id="44"/>
+						<ExtendedTooltip name="ВидыСубконтоСуммовойРасширеннаяПодсказка" id="45"/>
+					</CheckBoxField>
 				</ChildItems>
 			</Table>
-			<InputField name="Примечание" id="43">
+			<InputField name="Примечание" id="46">
 				<DataPath>Объект.Примечание</DataPath>
-				<ContextMenu name="ПримечаниеКонтекстноеМеню" id="44"/>
-				<ExtendedTooltip name="ПримечаниеРасширеннаяПодсказка" id="45"/>
+				<ContextMenu name="ПримечаниеКонтекстноеМеню" id="47"/>
+				<ExtendedTooltip name="ПримечаниеРасширеннаяПодсказка" id="48"/>
 			</InputField>
 		</ChildItems>
 		<Attributes>

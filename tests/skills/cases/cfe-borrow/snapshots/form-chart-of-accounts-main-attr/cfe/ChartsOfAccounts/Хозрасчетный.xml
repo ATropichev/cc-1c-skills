@@ -64,6 +64,16 @@
 					<Type><v8:Type>xs:boolean</v8:Type></Type>
 				</Properties>
 			</AccountingFlag>
+			<ExtDimensionAccountingFlag uuid="UUID-021">
+				<InternalInfo/>
+				<Properties>
+					<ObjectBelonging>Adopted</ObjectBelonging>
+					<Name>Суммовой</Name>
+					<Comment/>
+					<ExtendedConfigurationObject>UUID-022</ExtendedConfigurationObject>
+					<Type><v8:Type>xs:boolean</v8:Type></Type>
+				</Properties>
+			</ExtDimensionAccountingFlag>
 		</ChildObjects>
 	</ChartOfAccounts>
 </MetaDataObject>
