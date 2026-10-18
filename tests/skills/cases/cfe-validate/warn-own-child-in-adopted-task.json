@@ -1,0 +1,56 @@
+{
+  "name": "Собственный реквизит в заимствованной задаче — предупреждение: на платформе ниже 8.3.25 базу не обновит",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Task",
+          "name": "ЗадачаИсполнителя",
+          "attributes": [
+            "Описание: String(50)"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Task.ЗадачаИсполнителя"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Tasks/ЗадачаИсполнителя.xml",
+        "-Operation": "add-attribute",
+        "-Value": "Тест_Срок: Date"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "noSnapshot": "навык ничего не пишет, проверяется текст предупреждения",
+  "expect": {
+    "stdoutContains": [
+      "[WARN]  10. Task.ЗадачаИсполнителя: собственный Attribute.Тест_Срок в заимствованном объекте — на платформе ниже 8.3.25"
+    ],
+    "stdoutNotContains": "[ERROR]"
+  }
+}

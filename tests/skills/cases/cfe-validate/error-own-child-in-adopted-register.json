@@ -1,0 +1,96 @@
+{
+  "name": "Ошибка: собственные реквизит и измерение в заимствованном регистре, собственная ТЧ в заимствованном ПВР; собственная команда — можно",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "InformationRegister",
+          "name": "Цены",
+          "dimensions": [
+            "Номенклатура: String(20)"
+          ],
+          "resources": [
+            "Цена: Number(15,2)"
+          ]
+        },
+        {
+          "type": "ChartOfCalculationTypes",
+          "name": "Начисления",
+          "attributes": [
+            "Процент: Number(5,2)"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "InformationRegister.Цены ;; ChartOfCalculationTypes.Начисления"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/InformationRegisters/Цены.xml",
+        "-Operation": "add-attribute",
+        "-Value": "Тест_Комментарий: String(50)"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/InformationRegisters/Цены.xml",
+        "-Operation": "add-dimension",
+        "-Value": "Тест_Склад: String(20)"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/InformationRegisters/Цены.xml",
+        "-Operation": "add-command",
+        "-Value": "Тест_Команда"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/ChartsOfCalculationTypes/Начисления.xml",
+        "-Operation": "add-ts",
+        "-Value": "Тест_Строки: Тест_Значение: String(10)"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "expectError": true,
+  "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
+  "expect": {
+    "stdoutContains": [
+      "10. InformationRegister.Цены: собственный Attribute.Тест_Комментарий в заимствованном объекте",
+      "10. InformationRegister.Цены: собственный Dimension.Тест_Склад в заимствованном объекте",
+      "10. ChartOfCalculationTypes.Начисления: собственный TabularSection.Тест_Строки в заимствованном объекте"
+    ],
+    "stdoutNotContains": [
+      "Command.Тест_Команда",
+      "TabularSection.Тест_Строки.Attribute"
+    ]
+  }
+}

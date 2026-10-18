@@ -1,0 +1,101 @@
+{
+  "name": "С -ConfigPath: собственные ТЧ, реквизит (в другом регистре), значение перечисления совпадают по имени с незаимствованными подобъектами источника; ТЧ с именем реквизита источника — можно",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Enum",
+          "name": "Статусы",
+          "values": [
+            "Новый",
+            "Закрыт"
+          ]
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Комментарий: String(50)",
+            "Статус: EnumRef.Статусы"
+          ],
+          "tabularSections": {
+            "Товары": [
+              "Количество: Number(10,3)"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Document.ЗаказКлиента ;; Enum.Статусы"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml",
+        "-Operation": "add-ts",
+        "-Value": "Товары: Тест_Х: String(10)"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml",
+        "-Operation": "add-attribute",
+        "-Value": "КОММЕНТАРИЙ: String(10)"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml",
+        "-Operation": "add-ts",
+        "-Value": "Статус: Тест_Х: String(10)"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Enums/Статусы.xml",
+        "-Operation": "add-enumValue",
+        "-Value": "Закрыт"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expectError": true,
+  "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
+  "expect": {
+    "stdoutContains": [
+      "18. Document.ЗаказКлиента.TabularSection.Товары: собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем",
+      "18. Document.ЗаказКлиента.Attribute.КОММЕНТАРИЙ: собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем (Document.ЗаказКлиента.Attribute.Комментарий)",
+      "18. Enum.Статусы.EnumValue.Закрыт: собственный подобъект"
+    ],
+    "stdoutNotContains": "TabularSection.Статус:"
+  }
+}

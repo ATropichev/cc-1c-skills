@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.20 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.21 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -755,6 +755,19 @@ def main():
     ext_obj_listed = set()
     form_list = []
 
+    # Собственные подобъекты данных в заимствованном объекте (реквизит, ТЧ, колонка заимствованной ТЧ,
+    # измерение, ресурс, признаки учёта): у ПВХ, ПС, ПВР и регистров платформа их загружает, но базу не
+    # обновляет («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»,
+    # 8.3.24–8.5.1 при любом режиме совместимости); у БП и Задачи — так же на платформе ниже 8.3.25, а с
+    # 8.3.25 можно (граница по версии платформы, не по режиму — по исходникам её не определить).
+    # Формы, команды и макеты — можно везде (замер 8.3.24, 8.3.27, 8.5.1).
+    own_child_restricted = {
+        'ChartOfCharacteristicTypes': 'Error', 'ChartOfAccounts': 'Error', 'ChartOfCalculationTypes': 'Error',
+        'InformationRegister': 'Error', 'AccumulationRegister': 'Error', 'AccountingRegister': 'Error',
+        'CalculationRegister': 'Error', 'BusinessProcess': 'Since8325', 'Task': 'Since8325',
+    }
+    own_data_child_tags = ('Attribute', 'TabularSection', 'Dimension', 'Resource', 'AccountingFlag', 'ExtDimensionAccountingFlag')
+
     def md_type_list(el):
         """Типы подобъекта метаданных: тексты <v8:Type>; определяемый тип и прочие наборы — меткой «#TypeSet»,
         квалификаторы пропускаются."""
@@ -997,6 +1010,37 @@ def main():
                     ix_ts_columns[ix_name] = ix_cols
             ix_owners = [o.text.strip() for o in obj_el.findall(f'{{{MD}}}Properties/{{{MD}}}Owners/{{{XR}}}Item') if o.text]
             ext_obj_index[f'{type_name}.{child_name}'.upper()] = {'Names': ix_names, 'TSColumns': ix_ts_columns, 'Owners': ix_owners}
+
+            # Собственные подобъекты данных в заимствованном объекте вида, где они запрещены
+            own_rule = None
+            if ob_node is not None and (ob_node.text or '') == 'Adopted':
+                own_rule = own_child_restricted.get(type_name)
+            if own_rule and obj_child_objects is not None:
+                own_found = []
+                for oc in obj_child_objects:
+                    if not isinstance(oc.tag, str) or etree.QName(oc.tag).localname not in own_data_child_tags:
+                        continue
+                    oc_ln = etree.QName(oc.tag).localname
+                    oc_name = oc.find(f'{{{MD}}}Properties/{{{MD}}}Name')
+                    oc_label = f"{oc_ln}.{(oc_name.text or '').strip() if oc_name is not None else '?'}"
+                    if not is_borrowed_sub_item(oc):
+                        own_found.append(oc_label)
+                        continue
+                    if oc_ln != 'TabularSection':
+                        continue
+                    for occ in oc.findall(f'{{{MD}}}ChildObjects/{{{MD}}}Attribute'):
+                        if is_borrowed_sub_item(occ):
+                            continue
+                        occ_name = occ.find(f'{{{MD}}}Properties/{{{MD}}}Name')
+                        own_found.append(f"{oc_label}.Attribute.{(occ_name.text or '').strip() if occ_name is not None else '?'}")
+                for own_label in own_found:
+                    if own_rule == 'Error':
+                        r.error(f'10. {type_name}.{child_name}: собственный {own_label} в заимствованном объекте — платформа загрузит расширение, '
+                                f'но базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
+                        check10_ok = False
+                    else:
+                        r.warn(f'10. {type_name}.{child_name}: собственный {own_label} в заимствованном объекте — на платформе ниже 8.3.25 '
+                               f'базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
 
             if obj_child_objects is not None:
                 ctx = f'{type_name}.{child_name}'
@@ -1595,7 +1639,8 @@ def main():
     # подобъекта (реквизит, ТЧ, колонка ТЧ, форма — замер 8.3.24), ОсновнойЯзык — у расширения.
     # Расхождение платформа принимает при загрузке, а применять расширение отказывается, и по
     # сообщению не видно, откуда взялся чужой UUID. Нулевой UUID (cfe-init без -ConfigPath) не
-    # совпадёт ни с чем — его видно и без источника.
+    # совпадёт ни с чем — его видно и без источника. Собственный подобъект с именем незаимствованного
+    # подобъекта источника платформа тоже загружает, а базу не обновляет.
 
     # UUID, по которому подобъект связан с основной конфигурацией: в расширении —
     # ExtendedConfigurationObject (у собственных подобъектов его нет), в источнике — атрибут uuid.
@@ -1663,6 +1708,52 @@ def main():
         if not add_md_id_file(idx, os.path.join(type_dir, f'{obj_name}.xml'), f'{type_name}.{obj_name}', from_extension):
             return None
         return idx
+
+    # Собственные подобъекты заимствованного объекта, одноимённые (без учёта регистра) с незаимствованным
+    # подобъектом источника того же вида на том же уровне: реквизит, ТЧ, колонка заимствованной ТЧ, значение
+    # перечисления, форма. Платформа расширение загружает, а базу не обновляет: «Уже существует объект с
+    # именем …» (замер 8.3.24, 8.3.27). Реквизит и ТЧ с одним именем друг другу не мешают. Совпадение с
+    # подобъектом, заимствованным в этом же расширении, — дубль имени, его платформа отвергает уже на загрузке.
+    def get_own_name_collisions(obj_file, prefix, ext_idx, src_idx):
+        result = []
+        try:
+            doc_root = etree.parse(obj_file).getroot()
+        except Exception:
+            return result
+        obj_el = next((c for c in doc_root if isinstance(c.tag, str)), None)
+        co = obj_el.xpath("*[local-name()='ChildObjects']") if obj_el is not None else []
+        if not co:
+            return result
+        keys = []
+        for sub in co[0]:
+            if not isinstance(sub.tag, str):
+                continue
+            ln = etree.QName(sub.tag).localname
+            if ln == 'Form':
+                if (sub.text or '').strip():
+                    keys.append(f'{prefix}.Form.{sub.text.strip()}')
+                continue
+            if ln not in ('Attribute', 'TabularSection', 'EnumValue'):
+                continue
+            name_node = sub.xpath("*[local-name()='Properties']/*[local-name()='Name']")
+            if not name_node:
+                continue
+            k = f'{prefix}.{ln}.{(name_node[0].text or "").strip()}'
+            keys.append(k)
+            if ln != 'TabularSection' or k not in ext_idx:
+                continue
+            for col in sub.xpath("*[local-name()='ChildObjects']/*[local-name()='Attribute']"):
+                col_name = col.xpath("*[local-name()='Properties']/*[local-name()='Name']")
+                if col_name:
+                    keys.append(f'{k}.Attribute.{(col_name[0].text or "").strip()}')
+        src_ci = {sk.upper(): sk for sk in src_idx}
+        ext_ci = {ek.upper() for ek in ext_idx}
+        for k in keys:
+            if k.upper() in ext_ci:
+                continue
+            if k.upper() in src_ci:
+                result.append({'Own': k, 'Src': src_ci[k.upper()]})
+        return result
 
     if not r.stopped and child_obj_node is not None:
         zero_guid = '00000000-0000-0000-0000-000000000000'
@@ -1736,6 +1827,13 @@ def main():
                     what = 'нулевой' if ext_id == zero_guid else ext_id
                     r.error(f'18. {key}: ExtendedConfigurationObject {what}, а UUID в конфигурации-источнике {src_id} — платформа загрузит расширение, но не применит («ОбъектРасширяемойКонфигурации не совпадает»)')
                     check18_ok = False
+                if r.stopped:
+                    break
+            if r.stopped:
+                break
+            for nc in get_own_name_collisions(os.path.join(config_dir, dir_name, f'{obj_name18}.xml'), f'{type_name}.{obj_name18}', ext_idx, src_idx):
+                r.error(f"18. {nc['Own']}: собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем ({nc['Src']}) — платформа загрузит расширение, но базу не обновит («Уже существует объект с именем …»)")
+                check18_ok = False
                 if r.stopped:
                     break
 

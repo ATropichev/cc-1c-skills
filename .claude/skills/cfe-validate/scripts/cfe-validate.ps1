@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.20 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.21 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -781,6 +781,19 @@ $script:extObjIndex = New-Object System.Collections.Hashtable ([StringComparer]:
 $script:extObjListed = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
 $script:formList = @()
 
+# Собственные подобъекты данных в заимствованном объекте (реквизит, ТЧ, колонка заимствованной ТЧ,
+# измерение, ресурс, признаки учёта): у ПВХ, ПС, ПВР и регистров платформа их загружает, но базу не
+# обновляет («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»,
+# 8.3.24–8.5.1 при любом режиме совместимости); у БП и Задачи — так же на платформе ниже 8.3.25, а с
+# 8.3.25 можно (граница по версии платформы, не по режиму — по исходникам её не определить).
+# Формы, команды и макеты — можно везде (замер 8.3.24, 8.3.27, 8.5.1).
+$script:ownChildRestricted = @{
+	"ChartOfCharacteristicTypes" = "Error"; "ChartOfAccounts" = "Error"; "ChartOfCalculationTypes" = "Error"
+	"InformationRegister" = "Error"; "AccumulationRegister" = "Error"; "AccountingRegister" = "Error"
+	"CalculationRegister" = "Error"; "BusinessProcess" = "Since8325"; "Task" = "Since8325"
+}
+$script:ownDataChildTags = @('Attribute','TabularSection','Dimension','Resource','AccountingFlag','ExtDimensionAccountingFlag')
+
 # Helper: check if sub-item has explicit borrowed metadata
 function Test-BorrowedSubItem {
 	param($subItem, $nsm)
@@ -933,6 +946,33 @@ if ($childObjNode) {
 		}
 		$ixOwners = @(foreach ($ixOwner in $objEl.SelectNodes("md:Properties/md:Owners/xr:Item", $objNs)) { $ixOwner.InnerText.Trim() })
 		$script:extObjIndex["${typeName}.${childName}"] = @{ Names = $ixNames; TSColumns = $ixTSColumns; Owners = $ixOwners }
+
+		# Собственные подобъекты данных в заимствованном объекте вида, где они запрещены
+		$ownRule = $null
+		if ($obNode -and $obNode.InnerText -eq "Adopted") { $ownRule = $script:ownChildRestricted[$typeName] }
+		if ($ownRule -and $objChildObjects) {
+			$ownFound = @()
+			foreach ($oc in $objChildObjects.ChildNodes) {
+				if ($oc.NodeType -ne 'Element' -or $oc.LocalName -notin $script:ownDataChildTags) { continue }
+				$ocName = $oc.SelectSingleNode("md:Properties/md:Name", $objNs)
+				$ocLabel = "$($oc.LocalName).$(if ($ocName) { $ocName.InnerText.Trim() } else { '?' })"
+				if (-not (Test-BorrowedSubItem $oc $objNs)) { $ownFound += $ocLabel; continue }
+				if ($oc.LocalName -ne 'TabularSection') { continue }
+				foreach ($occ in $oc.SelectNodes("md:ChildObjects/md:Attribute", $objNs)) {
+					if (Test-BorrowedSubItem $occ $objNs) { continue }
+					$occName = $occ.SelectSingleNode("md:Properties/md:Name", $objNs)
+					$ownFound += "$ocLabel.Attribute.$(if ($occName) { $occName.InnerText.Trim() } else { '?' })"
+				}
+			}
+			foreach ($ownLabel in $ownFound) {
+				if ($ownRule -eq "Error") {
+					Report-Error "10. ${typeName}.${childName}: собственный $ownLabel в заимствованном объекте — платформа загрузит расширение, но базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)"
+					$check10Ok = $false
+				} else {
+					Report-Warn "10. ${typeName}.${childName}: собственный $ownLabel в заимствованном объекте — на платформе ниже 8.3.25 базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)"
+				}
+			}
+		}
 
 		if ($objChildObjects) {
 			$ctx = "${typeName}.${childName}"
@@ -1566,7 +1606,8 @@ if ($version) {
 # подобъекта (реквизит, ТЧ, колонка ТЧ, форма — замер 8.3.24), ОсновнойЯзык — у расширения.
 # Расхождение платформа принимает при загрузке, а применять расширение отказывается, и по
 # сообщению не видно, откуда взялся чужой UUID. Нулевой UUID (cfe-init без -ConfigPath) не
-# совпадёт ни с чем — его видно и без источника.
+# совпадёт ни с чем — его видно и без источника. Собственный подобъект с именем незаимствованного
+# подобъекта источника платформа тоже загружает, а базу не обновляет.
 
 # UUID, по которому подобъект связан с основной конфигурацией: в расширении —
 # ExtendedConfigurationObject (у собственных подобъектов его нет), в источнике — атрибут uuid.
@@ -1636,6 +1677,51 @@ function Get-MdIdIndex {
 	$idx = New-Object System.Collections.Specialized.OrderedDictionary ([StringComparer]::Ordinal)
 	if (-not (Add-MdIdFile $idx (Join-Path $typeDir "$objName.xml") "$typeName.$objName" $fromExtension)) { return $null }
 	return $idx
+}
+
+# Собственные подобъекты заимствованного объекта, одноимённые (без учёта регистра) с незаимствованным
+# подобъектом источника того же вида на том же уровне: реквизит, ТЧ, колонка заимствованной ТЧ, значение
+# перечисления, форма. Платформа расширение загружает, а базу не обновляет: «Уже существует объект с
+# именем …» (замер 8.3.24, 8.3.27). Реквизит и ТЧ с одним именем друг другу не мешают. Совпадение с
+# подобъектом, заимствованным в этом же расширении, — дубль имени, его платформа отвергает уже на загрузке.
+function Get-OwnNameCollisions {
+	param([string]$objFile, [string]$prefix, $extIdx, $srcIdx)
+	$result = @()
+	$doc = New-Object System.Xml.XmlDocument
+	try { $doc.Load($objFile) } catch { return $result }
+	$objEl = $null
+	foreach ($c in $doc.DocumentElement.ChildNodes) {
+		if ($c.NodeType -eq 'Element') { $objEl = $c; break }
+	}
+	$co = if ($objEl) { $objEl.SelectSingleNode("*[local-name()='ChildObjects']") } else { $null }
+	if (-not $co) { return $result }
+	$keys = @()
+	foreach ($sub in $co.ChildNodes) {
+		if ($sub.NodeType -ne 'Element') { continue }
+		if ($sub.LocalName -eq 'Form') {
+			if ($sub.InnerText.Trim()) { $keys += "$prefix.Form.$($sub.InnerText.Trim())" }
+			continue
+		}
+		if ($sub.LocalName -notin @('Attribute','TabularSection','EnumValue')) { continue }
+		$nameNode = $sub.SelectSingleNode("*[local-name()='Properties']/*[local-name()='Name']")
+		if (-not $nameNode) { continue }
+		$k = "$prefix.$($sub.LocalName).$($nameNode.InnerText.Trim())"
+		$keys += $k
+		if ($sub.LocalName -ne 'TabularSection' -or -not $extIdx.Contains($k)) { continue }
+		foreach ($col in $sub.SelectNodes("*[local-name()='ChildObjects']/*[local-name()='Attribute']")) {
+			$colName = $col.SelectSingleNode("*[local-name()='Properties']/*[local-name()='Name']")
+			if ($colName) { $keys += "$k.Attribute.$($colName.InnerText.Trim())" }
+		}
+	}
+	$srcCi = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+	foreach ($sk in $srcIdx.Keys) { $srcCi[$sk] = $sk }
+	$extCi = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+	foreach ($ek in $extIdx.Keys) { $extCi[$ek] = $true }
+	foreach ($k in $keys) {
+		if ($extCi.ContainsKey($k)) { continue }
+		if ($srcCi.ContainsKey($k)) { $result += @{ Own = $k; Src = $srcCi[$k] } }
+	}
+	return $result
 }
 
 if (-not $script:stopped -and $childObjNode) {
@@ -1721,6 +1807,12 @@ if (-not $script:stopped -and $childObjNode) {
 				Report-Error "18. ${key}: ExtendedConfigurationObject $what, а UUID в конфигурации-источнике $($srcIdx[$key]) — платформа загрузит расширение, но не применит («ОбъектРасширяемойКонфигурации не совпадает»)"
 				$check18Ok = $false
 			}
+			if ($script:stopped) { break }
+		}
+		if ($script:stopped) { break }
+		foreach ($nc in @(Get-OwnNameCollisions (Join-Path (Join-Path $configDir $dirName) "$objName18.xml") "$typeName.$objName18" $extIdx $srcIdx)) {
+			Report-Error "18. $($nc.Own): собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем ($($nc.Src)) — платформа загрузит расширение, но базу не обновит («Уже существует объект с именем …»)"
+			$check18Ok = $false
 			if ($script:stopped) { break }
 		}
 	}
