@@ -1,0 +1,12 @@
+{
+  "name": "Валидатор находит ошибку: реквизит и реквизит адресации задачи с одним именем",
+  "setup": "fixture:task-attr-eq-addr",
+  "params": {
+    "objectPath": "Tasks/Задача.xml"
+  },
+  "expectError": true,
+  "noSnapshot": "навык ничего не пишет, проверяется текст",
+  "expect": {
+    "stdoutContains": "8. Name 'ТАдр' is used by both Attribute and AddressingAttribute"
+  }
+}

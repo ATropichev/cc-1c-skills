@@ -1,4 +1,4 @@
-﻿# meta-validate v1.37 — Validate 1C metadata object structure
+﻿# meta-validate v1.38 — Validate 1C metadata object structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1059,6 +1059,27 @@ $reservedEnRu = @{
 }
 
 $stdForType = $standardAttributesByType[$mdType]
+
+# Колонка ТЧ — стандартные реквизиты строки: «ТабличнаяЧасть.X - Недопустимое имя реквизита -
+# НомерСтроки» (замер 8.3.24). НомерСтроки — у любого объекта, Ссылка — только у ссылочного (у обработки
+# колонка Ссылка законна — замер и ERP); Номер — можно.
+$check7bColOk = $true
+if ($childObjNode) {
+	$tsRowReserved = @{ "linenumber" = $true; "номерстроки" = $true }
+	if ($stdForType -contains "Ref") { $tsRowReserved["ref"] = $true; $tsRowReserved["ссылка"] = $true }
+	foreach ($tsNode in $childObjNode.SelectNodes("md:TabularSection", $ns)) {
+		$tsNameNode = $tsNode.SelectSingleNode("md:Properties/md:Name", $ns)
+		$tsLabel = if ($tsNameNode) { $tsNameNode.InnerText } else { "?" }
+		foreach ($colNode in $tsNode.SelectNodes("md:ChildObjects/md:Attribute", $ns)) {
+			$colName = $colNode.SelectSingleNode("md:Properties/md:Name", $ns)
+			if ($colName -and $tsRowReserved.ContainsKey($colName.InnerText.ToLower())) {
+				Report-Error "7b. TabularSection.${tsLabel}: column '$($colName.InnerText)' conflicts with a standard attribute of a tabular section row"
+				$check7bColOk = $false
+			}
+		}
+	}
+}
+
 if ($childObjNode -and $stdForType) {
 	# Множество зарезервированных имён (EN + RU) в нижнем регистре.
 	$reservedSet = @{}
@@ -1084,29 +1105,11 @@ if ($childObjNode -and $stdForType) {
 			}
 		}
 	}
-	if ($check7bOk) {
+	if ($check7bOk -and $check7bColOk) {
 		Report-OK "7b. Reserved attribute names: no conflicts"
 	}
-} elseif ($childObjNode) {
+} elseif ($childObjNode -and $check7bColOk) {
 	Report-OK "7b. Reserved attribute names: no conflicts (no standard set for $mdType)"
-}
-
-# Колонка ТЧ — стандартные реквизиты строки: «ТабличнаяЧасть.X - Недопустимое имя реквизита -
-# НомерСтроки» (замер 8.3.24). НомерСтроки — у любого объекта, Ссылка — только у ссылочного (у обработки
-# колонка Ссылка законна — замер и ERP); Номер — можно.
-if ($childObjNode) {
-	$tsRowReserved = @{ "linenumber" = $true; "номерстроки" = $true }
-	if ($stdForType -contains "Ref") { $tsRowReserved["ref"] = $true; $tsRowReserved["ссылка"] = $true }
-	foreach ($tsNode in $childObjNode.SelectNodes("md:TabularSection", $ns)) {
-		$tsNameNode = $tsNode.SelectSingleNode("md:Properties/md:Name", $ns)
-		$tsLabel = if ($tsNameNode) { $tsNameNode.InnerText } else { "?" }
-		foreach ($colNode in $tsNode.SelectNodes("md:ChildObjects/md:Attribute", $ns)) {
-			$colName = $colNode.SelectSingleNode("md:Properties/md:Name", $ns)
-			if ($colName -and $tsRowReserved.ContainsKey($colName.InnerText.ToLower())) {
-				Report-Error "7b. TabularSection.${tsLabel}: column '$($colName.InnerText)' conflicts with a standard attribute of a tabular section row"
-			}
-		}
-	}
 }
 
 if ($script:stopped) { & $finalize; exit 1 }
@@ -1191,12 +1194,13 @@ if ($childObjNode) {
 		if (-not (Check-Uniqueness -nodes $ops -kind "Operation")) { $check8Ok = $false }
 	}
 
-	# Реквизит, ТЧ, измерение и ресурс объекта — одно пространство имён без учёта регистра: платформа
-	# отвергает загрузку («Задано одинаковое имя для реквизита и табличной части / измерения / ресурса»,
-	# замер 8.3.24). Колонке ТЧ имя реквизита объекта не мешает.
+	# Реквизит, ТЧ, измерение, ресурс, реквизит адресации и признак учёта объекта — одно пространство имён
+	# без учёта регистра: платформа отвергает загрузку («Задано одинаковое имя для реквизита и табличной
+	# части / измерения / ресурса / реквизита адресации», замер 8.3.24). Колонке ТЧ имя реквизита объекта
+	# не мешает, признаку учёта субконто — тоже (он колонка ТЧ видов субконто).
 	$crossSeen = @{}
 	foreach ($cn in $childObjNode.ChildNodes) {
-		if ($cn.NodeType -ne 'Element' -or $cn.LocalName -notin @('Attribute','TabularSection','Dimension','Resource')) { continue }
+		if ($cn.NodeType -ne 'Element' -or $cn.LocalName -notin @('Attribute','TabularSection','Dimension','Resource','AddressingAttribute','AccountingFlag')) { continue }
 		$cnName = $cn.SelectSingleNode("md:Properties/md:Name", $ns)
 		if (-not $cnName -or -not $cnName.InnerText) { continue }
 		$nm = $cnName.InnerText

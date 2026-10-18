@@ -7,6 +7,10 @@
   "expectError": true,
   "noSnapshot": "навык ничего не пишет, проверяется текст",
   "expect": {
-    "stdoutContains": "7b. TabularSection.ТЧ: column 'НомерСтроки' conflicts with a standard attribute of a tabular section row"
-  }
+    "stdoutContains": "7b. TabularSection.ТЧ: column 'НомерСтроки' conflicts with a standard attribute of a tabular section row",
+    "stdoutNotContains": "7b. Reserved attribute names: no conflicts"
+  },
+  "args_extra": [
+    "-Detailed"
+  ]
 }

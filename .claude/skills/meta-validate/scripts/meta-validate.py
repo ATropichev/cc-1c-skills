@@ -1,4 +1,4 @@
-# meta-validate v1.37 — Validate 1C metadata object structure (Python port)
+# meta-validate v1.38 — Validate 1C metadata object structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1087,6 +1087,24 @@ RESERVED_EN_RU = {
 }
 
 std_for_type = standard_attributes_by_type.get(md_type)
+
+# Колонка ТЧ — стандартные реквизиты строки: «ТабличнаяЧасть.X - Недопустимое имя реквизита -
+# НомерСтроки» (замер 8.3.24). НомерСтроки — у любого объекта, Ссылка — только у ссылочного (у обработки
+# колонка Ссылка законна — замер и ERP); Номер — можно.
+check7b_col_ok = True
+if child_obj_node is not None:
+    ts_row_reserved = {"linenumber", "номерстроки"}
+    if std_for_type and "Ref" in std_for_type:
+        ts_row_reserved |= {"ref", "ссылка"}
+    for ts_node in find_all(child_obj_node, "md:TabularSection"):
+        ts_name_node = find(ts_node, "md:Properties/md:Name")
+        ts_label = inner_text(ts_name_node) if ts_name_node is not None else "?"
+        for col_node in find_all(ts_node, "md:ChildObjects/md:Attribute"):
+            col_name = find(col_node, "md:Properties/md:Name")
+            if col_name is not None and inner_text(col_name).lower() in ts_row_reserved:
+                report_error(f"7b. TabularSection.{ts_label}: column '{inner_text(col_name)}' conflicts with a standard attribute of a tabular section row")
+                check7b_col_ok = False
+
 if child_obj_node is not None and std_for_type:
     reserved_set = set()
     for en in std_for_type:
@@ -1106,25 +1124,10 @@ if child_obj_node is not None and std_for_type:
                 if an.lower() in reserved_set:
                     report_error(f"7b. {local_name(attr_node)} '{an}' conflicts with a standard attribute of {md_type}")
                     check7b_ok = False
-    if check7b_ok:
+    if check7b_ok and check7b_col_ok:
         report_ok("7b. Reserved attribute names: no conflicts")
-elif child_obj_node is not None:
+elif child_obj_node is not None and check7b_col_ok:
     report_ok(f"7b. Reserved attribute names: no conflicts (no standard set for {md_type})")
-
-# Колонка ТЧ — стандартные реквизиты строки: «ТабличнаяЧасть.X - Недопустимое имя реквизита -
-# НомерСтроки» (замер 8.3.24). НомерСтроки — у любого объекта, Ссылка — только у ссылочного (у обработки
-# колонка Ссылка законна — замер и ERP); Номер — можно.
-if child_obj_node is not None:
-    ts_row_reserved = {"linenumber", "номерстроки"}
-    if std_for_type and "Ref" in std_for_type:
-        ts_row_reserved |= {"ref", "ссылка"}
-    for ts_node in find_all(child_obj_node, "md:TabularSection"):
-        ts_name_node = find(ts_node, "md:Properties/md:Name")
-        ts_label = inner_text(ts_name_node) if ts_name_node is not None else "?"
-        for col_node in find_all(ts_node, "md:ChildObjects/md:Attribute"):
-            col_name = find(col_node, "md:Properties/md:Name")
-            if col_name is not None and inner_text(col_name).lower() in ts_row_reserved:
-                report_error(f"7b. TabularSection.{ts_label}: column '{inner_text(col_name)}' conflicts with a standard attribute of a tabular section row")
 
 if stopped:
     finalize()
@@ -1204,12 +1207,13 @@ if child_obj_node is not None:
         if not check_uniqueness(ops, "Operation"):
             check8_ok = False
 
-    # Реквизит, ТЧ, измерение и ресурс объекта — одно пространство имён без учёта регистра: платформа
-    # отвергает загрузку («Задано одинаковое имя для реквизита и табличной части / измерения / ресурса»,
-    # замер 8.3.24). Колонке ТЧ имя реквизита объекта не мешает.
+    # Реквизит, ТЧ, измерение, ресурс, реквизит адресации и признак учёта объекта — одно пространство имён
+    # без учёта регистра: платформа отвергает загрузку («Задано одинаковое имя для реквизита и табличной
+    # части / измерения / ресурса / реквизита адресации», замер 8.3.24). Колонке ТЧ имя реквизита объекта
+    # не мешает, признаку учёта субконто — тоже (он колонка ТЧ видов субконто).
     cross_seen = {}
     for cn in child_obj_node:
-        if not isinstance(cn.tag, str) or local_name(cn) not in ("Attribute", "TabularSection", "Dimension", "Resource"):
+        if not isinstance(cn.tag, str) or local_name(cn) not in ("Attribute", "TabularSection", "Dimension", "Resource", "AddressingAttribute", "AccountingFlag"):
             continue
         cn_name = find(cn, "md:Properties/md:Name")
         if cn_name is None or not inner_text(cn_name):
