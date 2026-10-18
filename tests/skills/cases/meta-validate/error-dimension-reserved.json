@@ -1,0 +1,12 @@
+{
+  "name": "Валидатор находит ошибку: измерение регистра называется как стандартный реквизит (Период)",
+  "setup": "fixture:ir-dimension-reserved",
+  "params": {
+    "objectPath": "InformationRegisters/Рег.xml"
+  },
+  "expectError": true,
+  "noSnapshot": "навык ничего не пишет, проверяется текст",
+  "expect": {
+    "stdoutContains": "7b. Dimension 'Период' conflicts with a standard attribute of InformationRegister"
+  }
+}

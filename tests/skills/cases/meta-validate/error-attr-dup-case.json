@@ -1,0 +1,12 @@
+{
+  "name": "Валидатор находит ошибку: два реквизита с одним именем в разном регистре",
+  "setup": "fixture:doc-attr-dup-case",
+  "params": {
+    "objectPath": "Documents/Док.xml"
+  },
+  "expectError": true,
+  "noSnapshot": "навык ничего не пишет, проверяется текст",
+  "expect": {
+    "stdoutContains": "8. Duplicate Attribute name: 'РЕКВ'"
+  }
+}

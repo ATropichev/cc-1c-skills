@@ -1,4 +1,4 @@
-# meta-validate v1.36 — Validate 1C metadata object structure (Python port)
+# meta-validate v1.37 — Validate 1C metadata object structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -1095,19 +1095,36 @@ if child_obj_node is not None and std_for_type:
         if ru:
             reserved_set.add(ru.lower())
     check7b_ok = True
-    for attr_node in find_all(child_obj_node, 'md:Attribute'):
+    # Измерение и ресурс регистра — те же зарезервированные имена, что у реквизита («Недопустимое имя
+    # измерения - Период», замер 8.3.24)
+    for attr_node in find_all(child_obj_node, 'md:Attribute | md:Dimension | md:Resource'):
         attr_props = find(attr_node, 'md:Properties')
         if attr_props is not None:
             attr_name_node = find(attr_props, 'md:Name')
             if attr_name_node is not None and inner_text(attr_name_node):
                 an = inner_text(attr_name_node)
                 if an.lower() in reserved_set:
-                    report_error(f"7b. Attribute '{an}' conflicts with a standard attribute of {md_type}")
+                    report_error(f"7b. {local_name(attr_node)} '{an}' conflicts with a standard attribute of {md_type}")
                     check7b_ok = False
     if check7b_ok:
         report_ok("7b. Reserved attribute names: no conflicts")
 elif child_obj_node is not None:
     report_ok(f"7b. Reserved attribute names: no conflicts (no standard set for {md_type})")
+
+# Колонка ТЧ — стандартные реквизиты строки: «ТабличнаяЧасть.X - Недопустимое имя реквизита -
+# НомерСтроки» (замер 8.3.24). НомерСтроки — у любого объекта, Ссылка — только у ссылочного (у обработки
+# колонка Ссылка законна — замер и ERP); Номер — можно.
+if child_obj_node is not None:
+    ts_row_reserved = {"linenumber", "номерстроки"}
+    if std_for_type and "Ref" in std_for_type:
+        ts_row_reserved |= {"ref", "ссылка"}
+    for ts_node in find_all(child_obj_node, "md:TabularSection"):
+        ts_name_node = find(ts_node, "md:Properties/md:Name")
+        ts_label = inner_text(ts_name_node) if ts_name_node is not None else "?"
+        for col_node in find_all(ts_node, "md:ChildObjects/md:Attribute"):
+            col_name = find(col_node, "md:Properties/md:Name")
+            if col_name is not None and inner_text(col_name).lower() in ts_row_reserved:
+                report_error(f"7b. TabularSection.{ts_label}: column '{inner_text(col_name)}' conflicts with a standard attribute of a tabular section row")
 
 if stopped:
     finalize()
@@ -1127,11 +1144,12 @@ def check_uniqueness(nodes, kind):
         if el_name is None or not inner_text(el_name):
             continue
         name_val = inner_text(el_name)
-        if name_val in names:
+        # Без учёта регистра, как в языке 1С (и как Hashtable в PS-мастере)
+        if name_val.lower() in names:
             report_error(f"8. Duplicate {kind} name: '{name_val}'")
             has_dupes = True
         else:
-            names[name_val] = True
+            names[name_val.lower()] = True
     return not has_dupes
 
 
@@ -1185,6 +1203,24 @@ if child_obj_node is not None:
     if len(ops) > 0:
         if not check_uniqueness(ops, "Operation"):
             check8_ok = False
+
+    # Реквизит, ТЧ, измерение и ресурс объекта — одно пространство имён без учёта регистра: платформа
+    # отвергает загрузку («Задано одинаковое имя для реквизита и табличной части / измерения / ресурса»,
+    # замер 8.3.24). Колонке ТЧ имя реквизита объекта не мешает.
+    cross_seen = {}
+    for cn in child_obj_node:
+        if not isinstance(cn.tag, str) or local_name(cn) not in ("Attribute", "TabularSection", "Dimension", "Resource"):
+            continue
+        cn_name = find(cn, "md:Properties/md:Name")
+        if cn_name is None or not inner_text(cn_name):
+            continue
+        nm = inner_text(cn_name)
+        prev = cross_seen.get(nm.lower())
+        if prev is not None and prev != local_name(cn):
+            report_error(f"8. Name '{nm}' is used by both {prev} and {local_name(cn)}")
+            check8_ok = False
+        elif prev is None:
+            cross_seen[nm.lower()] = local_name(cn)
 
     if check8_ok:
         report_ok("8. Name uniqueness: all names unique")

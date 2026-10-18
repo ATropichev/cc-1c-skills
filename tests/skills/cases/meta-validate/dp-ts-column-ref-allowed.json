@@ -1,0 +1,11 @@
+{
+  "name": "У обработки колонка ТЧ «Ссылка» законна — стандартного реквизита Ссылка у её строки нет",
+  "setup": "fixture:dp-ts-column-ref",
+  "params": {
+    "objectPath": "DataProcessors/Обр.xml"
+  },
+  "noSnapshot": "навык ничего не пишет, проверяется текст",
+  "expect": {
+    "stdoutNotContains": "tabular section row"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "Валидатор находит ошибку: реквизит и табличная часть с одним именем",
+  "setup": "fixture:doc-attr-eq-ts",
+  "params": {
+    "objectPath": "Documents/Док.xml"
+  },
+  "expectError": true,
+  "noSnapshot": "навык ничего не пишет, проверяется текст",
+  "expect": {
+    "stdoutContains": "8. Name 'ТЧ' is used by both Attribute and TabularSection"
+  }
+}

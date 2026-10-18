@@ -1,0 +1,12 @@
+{
+  "name": "Валидатор находит ошибку: колонка ТЧ называется как стандартный реквизит строки (НомерСтроки)",
+  "setup": "fixture:doc-ts-column-reserved",
+  "params": {
+    "objectPath": "Documents/Док.xml"
+  },
+  "expectError": true,
+  "noSnapshot": "навык ничего не пишет, проверяется текст",
+  "expect": {
+    "stdoutContains": "7b. TabularSection.ТЧ: column 'НомерСтроки' conflicts with a standard attribute of a tabular section row"
+  }
+}
