@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.47 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.48 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1113,7 +1113,8 @@ function Borrow-Form {
 			}
 		}
 	} else {
-		$srcAttrUuids = Get-SourceAttributeUuids $typeName $objName
+		$maObj = Resolve-MainAttributeObject $srcFormEl $typeName $objName
+		$srcAttrUuids = Get-SourceAttributeUuids $maObj.TypeName $maObj.ObjName
 	}
 	# Реквизиты объекта, которые попадут в расширение: в режиме Form — только используемые формой
 	# (тот же сбор, что в Borrow-MainAttribute), в режиме All — все ($null)
@@ -2618,7 +2619,7 @@ function Resolve-CommonFormOwner {
 	if ($typeText -ceq 'cfg:ConstantsSet') { return @{ Kind = 'Constants'; MainName = $mainAttr.GetAttribute("name") } }
 	$m = [regex]::Match($typeText, '^cfg:(\w+)\.(\w+)$')
 	if ($m.Success -and $script:commonFormOwnerKinds.Contains($m.Groups[1].Value)) {
-		return @{ Kind = 'Object'; TypeName = $script:commonFormOwnerKinds[$m.Groups[1].Value]; ObjName = $m.Groups[2].Value }
+		return @{ Kind = 'Object'; TypeName = $script:commonFormOwnerKinds[$m.Groups[1].Value]; ObjName = $m.Groups[2].Value; ByType = $true }
 	}
 	if ($typeText -ceq 'cfg:DynamicList') {
 		$mt = $mainAttr.SelectSingleNode(".//*[local-name()='MainTable']")
@@ -2630,6 +2631,17 @@ function Resolve-CommonFormOwner {
 		}
 	}
 	return $null
+}
+
+# Объект, по которому разрешаются пути формы объекта: тип основного реквизита <Вид>Object.Имя и т.п.,
+# а не владелец формы — форма обработки с основным реквизитом DocumentObject.X видит реквизиты X (замер
+# 8.3.24, #120). Список (DynamicList) и прочие типы — владелец формы, как раньше.
+function Resolve-MainAttributeObject {
+	param($formEl, [string]$typeName, [string]$objName)
+
+	$o = Resolve-CommonFormOwner $formEl
+	if ($o -and $o.Kind -eq 'Object' -and $o.ByType) { return @{ TypeName = $o.TypeName; ObjName = $o.ObjName } }
+	return @{ TypeName = $typeName; ObjName = $objName }
 }
 
 # Набор констант как основной реквизит общей формы: заимствуются константы, пути на которые есть
@@ -3261,7 +3273,25 @@ foreach ($item in $items) {
 				Borrow-MainAttribute $cfOwner.TypeName $cfOwner.ObjName $null $BorrowMainAttribute $cfSrcFormXmlPath
 			}
 		} elseif ($hasBMA) {
-			Borrow-MainAttribute $typeName $objName $formName $BorrowMainAttribute
+			# Реквизиты заимствуются у объекта из типа основного реквизита: у формы обработки с
+			# DocumentObject.X это X, и его нужно заимствовать — иначе форма не загрузится
+			$srcFormXmlPath = Join-Path (Join-Path (Join-Path (Join-Path (Join-Path $cfgDir $dirName) $objName) "Forms") $formName) "Ext/Form.xml"
+			$maObj = @{ TypeName = $typeName; ObjName = $objName }
+			if (Test-Path $srcFormXmlPath) {
+				$maDoc = New-Object System.Xml.XmlDocument
+				$maDoc.PreserveWhitespace = $true
+				$maDoc.Load($srcFormXmlPath)
+				$maObj = Resolve-MainAttributeObject $maDoc.DocumentElement $typeName $objName
+			}
+			if ($maObj.TypeName -eq $typeName -and $maObj.ObjName -eq $objName) {
+				Borrow-MainAttribute $typeName $objName $formName $BorrowMainAttribute
+			} else {
+				Info "  Основной реквизит формы — $($maObj.TypeName).$($maObj.ObjName): реквизиты заимствуются у него"
+				Borrow-ObjectShell $maObj.TypeName $maObj.ObjName
+				if (Test-ObjectBorrowed $maObj.TypeName $maObj.ObjName) {
+					Borrow-MainAttribute $maObj.TypeName $maObj.ObjName $null $BorrowMainAttribute $srcFormXmlPath
+				}
+			}
 		}
 	} else {
 		# --- Object borrowing (existing logic) ---

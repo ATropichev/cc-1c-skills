@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.47 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.48 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -2214,7 +2214,7 @@ def main():
             return {"Kind": "Constants", "MainName": main_attr.get("name")}
         m = re.match(r'^cfg:(\w+)\.(\w+)$', type_text)
         if m and m.group(1) in common_form_owner_kinds:
-            return {"Kind": "Object", "TypeName": common_form_owner_kinds[m.group(1)], "ObjName": m.group(2)}
+            return {"Kind": "Object", "TypeName": common_form_owner_kinds[m.group(1)], "ObjName": m.group(2), "ByType": True}
         if type_text == "cfg:DynamicList":
             for el in main_attr.iter():
                 if isinstance(el.tag, str) and localname(el) == "MainTable":
@@ -2223,6 +2223,15 @@ def main():
                         return {"Kind": "Object", "TypeName": mtm.group(1), "ObjName": mtm.group(2)}
                     break
         return None
+
+    def resolve_main_attribute_object(form_el, type_name, obj_name):
+        """Объект, по которому разрешаются пути формы объекта: тип основного реквизита <Вид>Object.Имя и т.п.,
+        а не владелец формы — форма обработки с основным реквизитом DocumentObject.X видит реквизиты X (замер
+        8.3.24, #120). Список (DynamicList) и прочие типы — владелец формы, как раньше."""
+        o = resolve_common_form_owner(form_el)
+        if o and o["Kind"] == "Object" and o.get("ByType"):
+            return {"TypeName": o["TypeName"], "ObjName": o["ObjName"]}
+        return {"TypeName": type_name, "ObjName": obj_name}
 
     def borrow_form_constants(src_form_xml_path, main_name):
         """Набор констант как основной реквизит общей формы: заимствуются константы, пути на которые есть
@@ -2618,7 +2627,8 @@ def main():
                     if cm:
                         src_attr_uuids[c_name] = cm.group(1)
         else:
-            src_attr_uuids = get_source_attribute_uuids(type_name, obj_name)
+            ma_obj = resolve_main_attribute_object(src_form_el, type_name, obj_name)
+            src_attr_uuids = get_source_attribute_uuids(ma_obj["TypeName"], ma_obj["ObjName"])
         # Реквизиты объекта, которые попадут в расширение: в режиме Form — только используемые формой
         # (тот же сбор, что в borrow_main_attribute), в режиме All — все (None)
         borrowed_names = None
@@ -3159,7 +3169,19 @@ def main():
                         info(f"  Auto-borrowed: {cf_owner['TypeName']}.{cf_owner['ObjName']}")
                     borrow_main_attribute(cf_owner["TypeName"], cf_owner["ObjName"], None, borrow_main_attribute_mode, cf_src_form_xml_path)
             elif has_bma:
-                borrow_main_attribute(type_name, obj_name, form_name, borrow_main_attribute_mode)
+                # Реквизиты заимствуются у объекта из типа основного реквизита: у формы обработки с
+                # DocumentObject.X это X, и его нужно заимствовать — иначе форма не загрузится
+                src_form_xml_path = os.path.join(cfg_dir, dir_name, obj_name, "Forms", form_name, "Ext", "Form.xml")
+                ma_obj = {"TypeName": type_name, "ObjName": obj_name}
+                if os.path.isfile(src_form_xml_path):
+                    ma_obj = resolve_main_attribute_object(etree.parse(src_form_xml_path).getroot(), type_name, obj_name)
+                if ma_obj["TypeName"] == type_name and ma_obj["ObjName"] == obj_name:
+                    borrow_main_attribute(type_name, obj_name, form_name, borrow_main_attribute_mode)
+                else:
+                    info(f"  Основной реквизит формы — {ma_obj['TypeName']}.{ma_obj['ObjName']}: реквизиты заимствуются у него")
+                    borrow_object_shell(ma_obj["TypeName"], ma_obj["ObjName"])
+                    if test_object_borrowed(ma_obj["TypeName"], ma_obj["ObjName"]):
+                        borrow_main_attribute(ma_obj["TypeName"], ma_obj["ObjName"], None, borrow_main_attribute_mode, src_form_xml_path)
         else:
             # --- Object borrowing ---
             target_dir = os.path.join(ext_dir, dir_name)

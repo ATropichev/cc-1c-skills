@@ -1,0 +1,111 @@
+{
+  "name": "Форма обработки с основным реквизитом DocumentObject: реквизиты заимствуются у документа из типа, документ заимствуется сам",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Document",
+          "name": "Распознанный",
+          "attributes": [
+            "Комментарий: String(10)",
+            "Сумма: Number(15,2)"
+          ],
+          "tabularSections": {
+            "Строки": [
+              "Количество: Number(10,3)"
+            ]
+          }
+        },
+        {
+          "type": "DataProcessor",
+          "name": "Распознавание"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/DataProcessors/Распознавание.xml",
+        "-FormName": "Форма"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Распознавание",
+        "elements": [
+          {
+            "input": "Комментарий",
+            "path": "Объект.Комментарий"
+          },
+          {
+            "table": "Строки",
+            "path": "Объект.Строки",
+            "columns": [
+              {
+                "input": "СтрокиКоличество",
+                "path": "Объект.Строки.Количество"
+              }
+            ]
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.Распознанный",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/DataProcessors/Распознавание/Forms/Форма/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "DataProcessor.Распознавание.Form.Форма"
+  },
+  "args_extra": [
+    "-BorrowMainAttribute",
+    "Form"
+  ],
+  "expect": {
+    "stdoutContains": "Auto-borrowed: Document.Распознанный",
+    "fileContains": [
+      {
+        "file": "cfe/Documents/Распознанный.xml",
+        "text": [
+          "<Name>Комментарий</Name>",
+          "<Name>Строки</Name>",
+          "<Name>Количество</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Configuration.xml",
+        "text": [
+          "<Document>Распознанный</Document>",
+          "<DataProcessor>Распознавание</DataProcessor>"
+        ]
+      }
+    ],
+    "fileNotContains": {
+      "file": "cfe/Documents/Распознанный.xml",
+      "text": "<Name>Сумма</Name>"
+    }
+  }
+}
