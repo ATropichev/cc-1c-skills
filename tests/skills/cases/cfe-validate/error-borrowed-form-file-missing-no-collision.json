@@ -1,0 +1,61 @@
+{
+  "name": "С -ConfigPath: у заимствованной формы нет файла метаданных — ошибка 10, без ложной коллизии имени с формой источника",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Склады",
+          "attributes": [
+            "Адрес: String(50)"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Catalogs/Склады.xml",
+        "-FormName": "ФормаЭлемента"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Catalog.Склады.Form.ФормаЭлемента"
+      }
+    },
+    {
+      "deletePath": "cfe/Catalogs/Склады/Forms/ФормаЭлемента.xml"
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expectError": true,
+  "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
+  "expect": {
+    "stdoutContains": "10. Catalog.Склады: Form.ФормаЭлемента metadata file missing",
+    "stdoutNotContains": "собственный подобъект"
+  }
+}

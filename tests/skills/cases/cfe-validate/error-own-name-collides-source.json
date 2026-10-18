@@ -1,5 +1,5 @@
 {
-  "name": "С -ConfigPath: собственные ТЧ, реквизит (в другом регистре), значение перечисления совпадают по имени с незаимствованными подобъектами источника; ТЧ с именем реквизита источника — можно",
+  "name": "С -ConfigPath: собственные ТЧ, реквизит (в другом регистре), значение перечисления, команда и макет совпадают по имени с незаимствованными подобъектами источника; ТЧ с именем реквизита источника — можно",
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
@@ -23,12 +23,27 @@
             "Товары": [
               "Количество: Number(10,3)"
             ]
+          },
+          "commands": {
+            "Печать": {
+              "synonym": "Печать",
+              "group": "FormCommandBarImportant"
+            }
           }
         }
       ],
       "args": {
         "-JsonPath": "{inputFile}",
         "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "template-add/scripts/add-template",
+      "args": {
+        "-ObjectName": "ЗаказКлиента",
+        "-TemplateName": "ПечатьЗаказа",
+        "-TemplateType": "SpreadsheetDocument",
+        "-SrcDir": "{workDir}/Documents"
       }
     },
     {
@@ -79,6 +94,23 @@
         "-Operation": "add-enumValue",
         "-Value": "Закрыт"
       }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml",
+        "-Operation": "add-command",
+        "-Value": "Печать"
+      }
+    },
+    {
+      "script": "template-add/scripts/add-template",
+      "args": {
+        "-ObjectName": "ЗаказКлиента",
+        "-TemplateName": "ПечатьЗаказа",
+        "-TemplateType": "SpreadsheetDocument",
+        "-SrcDir": "{workDir}/cfe/Documents"
+      }
     }
   ],
   "params": {
@@ -94,7 +126,9 @@
     "stdoutContains": [
       "18. Document.ЗаказКлиента.TabularSection.Товары: собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем",
       "18. Document.ЗаказКлиента.Attribute.КОММЕНТАРИЙ: собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем (Document.ЗаказКлиента.Attribute.Комментарий)",
-      "18. Enum.Статусы.EnumValue.Закрыт: собственный подобъект"
+      "18. Enum.Статусы.EnumValue.Закрыт: собственный подобъект",
+      "18. Document.ЗаказКлиента.Command.Печать: собственный подобъект",
+      "18. Document.ЗаказКлиента.Template.ПечатьЗаказа: собственный подобъект"
     ],
     "stdoutNotContains": "TabularSection.Статус:"
   }

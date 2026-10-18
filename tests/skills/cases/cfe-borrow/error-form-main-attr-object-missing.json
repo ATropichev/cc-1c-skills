@@ -1,0 +1,83 @@
+{
+  "name": "Ошибка до записи: основной реквизит формы ссылается на объект, которого нет в конфигурации-источнике — расширение не изменено",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Document",
+          "name": "Распознанный",
+          "attributes": [
+            "Комментарий: String(10)"
+          ]
+        },
+        {
+          "type": "DataProcessor",
+          "name": "Распознавание"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/DataProcessors/Распознавание.xml",
+        "-FormName": "Форма"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Распознавание",
+        "elements": [
+          {
+            "input": "Комментарий",
+            "path": "Объект.Комментарий"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.Распознанный",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/DataProcessors/Распознавание/Forms/Форма/Ext/Form.xml"
+      }
+    },
+    {
+      "deletePath": "Documents/Распознанный.xml"
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "DataProcessor.Распознавание.Form.Форма"
+  },
+  "args_extra": [
+    "-BorrowMainAttribute",
+    "Form"
+  ],
+  "expectError": true,
+  "noSnapshot": "негативный кейс: отказ до записи, расширение не меняется",
+  "expect": {
+    "stderrContains": "ссылается на Document.Распознанный, а его нет в конфигурации-источнике",
+    "fileNotContains": {
+      "file": "cfe/Configuration.xml",
+      "text": "<DataProcessor>"
+    }
+  }
+}

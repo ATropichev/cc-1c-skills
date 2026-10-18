@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.21 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.22 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -756,7 +756,7 @@ def main():
     form_list = []
 
     # Собственные подобъекты данных в заимствованном объекте (реквизит, ТЧ, колонка заимствованной ТЧ,
-    # измерение, ресурс, признаки учёта): у ПВХ, ПС, ПВР и регистров платформа их загружает, но базу не
+    # измерение, ресурс, признаки учёта, реквизит адресации): у ПВХ, ПС, ПВР и регистров платформа их загружает, но базу не
     # обновляет («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»,
     # 8.3.24–8.5.1 при любом режиме совместимости); у БП и Задачи — так же на платформе ниже 8.3.25, а с
     # 8.3.25 можно (граница по версии платформы, не по режиму — по исходникам её не определить).
@@ -766,7 +766,7 @@ def main():
         'InformationRegister': 'Error', 'AccumulationRegister': 'Error', 'AccountingRegister': 'Error',
         'CalculationRegister': 'Error', 'BusinessProcess': 'Since8325', 'Task': 'Since8325',
     }
-    own_data_child_tags = ('Attribute', 'TabularSection', 'Dimension', 'Resource', 'AccountingFlag', 'ExtDimensionAccountingFlag')
+    own_data_child_tags = ('Attribute', 'TabularSection', 'Dimension', 'Resource', 'AccountingFlag', 'ExtDimensionAccountingFlag', 'AddressingAttribute')
 
     def md_type_list(el):
         """Типы подобъекта метаданных: тексты <v8:Type>; определяемый тип и прочие наборы — меткой «#TypeSet»,
@@ -1009,7 +1009,9 @@ def main():
                             ix_cols[ix_col_name.text.strip().upper()] = md_type_list(ix_col)
                     ix_ts_columns[ix_name] = ix_cols
             ix_owners = [o.text.strip() for o in obj_el.findall(f'{{{MD}}}Properties/{{{MD}}}Owners/{{{XR}}}Item') if o.text]
-            ext_obj_index[f'{type_name}.{child_name}'.upper()] = {'Names': ix_names, 'TSColumns': ix_ts_columns, 'Owners': ix_owners}
+            ix_ext_dim = obj_el.find(f'{{{MD}}}Properties/{{{MD}}}ExtDimensionTypes')
+            ext_obj_index[f'{type_name}.{child_name}'.upper()] = {'Names': ix_names, 'TSColumns': ix_ts_columns, 'Owners': ix_owners,
+                                                                  'ExtDimTypes': ix_ext_dim is not None and bool((ix_ext_dim.text or '').strip())}
 
             # Собственные подобъекты данных в заимствованном объекте вида, где они запрещены
             own_rule = None
@@ -1034,6 +1036,8 @@ def main():
                         occ_name = occ.find(f'{{{MD}}}Properties/{{{MD}}}Name')
                         own_found.append(f"{oc_label}.Attribute.{(occ_name.text or '').strip() if occ_name is not None else '?'}")
                 for own_label in own_found:
+                    if r.stopped:
+                        break
                     if own_rule == 'Error':
                         r.error(f'10. {type_name}.{child_name}: собственный {own_label} в заимствованном объекте — платформа загрузит расширение, '
                                 f'но базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
@@ -1402,6 +1406,17 @@ def main():
                 seg0_ci = seg0.upper()
                 path_check_count += 1
                 if seg0_ci in std_fields:
+                    # Стандартная ТЧ видов субконто плана счетов видна, только если в описании объекта в расширении
+                    # задано свойство ExtDimensionTypes: у заимствованной оболочки без него — «Неверный путь к данным»,
+                    # заимствованная форма грузится, когда в оболочке есть ExtDimensionTypes и MaxExtDimensionCount, а
+                    # ПВХ видов субконто заимствован (замер 8.3.24)
+                    if (target['Category'] == 'ChartOfAccountsObject' and seg0_ci in ('EXTDIMENSIONTYPES', 'ВИДЫСУБКОНТО')
+                            and not owner_entry['ExtDimTypes']):
+                        bad = f'{root_name14}.{seg0}'
+                        bad_paths.setdefault(bad.upper(), [bad, ''])[1] = (
+                            f'у {owner_key} в расширении не задано свойство ExtDimensionTypes — стандартная ТЧ видов субконто '
+                            f'форме не видна (перенесите ExtDimensionTypes и MaxExtDimensionCount и заимствуйте ПВХ видов субконто)')
+                        continue
                     if len(segments) >= 2:
                         target_kind, target_name = owner_key.split('.', 1)
                         std_types = get_std_ref_types(target_kind, target_name, seg0)
@@ -1711,7 +1726,7 @@ def main():
 
     # Собственные подобъекты заимствованного объекта, одноимённые (без учёта регистра) с незаимствованным
     # подобъектом источника того же вида на том же уровне: реквизит, ТЧ, колонка заимствованной ТЧ, значение
-    # перечисления, форма. Платформа расширение загружает, а базу не обновляет: «Уже существует объект с
+    # перечисления, форма, команда, макет. Платформа расширение загружает, а базу не обновляет: «Уже существует объект с
     # именем …» (замер 8.3.24, 8.3.27). Реквизит и ТЧ с одним именем друг другу не мешают. Совпадение с
     # подобъектом, заимствованным в этом же расширении, — дубль имени, его платформа отвергает уже на загрузке.
     def get_own_name_collisions(obj_file, prefix, ext_idx, src_idx):
@@ -1724,16 +1739,30 @@ def main():
         co = obj_el.xpath("*[local-name()='ChildObjects']") if obj_el is not None else []
         if not co:
             return result
+        own_dir = os.path.join(os.path.dirname(obj_file), os.path.splitext(os.path.basename(obj_file))[0])
         keys = []
         for sub in co[0]:
             if not isinstance(sub.tag, str):
                 continue
             ln = etree.QName(sub.tag).localname
-            if ln == 'Form':
-                if (sub.text or '').strip():
-                    keys.append(f'{prefix}.Form.{sub.text.strip()}')
+            if ln in ('Form', 'Template'):
+                # Собственная форма или макет — файл есть и в нём нет ExtendedConfigurationObject. Нет файла или
+                # не читается — не судим (об отсутствии файла формы говорит проверка 10)
+                f_name = (sub.text or '').strip()
+                if not f_name:
+                    continue
+                f_file = os.path.join(own_dir, nested_file_dirs[ln], f'{f_name}.xml')
+                if not os.path.isfile(f_file):
+                    continue
+                try:
+                    f_root = etree.parse(f_file).getroot()
+                except Exception:
+                    continue
+                if f_root.xpath("//*[local-name()='Properties']/*[local-name()='ExtendedConfigurationObject']"):
+                    continue
+                keys.append(f'{prefix}.{ln}.{f_name}')
                 continue
-            if ln not in ('Attribute', 'TabularSection', 'EnumValue'):
+            if ln not in ('Attribute', 'TabularSection', 'EnumValue', 'Command'):
                 continue
             name_node = sub.xpath("*[local-name()='Properties']/*[local-name()='Name']")
             if not name_node:
@@ -1831,6 +1860,9 @@ def main():
                     break
             if r.stopped:
                 break
+            # Там, где собственных подобъектов быть не может, о них уже сказала проверка 10
+            if own_child_restricted.get(type_name) == 'Error':
+                continue
             for nc in get_own_name_collisions(os.path.join(config_dir, dir_name, f'{obj_name18}.xml'), f'{type_name}.{obj_name18}', ext_idx, src_idx):
                 r.error(f"18. {nc['Own']}: собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем ({nc['Src']}) — платформа загрузит расширение, но базу не обновит («Уже существует объект с именем …»)")
                 check18_ok = False

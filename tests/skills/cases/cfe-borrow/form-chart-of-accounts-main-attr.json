@@ -1,0 +1,82 @@
+{
+  "name": "Форма элемента плана счетов с -BorrowMainAttribute Form: признак учёта заимствуется, для ТЧ видов субконто — свойства ExtDimensionTypes/MaxExtDimensionCount и ПВХ оболочкой",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Склады"
+        },
+        {
+          "type": "ChartOfCharacteristicTypes",
+          "name": "ВидыСубконто",
+          "valueType": "CatalogRef.Склады"
+        },
+        {
+          "type": "ChartOfAccounts",
+          "name": "Хозрасчетный",
+          "extDimensionTypes": "ChartOfCharacteristicTypes.ВидыСубконто",
+          "maxExtDimensionCount": 1,
+          "attributes": [
+            "Примечание: String(20)"
+          ],
+          "accountingFlags": [
+            "Количественный"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/ChartsOfAccounts/Хозрасчетный.xml",
+        "-FormName": "ФормаЭлемента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "args": {
+        "-FromObject": true,
+        "-OutputPath": "{workDir}/ChartsOfAccounts/Хозрасчетный/Forms/ФормаЭлемента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "ChartOfAccounts.Хозрасчетный.Form.ФормаЭлемента"
+  },
+  "args_extra": [
+    "-BorrowMainAttribute",
+    "Form"
+  ],
+  "expect": {
+    "fileContains": [
+      {
+        "file": "cfe/ChartsOfAccounts/Хозрасчетный.xml",
+        "text": [
+          "<AccountingFlag uuid=",
+          "<Name>Количественный</Name>",
+          "<ExtDimensionTypes>ChartOfCharacteristicTypes.ВидыСубконто</ExtDimensionTypes>",
+          "<MaxExtDimensionCount>1</MaxExtDimensionCount>"
+        ]
+      },
+      {
+        "file": "cfe/Configuration.xml",
+        "text": "<ChartOfCharacteristicTypes>ВидыСубконто</ChartOfCharacteristicTypes>"
+      }
+    ]
+  }
+}
