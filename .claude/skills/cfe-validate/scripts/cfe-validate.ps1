@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.23 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.24 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1847,6 +1847,171 @@ if (-not $script:stopped -and $childObjNode) {
 		Out-Line "[INFO]  18. Заимствованные объекты и основной язык против конфигурации-источника не сверялись: не задан -ConfigPath"
 	} elseif ($srcRoot -and $check18Ok -and $check18Count -gt 0) {
 		Report-OK "18. Source config: $check18Count link(s) agree (DefaultLanguage, ExtendedConfigurationObject)"
+	}
+}
+
+# --- Check 19: ссылки на объекты, которых нет в расширении ---
+# Объект основной конфигурации виден расширению, только если он заимствован (замер 8.3.24/8.3.27):
+# - ссылочный тип (реквизит, колонка, константа, измерение, параметр команды, реквизит формы):
+#   ниже 8.3.25 — «Неизвестное имя типа», с 8.3.25 работает;
+# - ссылка на объект (владельцы, движения, ввод на основании, журнал, состав подсистемы, план
+#   счетов регистра, задача БП): ниже 8.3.25 — «Неизвестный объект метаданных», с 8.3.25 грузится,
+#   но в рантайме связь пуста;
+# - права роли на такой объект платформа выбрасывает;
+# - тип определяемого типа, источник подписки, виды субконто плана счетов не грузятся нигде.
+# Формы (значения, СКД) и макеты не проверяются — не замерено.
+$script:refTypeKind = New-Object System.Collections.Hashtable ([StringComparer]::Ordinal)
+foreach ($k in @("Catalog","Document","Enum","ChartOfCharacteristicTypes","ChartOfAccounts","ChartOfCalculationTypes","ExchangePlan","BusinessProcess","Task")) {
+	foreach ($s in @("Ref","Object","Selection","List","Manager")) { $script:refTypeKind["$k$s"] = $k }
+}
+foreach ($k in @("InformationRegister","AccumulationRegister","AccountingRegister","CalculationRegister")) {
+	foreach ($s in @("RecordSet","RecordKey","Record","Manager","Selection","List","RecordManager")) { $script:refTypeKind["$k$s"] = $k }
+}
+foreach ($k in @("DataProcessor","Report")) { $script:refTypeKind["${k}Object"] = $k; $script:refTypeKind["${k}Manager"] = $k }
+$script:refTypeKind["ConstantValueManager"] = "Constant"; $script:refTypeKind["ConstantManager"] = "Constant"
+$script:refTypeKind["DefinedType"] = "DefinedType"; $script:refTypeKind["Characteristic"] = "ChartOfCharacteristicTypes"
+$script:refTypeKind["BusinessProcessRoutePointRef"] = "BusinessProcess"; $script:refTypeKind["DocumentJournalSelection"] = "DocumentJournal"
+
+$refTypeRe = '<v8:(Type|TypeSet)>(?:\w+:)?(\w+)\.([^<.\s]+)</v8:\1>'
+$refListRe = '(?s)<(Owners|RegisterRecords|BasedOn|RegisteredDocuments|Content)>(.*?)</\1>'
+$refItemRe = '>(\w+)\.([^<.\s]+)</xr:Item>'
+$refTagRe = '<(ChartOfAccounts|Task|ExtDimensionTypes)>(\w+)\.([^<.\s]+)</\1>'
+$refRightsRe = '<object>\s*<name>(\w+)\.([^<.\s]+)'
+
+# Файлы под каталогом: @(относительный путь через "/", полный путь); сначала файлы, потом
+# подкаталоги, имена по Ordinal. Относительный путь собирается из имён, а не вырезается из полного:
+# Resolve-Path оставляет короткие имена 8.3 (NSHIRO~1), а перечисление их разворачивает.
+function Get-RelFiles {
+	param([string]$dir, [string]$rel)
+	$out = New-Object System.Collections.ArrayList
+	$files = @([System.IO.Directory]::GetFiles($dir) | ForEach-Object { [System.IO.Path]::GetFileName($_) })
+	[Array]::Sort($files, [StringComparer]::Ordinal)
+	foreach ($n in $files) {
+		$r = if ($rel) { "$rel/$n" } else { $n }
+		[void]$out.Add(@($r, (Join-Path $dir $n)))
+	}
+	$dirs = @([System.IO.Directory]::GetDirectories($dir) | ForEach-Object { [System.IO.Path]::GetFileName($_) })
+	[Array]::Sort($dirs, [StringComparer]::Ordinal)
+	foreach ($d in $dirs) {
+		$r = if ($rel) { "$rel/$d" } else { $d }
+		foreach ($x in (Get-RelFiles (Join-Path $dir $d) $r)) { [void]$out.Add($x) }
+	}
+	return ,$out
+}
+
+if (-not $script:stopped -and $childObjNode) {
+	$refSeen = @{}
+	# $where — что ссылается (относительный путь файла), $prop — свойство, $kind.$name — цель
+	$reportRef = {
+		param([string]$where, [string]$prop, [string]$kind, [string]$name, [string]$level)
+		if (-not $childTypeDirMap.ContainsKey($kind)) { return }
+		$target = "$kind.$name"
+		$script:check19Count++
+		if ($script:extObjListed.ContainsKey($target)) { return }
+		$key = "$where|$prop|$target"
+		if ($refSeen.ContainsKey($key)) { return }
+		$refSeen[$key] = $true
+		$script:check19Ok = $false
+		switch ($level) {
+			"type" { Report-Warn "19. ${where}: $prop ссылается на $target, а его нет в расширении — на платформе ниже 8.3.25 не загрузится («Неизвестное имя типа»), с 8.3.25 можно. Заимствуйте $target" }
+			"never" { Report-Error "19. ${where}: $prop ссылается на $target, а его нет в расширении — платформа расширение не загрузит. Заимствуйте $target" }
+			"rights" { Report-Error "19. ${where}: права на $target, а его нет в расширении — платформа их выбросит. Заимствуйте $target" }
+			default { Report-Error "19. ${where}: $prop ссылается на $target, а его нет в расширении — ниже 8.3.25 не загрузится («Неизвестный объект метаданных»), с 8.3.25 загрузится, но связь в рантайме будет пустой. Заимствуйте $target" }
+		}
+	}
+	$script:check19Count = 0
+	$script:check19Ok = $true
+	$readText = { param([string]$f) try { return [System.IO.File]::ReadAllText($f, [System.Text.Encoding]::UTF8) } catch { return $null } }
+	$scanTypes = {
+		param([string]$text, [string]$where, [string]$prop, [string]$level)
+		foreach ($m in [regex]::Matches($text, $refTypeRe)) {
+			$k = $script:refTypeKind[$m.Groups[2].Value]
+			if ($k) { & $reportRef $where $prop $k $m.Groups[3].Value $level }
+			if ($script:stopped) { return }
+		}
+	}
+
+	foreach ($child in $childObjNode.ChildNodes) {
+		if ($script:stopped) { break }
+		if ($child.NodeType -ne 'Element') { continue }
+		$typeName = $child.LocalName
+		$childName = $child.InnerText
+		if ($typeName -eq "Language" -or -not $childTypeDirMap.ContainsKey($typeName)) { continue }
+		$objDir = Join-Path $configDir $childTypeDirMap[$typeName]
+		$objFile = Join-Path $objDir "$childName.xml"
+		$text = & $readText $objFile
+		if ($null -eq $text) { continue }
+		$where = "$typeName.$childName"
+
+		# Подсистема: состав — у неё и у вложенных подсистем
+		$texts = @(,@($where, $text))
+		if ($typeName -eq "Subsystem") {
+			$subDir = Join-Path $objDir $childName
+			if (Test-Path -LiteralPath $subDir) {
+				foreach ($e in (Get-RelFiles $subDir "")) {
+					$segs = $e[0].Split('/')
+					if ($segs.Count -lt 2 -or $segs[-2] -ne "Subsystems" -or -not $e[0].EndsWith(".xml", [StringComparison]::OrdinalIgnoreCase)) { continue }
+					$t = & $readText $e[1]
+					if ($null -ne $t) { $texts += ,@("$where/$($e[0])", $t) }
+				}
+			}
+		}
+		foreach ($pair in $texts) {
+			$w = $pair[0]; $t = $pair[1]
+			$typeLevel = "type"
+			$typeProp = "тип"
+			if ($typeName -eq "DefinedType") { $typeLevel = "never"; $typeProp = "Type" }
+			elseif ($typeName -eq "EventSubscription") { $typeLevel = "never"; $typeProp = "Source" }
+			& $scanTypes $t $w $typeProp $typeLevel
+			if ($script:stopped) { break }
+			# Движения последовательности не замерены
+			$lists = if ($typeName -eq "Sequence") { @() } else { [regex]::Matches($t, $refListRe) }
+			foreach ($lm in $lists) {
+				foreach ($im in [regex]::Matches($lm.Groups[2].Value, $refItemRe)) {
+					& $reportRef $w $lm.Groups[1].Value $im.Groups[1].Value $im.Groups[2].Value "object"
+					if ($script:stopped) { break }
+				}
+				if ($script:stopped) { break }
+			}
+			foreach ($tm in [regex]::Matches($t, $refTagRe)) {
+				$lvl = "object"
+				if ($tm.Groups[1].Value -eq "ExtDimensionTypes") { $lvl = "never" }
+				& $reportRef $w $tm.Groups[1].Value $tm.Groups[2].Value $tm.Groups[3].Value $lvl
+				if ($script:stopped) { break }
+			}
+		}
+		if ($script:stopped) { break }
+
+		# Формы объекта (и общая форма): типы реквизитов и параметров формы
+		$formRoot = Join-Path $objDir $childName
+		if (Test-Path -LiteralPath $formRoot) {
+			foreach ($e in (Get-RelFiles $formRoot "")) {
+				$segs = $e[0].Split('/')
+				if ($segs.Count -lt 2 -or $segs[-1] -ne "Form.xml" -or $segs[-2] -ne "Ext") { continue }
+				$t = & $readText $e[1]
+				if ($null -eq $t) { continue }
+				# Общая форма — сам объект (Ext/Form.xml), форма объекта — <Объект>/Forms/<Имя>
+				$rel = $where
+				if ($segs.Count -gt 2) { $rel = "$where/" + ($segs[0..($segs.Count - 3)] -join '/') }
+				& $scanTypes $t $rel "тип" "type"
+				if ($script:stopped) { break }
+			}
+		}
+		if ($script:stopped) { break }
+
+		if ($typeName -eq "Role") {
+			$t = & $readText (Join-Path (Join-Path (Join-Path $objDir $childName) "Ext") "Rights.xml")
+			if ($null -ne $t) {
+				foreach ($rm in [regex]::Matches($t, $refRightsRe)) {
+					& $reportRef $where "права" $rm.Groups[1].Value $rm.Groups[2].Value "rights"
+					if ($script:stopped) { break }
+				}
+			}
+		}
+	}
+
+	if ($script:check19Ok -and $script:check19Count -gt 0) {
+		Report-OK "19. References: $($script:check19Count) reference(s) to objects, all present in the extension"
 	}
 }
 

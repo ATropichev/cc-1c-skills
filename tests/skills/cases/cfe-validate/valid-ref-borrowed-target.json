@@ -1,0 +1,159 @@
+{
+  "name": "Те же ссылки (и общая форма, вложенная подсистема), но цели заимствованы — проверка 19 молчит",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура"
+        },
+        {
+          "type": "Catalog",
+          "name": "Склады"
+        },
+        {
+          "type": "AccumulationRegister",
+          "name": "Остатки",
+          "dimensions": [
+            "Склад: String(20)"
+          ],
+          "resources": [
+            "Количество: Number(15,3)"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Catalog.Номенклатура ;; Catalog.Склады ;; AccumulationRegister.Остатки"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "DataProcessor",
+          "name": "Тест_Обр",
+          "attributes": [
+            "Склад: CatalogRef.Склады"
+          ]
+        },
+        {
+          "type": "Catalog",
+          "name": "Тест_Спр",
+          "owners": [
+            "Catalog.Номенклатура"
+          ]
+        },
+        {
+          "type": "Document",
+          "name": "Тест_Док",
+          "registerRecords": [
+            "AccumulationRegister.Остатки"
+          ]
+        },
+        {
+          "type": "DefinedType",
+          "name": "Тест_ОТ",
+          "valueTypes": [
+            "CatalogRef.Номенклатура"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    },
+    {
+      "script": "role-compile/scripts/role-compile",
+      "input": {
+        "name": "Тест_Роль",
+        "objects": [
+          "Catalog.Номенклатура: @view"
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    },
+    {
+      "script": "subsystem-compile/scripts/subsystem-compile",
+      "args": {
+        "-Value": "{\"name\":\"Тест_Подс\",\"content\":[\"Catalog.Номенклатура\"]}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "CommonForm",
+          "name": "Тест_ОФ"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Т",
+        "elements": [
+          {
+            "input": "Скл",
+            "path": "Скл"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Скл",
+            "type": "CatalogRef.Склады"
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/cfe/CommonForms/Тест_ОФ/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "subsystem-compile/scripts/subsystem-compile",
+      "args": {
+        "-Value": "{\"name\":\"Тест_Вл\",\"content\":[\"Catalog.Склады\"]}",
+        "-OutputDir": "{workDir}/cfe",
+        "-Parent": "{workDir}/cfe/Subsystems/Тест_Подс.xml"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "noSnapshot": "навык ничего не пишет",
+  "expect": {
+    "stdoutContains": "=== Validation OK",
+    "stdoutNotContains": [
+      " 19. "
+    ]
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "name": "Предупреждение: тип реквизита — справочник, которого нет в расширении (ниже 8.3.25 не загрузится)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура"
+        },
+        {
+          "type": "Catalog",
+          "name": "Склады"
+        },
+        {
+          "type": "AccumulationRegister",
+          "name": "Остатки",
+          "dimensions": [
+            "Склад: String(20)"
+          ],
+          "resources": [
+            "Количество: Number(15,3)"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "DataProcessor",
+          "name": "Тест_Обр",
+          "attributes": [
+            "Склад: CatalogRef.Склады"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "noSnapshot": "навык ничего не пишет, проверяется текст предупреждения",
+  "expect": {
+    "stdoutContains": [
+      "[WARN]  19. DataProcessor.Тест_Обр: тип ссылается на Catalog.Склады, а его нет в расширении — на платформе ниже 8.3.25"
+    ],
+    "stdoutNotContains": "[ERROR]"
+  }
+}

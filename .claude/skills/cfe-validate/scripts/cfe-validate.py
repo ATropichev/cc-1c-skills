@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.23 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.24 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -1877,6 +1877,170 @@ def main():
             r.out('[INFO]  18. Заимствованные объекты и основной язык против конфигурации-источника не сверялись: не задан -ConfigPath')
         elif src_root and check18_ok and check18_count > 0:
             r.ok(f'18. Source config: {check18_count} link(s) agree (DefaultLanguage, ExtendedConfigurationObject)')
+
+    # --- Check 19: ссылки на объекты, которых нет в расширении ---
+    # Объект основной конфигурации виден расширению, только если он заимствован (замер 8.3.24/8.3.27):
+    # - ссылочный тип (реквизит, колонка, константа, измерение, параметр команды, реквизит формы):
+    #   ниже 8.3.25 — «Неизвестное имя типа», с 8.3.25 работает;
+    # - ссылка на объект (владельцы, движения, ввод на основании, журнал, состав подсистемы, план
+    #   счетов регистра, задача БП): ниже 8.3.25 — «Неизвестный объект метаданных», с 8.3.25 грузится,
+    #   но в рантайме связь пуста;
+    # - права роли на такой объект платформа выбрасывает;
+    # - тип определяемого типа, источник подписки, виды субконто плана счетов не грузятся нигде.
+    # Формы (значения, СКД) и макеты не проверяются — не замерено.
+    if not r.stopped and child_obj_node is not None:
+        ref_type_kind = {}
+        for k in ('Catalog', 'Document', 'Enum', 'ChartOfCharacteristicTypes', 'ChartOfAccounts', 'ChartOfCalculationTypes', 'ExchangePlan', 'BusinessProcess', 'Task'):
+            for s in ('Ref', 'Object', 'Selection', 'List', 'Manager'):
+                ref_type_kind[k + s] = k
+        for k in ('InformationRegister', 'AccumulationRegister', 'AccountingRegister', 'CalculationRegister'):
+            for s in ('RecordSet', 'RecordKey', 'Record', 'Manager', 'Selection', 'List', 'RecordManager'):
+                ref_type_kind[k + s] = k
+        for k in ('DataProcessor', 'Report'):
+            ref_type_kind[k + 'Object'] = k
+            ref_type_kind[k + 'Manager'] = k
+        ref_type_kind.update({'ConstantValueManager': 'Constant', 'ConstantManager': 'Constant', 'DefinedType': 'DefinedType',
+                              'Characteristic': 'ChartOfCharacteristicTypes', 'BusinessProcessRoutePointRef': 'BusinessProcess',
+                              'DocumentJournalSelection': 'DocumentJournal'})
+        ref_type_re = re.compile(r'<v8:(Type|TypeSet)>(?:\w+:)?(\w+)\.([^<.\s]+)</v8:\1>')
+        ref_list_re = re.compile(r'<(Owners|RegisterRecords|BasedOn|RegisteredDocuments|Content)>(.*?)</\1>', re.S)
+        ref_item_re = re.compile(r'>(\w+)\.([^<.\s]+)</xr:Item>')
+        ref_tag_re = re.compile(r'<(ChartOfAccounts|Task|ExtDimensionTypes)>(\w+)\.([^<.\s]+)</\1>')
+        ref_rights_re = re.compile(r'<object>\s*<name>(\w+)\.([^<.\s]+)')
+        ref_seen = set()
+        check19 = {'count': 0, 'ok': True}
+
+        # where — что ссылается (относительный путь файла), prop — свойство, kind.name — цель
+        def report_ref(where, prop, kind, name, level):
+            if kind.upper() not in CHILD_TYPE_KINDS_CI:
+                return
+            target = f'{kind}.{name}'
+            check19['count'] += 1
+            if target.upper() in ext_obj_listed:
+                return
+            key = f'{where}|{prop}|{target}'.upper()
+            if key in ref_seen:
+                return
+            ref_seen.add(key)
+            check19['ok'] = False
+            if level == 'type':
+                r.warn(f'19. {where}: {prop} ссылается на {target}, а его нет в расширении — на платформе ниже 8.3.25 не загрузится («Неизвестное имя типа»), с 8.3.25 можно. Заимствуйте {target}')
+            elif level == 'never':
+                r.error(f'19. {where}: {prop} ссылается на {target}, а его нет в расширении — платформа расширение не загрузит. Заимствуйте {target}')
+            elif level == 'rights':
+                r.error(f'19. {where}: права на {target}, а его нет в расширении — платформа их выбросит. Заимствуйте {target}')
+            else:
+                r.error(f'19. {where}: {prop} ссылается на {target}, а его нет в расширении — ниже 8.3.25 не загрузится («Неизвестный объект метаданных»), с 8.3.25 загрузится, но связь в рантайме будет пустой. Заимствуйте {target}')
+
+        def read_text19(f):
+            try:
+                with open(f, encoding='utf-8-sig') as fh:
+                    return fh.read()
+            except Exception:
+                return None
+
+        def scan_types(text, where, prop, level):
+            for m in ref_type_re.finditer(text):
+                k = ref_type_kind.get(m.group(2))
+                if k:
+                    report_ref(where, prop, k, m.group(3), level)
+                if r.stopped:
+                    return
+
+        # Файлы под каталогом: (относительный путь через "/", полный путь); сначала файлы, потом
+        # подкаталоги, имена по кодовым точкам — как Ordinal в PS
+        def rel_files(d, rel=''):
+            try:
+                names = sorted(os.listdir(d))
+            except OSError:
+                return
+            for n in names:
+                if os.path.isfile(os.path.join(d, n)):
+                    yield (f'{rel}/{n}' if rel else n), os.path.join(d, n)
+            for n in names:
+                if os.path.isdir(os.path.join(d, n)):
+                    yield from rel_files(os.path.join(d, n), f'{rel}/{n}' if rel else n)
+
+        for child in child_obj_node:
+            if r.stopped:
+                break
+            if not isinstance(child.tag, str):
+                continue
+            type_name = etree.QName(child.tag).localname
+            child_name = child.text or ''
+            if type_name == 'Language' or type_name not in CHILD_TYPE_DIR_MAP:
+                continue
+            obj_dir = os.path.join(config_dir, CHILD_TYPE_DIR_MAP[type_name])
+            text = read_text19(os.path.join(obj_dir, child_name + '.xml'))
+            if text is None:
+                continue
+            where = f'{type_name}.{child_name}'
+
+            # Подсистема: состав — у неё и у вложенных подсистем
+            texts = [(where, text)]
+            if type_name == 'Subsystem':
+                sub_dir = os.path.join(obj_dir, child_name)
+                if os.path.isdir(sub_dir):
+                    for rel, f in rel_files(sub_dir):
+                        segs = rel.split('/')
+                        if len(segs) < 2 or segs[-2].lower() != 'subsystems' or not rel.lower().endswith('.xml'):
+                            continue
+                        t = read_text19(f)
+                        if t is not None:
+                            texts.append((f'{where}/{rel}', t))
+            for w, t in texts:
+                if type_name == 'DefinedType':
+                    type_prop, type_level = 'Type', 'never'
+                elif type_name == 'EventSubscription':
+                    type_prop, type_level = 'Source', 'never'
+                else:
+                    type_prop, type_level = 'тип', 'type'
+                scan_types(t, w, type_prop, type_level)
+                if r.stopped:
+                    break
+                # Движения последовательности не замерены
+                for lm in ([] if type_name == 'Sequence' else ref_list_re.finditer(t)):
+                    for im in ref_item_re.finditer(lm.group(2)):
+                        report_ref(w, lm.group(1), im.group(1), im.group(2), 'object')
+                        if r.stopped:
+                            break
+                    if r.stopped:
+                        break
+                for tm in ref_tag_re.finditer(t):
+                    report_ref(w, tm.group(1), tm.group(2), tm.group(3), 'never' if tm.group(1) == 'ExtDimensionTypes' else 'object')
+                    if r.stopped:
+                        break
+            if r.stopped:
+                break
+
+            # Формы объекта (и общая форма): типы реквизитов и параметров формы
+            form_root = os.path.join(obj_dir, child_name)
+            if os.path.isdir(form_root):
+                for frel, f in rel_files(form_root):
+                    segs = frel.split('/')
+                    if len(segs) < 2 or segs[-1].lower() != 'form.xml' or segs[-2].lower() != 'ext':
+                        continue
+                    t = read_text19(f)
+                    if t is None:
+                        continue
+                    # Общая форма — сам объект (Ext/Form.xml), форма объекта — <Объект>/Forms/<Имя>
+                    rel = where if len(segs) == 2 else f'{where}/' + '/'.join(segs[:-2])
+                    scan_types(t, rel, 'тип', 'type')
+                    if r.stopped:
+                        break
+            if r.stopped:
+                break
+
+            if type_name == 'Role':
+                t = read_text19(os.path.join(obj_dir, child_name, 'Ext', 'Rights.xml'))
+                if t is not None:
+                    for rm in ref_rights_re.finditer(t):
+                        report_ref(where, 'права', rm.group(1), rm.group(2), 'rights')
+                        if r.stopped:
+                            break
+
+        if check19['ok'] and check19['count'] > 0:
+            r.ok(f"19. References: {check19['count']} reference(s) to objects, all present in the extension")
 
     # --- Breadcrumb: controlled methods (&ИзменениеИКонтроль) drift is not checked here ---
     ctrl_kw = bsl_keywords()
