@@ -1884,13 +1884,18 @@ $refRightsRe = '<object>\s*<name>(\w+)\.([^<.\s]+)'
 function Get-RelFiles {
 	param([string]$dir, [string]$rel)
 	$out = New-Object System.Collections.ArrayList
-	$files = @([System.IO.Directory]::GetFiles($dir) | ForEach-Object { [System.IO.Path]::GetFileName($_) })
+	# Каталог не читается (битая ссылка, нет доступа) — пропустить, как py
+	try {
+		$fileList = [System.IO.Directory]::GetFiles($dir)
+		$dirList = [System.IO.Directory]::GetDirectories($dir)
+	} catch { return ,$out }
+	$files = @($fileList | ForEach-Object { [System.IO.Path]::GetFileName($_) })
 	[Array]::Sort($files, [StringComparer]::Ordinal)
 	foreach ($n in $files) {
 		$r = if ($rel) { "$rel/$n" } else { $n }
 		[void]$out.Add(@($r, (Join-Path $dir $n)))
 	}
-	$dirs = @([System.IO.Directory]::GetDirectories($dir) | ForEach-Object { [System.IO.Path]::GetFileName($_) })
+	$dirs = @($dirList | ForEach-Object { [System.IO.Path]::GetFileName($_) })
 	[Array]::Sort($dirs, [StringComparer]::Ordinal)
 	foreach ($d in $dirs) {
 		$r = if ($rel) { "$rel/$d" } else { $d }
