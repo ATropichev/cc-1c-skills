@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.25 — Validate 1C managed form
+# form-validate v1.26 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1841,6 +1841,34 @@ def main():
                 prev, prev_rank = etree.QName(c.tag).localname, r
         if order_bad == 0:
             report_ok('16. Property order: matches the platform')
+
+    # --- Check 17: настройки динамического списка в режиме совместимости ниже 8.3.19 ---
+    # Field / CalculatedField / Parameter списка такая конфигурация принимает при загрузке и хранит в
+    # базе, но в выгрузку XML не пишет — исходник с ними после выгрузки «теряет» их в диффе. Только для
+    # конфигурации: у внешней обработки режим базы на форму не влияет.
+    if not stopped and is_config_context:
+        with open(dump_anchor, 'r', encoding='utf-8-sig') as f:
+            cfg_head = f.read(65536)
+        m = re.search(r'<CompatibilityMode>([^<]+)</CompatibilityMode>', cfg_head)
+        # Расширение: своего CompatibilityMode нет, форму ведёт его собственный режим. В основной
+        # конфигурации этот тег — режим для её расширений, не её собственный: только для расширения.
+        if not m and '<ConfigurationExtensionPurpose>' in cfg_head:
+            m = re.search(r'<ConfigurationExtensionCompatibilityMode>([^<]+)</ConfigurationExtensionCompatibilityMode>', cfg_head)
+        compat_mode = m.group(1).strip() if m else ''
+        m = re.match(r'^Version(\d+)_(\d+)(?:_(\d+))?$', compat_mode)   # и двухчастный Version8_1
+        compat_rank = int(m.group(1)) * 10000 + int(m.group(2)) * 100 + int(m.group(3) or 0) if m else 0
+        if 0 < compat_rank < 80319:
+            dyn_bad = 0
+            for a in attr_nodes:
+                st = a.find(f"{{{F_NS}}}Settings")
+                if st is None or st.get('{http://www.w3.org/2001/XMLSchema-instance}type') != 'DynamicList':
+                    continue
+                if any(isinstance(c.tag, str) and etree.QName(c.tag).localname in ('Field', 'CalculatedField', 'Parameter')
+                       and etree.QName(c.tag).namespace == F_NS for c in st):
+                    report_warn(f"17. Dynamic list '{a.get('name', '')}': Field/CalculatedField/Parameter under compatibility mode {compat_mode} (< 8.3.19) are kept in the infobase but not written to the XML dump")
+                    dyn_bad += 1
+            if dyn_bad == 0:
+                report_ok(f'17. Dynamic list settings: dumpable under {compat_mode}')
 
     # --- Finalize ---
     checks = ok_count + errors + warnings

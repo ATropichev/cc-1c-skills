@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.207 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.208 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -7256,6 +7256,42 @@ def format_rank(ver):
     return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
 
 
+def detect_compatibility_mode(d):
+    """Режим совместимости конфигурации (None — не определён). От него зависит xmlns:dcssch в шапке:
+    при режиме < 8.3.19 платформа не объявляет его никогда и не выгружает поля/параметры динамического
+    списка (в базе они хранятся). Подъём останавливается на корне внешней обработки/отчёта: её форму
+    режим базы не меняет, а Configuration.xml выше по дереву (src/cf рядом с src/epf) — чужой.
+    <CompatibilityMode> лежит ~11-12 КБ от начала — читаем 64 КБ."""
+    while d:
+        ext_path = d + ".xml"
+        if os.path.isfile(ext_path):
+            with open(ext_path, "r", encoding="utf-8-sig") as f:
+                ext_head = f.read(2000)
+            if re.search(r'<(ExternalDataProcessor|ExternalReport)[ >]', ext_head):
+                return None
+        cfg_path = os.path.join(d, "Configuration.xml")
+        if os.path.isfile(cfg_path):
+            with open(cfg_path, "r", encoding="utf-8-sig") as f:
+                head = f.read(65536)
+            m = re.search(r'<CompatibilityMode>([^<]+)</CompatibilityMode>', head)
+            # Расширение: своего CompatibilityMode нет, форму ведёт его собственный режим. В основной
+            # конфигурации этот тег — режим для её расширений, не её собственный: только для расширения.
+            if not m and '<ConfigurationExtensionPurpose>' in head:
+                m = re.search(r'<ConfigurationExtensionCompatibilityMode>([^<]+)</ConfigurationExtensionCompatibilityMode>', head)
+            return m.group(1).strip() if m else None
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return None
+
+
+def compat_mode_rank(mode):
+    """"Version8_3_27" → 80327, "Version8_5_1" → 80501."""
+    m = re.match(r'^Version(\d+)_(\d+)(?:_(\d+))?$', mode or '')   # и двухчастный Version8_1
+    return int(m.group(1)) * 10000 + int(m.group(2)) * 100 + int(m.group(3) or 0) if m else 0
+
+
 def _normalize_elements(defn):
     """Convert dict-style elements from --from-object generators to list-style expected by compiler.
     Generator format:  elements = {"ИмяЭлемента": {"element": "input", "path": "..."}, ...}
@@ -7394,6 +7430,11 @@ def main():
     out_path_resolved = args.OutputPath if os.path.isabs(args.OutputPath) else os.path.join(os.getcwd(), args.OutputPath)
     assert_edit_allowed(out_path_resolved, "editable")
     format_version = detect_format_version(os.path.dirname(out_path_resolved))
+    compat_mode = detect_compatibility_mode(os.path.dirname(out_path_resolved))
+    # Режим ниже 8.3.19: dcssch в шапке — только при использовании, поля/параметры списка не выгружаются.
+    # Нераспознанный режим (DontUse и т.п. — ранг 0) — как текущая платформа, то есть не старый.
+    compat_rank = compat_mode_rank(compat_mode)
+    is_compat_pre_8319 = 0 < compat_rank < 80319
 
     # Объявления пространств имён — одной переменной: место эмиссии её только подставляет.
     # Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.
@@ -7806,7 +7847,23 @@ def main():
         os.makedirs(out_dir, exist_ok=True)
 
     content = sort_element_tag_order(normalize_enum_tags('\r\n'.join(lines)))
+    # Режим ниже 8.3.19: платформа объявляет dcssch только там, где он есть в теле. Тело собрано —
+    # теперь видно, нужен ли он; иначе снимаем объявление из корня (как сделала бы выгрузка).
+    if is_compat_pre_8319:
+        root_end = content.index('>', content.index('<Form '))
+        if content.find('dcssch:', root_end) < 0:
+            content = content[:root_end].replace(
+                ' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema"', '') + content[root_end:]
     write_utf8_bom(out_path, content)
+
+    # Режим ниже 8.3.19: поля, вычисляемые поля и параметры динамического списка платформа хранит в
+    # базе, но в выгрузку XML не пишет. Загрузка их принимает молча — предупреждаем здесь.
+    if is_compat_pre_8319:
+        dyn_rx = (r'(?s)<Attribute name="([^"]+)"(?:(?!</Attribute>|<Attribute ).)*?'
+                  r'<Settings xsi:type="DynamicList">(?:(?!</Settings>).)*?<(?:Field|CalculatedField|Parameter)[ >]')
+        for m in re.finditer(dyn_rx, content):
+            print(f"[WARN] Dynamic list '{m.group(1)}': Field/CalculatedField/Parameter under compatibility "
+                  f"mode {compat_mode} (< 8.3.19) are kept in the infobase but not written to the XML dump")
 
     # --- 4. Auto-register form in parent object XML ---
     # Infer parent from OutputPath: .../TypePlural/ObjectName/Forms/FormName/Ext/Form.xml

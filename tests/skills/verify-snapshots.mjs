@@ -831,6 +831,7 @@ const EMPTY_CONFIG_ARGS = {
   'empty-config-220': ['-FormatVersion', '2.20', '-CompatibilityMode', 'Version8_3_27'],
   'empty-config-220-compat24': ['-FormatVersion', '2.20', '-CompatibilityMode', 'Version8_3_24'],
   'empty-config-221': ['-FormatVersion', '2.21', '-CompatibilityMode', 'Version8_3_27'],
+  'empty-config-compat17': ['-CompatibilityMode', 'Version8_3_17'],
 };
 
 // CFE skills — two-stage load: base config → extension

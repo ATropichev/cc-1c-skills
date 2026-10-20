@@ -1,0 +1,28 @@
+{
+  "name": "Режим совместимости 8.3.17: xmlns:dcssch не объявлен, если в форме его нет (#122)",
+  "setup": "empty-config-compat17",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Товары", "attributes": [{ "name": "Цена", "type": "Number(15,2)" }] },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/Catalogs/Товары.xml", "-FormName": "ФормаЭлемента" }
+    }
+  ],
+  "params": { "outputPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml" },
+  "validatePath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml",
+  "input": {
+    "elements": [{ "input": "Цена", "path": "Объект.Цена" }],
+    "attributes": [{ "name": "Объект", "type": "CatalogObject.Товары", "main": true }]
+  },
+  "expect": {
+    "fileNotContains": {
+      "file": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml",
+      "text": "xmlns:dcssch="
+    },
+    "stdoutNotContains": "[WARN]"
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "Режим совместимости 8.3.17: параметры динамического списка не попадут в выгрузку — предупреждение (#122)",
+  "setup": "empty-config-compat17",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Товары", "attributes": [{ "name": "Цена", "type": "Number(15,2)" }] },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/Catalogs/Товары.xml", "-FormName": "ФормаСписка", "-Purpose": "List" }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "elements": [{ "table": "Список", "path": "Список", "columns": [{ "input": "Цена", "path": "Список.Цена" }] }],
+        "attributes": [
+          { "name": "Список", "type": "DynamicList", "main": true, "settings": {
+            "query": "ВЫБРАТЬ Т.Ссылка, Т.Цена ИЗ Справочник.Товары КАК Т ГДЕ Т.Цена > &Порог",
+            "mainTable": "Catalog.Товары",
+            "parameters": ["Порог: decimal(15,2) = 0"]
+          } }
+        ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "{workDir}/Catalogs/Товары/Forms/ФормаСписка/Ext/Form.xml" }
+    }
+  ],
+  "params": { "formPath": "Catalogs/Товары/Forms/ФормаСписка" },
+  "expect": {
+    "stdoutContains": "17. Dynamic list 'Список': Field/CalculatedField/Parameter under compatibility mode Version8_3_17"
+  }
+}

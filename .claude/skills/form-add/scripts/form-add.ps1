@@ -1,4 +1,4 @@
-﻿# form-add v1.29 — Add managed form to 1C config object
+﻿# form-add v1.30 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -192,6 +192,44 @@ function Get-FormatRank([string]$ver) {
 	return 0
 }
 
+# Режим совместимости конфигурации ($null — не определён). От него зависит xmlns:dcssch в шапке
+# формы: при режиме < 8.3.19 платформа объявляет его только при использовании, иначе — всегда.
+# Подъём останавливается на корне внешней обработки/отчёта: её форму режим базы не меняет, а
+# Configuration.xml выше по дереву (src/cf рядом с src/epf) — чужой. Читаем 64 КБ: тег ~11-12 КБ.
+function Detect-CompatibilityMode([string]$dir) {
+	$d = $dir
+	while ($d) {
+		$extPath = "$d.xml"
+		if (Test-Path -LiteralPath $extPath) {
+			$extText = [System.IO.File]::ReadAllText($extPath, [System.Text.Encoding]::UTF8)
+			$extHead = $extText.Substring(0, [Math]::Min(2000, $extText.Length))
+			if ($extHead -match '<(ExternalDataProcessor|ExternalReport)[ >]') { return $null }
+		}
+		$cfgPath = Join-Path $d "Configuration.xml"
+		if (Test-Path -LiteralPath $cfgPath) {
+			$text = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
+			$head = $text.Substring(0, [Math]::Min(65536, $text.Length))
+			if ($head -match '<CompatibilityMode>([^<]+)</CompatibilityMode>') { return $Matches[1].Trim() }
+			# Расширение: своего CompatibilityMode нет, форму ведёт его собственный режим. В основной
+			# конфигурации этот тег — режим для её расширений, не её собственный: только для расширения.
+			if ($head -match '<ConfigurationExtensionPurpose>' -and $head -match '<ConfigurationExtensionCompatibilityMode>([^<]+)</ConfigurationExtensionCompatibilityMode>') { return $Matches[1].Trim() }
+			return $null
+		}
+		$parent = Split-Path $d -Parent
+		if ($parent -eq $d) { break }
+		$d = $parent
+	}
+	return $null
+}
+
+# Номер режима совместимости для сравнений: "Version8_3_27" → 80327, "Version8_5_1" → 80501.
+function Get-CompatModeRank([string]$mode) {
+	if ($mode -match '^Version(\d+)_(\d+)(?:_(\d+))?$') {   # и двухчастный Version8_1
+		return [int]$Matches[1] * 10000 + [int]$Matches[2] * 100 + [int]$Matches[3]
+	}
+	return 0
+}
+
 # --- Фаза 1: Определение типа объекта ---
 
 # Resolve ObjectPath (directory → .xml)
@@ -232,6 +270,16 @@ $script:formNsDecl = 'xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:app="http://
 if ((Get-FormatRank $script:formatVersion) -ge 221) {
 	$script:xmlnsDecl = $script:xmlnsDecl -replace ' xmlns:style=', ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style='
 	$script:formNsDecl = $script:formNsDecl -replace ' xmlns:style=', ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style='
+}
+
+# xmlns:dcssch платформа пишет в шапку формы всегда — кроме режима совместимости ниже 8.3.19, где
+# объявляет его только при использовании (пустая форма его не использует). Внешняя обработка и
+# нераспознанный режим (DontUse — ранг 0) — как текущая платформа. Старт подъёма — «каталог» самого
+# объекта: так первым проверяется его же X.xml, и корень внешней обработки узнаётся сразу.
+$script:compatMode = Detect-CompatibilityMode ($objectXmlFull.Path -replace '\.xml$', '')
+$compatRank = Get-CompatModeRank $script:compatMode
+if (-not ($compatRank -gt 0 -and $compatRank -lt 80319)) {
+	$script:formNsDecl = $script:formNsDecl -replace ' xmlns:dcsset=', ' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:dcsset='
 }
 
 $xmlDoc = New-Object System.Xml.XmlDocument

@@ -1,4 +1,4 @@
-﻿# meta-compile v1.120 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.121 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -4858,7 +4858,7 @@ function Detect-CompatibilityMode([string]$dir) {
 
 # Номер версии режима совместимости для сравнений: "Version8_3_27" → 80327, "Version8_5_1" → 80501.
 function Get-CompatModeRank([string]$mode) {
-	if ($mode -match '^Version(\d+)_(\d+)_(\d+)$') {
+	if ($mode -match '^Version(\d+)_(\d+)(?:_(\d+))?$') {   # и двухчастный Version8_1
 		return [int]$Matches[1] * 10000 + [int]$Matches[2] * 100 + [int]$Matches[3]
 	}
 	return 0
@@ -5686,6 +5686,12 @@ if ($objType -eq "CommonForm") {
 		$cfFormNs = 'xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:dcscor="http://v8.1c.ru/8.1/data-composition-system/core" xmlns:dcsset="http://v8.1c.ru/8.1/data-composition-system/settings" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
 		# Шапка Form на 2.21 тоже несёт палитру — см. комментарий у $script:xmlnsDecl.
 		if ($script:isFormat221) { $cfFormNs = $cfFormNs -replace ' xmlns:style=', ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=' }
+		# xmlns:dcssch платформа пишет в шапку всегда, кроме режима совместимости ниже 8.3.19 (там —
+		# только при использовании; пустая заготовка его не использует). Как у form-add.
+		$cfRank = Get-CompatModeRank $script:compatMode
+		if (-not ($cfRank -gt 0 -and $cfRank -lt 80319)) {
+			$cfFormNs = $cfFormNs -replace ' xmlns:dcsset=', ' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:dcsset='
+		}
 		$cfFormXml = "<?xml version=`"1.0`" encoding=`"UTF-8`"?>`r`n<Form $cfFormNs version=`"$($script:formatVersion)`">`r`n`t<AutoCommandBar name=`"ФормаКоманднаяПанель`" id=`"-1`">`r`n`t`t<Autofill>true</Autofill>`r`n`t</AutoCommandBar>`r`n`t<ChildItems/>`r`n</Form>`r`n"
 		Write-XmlFileKeepEol $cfFormXmlPath $cfFormXml $enc
 		$modulesCreated += $cfFormXmlPath

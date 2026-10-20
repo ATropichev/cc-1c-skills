@@ -1,4 +1,4 @@
-﻿# form-compile v1.207 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.208 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1430,6 +1430,45 @@ function Get-FormatRank([string]$ver) {
 	return 0
 }
 
+# Режим совместимости конфигурации ($null — не определён). От него зависит xmlns:dcssch в шапке:
+# при режиме < 8.3.19 платформа не объявляет его никогда и не выгружает поля/параметры динамического
+# списка (в базе они хранятся). Подъём останавливается на корне внешней обработки/отчёта: её форму
+# режим базы не меняет, а Configuration.xml выше по дереву (src/cf рядом с src/epf) — чужой.
+# <CompatibilityMode> лежит ~11-12 КБ от начала — читаем 64 КБ.
+function Detect-CompatibilityMode([string]$dir) {
+	$d = $dir
+	while ($d) {
+		$extPath = "$d.xml"
+		if (Test-Path -LiteralPath $extPath) {
+			$extText = [System.IO.File]::ReadAllText($extPath, [System.Text.Encoding]::UTF8)
+			$extHead = $extText.Substring(0, [Math]::Min(2000, $extText.Length))
+			if ($extHead -match '<(ExternalDataProcessor|ExternalReport)[ >]') { return $null }
+		}
+		$cfgPath = Join-Path $d "Configuration.xml"
+		if (Test-Path -LiteralPath $cfgPath) {
+			$text = [System.IO.File]::ReadAllText($cfgPath, [System.Text.Encoding]::UTF8)
+			$head = $text.Substring(0, [Math]::Min(65536, $text.Length))
+			if ($head -match '<CompatibilityMode>([^<]+)</CompatibilityMode>') { return $Matches[1].Trim() }
+			# Расширение: своего CompatibilityMode нет, форму ведёт его собственный режим. В основной
+			# конфигурации этот тег — режим для её расширений, не её собственный: только для расширения.
+			if ($head -match '<ConfigurationExtensionPurpose>' -and $head -match '<ConfigurationExtensionCompatibilityMode>([^<]+)</ConfigurationExtensionCompatibilityMode>') { return $Matches[1].Trim() }
+			return $null
+		}
+		$parent = Split-Path $d -Parent
+		if ($parent -eq $d) { break }
+		$d = $parent
+	}
+	return $null
+}
+
+# Номер режима совместимости для сравнений: "Version8_3_27" → 80327, "Version8_5_1" → 80501.
+function Get-CompatModeRank([string]$mode) {
+	if ($mode -match '^Version(\d+)_(\d+)(?:_(\d+))?$') {   # и двухчастный Version8_1
+		return [int]$Matches[1] * 10000 + [int]$Matches[2] * 100 + [int]$Matches[3]
+	}
+	return 0
+}
+
 # --- Support guard (Ext/ParentConfigurations.bin) ---
 # See docs/1c-support-state-spec.md. Blocks edits of vendor objects "на замке" /
 # read-only configs unless allowed. Trigger = bin present; reaction from
@@ -1564,6 +1603,11 @@ function Assert-EditAllowed([string]$targetPath, [string]$require) {
 $script:outPathResolved = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path (Get-Location) $OutputPath }
 Assert-EditAllowed $script:outPathResolved 'editable'
 $script:formatVersion = Detect-FormatVersion ([System.IO.Path]::GetDirectoryName($script:outPathResolved))
+$script:compatMode = Detect-CompatibilityMode ([System.IO.Path]::GetDirectoryName($script:outPathResolved))
+# Режим ниже 8.3.19: dcssch в шапке — только при использовании, поля/параметры списка не выгружаются.
+# Нераспознанный режим (DontUse и т.п. — ранг 0) — как текущая платформа, то есть не старый.
+$script:compatRank = Get-CompatModeRank $script:compatMode
+$script:isCompatPre8319 = ($script:compatRank -gt 0 -and $script:compatRank -lt 80319)
 
 # Объявления пространств имён — одной переменной: место эмиссии её только интерполирует.
 # Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.
@@ -7737,8 +7781,26 @@ if (-not (Test-Path $outDir)) {
 	New-Item -ItemType Directory -Path $outDir -Force | Out-Null
 }
 
+$formText = Sort-ElementTagOrder (Normalize-EnumTags $xml.ToString().TrimEnd("`r", "`n"))
+# Режим ниже 8.3.19: платформа объявляет dcssch только там, где он есть в теле. Тело собрано —
+# теперь видно, нужен ли он; иначе снимаем объявление из корня (как сделала бы выгрузка).
+if ($script:isCompatPre8319) {
+	$rootEnd = $formText.IndexOf('>', $formText.IndexOf('<Form '))
+	if ($formText.IndexOf('dcssch:', $rootEnd) -lt 0) {
+		$formText = $formText.Substring(0, $rootEnd).Replace(' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema"', '') + $formText.Substring($rootEnd)
+	}
+}
 $enc = New-Object System.Text.UTF8Encoding($true)
-[System.IO.File]::WriteAllText($outPath, (Sort-ElementTagOrder (Normalize-EnumTags $xml.ToString().TrimEnd("`r", "`n"))), $enc)
+[System.IO.File]::WriteAllText($outPath, $formText, $enc)
+
+# Режим ниже 8.3.19: поля, вычисляемые поля и параметры динамического списка платформа хранит в
+# базе, но в выгрузку XML не пишет. Загрузка их принимает молча — предупреждаем здесь.
+if ($script:isCompatPre8319) {
+	$dynRx = '(?s)<Attribute name="([^"]+)"(?:(?!</Attribute>|<Attribute ).)*?<Settings xsi:type="DynamicList">(?:(?!</Settings>).)*?<(?:Field|CalculatedField|Parameter)[ >]'
+	foreach ($m in [regex]::Matches($formText, $dynRx)) {
+		Write-Host "[WARN] Dynamic list '$($m.Groups[1].Value)': Field/CalculatedField/Parameter under compatibility mode $($script:compatMode) (< 8.3.19) are kept in the infobase but not written to the XML dump"
+	}
+}
 
 # --- 13b. Auto-register form in parent object XML ---
 

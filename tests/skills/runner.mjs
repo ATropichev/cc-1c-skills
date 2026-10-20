@@ -151,6 +151,8 @@ function ensureSetup(setupName, runtime, skillCasesDir) {
     'empty-config-220-compat24': ['-FormatVersion', '2.20', '-CompatibilityMode', 'Version8_3_24'],
     // 2.21 (8.5) — в шапках MetaDataObject и Form появляется xmlns:pal.
     'empty-config-221': ['-FormatVersion', '2.21', '-CompatibilityMode', 'Version8_3_27'],
+    // Режим ниже 8.3.19: в шапке формы xmlns:dcssch только при использовании.
+    'empty-config-compat17': ['-CompatibilityMode', 'Version8_3_17'],
   };
   if (EMPTY_CONFIGS[setupName]) {
     const cached = join(CACHE, setupName);

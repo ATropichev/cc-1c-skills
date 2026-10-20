@@ -96,6 +96,8 @@
   "valueType": "string(10)", "presentationExpression": "Code" }
 ```
 
+При режиме совместимости ниже 8.3.19 `parameters`, `fields` и `calculatedFields` в базу загружаются, но в выгрузку XML из базы не попадают.
+
 ## Отбор (`filter`)
 
 Shorthand `"Поле оператор значение @флаги"` или объект:

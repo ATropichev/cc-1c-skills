@@ -1,4 +1,4 @@
-﻿# form-validate v1.25 — Validate 1C managed form
+﻿# form-validate v1.26 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1906,6 +1906,33 @@ if (-not $stopped) {
 		}
 	}
 	if ($orderBad -eq 0) { Report-OK "16. Property order: matches the platform" }
+}
+
+# --- Check 17: настройки динамического списка в режиме совместимости ниже 8.3.19 ---
+# Field / CalculatedField / Parameter списка такая конфигурация принимает при загрузке и хранит в
+# базе, но в выгрузку XML не пишет — исходник с ними после выгрузки «теряет» их в диффе. Только для
+# конфигурации: у внешней обработки режим базы на форму не влияет.
+if (-not $stopped -and $script:isConfigContext) {
+	$cfgText = [System.IO.File]::ReadAllText($script:dumpAnchor, [System.Text.Encoding]::UTF8)
+	$cfgHead = $cfgText.Substring(0, [Math]::Min(65536, $cfgText.Length))
+	# Расширение: своего CompatibilityMode нет, форму ведёт его собственный режим. В основной
+	# конфигурации этот тег — режим для её расширений, не её собственный: только для расширения.
+	$compatMode = if ($cfgHead -match '<CompatibilityMode>([^<]+)</CompatibilityMode>') { $Matches[1].Trim() }
+		elseif ($cfgHead -match '<ConfigurationExtensionPurpose>' -and $cfgHead -match '<ConfigurationExtensionCompatibilityMode>([^<]+)</ConfigurationExtensionCompatibilityMode>') { $Matches[1].Trim() }
+		else { '' }
+	$compatRank = if ($compatMode -match '^Version(\d+)_(\d+)(?:_(\d+))?$') { [int]$Matches[1] * 10000 + [int]$Matches[2] * 100 + [int]$Matches[3] } else { 0 }
+	if ($compatRank -gt 0 -and $compatRank -lt 80319) {
+		$dynBad = 0
+		foreach ($a in $attrNodes) {
+			$st = $a.SelectSingleNode("f:Settings", $nsMgr)
+			if (-not $st -or $st.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance") -ne 'DynamicList') { continue }
+			if ($st.SelectSingleNode("f:Field|f:CalculatedField|f:Parameter", $nsMgr)) {
+				Report-Warn "17. Dynamic list '$($a.GetAttribute('name'))': Field/CalculatedField/Parameter under compatibility mode $compatMode (< 8.3.19) are kept in the infobase but not written to the XML dump"
+				$dynBad++
+			}
+		}
+		if ($dynBad -eq 0) { Report-OK "17. Dynamic list settings: dumpable under $compatMode" }
+	}
 }
 
 # --- Summary ---

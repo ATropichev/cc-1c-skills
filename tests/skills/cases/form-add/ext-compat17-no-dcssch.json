@@ -1,0 +1,30 @@
+{
+  "name": "Расширение с режимом 8.3.17 в конфигурации 8.3.24: шапку ведёт режим расширения — без xmlns:dcssch (#122)",
+  "preRun": [
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Р17", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
+    },
+    {
+      "script": "cf-edit/scripts/cf-edit",
+      "args": { "-ConfigPath": "{workDir}/cfe", "-Operation": "modify-property", "-Value": "ConfigurationExtensionCompatibilityMode=Version8_3_17" }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "СвойСпр" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}/cfe" }
+    }
+  ],
+  "params": {
+    "objectPath": "cfe/Catalogs/СвойСпр.xml",
+    "formName": "ФормаЭлемента",
+    "extensionPath": "cfe"
+  },
+  "validatePath": "cfe/Catalogs/СвойСпр/Forms/ФормаЭлемента",
+  "expect": {
+    "fileNotContains": {
+      "file": "cfe/Catalogs/СвойСпр/Forms/ФормаЭлемента/Ext/Form.xml",
+      "text": "xmlns:dcssch="
+    }
+  }
+}

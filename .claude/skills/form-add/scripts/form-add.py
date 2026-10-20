@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-add v1.29 — Add managed form to 1C config object (Python port)
+# form-add v1.30 — Add managed form to 1C config object (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -248,6 +248,41 @@ def format_rank(ver):
     return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
 
 
+def detect_compatibility_mode(d):
+    """Режим совместимости конфигурации (None — не определён). От него зависит xmlns:dcssch в шапке
+    формы: при режиме < 8.3.19 платформа объявляет его только при использовании, иначе — всегда.
+    Подъём останавливается на корне внешней обработки/отчёта: её форму режим базы не меняет, а
+    Configuration.xml выше по дереву (src/cf рядом с src/epf) — чужой. Читаем 64 КБ: тег ~11-12 КБ."""
+    while d:
+        ext_path = d + ".xml"
+        if os.path.isfile(ext_path):
+            with open(ext_path, "r", encoding="utf-8-sig") as f:
+                ext_head = f.read(2000)
+            if re.search(r'<(ExternalDataProcessor|ExternalReport)[ >]', ext_head):
+                return None
+        cfg_path = os.path.join(d, "Configuration.xml")
+        if os.path.isfile(cfg_path):
+            with open(cfg_path, "r", encoding="utf-8-sig") as f:
+                head = f.read(65536)
+            m = re.search(r'<CompatibilityMode>([^<]+)</CompatibilityMode>', head)
+            # Расширение: своего CompatibilityMode нет, форму ведёт его собственный режим. В основной
+            # конфигурации этот тег — режим для её расширений, не её собственный: только для расширения.
+            if not m and '<ConfigurationExtensionPurpose>' in head:
+                m = re.search(r'<ConfigurationExtensionCompatibilityMode>([^<]+)</ConfigurationExtensionCompatibilityMode>', head)
+            return m.group(1).strip() if m else None
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return None
+
+
+def compat_mode_rank(mode):
+    """"Version8_3_27" → 80327, "Version8_5_1" → 80501."""
+    m = re.match(r'^Version(\d+)_(\d+)(?:_(\d+))?$', mode or '')   # и двухчастный Version8_1
+    return int(m.group(1)) * 10000 + int(m.group(2)) * 100 + int(m.group(3) or 0) if m else 0
+
+
 def _detect_xml_style(path):
     """Стиль существующего файла для round-trip-сохранения: BOM / EOL / регистр encoding /
     финальный перенос. None → файл новый (сохранить текущее поведение)."""
@@ -415,6 +450,16 @@ def main():
         pal = ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style='
         xmlns_decl = xmlns_decl.replace(' xmlns:style=', pal)
         form_ns_decl = form_ns_decl.replace(' xmlns:style=', pal)
+
+    # xmlns:dcssch платформа пишет в шапку формы всегда — кроме режима совместимости ниже 8.3.19, где
+    # объявляет его только при использовании (пустая форма его не использует). Внешняя обработка и
+    # нераспознанный режим (DontUse — ранг 0) — как текущая платформа. Старт подъёма — «каталог» самого
+    # объекта: так первым проверяется его же X.xml, и корень внешней обработки узнаётся сразу.
+    compat_rank = compat_mode_rank(detect_compatibility_mode(re.sub(r'\.xml$', '', object_xml_full, flags=re.I)))
+    if not (0 < compat_rank < 80319):
+        form_ns_decl = form_ns_decl.replace(
+            ' xmlns:dcsset=',
+            ' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:dcsset=')
 
     parser_xml = etree.XMLParser(remove_blank_text=False)
     tree = etree.parse(object_xml_full, parser_xml)

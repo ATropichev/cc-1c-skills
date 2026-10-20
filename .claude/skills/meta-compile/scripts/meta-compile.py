@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-compile v1.120 — Compile 1C metadata object from JSON
+# meta-compile v1.121 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -4876,8 +4876,8 @@ def detect_compatibility_mode(d):
 
 def compat_mode_rank(mode):
     """"Version8_3_27" → 80327, "Version8_5_1" → 80501."""
-    m = re.match(r'^Version(\d+)_(\d+)_(\d+)$', mode or '')
-    return int(m.group(1)) * 10000 + int(m.group(2)) * 100 + int(m.group(3)) if m else 0
+    m = re.match(r'^Version(\d+)_(\d+)(?:_(\d+))?$', mode or '')   # и двухчастный Version8_1
+    return int(m.group(1)) * 10000 + int(m.group(2)) * 100 + int(m.group(3) or 0) if m else 0
 
 
 def format_rank(ver):
@@ -5453,6 +5453,12 @@ if obj_type == 'CommonForm':
         if is_format_221:
             cf_ns = cf_ns.replace(' xmlns:style=',
                                   ' xmlns:pal="http://v8.1c.ru/8.1/data/ui/colors/palette" xmlns:style=')
+        # xmlns:dcssch платформа пишет в шапку всегда, кроме режима совместимости ниже 8.3.19 (там —
+        # только при использовании; пустая заготовка его не использует). Как у form-add.
+        cf_rank = compat_mode_rank(compat_mode)
+        if not (0 < cf_rank < 80319):
+            cf_ns = cf_ns.replace(' xmlns:dcsset=',
+                                  ' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:dcsset=')
         cf_form_xml = ('<?xml version="1.0" encoding="UTF-8"?>\r\n<Form ' + cf_ns + ' version="' + format_version + '">\r\n'
                        '\t<AutoCommandBar name="ФормаКоманднаяПанель" id="-1">\r\n\t\t<Autofill>true</Autofill>\r\n\t</AutoCommandBar>\r\n'
                        '\t<ChildItems/>\r\n</Form>\r\n')

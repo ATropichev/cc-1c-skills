@@ -1,0 +1,20 @@
+{
+  "name": "Режим совместимости 8.3.17: форма без настроек динамического списка — без предупреждения (#122)",
+  "setup": "empty-config-compat17",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Товары" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/Catalogs/Товары.xml", "-FormName": "ФормаСписка", "-Purpose": "List" }
+    }
+  ],
+  "params": { "formPath": "Catalogs/Товары/Forms/ФормаСписка" },
+  "expect": {
+    "stdoutContains": "Validation OK",
+    "stdoutNotContains": "17. Dynamic list"
+  }
+}

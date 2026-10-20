@@ -1,0 +1,34 @@
+{
+  "name": "Режим совместимости 8.3.17: настройки динамического списка — dcssch в шапке и предупреждение о выгрузке (#122)",
+  "setup": "empty-config-compat17",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Товары", "attributes": [{ "name": "Цена", "type": "Number(15,2)" }] },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/Catalogs/Товары.xml", "-FormName": "ФормаСписка", "-Purpose": "List" }
+    }
+  ],
+  "params": { "outputPath": "Catalogs/Товары/Forms/ФормаСписка/Ext/Form.xml" },
+  "validatePath": "Catalogs/Товары/Forms/ФормаСписка/Ext/Form.xml",
+  "input": {
+    "elements": [{ "table": "Список", "path": "Список", "columns": [{ "input": "Цена", "path": "Список.Цена" }] }],
+    "attributes": [
+      { "name": "Список", "type": "DynamicList", "main": true, "settings": {
+        "query": "ВЫБРАТЬ Т.Ссылка, Т.Цена ИЗ Справочник.Товары КАК Т ГДЕ Т.Цена > &Порог",
+        "mainTable": "Catalog.Товары",
+        "parameters": ["Порог: decimal(15,2) = 0"]
+      } }
+    ]
+  },
+  "expect": {
+    "fileContains": {
+      "file": "Catalogs/Товары/Forms/ФормаСписка/Ext/Form.xml",
+      "text": "xmlns:dcssch=\"http://v8.1c.ru/8.1/data-composition-system/schema\""
+    },
+    "stdoutContains": "[WARN] Dynamic list 'Список': Field/CalculatedField/Parameter under compatibility mode Version8_3_17"
+  }
+}
