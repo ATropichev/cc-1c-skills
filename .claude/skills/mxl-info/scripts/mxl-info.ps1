@@ -1,4 +1,4 @@
-﻿# mxl-info v1.5 — Analyze 1C spreadsheet structure
+﻿# mxl-info v1.6 — Analyze 1C spreadsheet structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -34,11 +34,55 @@ if (-not (Test-Path $TemplatePath)) {
 	exit 1
 }
 
+# Ошибка разбора XML — блок строк вместо трассы: место, сообщение парсера и выдержка строки файла
+# с указателем. Номера и выдержка в портах совпадают, текст сообщения — нет: у lxml он свой,
+# у .NET ещё и зависит от языка ОС.
+function Format-XmlParseError {
+	param([string]$path, $exception)
+	$ex = $exception
+	while ($ex -and -not ($ex -is [System.Xml.XmlException])) { $ex = $ex.InnerException }
+	if (-not $ex) { return @("[ERROR] Not well-formed XML: $($exception.Message)") }
+	$lineNo = $ex.LineNumber
+	$pos = $ex.LinePosition
+	# Хвост «Line N, position M.» («строка N, позиция M.») повторяет заголовок; срезаем его по самим
+	# номерам, чтобы не зависеть от языка сообщения.
+	$msg = $ex.Message -replace ",?\s*\S+\s+$lineNo,\s*\S+\s+$pos\.?\s*$", ''
+	$out = @("[ERROR] Not well-formed XML (line $lineNo, position $pos):", "        $msg")
+	$fileLines = [System.IO.File]::ReadAllText($path) -split "`n"
+	if ($lineNo -lt 1 -or $lineNo -gt $fileLines.Count) { return $out }
+	$raw = $fileLines[$lineNo - 1].TrimEnd("`r").Replace("`t", ' ')
+	$text = $raw.TrimStart()
+	# Пустая строка (обрыв файла) ничего не показывает — без выдержки.
+	if ($text -eq '') { return $out }
+	$col = [Math]::Max(0, $pos - 1 - ($raw.Length - $text.Length))
+	# Длинную строку (base64 картинки) режем до окна вокруг позиции — иначе в вывод уйдут килобайты.
+	$prefix = ''
+	$suffix = ''
+	if ($text.Length -gt 120) {
+		$start = [Math]::Max(0, [Math]::Min($col - 60, $text.Length - 120))
+		if ($start -gt 0) { $prefix = '...' }
+		if ($start + 120 -lt $text.Length) { $suffix = '...' }
+		$text = $text.Substring($start, 120)
+		$col -= $start
+	}
+	$col = [Math]::Min($col, $text.Length)
+	$gutter = "        $lineNo | "
+	$out += $gutter + $prefix + $text + $suffix
+	$out += (' ' * ($gutter.Length + $prefix.Length + $col)) + '^'
+	return $out
+}
+
 # --- Load XML ---
 
 $xmlDoc = New-Object System.Xml.XmlDocument
 $xmlDoc.PreserveWhitespace = $false
-$xmlDoc.Load((Resolve-Path $TemplatePath).Path)
+$resolvedPath = (Resolve-Path $TemplatePath).Path
+try {
+	$xmlDoc.Load($resolvedPath)
+} catch {
+	foreach ($l in (Format-XmlParseError $resolvedPath $_.Exception)) { Write-Host $l }
+	exit 1
+}
 
 $nsMgr = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
 $nsMgr.AddNamespace("d", "http://v8.1c.ru/8.2/data/spreadsheet")

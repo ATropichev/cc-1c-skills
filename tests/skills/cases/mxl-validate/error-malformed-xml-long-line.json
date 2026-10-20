@@ -1,0 +1,21 @@
+{
+  "name": "Невалидный XML: длинная строка урезана до окна вокруг позиции",
+  "setup": "fixture:malformed-long-line",
+  "params": {
+    "templatePath": "Template.xml"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] Not well-formed XML (line 4, position 311):",
+      "        4 | ...AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA & BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB...",
+      "\n                                                                           ^",
+      "=== Result: 1 errors, 0 warnings (other checks skipped) ==="
+    ],
+    "stdoutNotContains": [
+      "Traceback",
+      "Exception",
+      "   at "
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# mxl-info v1.5 — Analyze 1C spreadsheet structure
+# mxl-info v1.6 — Analyze 1C spreadsheet structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -63,8 +63,51 @@ if not os.path.isfile(template_path):
     print(f"File not found: {template_path}", file=sys.stderr)
     sys.exit(1)
 
+# Ошибка разбора XML — блок строк вместо трассы: место, сообщение парсера и выдержка строки файла
+# с указателем. Номера и выдержка в портах совпадают, текст сообщения — нет: у lxml он свой,
+# у .NET ещё и зависит от языка ОС.
+def format_xml_parse_error(path, exception):
+    if not isinstance(exception, etree.XMLSyntaxError):
+        return [f'[ERROR] Not well-formed XML: {exception}']
+    line_no, pos = exception.position
+    # Хвост «line N, column M» повторяет заголовок; срезаем его по самим номерам, как в PS-порте.
+    msg = re.sub(rf',?\s*\S+\s+{line_no},\s*\S+\s+{pos}\.?\s*$', '', exception.msg or str(exception))
+    out = [f'[ERROR] Not well-formed XML (line {line_no}, position {pos}):', f'        {msg}']
+    with open(path, encoding='utf-8-sig', errors='replace', newline='') as f:
+        file_lines = f.read().split('\n')
+    if line_no < 1 or line_no > len(file_lines):
+        return out
+    raw = file_lines[line_no - 1].rstrip('\r').replace('\t', ' ')
+    text = raw.lstrip()
+    # Пустая строка (обрыв файла) ничего не показывает — без выдержки.
+    if not text:
+        return out
+    col = max(0, pos - 1 - (len(raw) - len(text)))
+    # Длинную строку (base64 картинки) режем до окна вокруг позиции — иначе в вывод уйдут килобайты.
+    prefix = ''
+    suffix = ''
+    if len(text) > 120:
+        start = max(0, min(col - 60, len(text) - 120))
+        if start > 0:
+            prefix = '...'
+        if start + 120 < len(text):
+            suffix = '...'
+        text = text[start:start + 120]
+        col -= start
+    col = min(col, len(text))
+    gutter = f'        {line_no} | '
+    out.append(gutter + prefix + text + suffix)
+    out.append(' ' * (len(gutter) + len(prefix) + col) + '^')
+    return out
+
+
 # --- Load XML ---
-tree = etree.parse(template_path, etree.XMLParser(remove_blank_text=True))
+try:
+    tree = etree.parse(template_path, etree.XMLParser(remove_blank_text=True))
+except Exception as e:
+    for line in format_xml_parse_error(template_path, e):
+        print(line)
+    sys.exit(1)
 root = tree.getroot()
 
 NS = {

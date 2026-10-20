@@ -1,0 +1,20 @@
+{
+  "name": "Невалидный XML: обрыв файла — без пустой выдержки",
+  "setup": "fixture:malformed-truncated",
+  "params": {
+    "templatePath": "Template.xml"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] Not well-formed XML (line 5, position 1):",
+      "=== Result: 1 errors, 0 warnings (other checks skipped) ==="
+    ],
+    "stdoutNotContains": [
+      "Traceback",
+      "Exception",
+      "   at ",
+      " | "
+    ]
+  }
+}

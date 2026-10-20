@@ -1,0 +1,21 @@
+{
+  "name": "Невалидный XML: место, выдержка строки с указателем, без трассы",
+  "setup": "fixture:malformed-detail",
+  "params": {
+    "templatePath": "Template.xml"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] Not well-formed XML (line 8, position 31):",
+      "        8 | <detailParameter>Скидка <> 0</detailParameter>",
+      "\n                                     ^",
+      "=== Result: 1 errors, 0 warnings (other checks skipped) ==="
+    ],
+    "stdoutNotContains": [
+      "Traceback",
+      "Exception",
+      "   at "
+    ]
+  }
+}

@@ -319,6 +319,15 @@ const FAMILIES = [
           'subsystem-compile', 'subsystem-edit', 'xdto-compile'] },
     ],
   },
+  // ─── Ошибка разбора XML: блок для вывода вместо трассы ───────────────────
+  // Функция только строит строки (место, сообщение парсера, выдержка с указателем); что печатать
+  // вокруг — итог валидатора, коды выхода — решает навык. Поэтому тело общее у validate и info.
+  {
+    name: 'format_xml_parse_error', py: 'format_xml_parse_error', ps1: 'Format-XmlParseError',
+    variants: [
+      { id: 'excerpt', authority: 'mxl-validate', consumers: ['mxl-info'] },
+    ],
+  },
   // ─── Сохранение стиля XML при round-trip (#44/#46/#47) ───────────────────
   {
     name: 'detect_xml_style', py: '_detect_xml_style', ps1: 'Detect-XmlStyle',

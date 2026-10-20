@@ -1,8 +1,8 @@
 ﻿#!/usr/bin/env python3
-# mxl-validate v1.8 — Validate 1C spreadsheet document Template.xml
+# mxl-validate v1.9 — Validate 1C spreadsheet document Template.xml
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates spreadsheet Template.xml: height, palette refs, column/row indices, areas, merges."""
-import sys, os, argparse
+import sys, os, re, argparse
 from lxml import etree
 
 # Регистронезависимый ввод — паритет с PS1: в PowerShell имена параметров и [ValidateSet]
@@ -71,6 +71,44 @@ def int_text(node):
     return 0
 
 
+# Ошибка разбора XML — блок строк вместо трассы: место, сообщение парсера и выдержка строки файла
+# с указателем. Номера и выдержка в портах совпадают, текст сообщения — нет: у lxml он свой,
+# у .NET ещё и зависит от языка ОС.
+def format_xml_parse_error(path, exception):
+    if not isinstance(exception, etree.XMLSyntaxError):
+        return [f'[ERROR] Not well-formed XML: {exception}']
+    line_no, pos = exception.position
+    # Хвост «line N, column M» повторяет заголовок; срезаем его по самим номерам, как в PS-порте.
+    msg = re.sub(rf',?\s*\S+\s+{line_no},\s*\S+\s+{pos}\.?\s*$', '', exception.msg or str(exception))
+    out = [f'[ERROR] Not well-formed XML (line {line_no}, position {pos}):', f'        {msg}']
+    with open(path, encoding='utf-8-sig', errors='replace', newline='') as f:
+        file_lines = f.read().split('\n')
+    if line_no < 1 or line_no > len(file_lines):
+        return out
+    raw = file_lines[line_no - 1].rstrip('\r').replace('\t', ' ')
+    text = raw.lstrip()
+    # Пустая строка (обрыв файла) ничего не показывает — без выдержки.
+    if not text:
+        return out
+    col = max(0, pos - 1 - (len(raw) - len(text)))
+    # Длинную строку (base64 картинки) режем до окна вокруг позиции — иначе в вывод уйдут килобайты.
+    prefix = ''
+    suffix = ''
+    if len(text) > 120:
+        start = max(0, min(col - 60, len(text) - 120))
+        if start > 0:
+            prefix = '...'
+        if start + 120 < len(text):
+            suffix = '...'
+        text = text[start:start + 120]
+        col -= start
+    col = min(col, len(text))
+    gutter = f'        {line_no} | '
+    out.append(gutter + prefix + text + suffix)
+    out.append(' ' * (len(gutter) + len(prefix) + col) + '^')
+    return out
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -129,14 +167,24 @@ def main():
 
     # --- Load XML ---
     xml_parser = etree.XMLParser(remove_blank_text=False)
-    xml_doc = etree.parse(resolved_path, xml_parser)
+    # Derive template name from path: .../Templates/<Name>/Ext/Template.xml
+    # Go up 2 levels from Template.xml -> Ext -> <Name>
+    template_display_name = os.path.basename(os.path.dirname(os.path.dirname(resolved_path)))
+    try:
+        xml_doc = etree.parse(resolved_path, xml_parser)
+    except Exception as e:
+        if detailed:
+            print(f'=== Validation: Template.{template_display_name} ===')
+            print('')
+        for line in format_xml_parse_error(resolved_path, e):
+            print(line)
+        print('')
+        print('=== Result: 1 errors, 0 warnings (other checks skipped) ===')
+        sys.exit(1)
     root = xml_doc.getroot()
 
     r = Reporter(max_errors, detailed)
 
-    # Derive template name from path: .../Templates/<Name>/Ext/Template.xml
-    # Go up 2 levels from Template.xml -> Ext -> <Name>
-    template_display_name = os.path.basename(os.path.dirname(os.path.dirname(resolved_path)))
     r.lines.append(f'=== Validation: Template.{template_display_name} ===')
     r.lines.append('')
 
