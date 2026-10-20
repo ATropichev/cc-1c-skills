@@ -56,6 +56,9 @@
   "params": {
     "extensionPath": "cfe"
   },
+  "args_extra": [
+    "-Detailed"
+  ],
   "expectError": true,
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
   "expect": {
@@ -65,7 +68,8 @@
       "[ERROR] 9. CommonAttribute.Тест_ОР: собственный объект этого вида в расширении"
     ],
     "stdoutNotContains": [
-      "Document.Тест_Док: собственный"
+      "Document.Тест_Док: собственный",
+      "9. Borrowed objects"
     ]
   }
 }

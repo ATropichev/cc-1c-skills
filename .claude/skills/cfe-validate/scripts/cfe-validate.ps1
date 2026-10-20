@@ -1085,10 +1085,13 @@ if ($childObjNode) {
 		if ($script:stopped) { break }
 	}
 
-	if ($borrowedCount -eq 0) {
-		Report-OK "9. Borrowed objects: none found"
-	} elseif ($check9Ok) {
-		Report-OK "9. Borrowed objects: $borrowedOk/$borrowedCount validated"
+	# Ошибка проверки 9 (в т.ч. на собственном объекте) гасит итоговую строку OK
+	if ($check9Ok) {
+		if ($borrowedCount -eq 0) {
+			Report-OK "9. Borrowed objects: none found"
+		} else {
+			Report-OK "9. Borrowed objects: $borrowedOk/$borrowedCount validated"
+		}
 	}
 
 	if ($subItemCount -eq 0) {

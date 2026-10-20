@@ -1143,10 +1143,12 @@ def main():
             if r.stopped:
                 break
 
-        if borrowed_count == 0:
-            r.ok('9. Borrowed objects: none found')
-        elif check9_ok:
-            r.ok(f'9. Borrowed objects: {borrowed_ok_count}/{borrowed_count} validated')
+        # Ошибка проверки 9 (в т.ч. на собственном объекте) гасит итоговую строку OK
+        if check9_ok:
+            if borrowed_count == 0:
+                r.ok('9. Borrowed objects: none found')
+            else:
+                r.ok(f'9. Borrowed objects: {borrowed_ok_count}/{borrowed_count} validated')
 
         if sub_item_count == 0:
             r.ok('10. Sub-items: none found')
