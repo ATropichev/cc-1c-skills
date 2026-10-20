@@ -1,5 +1,5 @@
 ﻿#!/usr/bin/env python3
-# mxl-compile v1.56 — Compile 1C spreadsheet from JSON
+# mxl-compile v1.57 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import hashlib
@@ -2059,7 +2059,7 @@ def main():
                 lines.append(f'\t\t\t\t\t<f>{cell_info["FormatIdx"]}</f>')
 
                 if cell_info['Param']:
-                    lines.append(f'\t\t\t\t\t<parameter>{cell_info["Param"]}</parameter>')
+                    lines.append(f'\t\t\t\t\t<parameter>{esc_xml_text(str(cell_info["Param"]))}</parameter>')
 
                 # Проверяем НАЛИЧИЕ ключа, а не истинность: пустая строка — это текст,
                 # платформа такие ячейки пишет с пустым <tl>, и по истинности он терялся.
@@ -2089,7 +2089,7 @@ def main():
                 # Пока она стояла внутри ветки параметра, две трети расшифровок терялись молча.
                 # Порядок тегов ячейки снят с корпуса: parameter · текст · detailParameter.
                 if cell_info['Detail']:
-                    lines.append(f'\t\t\t\t\t<detailParameter>{cell_info["Detail"]}</detailParameter>')
+                    lines.append(f'\t\t\t\t\t<detailParameter>{esc_xml_text(str(cell_info["Detail"]))}</detailParameter>')
 
                 # Третий параметр ячейки — имя параметра, которым подставляют картинку. Сама
                 # картинка при этом задаётся оформлением (picIndex), а параметр — тут, последним
@@ -2242,7 +2242,7 @@ def main():
         lines.append(f'\t\t<id>{dr["Id"]}</id>')
         lines.append(f'\t\t<formatIndex>{dr["FormatIdx"]}</formatIndex>')
         if dr['Detail']:
-            lines.append(f'\t\t<detailParameter>{dr["Detail"]}</detailParameter>')
+            lines.append(f'\t\t<detailParameter>{esc_xml_text(str(dr["Detail"]))}</detailParameter>')
         if dr['Text'] is not None:
             value = dr['Text']
             if isinstance(value, dict):
@@ -2422,7 +2422,7 @@ def main():
     for ni in sorted(named_items, key=lambda x: str(x['Name']).lower()):
         if ni.get('DrawingId'):
             lines.append('\t<namedItem xsi:type="NamedItemDrawing">')
-            lines.append(f'\t\t<name>{ni["Name"]}</name>')
+            lines.append(f'\t\t<name>{esc_xml_text(str(ni["Name"]))}</name>')
             lines.append(f'\t\t<drawingID>{ni["DrawingId"]}</drawingID>')
             lines.append('\t</namedItem>')
             continue
@@ -2432,7 +2432,7 @@ def main():
         has_cols = int(ni.get('BeginCol', -1)) >= 0
         area_type = 'Rectangle' if (has_rows and has_cols) else ('Columns' if has_cols else 'Rows')
         lines.append('\t<namedItem xsi:type="NamedItemCells">')
-        lines.append(f'\t\t<name>{ni["Name"]}</name>')
+        lines.append(f'\t\t<name>{esc_xml_text(str(ni["Name"]))}</name>')
         lines.append('\t\t<area>')
         lines.append(f'\t\t\t<type>{area_type}</type>')
         lines.append(f'\t\t\t<beginRow>{ni["BeginRow"]}</beginRow>')
@@ -2463,7 +2463,7 @@ def main():
             else:
                 lines.append(f'	<font ref="{esc_xml(fe["Ref"])}" kind="{fe["Kind"]}"/>')
             continue
-        lines.append(f'\t<font faceName="{fe["Face"]}" height="{fe["Size"]}" bold="{fe["Bold"]}" italic="{fe["Italic"]}" underline="{fe["Underline"]}" strikeout="{fe["Strikeout"]}" kind="Absolute" scale="100"/>')
+        lines.append(f'\t<font faceName="{esc_xml(str(fe["Face"]))}" height="{fe["Size"]}" bold="{fe["Bold"]}" italic="{fe["Italic"]}" underline="{fe["Underline"]}" strikeout="{fe["Strikeout"]}" kind="Absolute" scale="100"/>')
 
     # 7j. Format palette
     for key in format_order:

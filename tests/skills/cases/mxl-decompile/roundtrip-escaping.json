@@ -1,0 +1,40 @@
+{
+  "name": "Roundtrip — спецсимволы XML в расшифровке, параметре, именах и шрифте",
+  "preRun": [
+    {
+      "script": "mxl-compile/scripts/mxl-compile",
+      "input": {
+        "columns": 2,
+        "fonts": { "особый": { "face": "Font \"A&B\" <x>", "size": 10 } },
+        "styles": { "особый": { "font": "особый" } },
+        "areas": [
+          {
+            "name": "Строка<1>",
+            "rows": [
+              { "cells": [
+                { "col": 1, "text": "Скидка", "detail": "Скидка <> 0" },
+                { "col": 2, "param": "Сумма<НДС>", "detail": "СтрНайти(Комментарий, \"&\") > 0" }
+              ]},
+              { "cells": [
+                { "col": 1, "style": "особый", "text": "Буквально", "detail": "Сумма &lt; 0" },
+                { "col": 2, "detail": "Количество >= 1" }
+              ]}
+            ]
+          }
+        ],
+        "drawings": [
+          { "type": "Rectangle", "name": "Рамка&<1>", "detail": "Количество < 10",
+            "begin": { "row": 1, "col": 1 }, "end": { "row": 2, "col": 2 } }
+        ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputPath": "Template.xml" },
+      "cwd": "{workDir}"
+    }
+  ],
+  "params": { "templatePath": "Template.xml" },
+  "args_extra": ["-OutputPath", "{workDir}/back.json"],
+  "expect": {
+    "files": ["back.json"],
+    "stdoutContains": "[OK] Decompiled:"
+  }
+}

@@ -1,4 +1,4 @@
-﻿# mxl-compile v1.56 — Compile 1C spreadsheet from JSON
+﻿# mxl-compile v1.57 — Compile 1C spreadsheet from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2168,7 +2168,7 @@ foreach ($area in $def.areas) {
 			X "`t`t`t`t`t<f>$($cellInfo.FormatIdx)</f>"
 
 			if ($cellInfo.Param) {
-				X "`t`t`t`t`t<parameter>$($cellInfo.Param)</parameter>"
+				X "`t`t`t`t`t<parameter>$(Esc-XmlText $cellInfo.Param)</parameter>"
 			}
 
 			# Проверяем НАЛИЧИЕ ключа, а не истинность: пустая строка — это текст, платформа
@@ -2198,7 +2198,7 @@ foreach ($area in $def.areas) {
 			# Пока она стояла внутри ветки параметра, две трети расшифровок терялись молча.
 			# Порядок тегов ячейки снят с корпуса: parameter · текст · detailParameter.
 			if ($cellInfo.Detail) {
-				X "`t`t`t`t`t<detailParameter>$($cellInfo.Detail)</detailParameter>"
+				X "`t`t`t`t`t<detailParameter>$(Esc-XmlText $cellInfo.Detail)</detailParameter>"
 			}
 
 			# Третий параметр ячейки — имя параметра, которым подставляют картинку. Сама
@@ -2372,7 +2372,7 @@ foreach ($dr in $drawings) {
 	X "`t`t<drawingType>$($dr.Type)</drawingType>"
 	X "`t`t<id>$($dr.Id)</id>"
 	X "`t`t<formatIndex>$($dr.FormatIdx)</formatIndex>"
-	if ($dr.Detail) { X "`t`t<detailParameter>$($dr.Detail)</detailParameter>" }
+	if ($dr.Detail) { X "`t`t<detailParameter>$(Esc-XmlText $dr.Detail)</detailParameter>" }
 	if ($null -ne $dr.Text) {
 		$pairs = @()
 		if ($dr.Text -is [System.Management.Automation.PSCustomObject]) {
@@ -2572,7 +2572,7 @@ $sortedNamedItems = @($namedItems | Sort-Object -Property @{ Expression = { Get-
 foreach ($ni in $sortedNamedItems) {
 	if ($ni.DrawingId) {
 		X "`t<namedItem xsi:type=`"NamedItemDrawing`">"
-		X "`t`t<name>$($ni.Name)</name>"
+		X "`t`t<name>$(Esc-XmlText $ni.Name)</name>"
 		X "`t`t<drawingID>$($ni.DrawingId)</drawingID>"
 		X "`t</namedItem>"
 		continue
@@ -2583,7 +2583,7 @@ foreach ($ni in $sortedNamedItems) {
 	$hasCols = $ni.BeginCol -ge 0
 	$type = if ($hasRows -and $hasCols) { 'Rectangle' } elseif ($hasCols) { 'Columns' } else { 'Rows' }
 	X "`t<namedItem xsi:type=`"NamedItemCells`">"
-	X "`t`t<name>$($ni.Name)</name>"
+	X "`t`t<name>$(Esc-XmlText $ni.Name)</name>"
 	X "`t`t<area>"
 	X "`t`t`t<type>$type</type>"
 	X "`t`t`t<beginRow>$($ni.BeginRow)</beginRow>"
@@ -2615,7 +2615,7 @@ foreach ($fe in $fontEntries) {
 		}
 		continue
 	}
-	X "`t<font faceName=`"$($fe.Face)`" height=`"$(Format-Num $fe.Size)`" bold=`"$($fe.Bold)`" italic=`"$($fe.Italic)`" underline=`"$($fe.Underline)`" strikeout=`"$($fe.Strikeout)`" kind=`"Absolute`" scale=`"100`"/>"
+	X "`t<font faceName=`"$(Esc-Xml $fe.Face)`" height=`"$(Format-Num $fe.Size)`" bold=`"$($fe.Bold)`" italic=`"$($fe.Italic)`" underline=`"$($fe.Underline)`" strikeout=`"$($fe.Strikeout)`" kind=`"Absolute`" scale=`"100`"/>"
 }
 
 # 7j. Format palette

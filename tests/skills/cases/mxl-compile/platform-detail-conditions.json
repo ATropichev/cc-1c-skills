@@ -1,0 +1,19 @@
+{
+  "name": "Раундтрип типового макета: условия вывода БСП в расшифровке (УТ, ПФ_MXL_Карточка)",
+  "setup": "fixture:platform-roundtrip",
+  "preRun": [
+    { "script": "mxl-decompile/scripts/mxl-decompile",
+      "args": { "-TemplatePath": "РетроБонусКарточка.xml", "-OutputPath": "back.json" },
+      "cwd": "{workDir}" }
+  ],
+  "params": { "outputPath": "out.xml" },
+  "noSnapshot": "эталон — файл платформы; весь макет байт в байт не сходится по причинам вне расшифровки, сверяются условия",
+  "expect": {
+    "fileContains": { "file": "out.xml", "text": [
+      "И НРег(Строка(ПериодичностьУсловий))&lt;&gt; НРег(\"Неделя\")",
+      "И НРег(Строка(ПоказательТоваров))&lt;&gt; НРег(\"Не используется\")  </detailParameter>"
+    ] },
+    "fileNotContains": { "file": "out.xml", "text": "))<> НРег(" }
+  },
+  "inputFrom": "back.json"
+}

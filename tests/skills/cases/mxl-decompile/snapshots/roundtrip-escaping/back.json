@@ -1,0 +1,8 @@
+{
+  "columns": 2,
+  "defaultWidth": 10,
+  "fonts": { "default": { "face": "Font \"A&B\" <x>", "size": 10 } },
+  "styles": { "style": { "font": "default" } },
+  "drawings": [{ "type": "Rectangle", "name": "Рамка&<1>", "detail": "Количество < 10", "begin": { "row": 1, "col": 1, "dy": 0, "dx": 0 }, "end": { "row": 2, "col": 2, "dy": 0, "dx": 0 } }],
+  "areas": [{ "name": "Строка<1>", "rows": [[{ "text": "Скидка", "detail": "Скидка <> 0" }, { "param": "Сумма<НДС>", "detail": "СтрНайти(Комментарий, \"&\") > 0" }], [{ "style": "style", "text": "Буквально", "detail": "Сумма &lt; 0" }, { "detail": "Количество >= 1" }]] }]
+}
