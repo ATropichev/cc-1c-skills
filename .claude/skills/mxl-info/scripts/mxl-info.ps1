@@ -41,17 +41,28 @@ function Format-XmlParseError {
 	param([string]$path, $exception)
 	$ex = $exception
 	while ($ex -and -not ($ex -is [System.Xml.XmlException])) { $ex = $ex.InnerException }
-	if (-not $ex) { return @("[ERROR] Not well-formed XML: $($exception.Message)") }
+	# Не XmlException — файл не прочитан (заблокирован, нет прав): это не синтаксис, и звать это
+	# «not well-formed» значит отправить искать ошибку, которой нет.
+	if (-not $ex) {
+		# Обёртку «Exception calling "Load"…» снимаем: причина — во внутреннем исключении.
+		$inner = $exception
+		while ($inner.InnerException) { $inner = $inner.InnerException }
+		return @("[ERROR] Cannot read XML: $($inner.Message)")
+	}
 	$lineNo = $ex.LineNumber
 	$pos = $ex.LinePosition
 	# Хвост «Line N, position M.» («строка N, позиция M.») повторяет заголовок; срезаем его по самим
 	# номерам, чтобы не зависеть от языка сообщения.
 	$msg = $ex.Message -replace ",?\s*\S+\s+$lineNo,\s*\S+\s+$pos\.?\s*$", ''
+	# Пустой файл .NET относит к строке 0, позиции 0, а lxml — к 1:1; приводим к общему виду.
+	if ($lineNo -lt 1) { $lineNo = 1; $pos = 1 }
 	$out = @("[ERROR] Not well-formed XML (line $lineNo, position $pos):", "        $msg")
 	$fileLines = [System.IO.File]::ReadAllText($path) -split "`n"
 	if ($lineNo -lt 1 -or $lineNo -gt $fileLines.Count) { return $out }
 	$raw = $fileLines[$lineNo - 1].TrimEnd("`r").Replace("`t", ' ')
-	$text = $raw.TrimStart()
+	# Только пробел (табы уже заменены): TrimStart() и str.lstrip() считают пробелами разные
+	# символы, и на управляющем символе в начале строки указатель в портах разъезжался.
+	$text = $raw.TrimStart(' ')
 	# Пустая строка (обрыв файла) ничего не показывает — без выдержки.
 	if ($text -eq '') { return $out }
 	$col = [Math]::Max(0, $pos - 1 - ($raw.Length - $text.Length))

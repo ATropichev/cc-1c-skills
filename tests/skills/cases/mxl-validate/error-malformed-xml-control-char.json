@@ -1,0 +1,20 @@
+{
+  "name": "Невалидный XML: управляющий символ в начале строки — указатель на нём, не сдвинут",
+  "setup": "fixture:malformed-control-char",
+  "params": {
+    "templatePath": "Template.xml"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] Not well-formed XML (line 3, position 1):",
+      "        3 | \u001c<rowsItem/>",
+      "\n            ^"
+    ],
+    "stdoutNotContains": [
+      "Traceback",
+      "Exception",
+      "   at "
+    ]
+  }
+}

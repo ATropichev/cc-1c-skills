@@ -1,0 +1,21 @@
+{
+  "name": "Невалидный XML: пустой файл — строка 1, позиция 1 в обоих портах",
+  "setup": "fixture:malformed-empty",
+  "params": {
+    "templatePath": "Template.xml"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] Not well-formed XML (line 1, position 1):",
+      "=== Result: 1 errors, 0 warnings (other checks skipped) ==="
+    ],
+    "stdoutNotContains": [
+      "Traceback",
+      "Exception",
+      "   at ",
+      " | ",
+      "Cannot read XML"
+    ]
+  }
+}

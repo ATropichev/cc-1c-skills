@@ -67,18 +67,25 @@ if not os.path.isfile(template_path):
 # с указателем. Номера и выдержка в портах совпадают, текст сообщения — нет: у lxml он свой,
 # у .NET ещё и зависит от языка ОС.
 def format_xml_parse_error(path, exception):
+    # Не XMLSyntaxError — файл не прочитан (заблокирован, нет прав): это не синтаксис, и звать это
+    # «not well-formed» значит отправить искать ошибку, которой нет.
     if not isinstance(exception, etree.XMLSyntaxError):
-        return [f'[ERROR] Not well-formed XML: {exception}']
+        return [f'[ERROR] Cannot read XML: {exception}']
     line_no, pos = exception.position
     # Хвост «line N, column M» повторяет заголовок; срезаем его по самим номерам, как в PS-порте.
     msg = re.sub(rf',?\s*\S+\s+{line_no},\s*\S+\s+{pos}\.?\s*$', '', exception.msg or str(exception))
+    # Пустой файл .NET относит к строке 0, позиции 0, а lxml — к 1:1; приводим к общему виду.
+    if line_no < 1:
+        line_no, pos = 1, 1
     out = [f'[ERROR] Not well-formed XML (line {line_no}, position {pos}):', f'        {msg}']
     with open(path, encoding='utf-8-sig', errors='replace', newline='') as f:
         file_lines = f.read().split('\n')
     if line_no < 1 or line_no > len(file_lines):
         return out
     raw = file_lines[line_no - 1].rstrip('\r').replace('\t', ' ')
-    text = raw.lstrip()
+    # Только пробел (табы уже заменены): TrimStart() и str.lstrip() считают пробелами разные
+    # символы, и на управляющем символе в начале строки указатель в портах разъезжался.
+    text = raw.lstrip(' ')
     # Пустая строка (обрыв файла) ничего не показывает — без выдержки.
     if not text:
         return out
