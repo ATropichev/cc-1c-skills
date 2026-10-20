@@ -1,0 +1,36 @@
+{
+  "name": "Режим совместимости 8.3.17: добавленные dcssch:-узлы — объявление xmlns:dcssch одно, в корне",
+  "setup": "empty-config-compat17",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Товары", "attributes": [{ "name": "Цена", "type": "Number(15,2)" }] },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/Catalogs/Товары.xml", "-FormName": "ФормаСписка", "-Purpose": "List" }
+    }
+  ],
+  "params": { "formPath": "Catalogs/Товары/Forms/ФормаСписка/Ext/Form.xml" },
+  "input": {
+    "attributes": [
+      { "name": "Список2", "type": "DynamicList", "settings": {
+        "query": "ВЫБРАТЬ Т.Ссылка, Т.Цена ИЗ Справочник.Товары КАК Т ГДЕ Т.Цена > &Порог",
+        "mainTable": "Catalog.Товары",
+        "parameters": ["Порог: decimal(15,2) = 0"],
+        "calculatedFields": ["Метка = Code"]
+      } }
+    ]
+  },
+  "expect": {
+    "fileContains": {
+      "file": "Catalogs/Товары/Forms/ФормаСписка/Ext/Form.xml",
+      "text": "xmlns:dcscor=\"http://v8.1c.ru/8.1/data-composition-system/core\" xmlns:dcssch=\"http://v8.1c.ru/8.1/data-composition-system/schema\" xmlns:dcsset="
+    },
+    "fileNotContains": [
+      { "file": "Catalogs/Товары/Forms/ФормаСписка/Ext/Form.xml", "text": "<Attribute xmlns:dcssch" },
+      { "file": "Catalogs/Товары/Forms/ФормаСписка/Ext/Form.xml", "text": "<dcssch:name xmlns:dcssch" }
+    ]
+  }
+}

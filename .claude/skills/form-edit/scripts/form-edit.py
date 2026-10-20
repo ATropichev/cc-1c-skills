@@ -1,4 +1,4 @@
-# form-edit v1.30 — Edit 1C managed form elements (Python port)
+# form-edit v1.31 — Edit 1C managed form elements (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import contextlib
@@ -6241,7 +6241,17 @@ def _normalize_synonyms(el):
             _normalize_synonyms(child)
 
 
-def _apply_dlist_table_heuristic(el, list_name, has_main_table):
+def _dlist_has_explicit_key(attr_node):
+    """Явный ключ набора (FieldValue/RowKey/RowNumber) у списка без основной таблицы: ссылки в строке
+    нет — нет и DefaultPicture. Признак берётся из XML реквизита (Settings/KeyType, Settings/MainTable)."""
+    kt = attr_node.find("f:Settings/f:KeyType", NS)
+    v = (kt.text or '').strip() if kt is not None else ''
+    if v == '' or v.lower() == 'auto':
+        return False
+    return attr_node.find("f:Settings/f:MainTable", NS) is None
+
+
+def _apply_dlist_table_heuristic(el, list_name, has_main_table, has_key_type=False):
     if not isinstance(el, dict):
         return
     if el.get('table') is not None and str(el.get('path', '')).lower() == list_name.lower():
@@ -6254,11 +6264,13 @@ def _apply_dlist_table_heuristic(el, list_name, has_main_table):
         # RowPictureDataPath: умный дефолт <Список>.DefaultPicture, если ключ ОТСУТСТВУЕТ.
         # Декомпилятор опускает при rpdp == smart-default; реальное отсутствие → ""-маркер (не
         # перезатирается). Гейт has_main_table снят: дин-список без mainTable тоже несёт RowPictureDataPath.
-        if 'rowPictureDataPath' not in el:
+        # Но не при явном keyType: строка без ссылки, DefaultPicture платформа отвергает («Неверный путь
+        # к данным»); в корпусе у таких списков RowPictureDataPath нет ни разу.
+        if 'rowPictureDataPath' not in el and not has_key_type:
             el['rowPictureDataPath'] = f'{list_name}.DefaultPicture'
     if isinstance(el.get('children'), list):
         for child in el['children']:
-            _apply_dlist_table_heuristic(child, list_name, has_main_table)
+            _apply_dlist_table_heuristic(child, list_name, has_main_table, has_key_type)
 
 
 # Ключи типов — в порядке form-compile (ключ-свойство проверяется после типа, у которого он свойство)
@@ -6746,7 +6758,7 @@ def invoke_add(op, type_key, idx):
     for a in root.findall("f:Attributes/f:Attribute", NS):
         t = a.find("f:Type/v8:Type", NS)
         if t is not None and (t.text or "").strip() == 'cfg:DynamicList':
-            _apply_dlist_table_heuristic(el, a.get('name'), True)
+            _apply_dlist_table_heuristic(el, a.get('name'), True, _dlist_has_explicit_key(a))
     # Пул имён эмиттера — имена элементов формы на момент операции (без узлов событий)
     _seen_element_names.clear()
     for sc in get_element_scopes():
@@ -7240,7 +7252,7 @@ def invoke_set_probe(node, props):
     for a in root.findall("f:Attributes/f:Attribute", NS):
         t = a.find("f:Type/v8:Type", NS)
         if t is not None and (t.text or "").strip() == 'cfg:DynamicList':
-            _apply_dlist_table_heuristic(el, a.get('name'), True)
+            _apply_dlist_table_heuristic(el, a.get('name'), True, _dlist_has_explicit_key(a))
     save_id = next_elem_id
     _seen_element_names.clear()
     tbl = get_nearest_table(node, False)
@@ -8591,6 +8603,18 @@ else:
     _fe_bom, _fe_crlf, _fe_enc, _fe_final_nl = True, False, "utf-8", True
 
 xml_bytes = etree.tostring(tree, xml_declaration=True, encoding="UTF-8")
+# Добавленные dcssch:-узлы в форме, где корень dcssch не объявляет (режим совместимости ниже 8.3.19),
+# сериализатор снабжает локальным xmlns:dcssch. Платформа объявляет его только в корне — переносим туда,
+# на место по алфавиту (перед dcsset). Зеркало блока в ps1.
+_dcssch_decl = b' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema"'
+_root_start = xml_bytes.find(b'<Form ')
+_root_end = xml_bytes.find(b'>', _root_start) if _root_start >= 0 else -1
+if _root_end >= 0 and xml_bytes.find(_dcssch_decl, _root_end) >= 0:
+    _head = xml_bytes[:_root_end]
+    if _dcssch_decl not in _head:
+        _head = (_head.replace(b' xmlns:dcsset=', _dcssch_decl + b' xmlns:dcsset=', 1)
+                 if b' xmlns:dcsset=' in _head else _head + _dcssch_decl)
+    xml_bytes = _head + xml_bytes[_root_end:].replace(_dcssch_decl, b'')
 # Восстановить регистр encoding как в оригинале.
 xml_bytes = xml_bytes.replace(
     b"<?xml version='1.0' encoding='UTF-8'?>",

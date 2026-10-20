@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-decompile v0.153 — Decompile 1C managed Form.xml to JSON DSL (draft)
+# form-decompile v0.154 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 #
@@ -624,6 +624,17 @@ def _ps_str(v):
     if v is None:
         return ''
     return str(v)
+
+
+def _dlist_has_explicit_key(list_name):
+    """Список с явным ключом набора (FieldValue/RowKey/RowNumber) без основной таблицы: ссылки в строке
+    нет, умный дефолт RowPictureDataPath = <Список>.DefaultPicture компилятор ему не ставит."""
+    for a in ROOT.findall('lf:Attributes/lf:Attribute', NS):
+        if (a.get('name') or '').lower() == list_name.lower():
+            kt = a.find('lf:Settings/lf:KeyType', NS)
+            v = (kt.text or '').strip() if kt is not None else ''
+            return v != '' and v.lower() != 'auto' and a.find('lf:Settings/lf:MainTable', NS) is None
+    return False
 
 
 # Шрифт оформления → объект {@type:Font, ...} (bit-perfect для compile).
@@ -2516,7 +2527,13 @@ def decompile_element(node):
                 obj['updateOnDataChange'] = uodc
             if get_child(node, 'AllowGettingCurrentRowURL') == 'false':
                 obj['allowGettingCurrentRowURL'] = False
-            if rpdp is None:
+            # RowPictureDataPath: инверсия умного дефолта <Список>.DefaultPicture. У списка с явным ключом
+            # без основной таблицы умолчание — отсутствие (компилятор его не ставит): ""-маркер не нужен,
+            # а любое значение — явное.
+            if _dlist_has_explicit_key(_ps_str(obj.get('path'))):
+                if rpdp is not None:
+                    obj['rowPictureDataPath'] = rpdp
+            elif rpdp is None:
                 obj['rowPictureDataPath'] = ''
             elif rpdp != ('%s.DefaultPicture' % _ps_str(obj.get('path'))):
                 obj['rowPictureDataPath'] = rpdp

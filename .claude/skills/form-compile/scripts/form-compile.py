@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.208 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.209 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -7609,7 +7609,7 @@ def main():
                     return True
         return False
 
-    def _apply_dlist_table_heuristic(el, list_name, has_main_table):
+    def _apply_dlist_table_heuristic(el, list_name, has_main_table, has_key_type=False):
         if not isinstance(el, dict):
             return
         if el.get('table') is not None and str(el.get('path', '')).lower() == list_name.lower():
@@ -7622,11 +7622,13 @@ def main():
             # RowPictureDataPath: умный дефолт <Список>.DefaultPicture, если ключ ОТСУТСТВУЕТ.
             # Декомпилятор опускает при rpdp == smart-default; реальное отсутствие → ""-маркер (не
             # перезатирается). Гейт has_main_table снят: дин-список без mainTable тоже несёт RowPictureDataPath.
-            if 'rowPictureDataPath' not in el:
+            # Но не при явном keyType: строка без ссылки, DefaultPicture платформа отвергает («Неверный путь
+            # к данным»); в корпусе у таких списков RowPictureDataPath нет ни разу.
+            if 'rowPictureDataPath' not in el and not has_key_type:
                 el['rowPictureDataPath'] = f'{list_name}.DefaultPicture'
         if isinstance(el.get('children'), list):
             for child in el['children']:
-                _apply_dlist_table_heuristic(child, list_name, has_main_table)
+                _apply_dlist_table_heuristic(child, list_name, has_main_table, has_key_type)
 
     def _is_object_like_type(t):
         if not t:
@@ -7694,8 +7696,12 @@ def main():
                 continue
             settings = attr.get('settings') or {}
             has_mt = bool(isinstance(settings, dict) and settings.get('mainTable'))
+            # Явный ключ набора (FieldValue/RowKey/RowNumber) без основной таблицы: ссылки в строке нет —
+            # нет и DefaultPicture. С mainTable ссылка остаётся.
+            key_type = str(settings.get('keyType') or '') if isinstance(settings, dict) else ''
+            has_key_type = key_type != '' and key_type.lower() != 'auto' and not has_mt
             for el in defn['elements']:
-                _apply_dlist_table_heuristic(el, attr.get('name', ''), has_mt)
+                _apply_dlist_table_heuristic(el, attr.get('name', ''), has_mt, has_key_type)
 
     # 1b.5: Compute main AutoCommandBar Autofill (B3)
     def _compute_main_acb_autofill():
@@ -7850,8 +7856,9 @@ def main():
     # Режим ниже 8.3.19: платформа объявляет dcssch только там, где он есть в теле. Тело собрано —
     # теперь видно, нужен ли он; иначе снимаем объявление из корня (как сделала бы выгрузка).
     if is_compat_pre_8319:
-        root_end = content.index('>', content.index('<Form '))
-        if content.find('dcssch:', root_end) < 0:
+        root_start = content.find('<Form ')
+        root_end = content.find('>', root_start) if root_start >= 0 else -1
+        if root_end >= 0 and content.find('dcssch:', root_end) < 0:
             content = content[:root_end].replace(
                 ' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema"', '') + content[root_end:]
     write_utf8_bom(out_path, content)

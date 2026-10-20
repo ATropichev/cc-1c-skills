@@ -1,4 +1,4 @@
-﻿# form-compile v1.208 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.209 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -7485,7 +7485,7 @@ function HasCmdBarRecursive {
 }
 
 function ApplyDynamicListTableHeuristic {
-	param($el, [string]$listName, [bool]$hasMainTable)
+	param($el, [string]$listName, [bool]$hasMainTable, [bool]$hasKeyType = $false)
 	if ($null -eq $el) { return }
 	if ($el.PSObject.Properties["table"] -and $null -ne $el.table -and "$($el.path)" -eq $listName) {
 		# Маркер дин-список-таблицы → Emit-Table эмитит блок свойств (Group A defaults)
@@ -7499,13 +7499,15 @@ function ApplyDynamicListTableHeuristic {
 		# RowPictureDataPath: умный дефолт <Список>.DefaultPicture, если ключ ОТСУТСТВУЕТ.
 		# Декомпилятор опускает ключ при rpdp == smart-default (ждёт реинъекции); реальное отсутствие
 		# фиксирует ""-маркером (НЕ перезатирается). Гейт hasMainTable снят: дин-список без mainTable
-		# (напр. query-based) тоже несёт RowPictureDataPath.
-		if ($null -eq $el.PSObject.Properties["rowPictureDataPath"]) {
+		# (напр. query-based) тоже несёт RowPictureDataPath. Но не при явном keyType: строка без ссылки,
+		# DefaultPicture платформа отвергает («Неверный путь к данным»); в корпусе у таких списков
+		# RowPictureDataPath нет ни разу.
+		if ($null -eq $el.PSObject.Properties["rowPictureDataPath"] -and -not $hasKeyType) {
 			$el | Add-Member -NotePropertyName "rowPictureDataPath" -NotePropertyValue "$listName.DefaultPicture" -Force
 		}
 	}
 	if ($el.PSObject.Properties["children"] -and $el.children) {
-		foreach ($child in $el.children) { ApplyDynamicListTableHeuristic $child $listName $hasMainTable }
+		foreach ($child in $el.children) { ApplyDynamicListTableHeuristic $child $listName $hasMainTable $hasKeyType }
 	}
 }
 
@@ -7591,17 +7593,22 @@ if ($def.attributes) {
 if ($def.attributes -and $def.elements) {
 	foreach ($attr in $def.attributes) {
 		if ("$($attr.type)" -ne "DynamicList") { continue }
-		$mt = $null
+		$mt = $null; $kt = $null
 		if ($attr.PSObject.Properties["settings"] -and $null -ne $attr.settings) {
 			if ($attr.settings -is [hashtable]) {
 				if ($attr.settings.ContainsKey("mainTable")) { $mt = $attr.settings["mainTable"] }
-			} elseif ($attr.settings.PSObject.Properties["mainTable"]) {
-				$mt = $attr.settings.mainTable
+				if ($attr.settings.ContainsKey("keyType")) { $kt = $attr.settings["keyType"] }
+			} else {
+				if ($attr.settings.PSObject.Properties["mainTable"]) { $mt = $attr.settings.mainTable }
+				if ($attr.settings.PSObject.Properties["keyType"]) { $kt = $attr.settings.keyType }
 			}
 		}
 		$hasMt = -not [string]::IsNullOrEmpty("$mt")
+		# Явный ключ набора (FieldValue/RowKey/RowNumber) без основной таблицы: ссылки в строке нет —
+		# нет и DefaultPicture. С mainTable ссылка остаётся.
+		$hasKt = -not [string]::IsNullOrEmpty("$kt") -and "$kt" -ne 'Auto' -and -not $hasMt
 		foreach ($el in $def.elements) {
-			ApplyDynamicListTableHeuristic $el $attr.name $hasMt
+			ApplyDynamicListTableHeuristic $el $attr.name $hasMt $hasKt
 		}
 	}
 }
@@ -7785,8 +7792,10 @@ $formText = Sort-ElementTagOrder (Normalize-EnumTags $xml.ToString().TrimEnd("`r
 # Режим ниже 8.3.19: платформа объявляет dcssch только там, где он есть в теле. Тело собрано —
 # теперь видно, нужен ли он; иначе снимаем объявление из корня (как сделала бы выгрузка).
 if ($script:isCompatPre8319) {
-	$rootEnd = $formText.IndexOf('>', $formText.IndexOf('<Form '))
-	if ($formText.IndexOf('dcssch:', $rootEnd) -lt 0) {
+	$ord = [System.StringComparison]::Ordinal
+	$rootStart = $formText.IndexOf('<Form ', $ord)
+	$rootEnd = if ($rootStart -ge 0) { $formText.IndexOf('>', $rootStart, $ord) } else { -1 }
+	if ($rootEnd -ge 0 -and $formText.IndexOf('dcssch:', $rootEnd, $ord) -lt 0) {
 		$formText = $formText.Substring(0, $rootEnd).Replace(' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema"', '') + $formText.Substring($rootEnd)
 	}
 }

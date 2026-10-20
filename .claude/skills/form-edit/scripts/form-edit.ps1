@@ -1,4 +1,4 @@
-﻿# form-edit v1.30 — Edit 1C managed form elements
+﻿# form-edit v1.31 — Edit 1C managed form elements
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -5848,8 +5848,18 @@ function Normalize-ElementSynonyms {
 	}
 }
 
+# Явный ключ набора (FieldValue/RowKey/RowNumber) у списка без основной таблицы: ссылки в строке нет —
+# нет и DefaultPicture. Признак берётся из XML реквизита (Settings/KeyType, Settings/MainTable).
+function Test-DynListExplicitKey($attrNode) {
+	$kt = $attrNode.SelectSingleNode("f:Settings/f:KeyType", $nsMgr)
+	if ($null -eq $kt) { return $false }
+	$v = $kt.InnerText.Trim()
+	if ($v -eq '' -or $v -eq 'Auto') { return $false }
+	return ($null -eq $attrNode.SelectSingleNode("f:Settings/f:MainTable", $nsMgr))
+}
+
 function ApplyDynamicListTableHeuristic {
-	param($el, [string]$listName, [bool]$hasMainTable)
+	param($el, [string]$listName, [bool]$hasMainTable, [bool]$hasKeyType = $false)
 	if ($null -eq $el) { return }
 	if ($el.PSObject.Properties["table"] -and $null -ne $el.table -and "$($el.path)" -eq $listName) {
 		# Маркер дин-список-таблицы → Emit-Table эмитит блок свойств (Group A defaults)
@@ -5863,13 +5873,15 @@ function ApplyDynamicListTableHeuristic {
 		# RowPictureDataPath: умный дефолт <Список>.DefaultPicture, если ключ ОТСУТСТВУЕТ.
 		# Декомпилятор опускает ключ при rpdp == smart-default (ждёт реинъекции); реальное отсутствие
 		# фиксирует ""-маркером (НЕ перезатирается). Гейт hasMainTable снят: дин-список без mainTable
-		# (напр. query-based) тоже несёт RowPictureDataPath.
-		if ($null -eq $el.PSObject.Properties["rowPictureDataPath"]) {
+		# (напр. query-based) тоже несёт RowPictureDataPath. Но не при явном keyType: строка без ссылки,
+		# DefaultPicture платформа отвергает («Неверный путь к данным»); в корпусе у таких списков
+		# RowPictureDataPath нет ни разу.
+		if ($null -eq $el.PSObject.Properties["rowPictureDataPath"] -and -not $hasKeyType) {
 			$el | Add-Member -NotePropertyName "rowPictureDataPath" -NotePropertyValue "$listName.DefaultPicture" -Force
 		}
 	}
 	if ($el.PSObject.Properties["children"] -and $el.children) {
-		foreach ($child in $el.children) { ApplyDynamicListTableHeuristic $child $listName $hasMainTable }
+		foreach ($child in $el.children) { ApplyDynamicListTableHeuristic $child $listName $hasMainTable $hasKeyType }
 	}
 }
 
@@ -6273,7 +6285,7 @@ function Invoke-Add($op, [string]$typeKey, [int]$idx) {
 	# Таблица динамического списка получает поведение списка, как в form-compile
 	foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute", $nsMgr)) {
 		$t = $a.SelectSingleNode("f:Type/v8:Type", $nsMgr)
-		if ($null -ne $t -and $t.InnerText.Trim() -eq 'cfg:DynamicList') { ApplyDynamicListTableHeuristic $el $a.GetAttribute('name') $true }
+		if ($null -ne $t -and $t.InnerText.Trim() -eq 'cfg:DynamicList') { ApplyDynamicListTableHeuristic $el $a.GetAttribute('name') $true (Test-DynListExplicitKey $a) }
 	}
 	# Пул имён эмиттера — имена элементов формы на момент операции (без узлов событий)
 	$script:seenElementNames = @{}
@@ -6725,7 +6737,7 @@ function Invoke-SetProbe($node, $props) {
 	Normalize-ElementSynonyms $el
 	foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute", $nsMgr)) {
 		$t = $a.SelectSingleNode("f:Type/v8:Type", $nsMgr)
-		if ($null -ne $t -and $t.InnerText.Trim() -eq 'cfg:DynamicList') { ApplyDynamicListTableHeuristic $el $a.GetAttribute('name') $true }
+		if ($null -ne $t -and $t.InnerText.Trim() -eq 'cfg:DynamicList') { ApplyDynamicListTableHeuristic $el $a.GetAttribute('name') $true (Test-DynListExplicitKey $a) }
 	}
 	$saveId = $script:nextElemId
 	$script:seenElementNames = @{}
@@ -7973,6 +7985,20 @@ if (-not $script:isExtension) {
 # === 13. Save ===
 
 $content = $xmlDoc.OuterXml
+# Добавленные dcssch:-узлы в форме, где корень dcssch не объявляет (режим совместимости ниже 8.3.19),
+# сериализатор снабжает локальным xmlns:dcssch. Платформа объявляет его только в корне — переносим туда,
+# на место по алфавиту (перед dcsset). Зеркало блока в py-порту.
+$dcsschDecl = ' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema"'
+$ord = [System.StringComparison]::Ordinal
+$rootStart = $content.IndexOf('<Form ', $ord)
+$rootEnd = if ($rootStart -ge 0) { $content.IndexOf('>', $rootStart, $ord) } else { -1 }
+if ($rootEnd -ge 0 -and $content.IndexOf($dcsschDecl, $rootEnd, $ord) -ge 0) {
+	$formHead = $content.Substring(0, $rootEnd)
+	if ($formHead.IndexOf($dcsschDecl, $ord) -lt 0) {
+		$formHead = if ($formHead.Contains(' xmlns:dcsset=')) { $formHead.Replace(' xmlns:dcsset=', "$dcsschDecl xmlns:dcsset=") } else { $formHead + $dcsschDecl }
+	}
+	$content = $formHead + $content.Substring($rootEnd).Replace($dcsschDecl, '')
+}
 # Ensure encoding declaration is uppercase UTF-8
 $content = $content -replace '^<\?xml version="1.0" encoding="utf-8"\?>', '<?xml version="1.0" encoding="UTF-8"?>'
 # Пустой элемент: XmlWriter отдаёт `<a />`, Конфигуратор пишет `<a/>`. Внутри

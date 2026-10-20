@@ -1,0 +1,31 @@
+{
+  "name": "DynamicList с явным keyType: у таблицы нет RowPictureDataPath = DefaultPicture",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "DataProcessor", "name": "СписокБезСсылки" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/DataProcessors/СписокБезСсылки.xml", "-FormName": "Форма" }
+    }
+  ],
+  "params": { "outputPath": "DataProcessors/СписокБезСсылки/Forms/Форма/Ext/Form.xml" },
+  "validatePath": "DataProcessors/СписокБезСсылки/Forms/Форма/Ext/Form.xml",
+  "input": {
+    "elements": [{ "table": "Список", "path": "Список", "columns": [{ "input": "Цена", "path": "Список.Цена" }] }],
+    "attributes": [
+      { "name": "Список", "type": "DynamicList", "settings": {
+        "query": "ВЫБРАТЬ 1 КАК Цена",
+        "keyType": "RowNumber"
+      } }
+    ]
+  },
+  "expect": {
+    "fileNotContains": {
+      "file": "DataProcessors/СписокБезСсылки/Forms/Форма/Ext/Form.xml",
+      "text": "DefaultPicture"
+    }
+  }
+}
