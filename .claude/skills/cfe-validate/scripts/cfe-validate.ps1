@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.24 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.25 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -792,6 +792,16 @@ $script:ownChildRestricted = @{
 	"InformationRegister" = "Error"; "AccumulationRegister" = "Error"; "AccountingRegister" = "Error"
 	"CalculationRegister" = "Error"; "BusinessProcess" = "Since8325"; "Task" = "Since8325"
 }
+# Собственные объекты верхнего уровня: платформа загружает расширение, но базу не обновляет
+# («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо в режиме
+# совместимости <режим> и ниже» — режим в сообщении лишь текущий). Последовательность, хранилище
+# настроек, общий реквизит — нигде (8.3.24–8.5.1, и в режиме 8.5.1); БП и Задача — на платформе ниже
+# 8.3.25, журнал документов — ниже 8.3.26 (граница по версии платформы, режим расширения 8.3.24).
+# Остальные виды — можно уже на 8.3.24.
+$script:ownObjectRestricted = @{
+	"Sequence" = "Error"; "SettingsStorage" = "Error"; "CommonAttribute" = "Error"
+	"BusinessProcess" = "8.3.25"; "Task" = "8.3.25"; "DocumentJournal" = "8.3.26"
+}
 $script:ownDataChildTags = @('Attribute','TabularSection','Dimension','Resource','AccountingFlag','ExtDimensionAccountingFlag','AddressingAttribute')
 
 # Helper: check if sub-item has explicit borrowed metadata
@@ -914,6 +924,14 @@ if ($childObjNode) {
 					Report-Error "9. Borrowed ${typeName}.${childName}: missing GeneratedType categor$(if ($missingCats.Count -eq 1) { 'y' } else { 'ies' }) $($missingCats -join ', ')"
 					$check9Ok = $false
 				}
+			}
+		} else {
+			$ownObjRule = $script:ownObjectRestricted[$typeName]
+			if ($ownObjRule -eq "Error") {
+				Report-Error "9. ${typeName}.${childName}: собственный объект этого вида в расширении — платформа загрузит расширение, но базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)"
+				$check9Ok = $false
+			} elseif ($ownObjRule) {
+				Report-Warn "9. ${typeName}.${childName}: собственный объект этого вида — на платформе ниже $ownObjRule базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)"
 			}
 		}
 

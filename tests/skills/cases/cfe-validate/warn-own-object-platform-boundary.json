@@ -1,0 +1,68 @@
+{
+  "name": "Предупреждение: собственные задача и бизнес-процесс — ниже 8.3.25, журнал документов — ниже 8.3.26 базу не обновит",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Склады"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Task",
+          "name": "Тест_Зад"
+        },
+        {
+          "type": "BusinessProcess",
+          "name": "Тест_БП",
+          "task": "Task.Тест_Зад"
+        },
+        {
+          "type": "Document",
+          "name": "Тест_Док"
+        },
+        {
+          "type": "DocumentJournal",
+          "name": "Тест_Жур",
+          "registeredDocuments": [
+            "Document.Тест_Док"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "noSnapshot": "навык ничего не пишет, проверяется текст предупреждения",
+  "expect": {
+    "stdoutContains": [
+      "[WARN]  9. Task.Тест_Зад: собственный объект этого вида — на платформе ниже 8.3.25 базу не обновит",
+      "[WARN]  9. BusinessProcess.Тест_БП: собственный объект этого вида — на платформе ниже 8.3.25",
+      "[WARN]  9. DocumentJournal.Тест_Жур: собственный объект этого вида — на платформе ниже 8.3.26"
+    ],
+    "stdoutNotContains": "[ERROR]"
+  }
+}

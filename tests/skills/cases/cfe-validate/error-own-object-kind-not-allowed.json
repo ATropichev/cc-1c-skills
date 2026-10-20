@@ -1,0 +1,71 @@
+{
+  "name": "Ошибка: собственные последовательность, хранилище настроек и общий реквизит — платформа базу не обновит; собственный документ — можно",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Склады"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Document",
+          "name": "Тест_Док"
+        },
+        {
+          "type": "Sequence",
+          "name": "Тест_Посл",
+          "documents": [
+            "Document.Тест_Док"
+          ]
+        },
+        {
+          "type": "SettingsStorage",
+          "name": "Тест_ХН"
+        },
+        {
+          "type": "CommonAttribute",
+          "name": "Тест_ОР",
+          "valueType": "Boolean"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "expectError": true,
+  "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] 9. Sequence.Тест_Посл: собственный объект этого вида в расширении — платформа загрузит расширение, но базу не обновит",
+      "[ERROR] 9. SettingsStorage.Тест_ХН: собственный объект этого вида в расширении",
+      "[ERROR] 9. CommonAttribute.Тест_ОР: собственный объект этого вида в расширении"
+    ],
+    "stdoutNotContains": [
+      "Document.Тест_Док: собственный"
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.24 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.25 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -761,6 +761,16 @@ def main():
     # 8.3.24–8.5.1 при любом режиме совместимости); у БП и Задачи — так же на платформе ниже 8.3.25, а с
     # 8.3.25 можно (граница по версии платформы, не по режиму — по исходникам её не определить).
     # Формы, команды и макеты — можно везде (замер 8.3.24, 8.3.27, 8.5.1).
+    # Собственные объекты верхнего уровня: платформа загружает расширение, но базу не обновляет
+    # («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо в режиме
+    # совместимости <режим> и ниже» — режим в сообщении лишь текущий). Последовательность, хранилище
+    # настроек, общий реквизит — нигде (8.3.24–8.5.1, и в режиме 8.5.1); БП и Задача — на платформе ниже
+    # 8.3.25, журнал документов — ниже 8.3.26 (граница по версии платформы, режим расширения 8.3.24).
+    # Остальные виды — можно уже на 8.3.24.
+    own_object_restricted = {
+        'Sequence': 'Error', 'SettingsStorage': 'Error', 'CommonAttribute': 'Error',
+        'BusinessProcess': '8.3.25', 'Task': '8.3.25', 'DocumentJournal': '8.3.26',
+    }
     own_child_restricted = {
         'ChartOfCharacteristicTypes': 'Error', 'ChartOfAccounts': 'Error', 'ChartOfCalculationTypes': 'Error',
         'InformationRegister': 'Error', 'AccumulationRegister': 'Error', 'AccountingRegister': 'Error',
@@ -976,6 +986,13 @@ def main():
                         word = 'category' if len(missing_cats) == 1 else 'categories'
                         r.error(f"9. Borrowed {type_name}.{child_name}: missing GeneratedType {word} {', '.join(missing_cats)}")
                         check9_ok = False
+            else:
+                own_obj_rule = own_object_restricted.get(type_name)
+                if own_obj_rule == 'Error':
+                    r.error(f'9. {type_name}.{child_name}: собственный объект этого вида в расширении — платформа загрузит расширение, но базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
+                    check9_ok = False
+                elif own_obj_rule:
+                    r.warn(f'9. {type_name}.{child_name}: собственный объект этого вида — на платформе ниже {own_obj_rule} базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
 
             # --- Check 10: Sub-items (Attribute, TabularSection, EnumValue, Form) ---
             obj_child_objects = obj_el.find(f'{{{MD}}}ChildObjects')
