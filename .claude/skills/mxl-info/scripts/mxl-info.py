@@ -80,7 +80,7 @@ def format_xml_parse_error(path, exception):
     out = [f'[ERROR] Not well-formed XML (line {line_no}, position {pos}):', f'        {msg}']
     with open(path, encoding='utf-8-sig', errors='replace', newline='') as f:
         file_lines = f.read().split('\n')
-    if line_no < 1 or line_no > len(file_lines):
+    if line_no > len(file_lines):
         return out
     raw = file_lines[line_no - 1].rstrip('\r').replace('\t', ' ')
     # Только пробел (табы уже заменены): TrimStart() и str.lstrip() считают пробелами разные

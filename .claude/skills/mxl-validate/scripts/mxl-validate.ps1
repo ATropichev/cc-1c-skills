@@ -74,7 +74,7 @@ function Format-XmlParseError {
 	if ($lineNo -lt 1) { $lineNo = 1; $pos = 1 }
 	$out = @("[ERROR] Not well-formed XML (line $lineNo, position $pos):", "        $msg")
 	$fileLines = [System.IO.File]::ReadAllText($path) -split "`n"
-	if ($lineNo -lt 1 -or $lineNo -gt $fileLines.Count) { return $out }
+	if ($lineNo -gt $fileLines.Count) { return $out }
 	$raw = $fileLines[$lineNo - 1].TrimEnd("`r").Replace("`t", ' ')
 	# Только пробел (табы уже заменены): TrimStart() и str.lstrip() считают пробелами разные
 	# символы, и на управляющем символе в начале строки указатель в портах разъезжался.
