@@ -1,4 +1,4 @@
-﻿# meta-validate v1.38 — Validate 1C metadata object structure
+﻿# meta-validate v1.39 — Validate 1C metadata object structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -316,6 +316,40 @@ $typesWithStdAttrs = @(
 	"ChartOfAccounts","ChartOfCharacteristicTypes","ChartOfCalculationTypes",
 	"BusinessProcess","Task","ExchangePlan","DocumentJournal"
 )
+
+# Порядок групп в <ChildObjects> объекта по виду. Это xs:sequence <Вид>ChildObjects из MDClasses XSD,
+# сверенный выгрузкой платформы: выгрузка сама ставит группы в этот порядок, так что вставка не на место
+# даёт дифф при следующей выгрузке. Единого порядка нет — у документа Form стоит до TabularSection.
+function Get-ObjectChildOrder {
+	return @{
+		"Catalog"                    = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Document"                   = @("Attribute", "Form", "TabularSection", "Template", "Command")
+		"ExchangePlan"               = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ChartOfCharacteristicTypes" = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ChartOfAccounts"            = @("Attribute", "TabularSection", "AccountingFlag", "ExtDimensionAccountingFlag", "Form", "Template", "Command")
+		"ChartOfCalculationTypes"    = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"BusinessProcess"            = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Task"                       = @("Attribute", "TabularSection", "Form", "Template", "AddressingAttribute", "Command")
+		"DataProcessor"              = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Report"                     = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ExternalDataProcessor"      = @("Attribute", "TabularSection", "Form", "Template")
+		"ExternalReport"             = @("Attribute", "TabularSection", "Form", "Template")
+		"Enum"                       = @("EnumValue", "Form", "Template", "Command")
+		"InformationRegister"        = @("Resource", "Attribute", "Dimension", "Form", "Template", "Command")
+		"AccumulationRegister"       = @("Resource", "Attribute", "Dimension", "Form", "Template", "Command")
+		"AccountingRegister"         = @("Dimension", "Resource", "Attribute", "Form", "Template", "Command")
+		"CalculationRegister"        = @("Resource", "Attribute", "Dimension", "Recalculation", "Form", "Template", "Command")
+		"DocumentJournal"            = @("Column", "Form", "Template", "Command")
+		"Table"                      = @("Field", "Form", "Command", "Template")
+		"ExternalDataSource"         = @("Table", "Cube", "Function")
+		"Cube"                       = @("DimensionTable", "Dimension", "Resource", "Form", "Command", "Template")
+		"DimensionTable"             = @("Field", "Form", "Command", "Template")
+		"FilterCriterion"            = @("Form", "Command")
+		"SettingsStorage"            = @("Form", "Template")
+		"TabularSection"             = @("Attribute")
+	}
+}
+
 
 # ChildObjects rules: what child element types are valid for each metadata type
 $childObjectRules = @{
@@ -947,6 +981,22 @@ if ($childObjNode) {
 			$childCounts[$childTag] = 0
 		}
 		$childCounts[$childTag]++
+	}
+
+	# Порядок групп: загрузка примет любой, но выгрузка переставит по канону вида — дифф без правок
+	$order = (Get-ObjectChildOrder)[$mdType]
+	if ($order) {
+		$prevTag = $null; $prevRank = -1
+		foreach ($child in $childObjNode.ChildNodes) {
+			if ($child.NodeType -ne 'Element' -or -not ($order -ccontains $child.LocalName)) { continue }
+			$rank = [array]::IndexOf([string[]]$order, $child.LocalName)
+			if ($rank -lt $prevRank) {
+				$present = @($order | Where-Object { $childCounts.ContainsKey($_) })
+				Report-Warn "6. ChildObjects order: <$($child.LocalName)> after <$prevTag>; platform dump reorders $mdType children as $($present -join ' -> ')"
+				break
+			}
+			$prevTag = $child.LocalName; $prevRank = $rank
+		}
 	}
 
 	if ($check6Ok) {

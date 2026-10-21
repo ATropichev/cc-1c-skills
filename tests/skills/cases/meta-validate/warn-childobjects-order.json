@@ -1,0 +1,11 @@
+{
+  "name": "Группы ChildObjects не в каноне вида (команда перед ТЧ) — предупреждение: выгрузка переставит (#123)",
+  "setup": "fixture:catalog-childobjects-misordered",
+  "params": { "objectPath": "Catalogs/Склады.xml" },
+  "noSnapshot": "фикстура статична, meta-validate только читает и печатает — эталон зафиксировал бы саму фикстуру; проверяется stdout",
+  "skipPlatformVerify": "фикстура — один объект без остальной конфигурации; полная загрузка такого дерева невозможна",
+  "expect": {
+    "stdoutContains": "6. ChildObjects order: <TabularSection> after <Command>",
+    "stdoutNotContains": "[ERROR]"
+  }
+}

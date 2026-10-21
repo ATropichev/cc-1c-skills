@@ -33,8 +33,6 @@
 			<NumberAllowedLength>Variable</NumberAllowedLength>
 		</Properties>
 		<ChildObjects>
-			<Form>ФормаДокумента</Form>
-		
 			<Attribute uuid="UUID-013">
 				<InternalInfo/>
 				<Properties>
@@ -98,6 +96,7 @@
 					<DataHistory>Use</DataHistory>
 				</Properties>
 			</Attribute>
+			<Form>ФормаДокумента</Form>
 			<TabularSection uuid="UUID-018">
 				<InternalInfo>
 					<xr:GeneratedType name="DocumentTabularSection.ЗаказКлиента.Товары" category="TabularSection">

@@ -1,0 +1,14 @@
+{
+  "name": "Порядок ChildObjects: первая ТЧ документа встаёт ПОСЛЕ формы (#123)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Document", "name": "Заказ", "attributes": ["Комментарий: String(100)"],
+        "commands": { "Печать": { "group": "FormCommandBarImportant" } } },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    { "script": "form-add/scripts/form-add", "args": { "-ObjectPath": "{workDir}/Documents/Заказ.xml", "-FormName": "ФормаДокумента" } }
+  ],
+  "params": { "objectPath": "Documents/Заказ" },
+  "input": { "add": { "tabularSections": [ { "name": "Товары", "attrs": ["Количество: Number(15,3)"] } ] } }
+}

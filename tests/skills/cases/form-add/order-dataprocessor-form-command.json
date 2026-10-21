@@ -1,0 +1,17 @@
+{
+  "name": "Порядок ChildObjects: вторая форма обработки встаёт за первой, а не после команды (#123)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "DataProcessor", "name": "Загрузка",
+        "commands": { "ЗагрузитьИзФайла": { "group": "NavigationPanelOrdinary" } } },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/DataProcessors/Загрузка.xml", "-FormName": "Форма" }
+    }
+  ],
+  "params": { "objectPath": "DataProcessors/Загрузка.xml", "formName": "ФормаНастроек" },
+  "validatePath": "DataProcessors/Загрузка/Forms/ФормаНастроек"
+}

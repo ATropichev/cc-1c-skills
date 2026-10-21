@@ -1,0 +1,17 @@
+{
+  "name": "Порядок ChildObjects: макет обработки встаёт после формы и перед командой (#123)",
+  "setup": "empty-config",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "DataProcessor", "name": "Печать",
+        "commands": { "ЗагрузитьИзФайла": { "group": "NavigationPanelOrdinary" } } },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/DataProcessors/Печать.xml", "-FormName": "Форма" }
+    }
+  ],
+  "params": { "objectName": "Печать", "templateName": "Макет", "templateType": "SpreadsheetDocument" }
+}

@@ -40,8 +40,6 @@
 			<WriteMode>Independent</WriteMode>
 		</Properties>
 		<ChildObjects>
-			<Form>ФормаЗаписи</Form>
-		
 			<Resource uuid="UUID-017">
 				<InternalInfo/>
 				<Properties>
@@ -62,6 +60,7 @@
 					<Type><v8:Type>xs:string</v8:Type><v8:StringQualifiers><v8:Length>50</v8:Length><v8:AllowedLength>Variable</v8:AllowedLength></v8:StringQualifiers></Type>
 				</Properties>
 			</Dimension>
+			<Form>ФормаЗаписи</Form>
 		</ChildObjects>
 	</InformationRegister>
 </MetaDataObject>

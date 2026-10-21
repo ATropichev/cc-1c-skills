@@ -33,8 +33,6 @@
 			<NumberAllowedLength>Variable</NumberAllowedLength>
 		</Properties>
 		<ChildObjects>
-			<Form>ФормаСписка</Form>
-		
 			<Attribute uuid="UUID-013">
 				<InternalInfo/>
 				<Properties>
@@ -45,6 +43,7 @@
 					<Type><v8:Type>cfg:CatalogRef.Контрагенты</v8:Type></Type>
 				</Properties>
 			</Attribute>
+			<Form>ФормаСписка</Form>
 		</ChildObjects>
 	</Document>
 </MetaDataObject>

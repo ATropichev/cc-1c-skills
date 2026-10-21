@@ -33,8 +33,6 @@
 			<NumberAllowedLength>Variable</NumberAllowedLength>
 		</Properties>
 		<ChildObjects>
-			<Form>ФормаДокумента</Form>
-		
 			<Attribute uuid="UUID-013">
 				<InternalInfo/>
 				<Properties>
@@ -45,6 +43,7 @@
 					<Type><v8:Type>cfg:CatalogRef.Склады</v8:Type></Type>
 				</Properties>
 			</Attribute>
+			<Form>ФормаДокумента</Form>
 			<TabularSection uuid="UUID-015">
 				<InternalInfo>
 					<xr:GeneratedType name="DocumentTabularSection.Размещение.Товары" category="TabularSection">

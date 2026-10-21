@@ -1,0 +1,14 @@
+{
+  "name": "Документ с формой ДО табличной части — канон вида, без предупреждения о порядке (#123)",
+  "setup": "empty-config",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Document", "name": "Заказ", "tabularSections": { "Товары": ["Количество: Number(15,3)"] } },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    { "script": "form-add/scripts/form-add", "args": { "-ObjectPath": "{workDir}/Documents/Заказ.xml", "-FormName": "ФормаДокумента" } }
+  ],
+  "params": { "objectPath": "Documents/Заказ" },
+  "expect": { "stdoutNotContains": "ChildObjects order" }
+}

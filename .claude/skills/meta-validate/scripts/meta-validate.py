@@ -1,4 +1,4 @@
-# meta-validate v1.38 — Validate 1C metadata object structure (Python port)
+# meta-validate v1.39 — Validate 1C metadata object structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -369,6 +369,39 @@ types_with_std_attrs = (
     "ChartOfAccounts", "ChartOfCharacteristicTypes", "ChartOfCalculationTypes",
     "BusinessProcess", "Task", "ExchangePlan", "DocumentJournal",
 )
+
+def object_child_order():
+    """Порядок групп в <ChildObjects> объекта по виду. Это xs:sequence <Вид>ChildObjects из MDClasses XSD,
+    сверенный выгрузкой платформы: выгрузка сама ставит группы в этот порядок, так что вставка не на место
+    даёт дифф при следующей выгрузке. Единого порядка нет — у документа Form стоит до TabularSection."""
+    return {
+        "Catalog":                    ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Document":                   ["Attribute", "Form", "TabularSection", "Template", "Command"],
+        "ExchangePlan":               ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ChartOfCharacteristicTypes": ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ChartOfAccounts":            ["Attribute", "TabularSection", "AccountingFlag", "ExtDimensionAccountingFlag", "Form", "Template", "Command"],
+        "ChartOfCalculationTypes":    ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "BusinessProcess":            ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Task":                       ["Attribute", "TabularSection", "Form", "Template", "AddressingAttribute", "Command"],
+        "DataProcessor":              ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Report":                     ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ExternalDataProcessor":      ["Attribute", "TabularSection", "Form", "Template"],
+        "ExternalReport":             ["Attribute", "TabularSection", "Form", "Template"],
+        "Enum":                       ["EnumValue", "Form", "Template", "Command"],
+        "InformationRegister":        ["Resource", "Attribute", "Dimension", "Form", "Template", "Command"],
+        "AccumulationRegister":       ["Resource", "Attribute", "Dimension", "Form", "Template", "Command"],
+        "AccountingRegister":         ["Dimension", "Resource", "Attribute", "Form", "Template", "Command"],
+        "CalculationRegister":        ["Resource", "Attribute", "Dimension", "Recalculation", "Form", "Template", "Command"],
+        "DocumentJournal":            ["Column", "Form", "Template", "Command"],
+        "Table":                      ["Field", "Form", "Command", "Template"],
+        "ExternalDataSource":         ["Table", "Cube", "Function"],
+        "Cube":                       ["DimensionTable", "Dimension", "Resource", "Form", "Command", "Template"],
+        "DimensionTable":             ["Field", "Form", "Command", "Template"],
+        "FilterCriterion":            ["Form", "Command"],
+        "SettingsStorage":            ["Form", "Template"],
+        "TabularSection":             ["Attribute"],
+    }
+
 
 # ChildObjects rules
 child_object_rules = {
@@ -989,6 +1022,22 @@ if child_obj_node is not None:
             check6_ok = False
 
         child_counts[child_tag] = child_counts.get(child_tag, 0) + 1
+
+    # Порядок групп: загрузка примет любой, но выгрузка переставит по канону вида — дифф без правок
+    order = object_child_order().get(md_type)
+    if order:
+        prev_tag, prev_rank = None, -1
+        for child in child_obj_node:
+            if not isinstance(child.tag, str) or local_name(child) not in order:
+                continue
+            group_tag = local_name(child)
+            rank = order.index(group_tag)
+            if rank < prev_rank:
+                present = [t for t in order if t in child_counts]
+                report_warn(f"6. ChildObjects order: <{group_tag}> after <{prev_tag}>; platform dump reorders "
+                            f"{md_type} children as {' -> '.join(present)}")
+                break
+            prev_tag, prev_rank = group_tag, rank
 
     if check6_ok:
         summary = ", ".join(f"{k}({v})" for k, v in sorted(child_counts.items()))

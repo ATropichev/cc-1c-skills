@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.65 — Edit existing 1C metadata object XML
+# meta-edit v1.66 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1084,21 +1084,6 @@ def find_element_by_name(container, elem_local_name, name_value):
     return None
 
 
-def find_last_element_of_type(container, local_name):
-    last = None
-    for child in container:
-        if localname(child) == local_name:
-            last = child
-    return last
-
-
-def find_first_element_of_type(container, local_name):
-    for child in container:
-        if localname(child) == local_name:
-            return child
-    return None
-
-
 def ensure_child_objects_open():
     """Ensure ChildObjects element exists and is open (not self-closing empty)."""
     global child_objects_el
@@ -1808,13 +1793,58 @@ valid_child_types = {
     "Table": ["fields", "forms", "templates", "commands"],
 }
 
-# Canonical child order in ChildObjects
-child_order = [
-    "Resource", "Dimension", "Attribute", "TabularSection", "Field", "Table", "Function",
-    "AccountingFlag", "ExtDimensionAccountingFlag",
-    "EnumValue", "Column", "AddressingAttribute", "Recalculation",
-    "Form", "Template", "Command",
-]
+def object_child_order():
+    """Порядок групп в <ChildObjects> объекта по виду. Это xs:sequence <Вид>ChildObjects из MDClasses XSD,
+    сверенный выгрузкой платформы: выгрузка сама ставит группы в этот порядок, так что вставка не на место
+    даёт дифф при следующей выгрузке. Единого порядка нет — у документа Form стоит до TabularSection."""
+    return {
+        "Catalog":                    ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Document":                   ["Attribute", "Form", "TabularSection", "Template", "Command"],
+        "ExchangePlan":               ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ChartOfCharacteristicTypes": ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ChartOfAccounts":            ["Attribute", "TabularSection", "AccountingFlag", "ExtDimensionAccountingFlag", "Form", "Template", "Command"],
+        "ChartOfCalculationTypes":    ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "BusinessProcess":            ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Task":                       ["Attribute", "TabularSection", "Form", "Template", "AddressingAttribute", "Command"],
+        "DataProcessor":              ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Report":                     ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ExternalDataProcessor":      ["Attribute", "TabularSection", "Form", "Template"],
+        "ExternalReport":             ["Attribute", "TabularSection", "Form", "Template"],
+        "Enum":                       ["EnumValue", "Form", "Template", "Command"],
+        "InformationRegister":        ["Resource", "Attribute", "Dimension", "Form", "Template", "Command"],
+        "AccumulationRegister":       ["Resource", "Attribute", "Dimension", "Form", "Template", "Command"],
+        "AccountingRegister":         ["Dimension", "Resource", "Attribute", "Form", "Template", "Command"],
+        "CalculationRegister":        ["Resource", "Attribute", "Dimension", "Recalculation", "Form", "Template", "Command"],
+        "DocumentJournal":            ["Column", "Form", "Template", "Command"],
+        "Table":                      ["Field", "Form", "Command", "Template"],
+        "ExternalDataSource":         ["Table", "Cube", "Function"],
+        "Cube":                       ["DimensionTable", "Dimension", "Resource", "Form", "Command", "Template"],
+        "DimensionTable":             ["Field", "Form", "Command", "Template"],
+        "FilterCriterion":            ["Form", "Command"],
+        "SettingsStorage":            ["Form", "Template"],
+        "TabularSection":             ["Attribute"],
+    }
+
+
+def find_child_anchor(container, tag, obj_type):
+    """Элемент <ChildObjects>, ПЕРЕД которым встаёт новый <tag>; None — дописать в конец.
+    Сразу за последним элементом своего тега, иначе перед первым элементом группы, идущей
+    по канону вида позже. Вид или тег вне канона — None, как раньше."""
+    children = [c for c in container if isinstance(c.tag, str)]
+    last_idx = -1
+    for i, c in enumerate(children):
+        if c.tag.rsplit('}', 1)[-1] == tag:
+            last_idx = i
+    if last_idx >= 0:
+        return children[last_idx + 1] if last_idx + 1 < len(children) else None
+    order = object_child_order().get(obj_type)
+    if not order or tag not in order:
+        return None
+    later = order[order.index(tag) + 1:]
+    for c in children:
+        if c.tag.rsplit('}', 1)[-1] in later:
+            return c
+    return None
 
 # Map from DSL child type to XML element name
 child_type_to_xml_tag = {
@@ -2329,8 +2359,9 @@ def convert_inline_to_definition(operation, value):
 # ============================================================
 
 
-def find_insertion_point(xml_tag, parsed):
-    """Find reference node for insertion. Returns element or None (meaning append)."""
+def find_insertion_point(xml_tag, parsed, kind=None):
+    """Find reference node for insertion. Returns element or None (meaning append).
+    kind — вид владельца контейнера для канона (по умолчанию вид объекта; для ТЧ — TabularSection)."""
     if child_objects_el is None:
         return None
 
@@ -2341,44 +2372,23 @@ def find_insertion_point(xml_tag, parsed):
     if after_name:
         after_el = find_element_by_name(child_objects_el, xml_tag, after_name)
         if after_el is not None:
-            # Insert after = insert before the next element sibling
+            # Insert after = insert before the next element sibling, какого бы вида он ни был:
+            # за последним элементом группы идёт уже следующая группа, а не конец ChildObjects
             nxt = after_el.getnext()
             while nxt is not None and not isinstance(nxt.tag, str):
                 nxt = nxt.getnext()
-            if nxt is not None and localname(nxt) == xml_tag:
-                return nxt
-            return None  # append
+            return nxt
         else:
-            warn(f"after='{after_name}': element '{after_name}' not found in {xml_tag}, appending")
+            warn(f"after='{after_name}': element '{after_name}' not found in {xml_tag}, using default position")
 
     if before_name:
         before_el = find_element_by_name(child_objects_el, xml_tag, before_name)
         if before_el is not None:
             return before_el
-        warn(f"before='{before_name}': element '{before_name}' not found in {xml_tag}, appending")
+        warn(f"before='{before_name}': element '{before_name}' not found in {xml_tag}, using default position")
 
-    # Default: after last element of this type, or in canonical position
-    last_of_type = find_last_element_of_type(child_objects_el, xml_tag)
-    if last_of_type is not None:
-        nxt = last_of_type.getnext()
-        while nxt is not None and not isinstance(nxt.tag, str):
-            nxt = nxt.getnext()
-        return nxt  # None means append (correct: after last of type)
-
-    # No elements of this type yet -- find canonical position
-    if xml_tag in child_order:
-        tag_idx = child_order.index(xml_tag)
-    else:
-        return None
-
-    # Find first element of any type that comes AFTER in the canonical order
-    for i in range(tag_idx + 1, len(child_order)):
-        next_tag = child_order[i]
-        first_of_next = find_first_element_of_type(child_objects_el, next_tag)
-        if first_of_next is not None:
-            return first_of_next
-
-    return None  # append at end
+    # Default: after last element of this type, or in canonical position of the owner kind
+    return find_child_anchor(child_objects_el, xml_tag, kind or obj_type)
 
 
 def process_add(add_def):
@@ -2808,7 +2818,7 @@ def modify_child_elements(modify_def, child_type):
                         nodes = import_fragment(fragment_xml)
                         saved_co = child_objects_el
                         child_objects_el = ts_child_obj_el
-                        ref_node = find_insertion_point("Attribute", parsed)
+                        ref_node = find_insertion_point("Attribute", parsed, "TabularSection")
                         child_objects_el = saved_co
                         for node in nodes:
                             insert_before_element(ts_child_obj_el, node, ref_node, ts_attr_indent)

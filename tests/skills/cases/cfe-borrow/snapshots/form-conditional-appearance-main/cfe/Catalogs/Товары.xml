@@ -35,8 +35,6 @@
 			<CodeAllowedLength>Variable</CodeAllowedLength>
 		</Properties>
 		<ChildObjects>
-			<Form>ФормаЭлемента</Form>
-		
 			<Attribute uuid="UUID-013">
 				<InternalInfo/>
 				<Properties>
@@ -47,6 +45,7 @@
 					<Type><v8:Type>xs:decimal</v8:Type><v8:NumberQualifiers><v8:Digits>15</v8:Digits><v8:FractionDigits>3</v8:FractionDigits><v8:AllowedSign>Any</v8:AllowedSign></v8:NumberQualifiers></Type>
 				</Properties>
 			</Attribute>
+			<Form>ФормаЭлемента</Form>
 		</ChildObjects>
 	</Catalog>
 </MetaDataObject>

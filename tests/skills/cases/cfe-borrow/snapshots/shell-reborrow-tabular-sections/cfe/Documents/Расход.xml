@@ -33,8 +33,6 @@
 			<NumberAllowedLength>Variable</NumberAllowedLength>
 		</Properties>
 		<ChildObjects>
-			<Form>ФормаДокумента</Form>
-		
 			<Attribute uuid="UUID-013">
 				<InternalInfo/>
 				<Properties>
@@ -45,48 +43,48 @@
 					<Type><v8:Type>xs:string</v8:Type><v8:StringQualifiers><v8:Length>100</v8:Length><v8:AllowedLength>Variable</v8:AllowedLength></v8:StringQualifiers></Type>
 				</Properties>
 			</Attribute>
-			<TabularSection uuid="UUID-015">
+			<Attribute uuid="UUID-015">
+				<InternalInfo/>
+				<Properties>
+					<ObjectBelonging>Adopted</ObjectBelonging>
+					<Name>Склад</Name>
+					<Comment/>
+					<ExtendedConfigurationObject>UUID-016</ExtendedConfigurationObject>
+					<Type><v8:Type>xs:string</v8:Type><v8:StringQualifiers><v8:Length>50</v8:Length><v8:AllowedLength>Variable</v8:AllowedLength></v8:StringQualifiers></Type>
+				</Properties>
+			</Attribute>
+			<Form>ФормаДокумента</Form>
+			<Form>ФормаСписка</Form>
+			<TabularSection uuid="UUID-017">
 				<InternalInfo>
 					<xr:GeneratedType name="DocumentTabularSection.Расход.Товары" category="TabularSection">
-						<xr:TypeId>UUID-016</xr:TypeId>
-						<xr:ValueId>UUID-017</xr:ValueId>
-					</xr:GeneratedType>
-					<xr:GeneratedType name="DocumentTabularSectionRow.Расход.Товары" category="TabularSectionRow">
 						<xr:TypeId>UUID-018</xr:TypeId>
 						<xr:ValueId>UUID-019</xr:ValueId>
+					</xr:GeneratedType>
+					<xr:GeneratedType name="DocumentTabularSectionRow.Расход.Товары" category="TabularSectionRow">
+						<xr:TypeId>UUID-020</xr:TypeId>
+						<xr:ValueId>UUID-021</xr:ValueId>
 					</xr:GeneratedType>
 				</InternalInfo>
 				<Properties>
 					<ObjectBelonging>Adopted</ObjectBelonging>
 					<Name>Товары</Name>
 					<Comment/>
-					<ExtendedConfigurationObject>UUID-020</ExtendedConfigurationObject>
+					<ExtendedConfigurationObject>UUID-022</ExtendedConfigurationObject>
 				</Properties>
 				<ChildObjects>
-					<Attribute uuid="UUID-021">
+					<Attribute uuid="UUID-023">
 						<InternalInfo/>
 						<Properties>
 							<ObjectBelonging>Adopted</ObjectBelonging>
 							<Name>Количество</Name>
 							<Comment/>
-							<ExtendedConfigurationObject>UUID-022</ExtendedConfigurationObject>
+							<ExtendedConfigurationObject>UUID-024</ExtendedConfigurationObject>
 							<Type><v8:Type>xs:decimal</v8:Type><v8:NumberQualifiers><v8:Digits>10</v8:Digits><v8:FractionDigits>3</v8:FractionDigits><v8:AllowedSign>Any</v8:AllowedSign></v8:NumberQualifiers></Type>
 						</Properties>
 					</Attribute>
 				</ChildObjects>
 			</TabularSection>
-			<Form>ФормаСписка</Form>
-		
-			<Attribute uuid="UUID-023">
-				<InternalInfo/>
-				<Properties>
-					<ObjectBelonging>Adopted</ObjectBelonging>
-					<Name>Склад</Name>
-					<Comment/>
-					<ExtendedConfigurationObject>UUID-024</ExtendedConfigurationObject>
-					<Type><v8:Type>xs:string</v8:Type><v8:StringQualifiers><v8:Length>50</v8:Length><v8:AllowedLength>Variable</v8:AllowedLength></v8:StringQualifiers></Type>
-				</Properties>
-			</Attribute>
 		</ChildObjects>
 	</Document>
 </MetaDataObject>

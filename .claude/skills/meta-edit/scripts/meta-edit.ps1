@@ -1,4 +1,4 @@
-﻿# meta-edit v1.65 — Edit existing 1C metadata object XML
+﻿# meta-edit v1.66 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1033,25 +1033,6 @@ function Find-ElementByName($container, [string]$elemLocalName, [string]$nameVal
 	return $null
 }
 
-function Find-LastElementOfType($container, [string]$localName) {
-	$last = $null
-	foreach ($child in $container.ChildNodes) {
-		if ($child.NodeType -eq 'Element' -and $child.LocalName -eq $localName) {
-			$last = $child
-		}
-	}
-	return $last
-}
-
-function Find-FirstElementOfType($container, [string]$localName) {
-	foreach ($child in $container.ChildNodes) {
-		if ($child.NodeType -eq 'Element' -and $child.LocalName -eq $localName) {
-			return $child
-		}
-	}
-	return $null
-}
-
 function Ensure-ChildObjectsOpen {
 	if ($script:childObjectsEl) {
 		# Check if it's self-closing (no child elements)
@@ -1787,13 +1768,63 @@ $script:validChildTypes = @{
 	"Table"                      = @("fields","forms","templates","commands")
 }
 
-# Canonical child order in ChildObjects
-$script:childOrder = @(
-	"Resource", "Dimension", "Attribute", "TabularSection", "Field", "Table", "Function",
-	"AccountingFlag", "ExtDimensionAccountingFlag",
-	"EnumValue", "Column", "AddressingAttribute", "Recalculation",
-	"Form", "Template", "Command"
-)
+# Порядок групп в <ChildObjects> объекта по виду. Это xs:sequence <Вид>ChildObjects из MDClasses XSD,
+# сверенный выгрузкой платформы: выгрузка сама ставит группы в этот порядок, так что вставка не на место
+# даёт дифф при следующей выгрузке. Единого порядка нет — у документа Form стоит до TabularSection.
+function Get-ObjectChildOrder {
+	return @{
+		"Catalog"                    = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Document"                   = @("Attribute", "Form", "TabularSection", "Template", "Command")
+		"ExchangePlan"               = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ChartOfCharacteristicTypes" = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ChartOfAccounts"            = @("Attribute", "TabularSection", "AccountingFlag", "ExtDimensionAccountingFlag", "Form", "Template", "Command")
+		"ChartOfCalculationTypes"    = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"BusinessProcess"            = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Task"                       = @("Attribute", "TabularSection", "Form", "Template", "AddressingAttribute", "Command")
+		"DataProcessor"              = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Report"                     = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ExternalDataProcessor"      = @("Attribute", "TabularSection", "Form", "Template")
+		"ExternalReport"             = @("Attribute", "TabularSection", "Form", "Template")
+		"Enum"                       = @("EnumValue", "Form", "Template", "Command")
+		"InformationRegister"        = @("Resource", "Attribute", "Dimension", "Form", "Template", "Command")
+		"AccumulationRegister"       = @("Resource", "Attribute", "Dimension", "Form", "Template", "Command")
+		"AccountingRegister"         = @("Dimension", "Resource", "Attribute", "Form", "Template", "Command")
+		"CalculationRegister"        = @("Resource", "Attribute", "Dimension", "Recalculation", "Form", "Template", "Command")
+		"DocumentJournal"            = @("Column", "Form", "Template", "Command")
+		"Table"                      = @("Field", "Form", "Command", "Template")
+		"ExternalDataSource"         = @("Table", "Cube", "Function")
+		"Cube"                       = @("DimensionTable", "Dimension", "Resource", "Form", "Command", "Template")
+		"DimensionTable"             = @("Field", "Form", "Command", "Template")
+		"FilterCriterion"            = @("Form", "Command")
+		"SettingsStorage"            = @("Form", "Template")
+		"TabularSection"             = @("Attribute")
+	}
+}
+
+# Элемент <ChildObjects>, ПЕРЕД которым встаёт новый <tag>; $null — дописать в конец.
+# Сразу за последним элементом своего тега, иначе перед первым элементом группы, идущей
+# по канону вида позже. Вид или тег вне канона — $null, как раньше.
+function Find-ChildAnchor($container, [string]$tag, [string]$objType) {
+	$children = New-Object System.Collections.Generic.List[object]
+	foreach ($c in $container.ChildNodes) { if ($c.NodeType -eq 'Element') { $children.Add($c) } }
+	$lastIdx = -1
+	for ($i = 0; $i -lt $children.Count; $i++) {
+		if ($children[$i].LocalName -ceq $tag) { $lastIdx = $i }
+	}
+	if ($lastIdx -ge 0) {
+		if ($lastIdx + 1 -lt $children.Count) { return $children[$lastIdx + 1] }
+		return $null
+	}
+	$order = (Get-ObjectChildOrder)[$objType]
+	if (-not $order) { return $null }
+	$tagIdx = [array]::IndexOf([string[]]$order, $tag)
+	if ($tagIdx -lt 0) { return $null }
+	$later = @($order | Select-Object -Skip ($tagIdx + 1))
+	foreach ($c in $children) {
+		if ($later -ccontains $c.LocalName) { return $c }
+	}
+	return $null
+}
 
 # Map from DSL child type to XML element name
 $script:childTypeToXmlTag = @{
@@ -2341,8 +2372,9 @@ function Convert-InlineToDefinition([string]$operation, [string]$value) {
 # ============================================================
 
 function Find-InsertionPoint {
-	param([string]$xmlTag, $parsed)
+	param([string]$xmlTag, $parsed, [string]$kind = "")
 	# Returns $refNode for Insert-BeforeElement (null = append)
+	# $kind — вид владельца контейнера для канона (по умолчанию вид объекта; для ТЧ — TabularSection)
 
 	if (-not $script:childObjectsEl) { return $null }
 
@@ -2350,41 +2382,24 @@ function Find-InsertionPoint {
 	if ($parsed.after) {
 		$afterEl = Find-ElementByName $script:childObjectsEl $xmlTag $parsed.after
 		if ($afterEl) {
-			# Insert after = insert before the next element sibling
+			# Insert after = insert before the next element sibling, какого бы вида он ни был:
+			# за последним элементом группы идёт уже следующая группа, а не конец ChildObjects
 			$next = $afterEl.NextSibling
 			while ($next -and $next.NodeType -ne 'Element') { $next = $next.NextSibling }
-			if ($next -and $next.LocalName -eq $xmlTag) { return $next }
-			return $null  # append
+			return $next
 		} else {
-			Warn "after='$($parsed.after)': element '$($parsed.after)' not found in $xmlTag, appending"
+			Warn "after='$($parsed.after)': element '$($parsed.after)' not found in $xmlTag, using default position"
 		}
 	}
 	if ($parsed.before) {
 		$beforeEl = Find-ElementByName $script:childObjectsEl $xmlTag $parsed.before
 		if ($beforeEl) { return $beforeEl }
-		Warn "before='$($parsed.before)': element '$($parsed.before)' not found in $xmlTag, appending"
+		Warn "before='$($parsed.before)': element '$($parsed.before)' not found in $xmlTag, using default position"
 	}
 
-	# Default: after last element of this type, or in canonical position
-	$lastOfType = Find-LastElementOfType $script:childObjectsEl $xmlTag
-	if ($lastOfType) {
-		$next = $lastOfType.NextSibling
-		while ($next -and $next.NodeType -ne 'Element') { $next = $next.NextSibling }
-		return $next  # null means append (which is correct: after last of type)
-	}
-
-	# No elements of this type yet — find canonical position
-	$tagIdx = [array]::IndexOf($script:childOrder, $xmlTag)
-	if ($tagIdx -lt 0) { return $null }
-
-	# Find first element of any type that comes AFTER in the canonical order
-	for ($i = $tagIdx + 1; $i -lt $script:childOrder.Count; $i++) {
-		$nextTag = $script:childOrder[$i]
-		$firstOfNext = Find-FirstElementOfType $script:childObjectsEl $nextTag
-		if ($firstOfNext) { return $firstOfNext }
-	}
-
-	return $null  # append at end
+	# Default: after last element of this type, or in canonical position of the owner kind
+	if (-not $kind) { $kind = $script:objType }
+	return Find-ChildAnchor $script:childObjectsEl $xmlTag $kind
 }
 
 function Process-Add($addDef) {
@@ -2915,7 +2930,7 @@ function Modify-ChildElements($modifyDef, [string]$childType) {
 							$nodes = Import-Fragment $fragmentXml
 							$savedCO = $script:childObjectsEl
 							$script:childObjectsEl = $tsChildObjEl
-							$refNode = Find-InsertionPoint "Attribute" $parsed
+							$refNode = Find-InsertionPoint "Attribute" $parsed "TabularSection"
 							$script:childObjectsEl = $savedCO
 							foreach ($node in $nodes) {
 								Insert-BeforeElement $tsChildObjEl $node $refNode $tsAttrIndent

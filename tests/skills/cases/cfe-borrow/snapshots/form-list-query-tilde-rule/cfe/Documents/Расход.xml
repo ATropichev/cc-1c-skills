@@ -33,8 +33,6 @@
 			<NumberAllowedLength>Variable</NumberAllowedLength>
 		</Properties>
 		<ChildObjects>
-			<Form>СвоиПоля</Form>
-		
 			<Attribute uuid="UUID-013">
 				<InternalInfo/>
 				<Properties>
@@ -45,8 +43,26 @@
 					<Type><v8:Type>cfg:CatalogRef.Контрагенты</v8:Type></Type>
 				</Properties>
 			</Attribute>
+			<Form>СвоиПоля</Form>
 			<Form>ТЧСоединение</Form>
-		
+			<Form>СтрокаКомментарий</Form>
+			<Form>СтрочныеБуквы</Form>
+			<Form>ЗначениеПеречисления</Form>
+			<Form>Разыменование</Form>
+			<Form>ЧужаяТаблица</Form>
+			<Form>РегистрРеквизита</Form>
+			<Form>ПсевдонимКолонки</Form>
+			<Form>РазыменованиеСтандартного</Form>
+			<Form>СоединениеОболочки</Form>
+			<Form>Звездочка</Form>
+			<Form>БезПсевдонима</Form>
+			<Form>БезПсевдонимаЧужое</Form>
+			<Form>РазыменованиеДаты</Form>
+			<Form>СоединениеДата</Form>
+			<Form>РазыменованиеРодителя</Form>
+			<Form>Умножение</Form>
+			<Form>Объединение</Form>
+			<Form>АвтоРежим</Form>
 			<TabularSection uuid="UUID-015">
 				<InternalInfo>
 					<xr:GeneratedType name="DocumentTabularSection.Расход.Товары" category="TabularSection">
@@ -77,24 +93,6 @@
 					</Attribute>
 				</ChildObjects>
 			</TabularSection>
-			<Form>СтрокаКомментарий</Form>
-			<Form>СтрочныеБуквы</Form>
-			<Form>ЗначениеПеречисления</Form>
-			<Form>Разыменование</Form>
-			<Form>ЧужаяТаблица</Form>
-			<Form>РегистрРеквизита</Form>
-			<Form>ПсевдонимКолонки</Form>
-			<Form>РазыменованиеСтандартного</Form>
-			<Form>СоединениеОболочки</Form>
-			<Form>Звездочка</Form>
-			<Form>БезПсевдонима</Form>
-			<Form>БезПсевдонимаЧужое</Form>
-			<Form>РазыменованиеДаты</Form>
-			<Form>СоединениеДата</Form>
-			<Form>РазыменованиеРодителя</Form>
-			<Form>Умножение</Form>
-			<Form>Объединение</Form>
-			<Form>АвтоРежим</Form>
 		</ChildObjects>
 	</Document>
 </MetaDataObject>

@@ -1,0 +1,14 @@
+{
+  "name": "Порядок ChildObjects: у документа форма встаёт ДО табличной части (#123)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Document", "name": "Заказ", "attributes": ["Комментарий: String(100)"],
+        "tabularSections": { "Товары": ["Количество: Number(15,3)"] },
+        "commands": { "Печать": { "group": "FormCommandBarImportant" } } },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    }
+  ],
+  "params": { "objectPath": "Documents/Заказ.xml", "formName": "ФормаДокумента" },
+  "validatePath": "Documents/Заказ/Forms/ФормаДокумента"
+}

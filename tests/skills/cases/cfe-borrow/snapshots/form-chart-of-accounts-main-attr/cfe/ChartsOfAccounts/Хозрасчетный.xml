@@ -42,8 +42,6 @@
 			<MaxExtDimensionCount>1</MaxExtDimensionCount>
 		</Properties>
 		<ChildObjects>
-			<Form>ФормаЭлемента</Form>
-		
 			<Attribute uuid="UUID-017">
 				<InternalInfo/>
 				<Properties>
@@ -74,6 +72,7 @@
 					<Type><v8:Type>xs:boolean</v8:Type></Type>
 				</Properties>
 			</ExtDimensionAccountingFlag>
+			<Form>ФормаЭлемента</Form>
 		</ChildObjects>
 	</ChartOfAccounts>
 </MetaDataObject>

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# template-add v1.27 — Add template to 1C object (+write_xml_file/write_utf8_bom: общий эталон записи)
+# template-add v1.28 — Add template to 1C object (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -338,6 +338,60 @@ def format_rank(ver):
     m = re.match(r'^(\d+)\.(\d+)$', ver or '')
     return int(m.group(1)) * 100 + int(m.group(2)) if m else 0
 
+
+
+def object_child_order():
+    """Порядок групп в <ChildObjects> объекта по виду. Это xs:sequence <Вид>ChildObjects из MDClasses XSD,
+    сверенный выгрузкой платформы: выгрузка сама ставит группы в этот порядок, так что вставка не на место
+    даёт дифф при следующей выгрузке. Единого порядка нет — у документа Form стоит до TabularSection."""
+    return {
+        "Catalog":                    ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Document":                   ["Attribute", "Form", "TabularSection", "Template", "Command"],
+        "ExchangePlan":               ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ChartOfCharacteristicTypes": ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ChartOfAccounts":            ["Attribute", "TabularSection", "AccountingFlag", "ExtDimensionAccountingFlag", "Form", "Template", "Command"],
+        "ChartOfCalculationTypes":    ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "BusinessProcess":            ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Task":                       ["Attribute", "TabularSection", "Form", "Template", "AddressingAttribute", "Command"],
+        "DataProcessor":              ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Report":                     ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ExternalDataProcessor":      ["Attribute", "TabularSection", "Form", "Template"],
+        "ExternalReport":             ["Attribute", "TabularSection", "Form", "Template"],
+        "Enum":                       ["EnumValue", "Form", "Template", "Command"],
+        "InformationRegister":        ["Resource", "Attribute", "Dimension", "Form", "Template", "Command"],
+        "AccumulationRegister":       ["Resource", "Attribute", "Dimension", "Form", "Template", "Command"],
+        "AccountingRegister":         ["Dimension", "Resource", "Attribute", "Form", "Template", "Command"],
+        "CalculationRegister":        ["Resource", "Attribute", "Dimension", "Recalculation", "Form", "Template", "Command"],
+        "DocumentJournal":            ["Column", "Form", "Template", "Command"],
+        "Table":                      ["Field", "Form", "Command", "Template"],
+        "ExternalDataSource":         ["Table", "Cube", "Function"],
+        "Cube":                       ["DimensionTable", "Dimension", "Resource", "Form", "Command", "Template"],
+        "DimensionTable":             ["Field", "Form", "Command", "Template"],
+        "FilterCriterion":            ["Form", "Command"],
+        "SettingsStorage":            ["Form", "Template"],
+        "TabularSection":             ["Attribute"],
+    }
+
+
+def find_child_anchor(container, tag, obj_type):
+    """Элемент <ChildObjects>, ПЕРЕД которым встаёт новый <tag>; None — дописать в конец.
+    Сразу за последним элементом своего тега, иначе перед первым элементом группы, идущей
+    по канону вида позже. Вид или тег вне канона — None, как раньше."""
+    children = [c for c in container if isinstance(c.tag, str)]
+    last_idx = -1
+    for i, c in enumerate(children):
+        if c.tag.rsplit('}', 1)[-1] == tag:
+            last_idx = i
+    if last_idx >= 0:
+        return children[last_idx + 1] if last_idx + 1 < len(children) else None
+    order = object_child_order().get(obj_type)
+    if not order or tag not in order:
+        return None
+    later = order[order.index(tag) + 1:]
+    for c in children:
+        if c.tag.rsplit('}', 1)[-1] in later:
+            return c
+    return None
 
 
 def main():
@@ -683,7 +737,7 @@ def main():
         print(f"Не найден элемент ChildObjects в {root_xml_path}", file=sys.stderr)
         sys.exit(1)
 
-    # Add <Template> to end of ChildObjects — idempotent (do not duplicate already-registered template)
+    # Add <Template> to ChildObjects — idempotent (do not duplicate already-registered template)
     already_registered = child_objects.find(f"md:Template[.='{template_name}']", NSMAP) is not None
 
     if not already_registered:
@@ -692,8 +746,14 @@ def main():
         # Remove auto-appended element to reinsert with proper whitespace
         child_objects.remove(template_elem)
 
+        # Место — по канону вида владельца: макет встаёт перед командами (у таблицы внешнего источника — после)
+        insert_before = find_child_anchor(child_objects, "Template", etree.QName(child_objects.getparent()).localname)
+
         children = list(child_objects)
-        if len(children) == 0 and (child_objects.text is None or child_objects.text.strip() == ""):
+        if insert_before is not None:
+            child_objects.insert(children.index(insert_before), template_elem)
+            template_elem.tail = "\n\t\t\t"
+        elif len(children) == 0 and (child_objects.text is None or child_objects.text.strip() == ""):
             # Empty ChildObjects (self-closing)
             child_objects.text = "\n\t\t\t"
             child_objects.append(template_elem)

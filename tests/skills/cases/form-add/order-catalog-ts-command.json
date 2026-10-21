@@ -1,0 +1,14 @@
+{
+  "name": "Порядок ChildObjects: форма справочника встаёт после ТЧ и перед командой (#123)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Номенклатура", "attributes": ["Артикул: String(25)"],
+        "tabularSections": { "Штрихкоды": ["Штрихкод: String(50)"] },
+        "commands": { "Печать": { "group": "FormCommandBarImportant" } } },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    }
+  ],
+  "params": { "objectPath": "Catalogs/Номенклатура.xml", "formName": "ФормаЭлемента" },
+  "validatePath": "Catalogs/Номенклатура/Forms/ФормаЭлемента"
+}

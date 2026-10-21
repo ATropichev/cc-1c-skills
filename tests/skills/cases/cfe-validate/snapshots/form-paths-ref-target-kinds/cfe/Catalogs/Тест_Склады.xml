@@ -87,7 +87,6 @@
 			<ExecuteAfterWriteDataHistoryVersionProcessing>false</ExecuteAfterWriteDataHistoryVersionProcessing>
 		</Properties>
 		<ChildObjects>
-			<Form>Тест_ФормаЭлемента</Form>
 			<TabularSection uuid="UUID-012">
 				<InternalInfo>
 					<xr:GeneratedType name="CatalogTabularSection.Тест_Склады.Тест_Ячейки" category="TabularSection">
@@ -184,6 +183,7 @@
 					</Attribute>
 				</ChildObjects>
 			</TabularSection>
+			<Form>Тест_ФормаЭлемента</Form>
 		</ChildObjects>
 	</Catalog>
 </MetaDataObject>

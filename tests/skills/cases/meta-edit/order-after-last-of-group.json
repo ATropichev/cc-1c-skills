@@ -1,0 +1,14 @@
+{
+  "name": "after на последний реквизит: новый встаёт за ним, а не в конец ChildObjects после команд (#123)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Склады", "attributes": ["Адрес: String(100)"],
+        "tabularSections": { "Ячейки": ["Код: String(10)"] },
+        "commands": { "Печать": { "group": "FormCommandBarImportant" } } },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    }
+  ],
+  "params": { "objectPath": "Catalogs/Склады" },
+  "input": { "add": { "attributes": ["Ответственный: String(50) >> after Адрес"] } }
+}

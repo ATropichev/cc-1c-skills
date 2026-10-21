@@ -19,6 +19,7 @@ const GUARDS = [
   ['check-typeset-coverage.mjs', 'имена типов: вывод meta-info замыкается на вход meta-compile'],
   ['check-format-versions.mjs', 'проверенный диапазон версий формата: согласован со спецификацией'],
   ['check-form-purposes.mjs', 'назначения форм в form-add: согласованы со спецификацией и между портами'],
+  ['check-object-child-order.mjs', 'канон групп ChildObjects объекта: порты, спецификация и XSD согласованы'],
   ['check-positional-binding.mjs', 'read-only навыки: позиционным остаётся только путь ко входу'],
   ['check-agent-portability.mjs', 'исходники навыков: без привязки к конкретному AI-агенту'],
   ['check-error-streams.mjs', 'сообщения об ошибках: один и тот же поток в обоих портах'],

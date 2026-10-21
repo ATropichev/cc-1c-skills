@@ -384,7 +384,6 @@
 					<DataHistory>Use</DataHistory>
 				</Properties>
 			</Attribute>
-			<Form>ФормаСписка</Form>
 			<TabularSection uuid="UUID-019">
 				<InternalInfo>
 					<xr:GeneratedType name="CatalogTabularSection.Валюты.Представления" category="TabularSection">
@@ -522,6 +521,7 @@
 					</Attribute>
 				</ChildObjects>
 			</TabularSection>
+			<Form>ФормаСписка</Form>
 		</ChildObjects>
 	</Catalog>
 </MetaDataObject>

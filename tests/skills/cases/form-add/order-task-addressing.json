@@ -1,0 +1,14 @@
+{
+  "name": "Порядок ChildObjects: у задачи форма встаёт до реквизитов адресации (#123)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Task", "name": "Задача", "attributes": ["Описание: String(100)"],
+        "addressingAttributes": ["Исполнитель: String(50)"],
+        "commands": { "Открыть": { "group": "FormCommandBarImportant" } } },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    }
+  ],
+  "params": { "objectPath": "Tasks/Задача.xml", "formName": "ФормаЗадачи" },
+  "validatePath": "Tasks/Задача/Forms/ФормаЗадачи"
+}

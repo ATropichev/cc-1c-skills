@@ -1,0 +1,72 @@
+{
+  "name": "Глубокий путь Объект.<Ссылка>.<Реквизит>: реквизит цели сливается в уже заимствованный справочник с формой — на место по канону, до <Form>",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Catalog",
+        "name": "Номенклатура",
+        "attributes": [
+          { "name": "Артикул", "type": "String", "length": 25 }
+        ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/Catalogs/Номенклатура.xml", "-FormName": "ФормаЭлемента" }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Document",
+        "name": "ЗаказКлиента",
+        "attributes": [
+          { "name": "Номенклатура", "type": "CatalogRef.Номенклатура" }
+        ]
+      },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": { "-ObjectPath": "{workDir}/Documents/ЗаказКлиента.xml", "-FormName": "ФормаДокумента" }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Заказ клиента",
+        "elements": [
+          { "input": "Номенклатура", "path": "Объект.Номенклатура" },
+          { "input": "Артикул", "path": "Объект.Номенклатура.Артикул" }
+        ],
+        "attributes": [
+          { "name": "Объект", "type": "DocumentObject.ЗаказКлиента", "main": true }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": { "-Name": "Тест", "-OutputDir": "{workDir}/cfe", "-ConfigPath": "{workDir}" }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Catalog.Номенклатура.Form.ФормаЭлемента"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "Document.ЗаказКлиента.Form.ФормаДокумента"
+  },
+  "args_extra": ["-BorrowMainAttribute", "Form"],
+  "expect": {
+    "stdoutContains": ["Merged 1 attribute(s)"]
+  }
+}

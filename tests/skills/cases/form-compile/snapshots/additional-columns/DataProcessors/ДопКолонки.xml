@@ -28,7 +28,6 @@
 			<Explanation/>
 		</Properties>
 		<ChildObjects>
-			<Form>Форма</Form>
 			<TabularSection uuid="UUID-006">
 				<InternalInfo>
 					<xr:GeneratedType name="DataProcessorTabularSection.ДопКолонки.Прочее" category="TabularSection">
@@ -217,6 +216,7 @@
 					</Attribute>
 				</ChildObjects>
 			</TabularSection>
+			<Form>Форма</Form>
 		</ChildObjects>
 	</DataProcessor>
 </MetaDataObject>

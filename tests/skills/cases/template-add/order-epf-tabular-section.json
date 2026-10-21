@@ -1,0 +1,13 @@
+{
+  "name": "Порядок ChildObjects: во внешней обработке форма и макет встают после ТЧ (#123)",
+  "preRun": [
+    { "script": "epf-init/scripts/init", "args": { "-Name": "Внешняя", "-SrcDir": "{workDir}" } },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "input": { "add": { "tabularSections": [ { "name": "Строки", "attrs": ["Значение: String(50)"] } ] } },
+      "args": { "-DefinitionFile": "{inputFile}", "-ObjectPath": "{workDir}/Внешняя.xml" }
+    },
+    { "script": "form-add/scripts/form-add", "args": { "-ObjectPath": "{workDir}/Внешняя.xml", "-FormName": "Форма" } }
+  ],
+  "params": { "objectName": "Внешняя", "templateName": "Макет", "templateType": "SpreadsheetDocument" }
+}

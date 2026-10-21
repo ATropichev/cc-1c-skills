@@ -688,6 +688,34 @@ const FAMILIES = [
         consumers: ['cf-edit', 'cfe-borrow', 'role-compile', 'xdto-compile'] },
     ],
   },
+  // ─── Порядок групп в <ChildObjects> ОБЪЕКТА (#123) ──────────────────────
+  // Канон зависит от вида (у документа Form до TabularSection) и равен xs:sequence <Вид>ChildObjects
+  // из MDClasses XSD; таблицу в коде с таблицей спеки (и с XSD, если скачан) сверяет check-object-child-order.
+  {
+    name: 'ChildObjects объекта: канон групп по виду',
+    py: 'object_child_order', ps1: 'Get-ObjectChildOrder',
+    variants: [
+      { id: 'base', authority: 'meta-edit',
+        consumers: ['cfe-borrow', 'form-add', 'form-compile', 'meta-validate', 'template-add'] },
+    ],
+  },
+  {
+    name: 'ChildObjects объекта: место вставки (DOM)',
+    py: 'find_child_anchor', ps1: 'Find-ChildAnchor',
+    variants: [
+      { id: 'base', authority: 'meta-edit',
+        consumers: ['cfe-borrow', 'form-add', 'template-add'],
+        consumersPs1: ['form-compile'] },
+    ],
+  },
+  {
+    name: 'ChildObjects объекта: место вставки (текст)',
+    py: 'insert_into_own_child_objects_by_canon', ps1: 'Insert-IntoOwnChildObjectsByCanon',
+    variants: [
+      { id: 'base', authority: 'cfe-borrow', consumers: [],
+        consumersPy: ['form-compile'] },
+    ],
+  },
   // ── Эмиттер элементов формы: form-edit добавляет элементы тем же кодом, что form-compile ──
   { name: 'Assert-UniqueName', py: null, ps1: 'Assert-UniqueName', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
   { name: 'emit_ml_items', py: 'emit_ml_items', ps1: 'Emit-MLItems', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }, { id: 'own', authority: 'meta-compile', consumers: ['meta-edit'], why: 'своя реализация для свойств метаданных объекта (meta-*), не копия эмиттера формы' }] },

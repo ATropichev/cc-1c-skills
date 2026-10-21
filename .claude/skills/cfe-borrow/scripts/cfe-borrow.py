@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.50 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.51 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -304,19 +304,133 @@ def get_own_child_object_names(obj_file):
     return names
 
 
-def insert_into_own_child_objects(text, content):
-    """Вставка в СОБСТВЕННЫЙ <ChildObjects> объекта. Свой контейнер закрывается в файле последним:
-    объект в файле один, а вложенные <ChildObjects> табличных частей закрываются раньше. Замена по
-    всем вхождениям раскидывала реквизиты по каждой ТЧ — ps1 рвал XML, py прятал ТЧ внутрь ТЧ."""
-    close_idx = text.rfind("</ChildObjects>")
-    if close_idx >= 0:
-        return text[:close_idx] + content + "\r\n\t\t" + text[close_idx:]
-    # Своего закрывающего тега нет — значит контейнер самозакрытый (детей у него нет, вложенных тоже)
-    self_matches = list(re.finditer(r'<ChildObjects\s*/>', text))
-    if not self_matches:
-        return text
-    m = self_matches[-1]
-    return text[:m.start()] + f"<ChildObjects>{content}\r\n\t\t</ChildObjects>" + text[m.end():]
+def object_child_order():
+    """Порядок групп в <ChildObjects> объекта по виду. Это xs:sequence <Вид>ChildObjects из MDClasses XSD,
+    сверенный выгрузкой платформы: выгрузка сама ставит группы в этот порядок, так что вставка не на место
+    даёт дифф при следующей выгрузке. Единого порядка нет — у документа Form стоит до TabularSection."""
+    return {
+        "Catalog":                    ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Document":                   ["Attribute", "Form", "TabularSection", "Template", "Command"],
+        "ExchangePlan":               ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ChartOfCharacteristicTypes": ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ChartOfAccounts":            ["Attribute", "TabularSection", "AccountingFlag", "ExtDimensionAccountingFlag", "Form", "Template", "Command"],
+        "ChartOfCalculationTypes":    ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "BusinessProcess":            ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Task":                       ["Attribute", "TabularSection", "Form", "Template", "AddressingAttribute", "Command"],
+        "DataProcessor":              ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Report":                     ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ExternalDataProcessor":      ["Attribute", "TabularSection", "Form", "Template"],
+        "ExternalReport":             ["Attribute", "TabularSection", "Form", "Template"],
+        "Enum":                       ["EnumValue", "Form", "Template", "Command"],
+        "InformationRegister":        ["Resource", "Attribute", "Dimension", "Form", "Template", "Command"],
+        "AccumulationRegister":       ["Resource", "Attribute", "Dimension", "Form", "Template", "Command"],
+        "AccountingRegister":         ["Dimension", "Resource", "Attribute", "Form", "Template", "Command"],
+        "CalculationRegister":        ["Resource", "Attribute", "Dimension", "Recalculation", "Form", "Template", "Command"],
+        "DocumentJournal":            ["Column", "Form", "Template", "Command"],
+        "Table":                      ["Field", "Form", "Command", "Template"],
+        "ExternalDataSource":         ["Table", "Cube", "Function"],
+        "Cube":                       ["DimensionTable", "Dimension", "Resource", "Form", "Command", "Template"],
+        "DimensionTable":             ["Field", "Form", "Command", "Template"],
+        "FilterCriterion":            ["Form", "Command"],
+        "SettingsStorage":            ["Form", "Template"],
+        "TabularSection":             ["Attribute"],
+    }
+
+
+def find_child_anchor(container, tag, obj_type):
+    """Элемент <ChildObjects>, ПЕРЕД которым встаёт новый <tag>; None — дописать в конец.
+    Сразу за последним элементом своего тега, иначе перед первым элементом группы, идущей
+    по канону вида позже. Вид или тег вне канона — None, как раньше."""
+    children = [c for c in container if isinstance(c.tag, str)]
+    last_idx = -1
+    for i, c in enumerate(children):
+        if c.tag.rsplit('}', 1)[-1] == tag:
+            last_idx = i
+    if last_idx >= 0:
+        return children[last_idx + 1] if last_idx + 1 < len(children) else None
+    order = object_child_order().get(obj_type)
+    if not order or tag not in order:
+        return None
+    later = order[order.index(tag) + 1:]
+    for c in children:
+        if c.tag.rsplit('}', 1)[-1] in later:
+            return c
+    return None
+
+
+def insert_into_own_child_objects_by_canon(text, fragment, tag, obj_type):
+    """Вставка ОДНОГО узла <tag> (fragment — с отступом прямого ребёнка) в СОБСТВЕННЫЙ <ChildObjects>
+    объекта на место по канону вида — как find_child_anchor, только по тексту: за последним своим тегом,
+    иначе перед первой группой, идущей по канону позже, иначе перед закрывающим тегом. Свой контейнер
+    открывается первым (свойства объекта <ChildObjects> не содержат) и закрывается последним: вложенные
+    <ChildObjects> табличных частей лежат внутри него, поиск «первого </ChildObjects>» уводил вставку в ТЧ.
+    Прямые дети — по глубине вложенности, не по отступу. Строку с одним тегом дополняем целой строкой,
+    перевод строки — из самого файла. None — своего <ChildObjects> у объекта нет."""
+    eol = "\r\n" if "\r\n" in text else "\n"
+    frag = fragment.rstrip().lstrip("\r\n").replace("\r\n", "\n").replace("\n", eol)
+    m_open = re.search(r'<ChildObjects\b[^>]*?(/?)>', text)
+    if not m_open:
+        return None
+
+    def line_indent(p):
+        # Отступ строки до позиции p; None — перед p на строке есть что-то кроме пробелов
+        ls = text.rfind("\n", 0, p) + 1
+        return text[ls:p] if not text[ls:p].strip() else None
+
+    if m_open.group(1):
+        # Контейнер самозакрытый — детей у него нет, раскрыть с единственным узлом
+        ind = line_indent(m_open.start()) or ""
+        return text[:m_open.start()] + "<ChildObjects>" + eol + frag + eol + ind + "</ChildObjects>" + text[m_open.end():]
+    m_close = None
+    for m_close in re.finditer(r'</ChildObjects\s*>', text):
+        pass
+    if m_close is None or m_close.start() < m_open.end():
+        return None
+    starts = []
+    depth = 0
+    for m in re.finditer(r'<(/?)([\w:.-]+)[^>]*?(/?)>', text[m_open.end():m_close.start()]):
+        if m.group(1):
+            depth -= 1
+            continue
+        if depth == 0:
+            starts.append((m_open.end() + m.start(), m.group(2).rsplit(':', 1)[-1]))
+        if not m.group(3):
+            depth += 1
+    pos = m_close.start()
+    last_idx = max((i for i, s in enumerate(starts) if s[1] == tag), default=-1)
+    order = object_child_order().get(obj_type) or []
+    if last_idx >= 0:
+        if last_idx + 1 < len(starts):
+            pos = starts[last_idx + 1][0]
+    elif tag in order:
+        later = order[order.index(tag) + 1:]
+        pos = next((p for p, t in starts if t in later), pos)
+    if line_indent(pos) is not None:
+        ls = text.rfind("\n", 0, pos) + 1
+        return text[:ls] + frag + eol + text[ls:]
+    return text[:pos] + frag.lstrip() + text[pos:]
+
+
+def insert_own_child_or_die(text, fragment, tag, obj_type, obj_file):
+    """insert_into_own_child_objects_by_canon, но своего <ChildObjects> нет — создать его последним
+    ребёнком элемента объекта; вставить всё равно некуда — отказ, а не молчаливое «добавлено»."""
+    if not re.search(r'<ChildObjects\b', text):
+        m_end = None
+        for m_end in re.finditer(r'</' + re.escape(obj_type) + r'\s*>', text):
+            pass
+        if m_end:
+            ls = text.rfind("\n", 0, m_end.start()) + 1
+            pre = text[ls:m_end.start()]
+            if not pre.strip():
+                eol = "\r\n" if "\r\n" in text else "\n"
+                text = text[:ls] + pre + "\t<ChildObjects/>" + eol + text[ls:]
+            else:
+                text = text[:m_end.start()] + "<ChildObjects/>" + text[m_end.start():]
+    result = insert_into_own_child_objects_by_canon(text, fragment, tag, obj_type)
+    if result is None:
+        print(f"Cannot insert <{tag}>: no own <ChildObjects> in {obj_file}", file=sys.stderr)
+        sys.exit(1)
+    return result
 
 
 def decode_numeric_entities(s):
@@ -1477,7 +1591,12 @@ def main():
 
         form_el = etree.Element(f"{{{MD_NS}}}Form")
         form_el.text = form_name
-        insert_before_closing(child_objs, form_el, "\t\t\t")
+        # Место — по канону вида (у документа форма до ТЧ, у справочника после)
+        anchor = find_child_anchor(child_objs, "Form", localname(obj_el))
+        if anchor is not None:
+            insert_before_ref(child_objs, form_el, anchor, "\t\t\t")
+        else:
+            insert_before_closing(child_objs, form_el, "\t\t\t")
 
         save_xml_bom(obj_tree, obj_file)
         info(f"  Registered form in: {obj_file}")
@@ -2156,16 +2275,17 @@ def main():
         # Collect existing names for dedup — только прямые дети своего ChildObjects
         existing_names = get_own_child_object_names(obj_file)
 
-        all_attr_xml = ""
         added = 0
         for attr in attrs_to_add:
             if attr["Name"] in existing_names:
                 continue
-            all_attr_xml += "\r\n" + build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t", attr.get("Kind", "Attribute"))
+            kind = attr.get("Kind", "Attribute")
+            obj_content = insert_own_child_or_die(
+                obj_content, build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t", kind),
+                kind, type_name, obj_file)
             added += 1
 
         if added > 0:
-            obj_content = insert_into_own_child_objects(obj_content, all_attr_xml)
             write_utf8_bom(obj_file, obj_content)
             info(f"  Merged {added} attribute(s) into: {obj_file}")
 
@@ -2355,21 +2475,13 @@ def main():
         insert_attrs = [a for a in src_attrs if a["Name"] not in existing_child_names]
         insert_ts = [t for t in src_ts if t["Name"] not in existing_child_names]
 
-        # Generate full object XML with attributes and TS
+        # Узлы заимствуемого содержимого: (тег, XML). Место каждому — по канону вида при вставке
         content_parts = []
-        # Порядок как у платформы: реквизиты (измерения, ресурсы), ТЧ, затем признаки учёта плана счетов
-        flag_kinds = ("AccountingFlag", "ExtDimensionAccountingFlag")
         for attr in insert_attrs:
-            if attr.get("Kind") in flag_kinds:
-                continue
-            content_parts.append(build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t", attr.get("Kind", "Attribute")))
+            kind = attr.get("Kind", "Attribute")
+            content_parts.append((kind, build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t", kind)))
         for ts in insert_ts:
-            content_parts.append(build_adopted_tabular_section_xml(ts["Name"], ts["Uuid"], ts["GeneratedTypes"], ts["Attributes"], "\t\t\t"))
-        for fk in flag_kinds:
-            for attr in insert_attrs:
-                if attr.get("Kind") == fk:
-                    content_parts.append(build_adopted_attribute_xml(attr["Name"], attr["Uuid"], attr["TypeXml"], "\t\t\t", fk))
-        adopted_content = "\n".join(content_parts).rstrip()
+            content_parts.append(("TabularSection", build_adopted_tabular_section_xml(ts["Name"], ts["Uuid"], ts["GeneratedTypes"], ts["Attributes"], "\t\t\t")))
 
         # Inject extra properties into the object's OWN Properties only — idempotent and anchored to the
         # first ExtendedConfigurationObject (the object's). On re-borrow, adopted attributes each have their
@@ -2386,8 +2498,8 @@ def main():
                 obj_content = obj_content.replace("</ExtendedConfigurationObject>", f"</ExtendedConfigurationObject>{props_xml}", 1)
 
         # Добавить заимствованное содержимое в ChildObjects объекта (там уже может лежать <Form>)
-        if adopted_content:
-            obj_content = insert_into_own_child_objects(obj_content, f"\r\n{adopted_content}")
+        for part_tag, part_xml in content_parts:
+            obj_content = insert_own_child_or_die(obj_content, part_xml, part_tag, type_name, obj_file)
 
         write_utf8_bom(obj_file, obj_content)
         info(f"  Enriched object: {obj_file}")

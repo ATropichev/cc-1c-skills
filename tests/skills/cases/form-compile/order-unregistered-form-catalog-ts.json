@@ -1,0 +1,43 @@
+{
+  "name": "Авторегистрация формы: в свой ChildObjects объекта (не во вложенный у ТЧ), после ТЧ и перед командой (#123)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Catalog",
+        "name": "Товары",
+        "attributes": [
+          "Артикул: String(25)"
+        ],
+        "tabularSections": {
+          "Штрихкоды": [
+            "Штрихкод: String(50)"
+          ]
+        },
+        "commands": {
+          "Печать": {
+            "group": "FormCommandBarImportant"
+          }
+        }
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "outputPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "validatePath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml",
+  "skipPlatformVerify": "форма регистрируется без метаданных (form-add не вызывается) — проверяется только место регистрации; такую конфигурацию платформа не загрузит",
+  "input": {
+    "title": "Товар",
+    "elements": [
+      {
+        "label": "Подпись",
+        "title": "Форма"
+      }
+    ]
+  }
+}

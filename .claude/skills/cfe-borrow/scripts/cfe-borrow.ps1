@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.50 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.51 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -281,21 +281,150 @@ function Get-OwnChildObjectNames {
 	return $names
 }
 
-# Вставка в СОБСТВЕННЫЙ <ChildObjects> объекта. Свой контейнер закрывается в файле последним:
-# объект в файле один, а вложенные <ChildObjects> табличных частей закрываются раньше. Замена по
-# всем вхождениям раскидывала реквизиты по каждой ТЧ — ps1 рвал XML, py прятал ТЧ внутрь ТЧ.
-function Insert-IntoOwnChildObjects {
-	param([string]$text, [string]$content)
-
-	$closeIdx = $text.LastIndexOf('</ChildObjects>')
-	if ($closeIdx -ge 0) {
-		return $text.Substring(0, $closeIdx) + "${content}`r`n`t`t" + $text.Substring($closeIdx)
+# Порядок групп в <ChildObjects> объекта по виду. Это xs:sequence <Вид>ChildObjects из MDClasses XSD,
+# сверенный выгрузкой платформы: выгрузка сама ставит группы в этот порядок, так что вставка не на место
+# даёт дифф при следующей выгрузке. Единого порядка нет — у документа Form стоит до TabularSection.
+function Get-ObjectChildOrder {
+	return @{
+		"Catalog"                    = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Document"                   = @("Attribute", "Form", "TabularSection", "Template", "Command")
+		"ExchangePlan"               = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ChartOfCharacteristicTypes" = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ChartOfAccounts"            = @("Attribute", "TabularSection", "AccountingFlag", "ExtDimensionAccountingFlag", "Form", "Template", "Command")
+		"ChartOfCalculationTypes"    = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"BusinessProcess"            = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Task"                       = @("Attribute", "TabularSection", "Form", "Template", "AddressingAttribute", "Command")
+		"DataProcessor"              = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Report"                     = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ExternalDataProcessor"      = @("Attribute", "TabularSection", "Form", "Template")
+		"ExternalReport"             = @("Attribute", "TabularSection", "Form", "Template")
+		"Enum"                       = @("EnumValue", "Form", "Template", "Command")
+		"InformationRegister"        = @("Resource", "Attribute", "Dimension", "Form", "Template", "Command")
+		"AccumulationRegister"       = @("Resource", "Attribute", "Dimension", "Form", "Template", "Command")
+		"AccountingRegister"         = @("Dimension", "Resource", "Attribute", "Form", "Template", "Command")
+		"CalculationRegister"        = @("Resource", "Attribute", "Dimension", "Recalculation", "Form", "Template", "Command")
+		"DocumentJournal"            = @("Column", "Form", "Template", "Command")
+		"Table"                      = @("Field", "Form", "Command", "Template")
+		"ExternalDataSource"         = @("Table", "Cube", "Function")
+		"Cube"                       = @("DimensionTable", "Dimension", "Resource", "Form", "Command", "Template")
+		"DimensionTable"             = @("Field", "Form", "Command", "Template")
+		"FilterCriterion"            = @("Form", "Command")
+		"SettingsStorage"            = @("Form", "Template")
+		"TabularSection"             = @("Attribute")
 	}
-	# Своего закрывающего тега нет — значит контейнер самозакрытый (детей у него нет, вложенных тоже)
-	$selfMatches = [regex]::Matches($text, '<ChildObjects\s*/>')
-	if ($selfMatches.Count -eq 0) { return $text }
-	$m = $selfMatches[$selfMatches.Count - 1]
-	return $text.Substring(0, $m.Index) + "<ChildObjects>${content}`r`n`t`t</ChildObjects>" + $text.Substring($m.Index + $m.Length)
+}
+
+# Элемент <ChildObjects>, ПЕРЕД которым встаёт новый <tag>; $null — дописать в конец.
+# Сразу за последним элементом своего тега, иначе перед первым элементом группы, идущей
+# по канону вида позже. Вид или тег вне канона — $null, как раньше.
+function Find-ChildAnchor($container, [string]$tag, [string]$objType) {
+	$children = New-Object System.Collections.Generic.List[object]
+	foreach ($c in $container.ChildNodes) { if ($c.NodeType -eq 'Element') { $children.Add($c) } }
+	$lastIdx = -1
+	for ($i = 0; $i -lt $children.Count; $i++) {
+		if ($children[$i].LocalName -ceq $tag) { $lastIdx = $i }
+	}
+	if ($lastIdx -ge 0) {
+		if ($lastIdx + 1 -lt $children.Count) { return $children[$lastIdx + 1] }
+		return $null
+	}
+	$order = (Get-ObjectChildOrder)[$objType]
+	if (-not $order) { return $null }
+	$tagIdx = [array]::IndexOf([string[]]$order, $tag)
+	if ($tagIdx -lt 0) { return $null }
+	$later = @($order | Select-Object -Skip ($tagIdx + 1))
+	foreach ($c in $children) {
+		if ($later -ccontains $c.LocalName) { return $c }
+	}
+	return $null
+}
+
+# Вставка ОДНОГО узла <tag> ($fragment — с отступом прямого ребёнка) в СОБСТВЕННЫЙ <ChildObjects>
+# объекта на место по канону вида — как Find-ChildAnchor, только по тексту: за последним своим тегом,
+# иначе перед первой группой, идущей по канону позже, иначе перед закрывающим тегом. Свой контейнер
+# открывается первым (свойства объекта <ChildObjects> не содержат) и закрывается последним: вложенные
+# <ChildObjects> табличных частей лежат внутри него, поиск «первого </ChildObjects>» уводил вставку в ТЧ.
+# Прямые дети — по глубине вложенности, не по отступу. Строку с одним тегом дополняем целой строкой,
+# перевод строки — из самого файла. $null — своего <ChildObjects> у объекта нет.
+function Insert-IntoOwnChildObjectsByCanon {
+	param([string]$text, [string]$fragment, [string]$tag, [string]$objType)
+
+	$eol = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+	$frag = ($fragment.TrimEnd().TrimStart([char[]]"`r`n") -replace "`r`n", "`n") -replace "`n", $eol
+	$mOpen = [regex]::Match($text, '<ChildObjects\b[^>]*?(/?)>')
+	if (-not $mOpen.Success) { return $null }
+
+	# Начало строки и отступ до позиции p; Indent = $null — перед p на строке есть что-то кроме пробелов
+	$lineAt = {
+		param([int]$p)
+		$ls = if ($p -gt 0) { $text.LastIndexOf("`n", $p - 1) + 1 } else { 0 }
+		$pre = $text.Substring($ls, $p - $ls)
+		@{ Start = $ls; Indent = $(if ($pre.Trim().Length -eq 0) { $pre } else { $null }) }
+	}
+
+	if ($mOpen.Groups[1].Value) {
+		# Контейнер самозакрытый — детей у него нет, раскрыть с единственным узлом
+		$ind = (& $lineAt $mOpen.Index).Indent
+		if ($null -eq $ind) { $ind = "" }
+		return $text.Substring(0, $mOpen.Index) + "<ChildObjects>" + $eol + $frag + $eol + $ind + "</ChildObjects>" + $text.Substring($mOpen.Index + $mOpen.Length)
+	}
+	$closes = [regex]::Matches($text, '</ChildObjects\s*>')
+	if ($closes.Count -eq 0) { return $null }
+	$mClose = $closes[$closes.Count - 1]
+	$bodyStart = $mOpen.Index + $mOpen.Length
+	if ($mClose.Index -lt $bodyStart) { return $null }
+	$starts = New-Object System.Collections.Generic.List[object]
+	$depth = 0
+	foreach ($m in [regex]::Matches($text.Substring($bodyStart, $mClose.Index - $bodyStart), '<(/?)([\w:.-]+)[^>]*?(/?)>')) {
+		if ($m.Groups[1].Value) { $depth--; continue }
+		if ($depth -eq 0) {
+			$nm = $m.Groups[2].Value
+			$starts.Add(@{ Pos = $bodyStart + $m.Index; Tag = $nm.Substring($nm.LastIndexOf(':') + 1) })
+		}
+		if (-not $m.Groups[3].Value) { $depth++ }
+	}
+	$pos = $mClose.Index
+	$lastIdx = -1
+	for ($i = 0; $i -lt $starts.Count; $i++) { if ($starts[$i].Tag -ceq $tag) { $lastIdx = $i } }
+	$order = (Get-ObjectChildOrder)[$objType]
+	if ($lastIdx -ge 0) {
+		if ($lastIdx + 1 -lt $starts.Count) { $pos = $starts[$lastIdx + 1].Pos }
+	} elseif ($order -and ($order -ccontains $tag)) {
+		$later = @($order | Select-Object -Skip ([array]::IndexOf([string[]]$order, $tag) + 1))
+		foreach ($s in $starts) { if ($later -ccontains $s.Tag) { $pos = $s.Pos; break } }
+	}
+	$line = & $lineAt $pos
+	if ($null -ne $line.Indent) {
+		return $text.Substring(0, $line.Start) + $frag + $eol + $text.Substring($line.Start)
+	}
+	return $text.Substring(0, $pos) + $frag.TrimStart() + $text.Substring($pos)
+}
+
+# Insert-IntoOwnChildObjectsByCanon, но своего <ChildObjects> нет — создать его последним ребёнком
+# элемента объекта; вставить всё равно некуда — отказ, а не молчаливое «добавлено».
+function Insert-OwnChildOrDie {
+	param([string]$text, [string]$fragment, [string]$tag, [string]$objType, [string]$objFile)
+
+	if (-not [regex]::IsMatch($text, '<ChildObjects\b')) {
+		$ends = [regex]::Matches($text, '</' + [regex]::Escape($objType) + '\s*>')
+		if ($ends.Count -gt 0) {
+			$mEnd = $ends[$ends.Count - 1]
+			$ls = if ($mEnd.Index -gt 0) { $text.LastIndexOf("`n", $mEnd.Index - 1) + 1 } else { 0 }
+			$pre = $text.Substring($ls, $mEnd.Index - $ls)
+			if ($pre.Trim().Length -eq 0) {
+				$eol = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+				$text = $text.Substring(0, $ls) + $pre + "`t<ChildObjects/>" + $eol + $text.Substring($ls)
+			} else {
+				$text = $text.Substring(0, $mEnd.Index) + "<ChildObjects/>" + $text.Substring($mEnd.Index)
+			}
+		}
+	}
+	$result = Insert-IntoOwnChildObjectsByCanon $text $fragment $tag $objType
+	if ($null -eq $result) {
+		Write-Error "Cannot insert <${tag}>: no own <ChildObjects> in $objFile"
+		exit 1
+	}
+	return $result
 }
 
 # --- 1. Resolve paths ---
@@ -1610,7 +1739,12 @@ function Register-FormInObject {
 
 	$trailing = $childObjs.LastChild
 	$ws = $objDoc.CreateWhitespace("`r`n`t`t`t")
-	if ($trailing -and ($trailing.NodeType -eq 'Whitespace' -or $trailing.NodeType -eq 'SignificantWhitespace')) {
+	# Место — по канону вида (у документа форма до ТЧ, у справочника после)
+	$anchor = Find-ChildAnchor $childObjs "Form" $objEl.LocalName
+	if ($anchor) {
+		$childObjs.InsertBefore($formEl, $anchor) | Out-Null
+		$childObjs.InsertBefore($ws, $anchor) | Out-Null
+	} elseif ($trailing -and ($trailing.NodeType -eq 'Whitespace' -or $trailing.NodeType -eq 'SignificantWhitespace')) {
 		$childObjs.InsertBefore($ws, $trailing) | Out-Null
 		$childObjs.InsertBefore($formEl, $trailing) | Out-Null
 	} else {
@@ -2524,20 +2658,17 @@ function Merge-AttributesIntoObject {
 	}
 	if (-not $objEl) { Warn "No type element in $objFile"; return }
 
+	# Нет своего <ChildObjects> — его создаст Insert-OwnChildOrDie
 	$childObjs = $objEl.SelectSingleNode("md:ChildObjects", $objNs)
-	if (-not $childObjs) {
-		$childObjs = $objDoc.CreateElement("ChildObjects", $script:mdNs)
-		$objEl.AppendChild($objDoc.CreateWhitespace("`r`n`t`t")) | Out-Null
-		$objEl.AppendChild($childObjs) | Out-Null
-		$objEl.AppendChild($objDoc.CreateWhitespace("`r`n`t")) | Out-Null
-	}
 
-	# Collect existing attribute names for dedup
+	# Имена всех прямых детей своего ChildObjects — дедуп для любого вида (реквизит, измерение, признак)
 	$existingNames = @{}
-	foreach ($c in $childObjs.ChildNodes) {
-		if ($c.NodeType -ne 'Element' -or $c.LocalName -ne 'Attribute') { continue }
-		$nameNode = $c.SelectSingleNode("md:Properties/md:Name", $objNs)
-		if ($nameNode) { $existingNames[$nameNode.InnerText] = $true }
+	if ($childObjs) {
+		foreach ($c in $childObjs.ChildNodes) {
+			if ($c.NodeType -ne 'Element') { continue }
+			$nameNode = $c.SelectSingleNode("md:Properties/md:Name", $objNs)
+			if ($nameNode) { $existingNames[$nameNode.InnerText.Trim()] = $true }
+		}
 	}
 
 	$added = 0
@@ -2548,11 +2679,11 @@ function Merge-AttributesIntoObject {
 
 	if ($added -gt 0) {
 		# Build all adopted attributes as text and do string-level insertion
-		$allAttrXml = ""
+		$attrParts = New-Object System.Collections.Generic.List[object]
 		foreach ($attr in $attrsToAdd) {
 			if ($existingNames.ContainsKey($attr.Name)) { continue }
 			$kind = if ($attr.Kind) { $attr.Kind } else { "Attribute" }
-			$allAttrXml += "`r`n" + (Build-AdoptedAttributeXml $attr.Name $attr.Uuid $attr.TypeXml "`t`t`t" $kind)
+			$attrParts.Add(@{ Tag = $kind; Xml = (Build-AdoptedAttributeXml $attr.Name $attr.Uuid $attr.TypeXml "`t`t`t" $kind) })
 		}
 
 		# Save via text manipulation to avoid namespace issues with InnerXml
@@ -2572,7 +2703,9 @@ function Merge-AttributesIntoObject {
 		# Самозакрытый элемент раскрывается текстом, а не пробельным узлом в DOM: тот давал
 		# лишнюю строку с табуляцией перед первым <Attribute> (у Конфигуратора пустых строк нет).
 		# Стоит ДО Finalize-XmlText, чтобы схлопывание пустых тегов накрыло и вставленные реквизиты.
-		$text3 = Insert-IntoOwnChildObjects $text3 $allAttrXml
+		foreach ($part in $attrParts) {
+			$text3 = Insert-OwnChildOrDie $text3 $part.Xml $part.Tag $typeName $objFile
+		}
 		$text3 = Finalize-XmlText $text3 $style3
 		$writeBom3 = ($null -eq $style3) -or $style3.bom
 		[System.IO.File]::WriteAllText($objFile, $text3, (New-Object System.Text.UTF8Encoding($writeBom3)))
@@ -2779,25 +2912,15 @@ function Borrow-MainAttribute {
 	$insertAttrs = @($srcAttrs | Where-Object { -not $existingChildNames.ContainsKey($_.Name) })
 	$insertTS = @($srcTS | Where-Object { -not $existingChildNames.ContainsKey($_.Name) })
 
-	# Generate full object XML with attributes and TS
-	$contentSb = New-Object System.Text.StringBuilder
-	# Порядок как у платформы: реквизиты (измерения, ресурсы), ТЧ, затем признаки учёта плана счетов
-	$flagKinds = @('AccountingFlag','ExtDimensionAccountingFlag')
-	foreach ($attr in @($insertAttrs | Where-Object { $_.Kind -notin $flagKinds })) {
+	# Узлы заимствуемого содержимого: тег + XML. Место каждому — по канону вида при вставке
+	$contentParts = New-Object System.Collections.Generic.List[object]
+	foreach ($attr in $insertAttrs) {
 		$attrKind = if ($attr.Kind) { $attr.Kind } else { "Attribute" }
-		$attrXml = Build-AdoptedAttributeXml $attr.Name $attr.Uuid $attr.TypeXml "`t`t`t" $attrKind
-		$contentSb.AppendLine($attrXml) | Out-Null
+		$contentParts.Add(@{ Tag = $attrKind; Xml = (Build-AdoptedAttributeXml $attr.Name $attr.Uuid $attr.TypeXml "`t`t`t" $attrKind) })
 	}
 	foreach ($ts in $insertTS) {
-		$tsXml = Build-AdoptedTabularSectionXml $ts.Name $ts.Uuid $ts.GeneratedTypes $ts.Attributes "`t`t`t"
-		$contentSb.AppendLine($tsXml) | Out-Null
+		$contentParts.Add(@{ Tag = "TabularSection"; Xml = (Build-AdoptedTabularSectionXml $ts.Name $ts.Uuid $ts.GeneratedTypes $ts.Attributes "`t`t`t") })
 	}
-	foreach ($fk in $flagKinds) {
-		foreach ($attr in @($insertAttrs | Where-Object { $_.Kind -eq $fk })) {
-			$contentSb.AppendLine((Build-AdoptedAttributeXml $attr.Name $attr.Uuid $attr.TypeXml "`t`t`t" $fk)) | Out-Null
-		}
-	}
-	$adoptedContent = $contentSb.ToString().TrimEnd()
 
 	# Inject extra properties into the object's OWN Properties only — idempotent and anchored to the
 	# first ExtendedConfigurationObject (the object's). On re-borrow, adopted attributes each have their
@@ -2816,8 +2939,8 @@ function Borrow-MainAttribute {
 	}
 
 	# Добавить заимствованное содержимое в ChildObjects объекта (там уже может лежать <Form>)
-	if ($adoptedContent) {
-		$objContent = Insert-IntoOwnChildObjects $objContent "`r`n${adoptedContent}"
+	foreach ($part in $contentParts) {
+		$objContent = Insert-OwnChildOrDie $objContent $part.Xml $part.Tag $typeName $objFile
 	}
 
 	$encBom = New-Object System.Text.UTF8Encoding($true)

@@ -1,4 +1,4 @@
-﻿# form-add v1.30 — Add managed form to 1C config object
+﻿# form-add v1.31 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -737,6 +737,64 @@ if (Test-Path $modulePath) {
 	[System.IO.File]::WriteAllText($modulePath, $moduleBsl, $encBom)
 }
 
+# Порядок групп в <ChildObjects> объекта по виду. Это xs:sequence <Вид>ChildObjects из MDClasses XSD,
+# сверенный выгрузкой платформы: выгрузка сама ставит группы в этот порядок, так что вставка не на место
+# даёт дифф при следующей выгрузке. Единого порядка нет — у документа Form стоит до TabularSection.
+function Get-ObjectChildOrder {
+	return @{
+		"Catalog"                    = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Document"                   = @("Attribute", "Form", "TabularSection", "Template", "Command")
+		"ExchangePlan"               = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ChartOfCharacteristicTypes" = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ChartOfAccounts"            = @("Attribute", "TabularSection", "AccountingFlag", "ExtDimensionAccountingFlag", "Form", "Template", "Command")
+		"ChartOfCalculationTypes"    = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"BusinessProcess"            = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Task"                       = @("Attribute", "TabularSection", "Form", "Template", "AddressingAttribute", "Command")
+		"DataProcessor"              = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"Report"                     = @("Attribute", "TabularSection", "Form", "Template", "Command")
+		"ExternalDataProcessor"      = @("Attribute", "TabularSection", "Form", "Template")
+		"ExternalReport"             = @("Attribute", "TabularSection", "Form", "Template")
+		"Enum"                       = @("EnumValue", "Form", "Template", "Command")
+		"InformationRegister"        = @("Resource", "Attribute", "Dimension", "Form", "Template", "Command")
+		"AccumulationRegister"       = @("Resource", "Attribute", "Dimension", "Form", "Template", "Command")
+		"AccountingRegister"         = @("Dimension", "Resource", "Attribute", "Form", "Template", "Command")
+		"CalculationRegister"        = @("Resource", "Attribute", "Dimension", "Recalculation", "Form", "Template", "Command")
+		"DocumentJournal"            = @("Column", "Form", "Template", "Command")
+		"Table"                      = @("Field", "Form", "Command", "Template")
+		"ExternalDataSource"         = @("Table", "Cube", "Function")
+		"Cube"                       = @("DimensionTable", "Dimension", "Resource", "Form", "Command", "Template")
+		"DimensionTable"             = @("Field", "Form", "Command", "Template")
+		"FilterCriterion"            = @("Form", "Command")
+		"SettingsStorage"            = @("Form", "Template")
+		"TabularSection"             = @("Attribute")
+	}
+}
+
+# Элемент <ChildObjects>, ПЕРЕД которым встаёт новый <tag>; $null — дописать в конец.
+# Сразу за последним элементом своего тега, иначе перед первым элементом группы, идущей
+# по канону вида позже. Вид или тег вне канона — $null, как раньше.
+function Find-ChildAnchor($container, [string]$tag, [string]$objType) {
+	$children = New-Object System.Collections.Generic.List[object]
+	foreach ($c in $container.ChildNodes) { if ($c.NodeType -eq 'Element') { $children.Add($c) } }
+	$lastIdx = -1
+	for ($i = 0; $i -lt $children.Count; $i++) {
+		if ($children[$i].LocalName -ceq $tag) { $lastIdx = $i }
+	}
+	if ($lastIdx -ge 0) {
+		if ($lastIdx + 1 -lt $children.Count) { return $children[$lastIdx + 1] }
+		return $null
+	}
+	$order = (Get-ObjectChildOrder)[$objType]
+	if (-not $order) { return $null }
+	$tagIdx = [array]::IndexOf([string[]]$order, $tag)
+	if ($tagIdx -lt 0) { return $null }
+	$later = @($order | Select-Object -Skip ($tagIdx + 1))
+	foreach ($c in $children) {
+		if ($later -ccontains $c.LocalName) { return $c }
+	}
+	return $null
+}
+
 # --- Фаза 4: Регистрация в родительском объекте ---
 
 $childObjects = $xmlDoc.SelectSingleNode("//md:${objectType}/md:ChildObjects", $nsMgr)
@@ -752,38 +810,13 @@ if (-not $alreadyRegistered) {
 $formElem = $xmlDoc.CreateElement("Form", "http://v8.1c.ru/8.3/MDClasses")
 $formElem.InnerText = $FormName
 
-# Ищем первый <Template> для вставки перед ним
-$firstTemplate = $childObjects.SelectSingleNode("md:Template", $nsMgr)
-# Ищем первую <TabularSection> для вставки перед ней (если нет Template)
-$firstTabular = $childObjects.SelectSingleNode("md:TabularSection", $nsMgr)
-
-# Определяем точку вставки: перед Template, перед TabularSection, или в конец
-$insertBefore = $null
-if ($firstTemplate) {
-	$insertBefore = $firstTemplate
-} elseif ($firstTabular) {
-	$insertBefore = $firstTabular
-}
+# Место — по канону вида: порядок групп у видов разный (у документа форма до ТЧ)
+$insertBefore = Find-ChildAnchor $childObjects "Form" $objectType
 
 if ($insertBefore) {
-	# Вставить перед найденным элементом, с переносом строки
-	$whitespace = $xmlDoc.CreateWhitespace("`n`t`t`t")
+	# Отступ перед insertBefore уже стоит и достаётся форме; свой перевод строки — после неё
 	$childObjects.InsertBefore($formElem, $insertBefore) | Out-Null
-	$childObjects.InsertBefore($whitespace, $formElem) | Out-Null
-	# Переставляем: whitespace перед formElem — неправильный порядок
-	# Правильно: formElem, затем whitespace перед insertBefore
-	# InsertBefore возвращает вставленный узел, порядок: ... formElem whitespace insertBefore ...
-	# На самом деле нам нужно: ... \n\t\t\tformElem \n\t\t\tinsertBefore
-	# Удалим и вставим правильно
-	$childObjects.RemoveChild($whitespace) | Out-Null
-	$childObjects.RemoveChild($formElem) | Out-Null
-
-	$childObjects.InsertBefore($formElem, $insertBefore) | Out-Null
-	# Whitespace нужен ДО formElem (перенос строки + отступ)
-	# Но перед insertBefore уже должен быть whitespace от предыдущего элемента
-	# Нам нужно добавить whitespace ПОСЛЕ formElem (перед insertBefore)
-	$ws = $xmlDoc.CreateWhitespace("`n`t`t`t")
-	$childObjects.InsertBefore($ws, $insertBefore) | Out-Null
+	$childObjects.InsertBefore($xmlDoc.CreateWhitespace("`n`t`t`t"), $insertBefore) | Out-Null
 } else {
 	# Добавить в конец ChildObjects
 	if ($childObjects.ChildNodes.Count -eq 0) {

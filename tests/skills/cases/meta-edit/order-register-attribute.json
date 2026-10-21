@@ -1,0 +1,13 @@
+{
+  "name": "Порядок ChildObjects: реквизит регистра сведений встаёт между ресурсами и измерениями (#123)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "InformationRegister", "name": "Цены",
+        "dimensions": ["Номенклатура: String(50)"], "resources": ["Цена: Number(15,2)"] },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    }
+  ],
+  "params": { "objectPath": "InformationRegisters/Цены" },
+  "input": { "add": { "attributes": ["Комментарий: String(100)"] } }
+}

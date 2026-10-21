@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.209 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.210 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -7381,6 +7381,92 @@ def _normalize_elements(defn):
     return defn
 
 
+def object_child_order():
+    """Порядок групп в <ChildObjects> объекта по виду. Это xs:sequence <Вид>ChildObjects из MDClasses XSD,
+    сверенный выгрузкой платформы: выгрузка сама ставит группы в этот порядок, так что вставка не на место
+    даёт дифф при следующей выгрузке. Единого порядка нет — у документа Form стоит до TabularSection."""
+    return {
+        "Catalog":                    ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Document":                   ["Attribute", "Form", "TabularSection", "Template", "Command"],
+        "ExchangePlan":               ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ChartOfCharacteristicTypes": ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ChartOfAccounts":            ["Attribute", "TabularSection", "AccountingFlag", "ExtDimensionAccountingFlag", "Form", "Template", "Command"],
+        "ChartOfCalculationTypes":    ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "BusinessProcess":            ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Task":                       ["Attribute", "TabularSection", "Form", "Template", "AddressingAttribute", "Command"],
+        "DataProcessor":              ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "Report":                     ["Attribute", "TabularSection", "Form", "Template", "Command"],
+        "ExternalDataProcessor":      ["Attribute", "TabularSection", "Form", "Template"],
+        "ExternalReport":             ["Attribute", "TabularSection", "Form", "Template"],
+        "Enum":                       ["EnumValue", "Form", "Template", "Command"],
+        "InformationRegister":        ["Resource", "Attribute", "Dimension", "Form", "Template", "Command"],
+        "AccumulationRegister":       ["Resource", "Attribute", "Dimension", "Form", "Template", "Command"],
+        "AccountingRegister":         ["Dimension", "Resource", "Attribute", "Form", "Template", "Command"],
+        "CalculationRegister":        ["Resource", "Attribute", "Dimension", "Recalculation", "Form", "Template", "Command"],
+        "DocumentJournal":            ["Column", "Form", "Template", "Command"],
+        "Table":                      ["Field", "Form", "Command", "Template"],
+        "ExternalDataSource":         ["Table", "Cube", "Function"],
+        "Cube":                       ["DimensionTable", "Dimension", "Resource", "Form", "Command", "Template"],
+        "DimensionTable":             ["Field", "Form", "Command", "Template"],
+        "FilterCriterion":            ["Form", "Command"],
+        "SettingsStorage":            ["Form", "Template"],
+        "TabularSection":             ["Attribute"],
+    }
+
+
+def insert_into_own_child_objects_by_canon(text, fragment, tag, obj_type):
+    """Вставка ОДНОГО узла <tag> (fragment — с отступом прямого ребёнка) в СОБСТВЕННЫЙ <ChildObjects>
+    объекта на место по канону вида — как find_child_anchor, только по тексту: за последним своим тегом,
+    иначе перед первой группой, идущей по канону позже, иначе перед закрывающим тегом. Свой контейнер
+    открывается первым (свойства объекта <ChildObjects> не содержат) и закрывается последним: вложенные
+    <ChildObjects> табличных частей лежат внутри него, поиск «первого </ChildObjects>» уводил вставку в ТЧ.
+    Прямые дети — по глубине вложенности, не по отступу. Строку с одним тегом дополняем целой строкой,
+    перевод строки — из самого файла. None — своего <ChildObjects> у объекта нет."""
+    eol = "\r\n" if "\r\n" in text else "\n"
+    frag = fragment.rstrip().lstrip("\r\n").replace("\r\n", "\n").replace("\n", eol)
+    m_open = re.search(r'<ChildObjects\b[^>]*?(/?)>', text)
+    if not m_open:
+        return None
+
+    def line_indent(p):
+        # Отступ строки до позиции p; None — перед p на строке есть что-то кроме пробелов
+        ls = text.rfind("\n", 0, p) + 1
+        return text[ls:p] if not text[ls:p].strip() else None
+
+    if m_open.group(1):
+        # Контейнер самозакрытый — детей у него нет, раскрыть с единственным узлом
+        ind = line_indent(m_open.start()) or ""
+        return text[:m_open.start()] + "<ChildObjects>" + eol + frag + eol + ind + "</ChildObjects>" + text[m_open.end():]
+    m_close = None
+    for m_close in re.finditer(r'</ChildObjects\s*>', text):
+        pass
+    if m_close is None or m_close.start() < m_open.end():
+        return None
+    starts = []
+    depth = 0
+    for m in re.finditer(r'<(/?)([\w:.-]+)[^>]*?(/?)>', text[m_open.end():m_close.start()]):
+        if m.group(1):
+            depth -= 1
+            continue
+        if depth == 0:
+            starts.append((m_open.end() + m.start(), m.group(2).rsplit(':', 1)[-1]))
+        if not m.group(3):
+            depth += 1
+    pos = m_close.start()
+    last_idx = max((i for i, s in enumerate(starts) if s[1] == tag), default=-1)
+    order = object_child_order().get(obj_type) or []
+    if last_idx >= 0:
+        if last_idx + 1 < len(starts):
+            pos = starts[last_idx + 1][0]
+    elif tag in order:
+        later = order[order.index(tag) + 1:]
+        pos = next((p for p, t in starts if t in later), pos)
+    if line_indent(pos) is not None:
+        ls = text.rfind("\n", 0, pos) + 1
+        return text[:ls] + frag + eol + text[ls:]
+    return text[:pos] + frag.lstrip() + text[pos:]
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
@@ -7891,26 +7977,16 @@ def main():
             # схлопнется в LF при чтении и файл будет переписан в LF (#44/#46/#47).
             with open(object_xml_path, 'r', encoding='utf-8-sig', newline='') as f:
                 raw_text = f.read()
-            # Перевод строки вставки берём из самого файла, а не из канона:
-            # правка существующего файла сохраняет его стиль.
-            eol = '\r\n' if '\r\n' in raw_text else '\n'
-
             # Check if already registered
             if f'<Form>{form_name}</Form>' not in raw_text:
-                # Insert before </ChildObjects>
-                if '</ChildObjects>' in raw_text:
-                    # Отступ вставки берём у закрывающего тега +1 уровень: подстановка
-                    # по голому '</ChildObjects>' удваивала бы уже присутствующий отступ
-                    # строки (получалось 5 табов вместо 3 — PS-порт через DOM даёт 3).
-                    raw_text = re.sub(r'([ \t]*)</ChildObjects>',
-                                      lambda m: m.group(1) + '\t' + f'<Form>{form_name}</Form>' + eol + m.group(1) + '</ChildObjects>',
-                                      raw_text, count=1)
-                elif '<ChildObjects/>' in raw_text:
-                    replacement = ('<ChildObjects>' + eol + f'\t\t\t<Form>{form_name}</Form>' + eol + '\t\t</ChildObjects>')
-                    raw_text = raw_text.replace('<ChildObjects/>', replacement, 1)
-
-                write_utf8_bom(object_xml_path, raw_text)
-                print(f"     Registered: <Form>{form_name}</Form> in {object_name}.xml")
+                # В свой ChildObjects объекта (не во вложенный у ТЧ), на место по канону вида;
+                # перевод строки вставки — из самого файла
+                m_kind = re.search(r'<MetaDataObject\b[^>]*>\s*<(\w+)', raw_text)
+                new_text = insert_into_own_child_objects_by_canon(
+                    raw_text, f'\t\t\t<Form>{form_name}</Form>', 'Form', m_kind.group(1) if m_kind else '')
+                if new_text is not None and new_text != raw_text:
+                    write_utf8_bom(object_xml_path, new_text)
+                    print(f"     Registered: <Form>{form_name}</Form> in {object_name}.xml")
 
     # --- 5. Summary ---
     el_count = _next_id
