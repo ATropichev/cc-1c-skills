@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.26 — Validate 1C managed form
+# form-validate v1.27 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1618,7 +1618,7 @@ def main():
             if dangling_paths:
                 shown = sorted(dangling_paths)
                 sample = ", ".join(shown[:3])
-                suffix = f" (\u0438 \u0435\u0449\u0451 {len(shown) - 3})" if len(shown) > 3 else ""
+                suffix = f" (and {len(shown) - 3} more)" if len(shown) > 3 else ""
                 report_error(f"Path(s) rooted at '{root_name}' but the form declares no MainAttribute: {sample}{suffix}")
             elif main_base is not None:
                 report_ok("Object paths: none dangling (MainAttribute not declared)")

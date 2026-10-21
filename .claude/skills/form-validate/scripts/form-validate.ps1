@@ -1,4 +1,4 @@
-﻿# form-validate v1.26 — Validate 1C managed form
+﻿# form-validate v1.27 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -861,7 +861,7 @@ if (-not $stopped -and $isExtension) {
 		if ($danglingPaths.Count -gt 0) {
 			$shown = @($danglingPaths.Keys | Sort-Object)
 			$sample = ($shown | Select-Object -First 3) -join ", "
-			$suffix = if ($shown.Count -gt 3) { " (и ещё $($shown.Count - 3))" } else { "" }
+			$suffix = if ($shown.Count -gt 3) { " (and $($shown.Count - 3) more)" } else { "" }
 			Report-Error "Path(s) rooted at '${rootName}' but the form declares no MainAttribute: $sample$suffix"
 		} elseif ($mainBase) {
 			Report-OK "Object paths: none dangling (MainAttribute not declared)"
