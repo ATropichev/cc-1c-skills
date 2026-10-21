@@ -6,12 +6,12 @@
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст и код возврата",
   "expect": {
     "stdoutContains": [
-      "HTTPService.ВнешнийAPI: право на сервис целиком не действует",
-      "HTTPService.ВнешнийAPI.URLTemplate.<Шаблон>.Method.<Метод>",
-      "WebService.ОбменДанными.Operation.<Операция>"
+      "HTTPService.ВнешнийAPI: a right on the whole service has no effect",
+      "HTTPService.ВнешнийAPI.URLTemplate.<Template>.Method.<Method>",
+      "WebService.ОбменДанными.Operation.<Operation>"
     ],
     "stdoutNotContains": [
-      "HTTPService.ВнешнийAPI.URLTemplate.Заказы.Method.Получить: право"
+      "HTTPService.ВнешнийAPI.URLTemplate.Заказы.Method.Получить: right"
     ]
   }
 }

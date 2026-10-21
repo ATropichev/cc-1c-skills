@@ -1,4 +1,4 @@
-﻿# role-validate v1.7 — Validate 1C role structure
+﻿# role-validate v1.8 — Validate 1C role structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -188,9 +188,9 @@ $script:kindOwners = @{
 
 # Подсказка формата для каждого вида сервиса: {0} подставляется как `Тип.Имя` из роли.
 $script:serviceLeafHints = @{
-	"WebService"         = "{0}.Operation.<Операция>"
-	"HTTPService"        = "{0}.URLTemplate.<Шаблон>.Method.<Метод>"
-	"IntegrationService" = "{0}.IntegrationServiceChannel.<Канал>"
+	"WebService"         = "{0}.Operation.<Operation>"
+	"HTTPService"        = "{0}.URLTemplate.<Template>.Method.<Method>"
+	"IntegrationService" = "{0}.IntegrationServiceChannel.<Channel>"
 }
 
 # Один и тот же вид под разными родителями имеет разный набор: измерение регистра —
@@ -281,11 +281,11 @@ function Get-NestedRights {
 function Format-TypeError {
 	param([string]$objName, [string]$objectType)
 	if ($script:noRightsTypes -contains $objectType) {
-		return "${objName}: тип '$objectType' не имеет прав в роли — блок нужно удалить"
+		return "${objName}: type '$objectType' has no rights in roles — remove the block"
 	}
 	$similar = Find-Similar -needle $objectType -haystack @($script:knownRights.Keys)
-	$sug = if ($similar.Count -gt 0) { " Возможно: $($similar -join ', ')?" } else { "" }
-	return "${objName}: неизвестный тип объекта '$objectType'.$sug"
+	$sug = if ($similar.Count -gt 0) { " Did you mean: $($similar -join ', ')?" } else { "" }
+	return "${objName}: unknown object type '$objectType'.$sug"
 }
 
 function Find-Similar {
@@ -474,15 +474,15 @@ foreach ($obj in $objects) {
 	if (-not $typeKnown) {
 		Report-Error (Format-TypeError $objName $objectType)
 	} elseif ($isNested -and $script:kindOwners.ContainsKey($nestedKind) -and $objectType -ne $script:kindOwners[$nestedKind]) {
-		Report-Error "${objName}: вид '$nestedKind' бывает только у $($script:kindOwners[$nestedKind])"
+		Report-Error "${objName}: kind '$nestedKind' exists only under $($script:kindOwners[$nestedKind])"
 	} elseif ($isNested -and $null -eq (Get-NestedRights $objectType $nestedKind)) {
-		Report-Error "${objName}: неизвестный вид вложенности '$nestedKind'"
+		Report-Error "${objName}: unknown nested kind '$nestedKind'"
 	} elseif (-not $isNested -and $script:serviceLeafHints.ContainsKey($objectType)) {
 		# Право на сервис целиком платформа игнорирует: проверяется лист (метод шаблона URL,
 		# операция, канал). Роль формально валидна и молча не работает — 403 на всех
 		# маршрутах, причина по симптому не читается. В Конфигураторе галки на корне сервиса
 		# нет вовсе, так что это недостижимое состояние, а не стилистика.
-		Report-Error "${objName}: право на сервис целиком не действует — назначайте права на вложенные объекты: $($script:serviceLeafHints[$objectType] -f $objName)"
+		Report-Error "${objName}: a right on the whole service has no effect — grant rights on nested objects: $($script:serviceLeafHints[$objectType] -f $objName)"
 	}
 
 	# Check rights
@@ -528,14 +528,14 @@ foreach ($obj in $objects) {
 		} elseif ($isNested) {
 			$validNested = Get-NestedRights $objectType $nestedKind
 			if ($null -ne $validNested -and $rName -notin $validNested) {
-				Report-Error "${objName}: право '$rName' недопустимо для вида '$nestedKind' (допустимо: $($validNested -join ', '))"
+				Report-Error "${objName}: right '$rName' is not allowed for kind '$nestedKind' (allowed: $($validNested -join ', '))"
 			}
 		} else {
 			$validRights = $script:knownRights[$objectType]
 			if ($rName -notin $validRights) {
 				$similar = Find-Similar -needle $rName -haystack $validRights
-				$sugStr = if ($similar.Count -gt 0) { " Возможно: $($similar -join ', ')?" } else { "" }
-				Report-Error "${objName}: право '$rName' не существует у типа '$objectType'.$sugStr"
+				$sugStr = if ($similar.Count -gt 0) { " Did you mean: $($similar -join ', ')?" } else { "" }
+				Report-Error "${objName}: right '$rName' does not exist for type '$objectType'.$sugStr"
 			}
 		}
 	}

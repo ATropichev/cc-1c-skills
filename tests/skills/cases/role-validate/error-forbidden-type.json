@@ -6,8 +6,8 @@
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст и код возврата",
   "expect": {
     "stdoutContains": [
-      "Enum.ЮрФизЛицо: тип 'Enum' не имеет прав в роли",
-      "CommonModule.ОбщегоНазначения: тип 'CommonModule' не имеет прав в роли"
+      "Enum.ЮрФизЛицо: type 'Enum' has no rights in roles",
+      "CommonModule.ОбщегоНазначения: type 'CommonModule' has no rights in roles"
     ]
   }
 }
