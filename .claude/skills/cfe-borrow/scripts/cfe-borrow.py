@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.54 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.55 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1954,8 +1954,19 @@ def main():
         with open(form_xml_path, "r", encoding="utf-8-sig") as fh:
             content = fh.read()
 
+        # Имена без учёта регистра, как у платформы (и у хеш-таблицы ps1): ключ — первое написание
         first_level = {}
+        first_seen = set()
         deep_paths = []
+        std_upper = {f.upper() for f in STANDARD_FIELDS}
+
+        def is_std(name):
+            return name.upper() in std_upper
+
+        def add_first(name):
+            if name.upper() not in first_seen:
+                first_seen.add(name.upper())
+                first_level[name] = True
 
         # Scan every data-binding tag (DataPath/TitleDataPath/FooterDataPath/HeaderDataPath/MultipleValue*)
         # for Объект.* references — picture-path tags carry picture indices, not data attributes.
@@ -1964,11 +1975,11 @@ def main():
                 path = m.group(1)
                 segments = path.split(".")
                 seg0 = segments[0]
-                if seg0 in STANDARD_FIELDS:
+                if is_std(seg0):
                     continue
-                first_level[seg0] = True
+                add_first(seg0)
                 if len(segments) >= 2:
-                    if segments[1] in STANDARD_FIELDS:
+                    if is_std(segments[1]):
                         continue
                     deep_paths.append(segments)
 
@@ -1978,11 +1989,11 @@ def main():
             path = m.group(1)
             segments = path.split(".")
             seg0 = segments[0]
-            if seg0 in STANDARD_FIELDS:
+            if is_std(seg0):
                 continue
-            first_level[seg0] = True
+            add_first(seg0)
             if len(segments) >= 2:
-                if segments[1] in STANDARD_FIELDS:
+                if is_std(segments[1]):
                     continue
                 deep_paths.append(segments)
 
@@ -1991,9 +2002,9 @@ def main():
         # и без её заимствования платформа отвергает форму: «Неверный путь к данным».
         for m in re.finditer(r'<AdditionalColumns table="' + root + r'\.(\w+)"', content):
             seg0 = m.group(1)
-            if seg0 in STANDARD_FIELDS:
+            if is_std(seg0):
                 continue
-            first_level[seg0] = True
+            add_first(seg0)
 
         # Текст запроса динамического списка — такое же место ссылки на реквизиты объекта, как DataPath.
         # Конфигуратор заимствует всё, что упомянуто в запросе: на эталоне Issue66Example2 это 21 из 27
@@ -2003,15 +2014,15 @@ def main():
         # реальному составу объекта, поэтому лишние слова из запроса безвредны.
         for qm in re.finditer(r'(?s)<QueryText>(.*?)</QueryText>', content):
             for w in re.finditer(r'\w+', qm.group(1)):
-                if w.group(0) in STANDARD_FIELDS:
+                if is_std(w.group(0)):
                     continue
-                first_level[w.group(0)] = True
+                add_first(w.group(0))
 
         # Deduplicate deep paths (each is the full segment list after the root)
         seen = set()
         unique_deep = []
         for dp in deep_paths:
-            key = ".".join(dp)
+            key = ".".join(dp).upper()
             if key not in seen:
                 seen.add(key)
                 unique_deep.append(dp)

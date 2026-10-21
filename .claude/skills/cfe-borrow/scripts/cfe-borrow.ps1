@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.54 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.55 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2771,7 +2771,7 @@ function Resolve-SingleRefTarget([string]$typeXml, [bool]$allowDefined = $true) 
 function Borrow-ReferenceTypeShells {
 	param([string[]]$typeXmls)
 
-	$refTypes = Collect-ReferenceTypes $typeXmls
+	$refTypes = @(Collect-ReferenceTypes $typeXmls)
 	Info "  Reference types to borrow: $($refTypes.Count)"
 
 	foreach ($rt in $refTypes) {
