@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.26 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.27 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -718,8 +718,8 @@ if ($childObjNode) {
 
 if ($script:stopped) { & $finalize; exit 1 }
 
-# Типы подобъекта метаданных: тексты <v8:Type>; определяемый тип и прочие наборы — меткой «#TypeSet»,
-# квалификаторы пропускаются.
+# Типы подобъекта метаданных: тексты <v8:Type>; определяемый тип — меткой «#DefinedType.<Имя>», прочие
+# наборы — «#TypeSet», квалификаторы пропускаются.
 function Get-MdTypeList {
 	param($el, $nsm)
 	$list = @()
@@ -728,7 +728,10 @@ function Get-MdTypeList {
 		foreach ($tn in $typeNode.ChildNodes) {
 			if ($tn.NodeType -ne 'Element') { continue }
 			if ($tn.LocalName -eq 'Type') { $list += $tn.InnerText.Trim() }
-			elseif ($tn.LocalName -eq 'TypeSet') { $list += '#TypeSet' }
+			elseif ($tn.LocalName -eq 'TypeSet') {
+				$dtm = [regex]::Match($tn.InnerText.Trim(), '^(?:\w+:)?DefinedType\.(.+)$')
+				$list += $(if ($dtm.Success) { "#DefinedType.$($dtm.Groups[1].Value)" } else { '#TypeSet' })
+			}
 		}
 	}
 	return ,$list
@@ -756,12 +759,22 @@ function Get-StdRefTypes {
 # нет — только стандартные.
 # ТЧ цели — дальше колонка этой ТЧ; Родитель и Владелец справочника — дальше по их типу. Правило
 # повторяется на каждом шаге. У составного типа (любой состав) дальше реквизита путь не разрешается.
-# Не замерено (определяемый, примитивный тип, перечисление, прочие стандартные реквизиты в середине
-# пути) — не проверяем. Ошибка — @(номер сегмента, текст), иначе $null.
+# Определяемый тип раскрывается по его составу в расширении (замер 8.3.27: путь через составной ОТ
+# отвергается и в конфигурации); ОТ нет в расширении — не проверяем, это проверка 19.
+# Не замерено (примитивный тип, перечисление, прочие стандартные реквизиты в середине пути) — не
+# проверяем. Ошибка — @(номер сегмента, текст), иначе $null.
 function Get-RefTailError {
 	param($types, [string[]]$segs, [int]$i)
 	while ($i -lt $segs.Count) {
-		$types = @($types)
+		$expanded = @()
+		foreach ($t in @($types)) {
+			if (([string]$t).StartsWith('#DefinedType.')) {
+				$dtEntry = $script:extObjIndex["DefinedType.$(([string]$t).Substring(13))"]
+				if (-not $dtEntry) { return $null }
+				$expanded += $dtEntry.Types
+			} else { $expanded += $t }
+		}
+		$types = $expanded
 		if ($types -contains '#TypeSet') { return $null }
 		if ($types.Count -ge 2) {
 			return @($i, "$($segs[$i - 1]) has a composite type — the path cannot continue past it")
@@ -1005,7 +1018,8 @@ if ($childObjNode) {
 		$ixExtDim = $objEl.SelectSingleNode("md:Properties/md:ExtDimensionTypes", $objNs)
 		$ixMaxExtDim = $objEl.SelectSingleNode("md:Properties/md:MaxExtDimensionCount", $objNs)
 		$script:extObjIndex["${typeName}.${childName}"] = @{ Names = $ixNames; TSColumns = $ixTSColumns; Owners = $ixOwners
-			ExtDimTypes = [bool]($ixExtDim -and $ixExtDim.InnerText.Trim() -and $ixMaxExtDim -and $ixMaxExtDim.InnerText.Trim()) }
+			ExtDimTypes = [bool]($ixExtDim -and $ixExtDim.InnerText.Trim() -and $ixMaxExtDim -and $ixMaxExtDim.InnerText.Trim())
+			Types = $(if ($typeName -eq "DefinedType") { Get-MdTypeList $objEl $objNs } else { @() }) }
 
 		# Собственные подобъекты данных в заимствованном объекте вида, где они запрещены
 		$ownRule = $null
@@ -1917,13 +1931,13 @@ if (-not $script:stopped -and $childObjNode) {
 
 # --- Check 19: ссылки на объекты, которых нет в расширении ---
 # Объект основной конфигурации виден расширению, только если он заимствован (замер 8.3.24/8.3.27):
-# - ссылочный тип (реквизит, колонка, константа, измерение, параметр команды, реквизит формы):
-#   ниже 8.3.25 — «Неизвестное имя типа», с 8.3.25 работает;
+# - ссылочный тип (реквизит, колонка, константа, измерение, параметр команды, реквизит формы, состав
+#   заимствованного определяемого типа): ниже 8.3.25 — «Неизвестное имя типа», с 8.3.25 работает;
 # - ссылка на объект (владельцы, движения, ввод на основании, журнал, состав подсистемы, план
 #   счетов регистра, задача БП): ниже 8.3.25 — «Неизвестный объект метаданных», с 8.3.25 грузится,
 #   но в рантайме связь пуста;
 # - права роли на такой объект платформа выбрасывает;
-# - тип определяемого типа, источник подписки, виды субконто плана счетов не грузятся нигде.
+# - тип собственного определяемого типа, источник подписки, виды субконто плана счетов не грузятся нигде.
 # Формы (значения, СКД) и макеты не проверяются — не замерено.
 $script:refTypeKind = New-Object System.Collections.Hashtable ([StringComparer]::Ordinal)
 foreach ($k in @("Catalog","Document","Enum","ChartOfCharacteristicTypes","ChartOfAccounts","ChartOfCalculationTypes","ExchangePlan","BusinessProcess","Task")) {
@@ -2030,7 +2044,12 @@ if (-not $script:stopped -and $childObjNode) {
 			$w = $pair[0]; $t = $pair[1]
 			$typeLevel = "type"
 			$typeProp = "type"
-			if ($typeName -eq "DefinedType") { $typeLevel = "never"; $typeProp = "Type" }
+			# Состав заимствованного определяемого типа — как ссылочный тип (замер 8.3.24/8.3.27, в т.ч.
+			# режим расширения 8.3.24 на 8.3.27); у собственного не грузится нигде
+			if ($typeName -eq "DefinedType") {
+				$typeProp = "Type"
+				if ($t -notmatch '<ObjectBelonging>Adopted</ObjectBelonging>') { $typeLevel = "never" }
+			}
 			elseif ($typeName -eq "EventSubscription") { $typeLevel = "never"; $typeProp = "Source" }
 			& $scanTypes $t $w $typeProp $typeLevel
 			if ($script:stopped) { break }

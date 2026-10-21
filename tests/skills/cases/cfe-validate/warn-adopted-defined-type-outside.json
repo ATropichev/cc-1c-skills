@@ -1,0 +1,62 @@
+{
+  "name": "Заимствованный определяемый тип ссылается на незаимствованный объект: предупреждение (ниже 8.3.25 не грузится), не ошибка",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура",
+          "attributes": [
+            "Артикул: String(25)",
+            "Вес: Number(10,3)"
+          ]
+        },
+        {
+          "type": "DefinedType",
+          "name": "ТипТовара",
+          "valueType": "CatalogRef.Номенклатура"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "DefinedType.ТипТовара"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "skipPlatformVerify": {
+    "reason": "ниже 8.3.25 ссылка на незаимствованный объект в составе типа не грузится — это и проверяется",
+    "platforms": [
+      "8.3.24",
+      "8.3.20"
+    ]
+  },
+  "expect": {
+    "stdoutContains": "[WARN]  19. DefinedType.ТипТовара: Type refers to Catalog.Номенклатура, which is not in the extension — below 8.3.25",
+    "stdoutNotContains": "[ERROR]"
+  }
+}

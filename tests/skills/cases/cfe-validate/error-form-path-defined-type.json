@@ -1,0 +1,137 @@
+{
+  "name": "Ошибка: путь через определяемый тип на незаимствованный реквизит цели; через составной определяемый тип — дальше реквизита нельзя",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура",
+          "attributes": [
+            "Артикул: String(25)",
+            "Вес: Number(10,3)"
+          ]
+        },
+        {
+          "type": "Catalog",
+          "name": "Партнеры",
+          "attributes": [
+            "Артикул: String(25)"
+          ]
+        },
+        {
+          "type": "DefinedType",
+          "name": "ТипТовара",
+          "valueType": "CatalogRef.Номенклатура"
+        },
+        {
+          "type": "DefinedType",
+          "name": "ТипСоставной",
+          "valueTypes": [
+            "CatalogRef.Номенклатура",
+            "CatalogRef.Партнеры"
+          ]
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Товар: DefinedType.ТипТовара",
+            "Составной: DefinedType.ТипСоставной"
+          ]
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/ЗаказКлиента.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Заказ",
+        "elements": [
+          {
+            "input": "Товар",
+            "path": "Объект.Товар"
+          },
+          {
+            "input": "Составной",
+            "path": "Объект.Составной"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.ЗаказКлиента",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Document.ЗаказКлиента.Form.ФормаДокумента",
+        "-BorrowMainAttribute": "Form"
+      }
+    },
+    {
+      "script": "form-edit/scripts/form-edit",
+      "input": {
+        "elements": [
+          {
+            "input": "Тест_Артикул",
+            "path": "Объект.Товар.Артикул",
+            "title": "А"
+          },
+          {
+            "input": "Тест_АртикулСост",
+            "path": "Объект.Составной.Артикул",
+            "title": "С"
+          }
+        ]
+      },
+      "args": {
+        "-FormPath": "{workDir}/cfe/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml",
+        "-JsonPath": "{inputFile}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "path 'Объект.Товар.Артикул' — Catalog.Номенклатура has no attribute Артикул in the extension",
+      "path 'Объект.Составной.Артикул' — Составной has a composite type"
+    ]
+  }
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.26 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.27 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -813,8 +813,8 @@ def main():
     own_data_child_tags = ('Attribute', 'TabularSection', 'Dimension', 'Resource', 'AccountingFlag', 'ExtDimensionAccountingFlag', 'AddressingAttribute')
 
     def md_type_list(el):
-        """Типы подобъекта метаданных: тексты <v8:Type>; определяемый тип и прочие наборы — меткой «#TypeSet»,
-        квалификаторы пропускаются."""
+        """Типы подобъекта метаданных: тексты <v8:Type>; определяемый тип — меткой «#DefinedType.<Имя>», прочие
+        наборы — «#TypeSet», квалификаторы пропускаются."""
         result = []
         type_el = el.find(f'{{{MD}}}Properties/{{{MD}}}Type')
         if type_el is not None:
@@ -825,7 +825,8 @@ def main():
                 if ln == 'Type':
                     result.append((tn.text or '').strip())
                 elif ln == 'TypeSet':
-                    result.append('#TypeSet')
+                    dtm = re.match(r'^(?:\w+:)?DefinedType\.(.+)$', (tn.text or '').strip())
+                    result.append(f'#DefinedType.{dtm.group(1)}' if dtm else '#TypeSet')
         return result
 
     def get_std_ref_types(kind, name, seg):
@@ -850,9 +851,21 @@ def main():
         нет — только стандартные.
         ТЧ цели — дальше колонка этой ТЧ; Родитель и Владелец справочника — дальше по их типу. Правило
         повторяется на каждом шаге. У составного типа (любой состав) дальше реквизита путь не разрешается.
-        Не замерено (определяемый, примитивный тип, перечисление, прочие стандартные реквизиты в середине
-        пути) — не проверяем. Ошибка — (номер сегмента, текст), иначе None."""
+        Определяемый тип раскрывается по его составу в расширении (замер 8.3.27: путь через составной ОТ
+        отвергается и в конфигурации); ОТ нет в расширении — не проверяем, это проверка 19.
+        Не замерено (примитивный тип, перечисление, прочие стандартные реквизиты в середине пути) — не
+        проверяем. Ошибка — (номер сегмента, текст), иначе None."""
         while i < len(segs):
+            expanded = []
+            for t in types:
+                if t.startswith('#DefinedType.'):
+                    dt_entry = ext_obj_index.get(f'DefinedType.{t[13:]}'.upper())
+                    if dt_entry is None:
+                        return None
+                    expanded.extend(dt_entry['Types'])
+                else:
+                    expanded.append(t)
+            types = expanded
             if '#TypeSet' in types:
                 return None
             if len(types) >= 2:
@@ -1064,7 +1077,8 @@ def main():
             ix_max_ext_dim = obj_el.find(f'{{{MD}}}Properties/{{{MD}}}MaxExtDimensionCount')
             ext_obj_index[f'{type_name}.{child_name}'.upper()] = {'Names': ix_names, 'TSColumns': ix_ts_columns, 'Owners': ix_owners,
                                                                   'ExtDimTypes': (ix_ext_dim is not None and bool((ix_ext_dim.text or '').strip())
-                                                                                  and ix_max_ext_dim is not None and bool((ix_max_ext_dim.text or '').strip()))}
+                                                                                  and ix_max_ext_dim is not None and bool((ix_max_ext_dim.text or '').strip())),
+                                                                  'Types': md_type_list(obj_el) if type_name == 'DefinedType' else []}
 
             # Собственные подобъекты данных в заимствованном объекте вида, где они запрещены
             own_rule = None
@@ -1939,13 +1953,13 @@ def main():
 
     # --- Check 19: ссылки на объекты, которых нет в расширении ---
     # Объект основной конфигурации виден расширению, только если он заимствован (замер 8.3.24/8.3.27):
-    # - ссылочный тип (реквизит, колонка, константа, измерение, параметр команды, реквизит формы):
-    #   ниже 8.3.25 — «Неизвестное имя типа», с 8.3.25 работает;
+    # - ссылочный тип (реквизит, колонка, константа, измерение, параметр команды, реквизит формы, состав
+    #   заимствованного определяемого типа): ниже 8.3.25 — «Неизвестное имя типа», с 8.3.25 работает;
     # - ссылка на объект (владельцы, движения, ввод на основании, журнал, состав подсистемы, план
     #   счетов регистра, задача БП): ниже 8.3.25 — «Неизвестный объект метаданных», с 8.3.25 грузится,
     #   но в рантайме связь пуста;
     # - права роли на такой объект платформа выбрасывает;
-    # - тип определяемого типа, источник подписки, виды субконто плана счетов не грузятся нигде.
+    # - тип собственного определяемого типа, источник подписки, виды субконто плана счетов не грузятся нигде.
     # Формы (значения, СКД) и макеты не проверяются — не замерено.
     if not r.stopped and child_obj_node is not None:
         ref_type_kind = {}
@@ -2048,8 +2062,11 @@ def main():
                         if t is not None:
                             texts.append((f'{where}/{rel}', t))
             for w, t in texts:
+                # Состав заимствованного определяемого типа — как ссылочный тип (замер 8.3.24/8.3.27, в т.ч.
+                # режим расширения 8.3.24 на 8.3.27); у собственного не грузится нигде
                 if type_name == 'DefinedType':
-                    type_prop, type_level = 'Type', 'never'
+                    type_prop = 'Type'
+                    type_level = 'type' if '<ObjectBelonging>Adopted</ObjectBelonging>' in t else 'never'
                 elif type_name == 'EventSubscription':
                     type_prop, type_level = 'Source', 'never'
                 else:
