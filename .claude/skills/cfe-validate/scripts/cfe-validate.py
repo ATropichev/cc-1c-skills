@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.27 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.28 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -1959,7 +1959,10 @@ def main():
     #   счетов регистра, задача БП): ниже 8.3.25 — «Неизвестный объект метаданных», с 8.3.25 грузится,
     #   но в рантайме связь пуста;
     # - права роли на такой объект платформа выбрасывает;
-    # - тип собственного определяемого типа, источник подписки, виды субконто плана счетов не грузятся нигде.
+    # - тип собственного определяемого типа, источник подписки, виды субконто плана счетов не грузятся нигде;
+    # - заимствованный определяемый тип с таким составом в реквизите, колонке, измерении собственного объекта
+    #   или в собственной константе — «Недопустимый тип» на любой платформе (замер 8.3.25/8.3.27); в
+    #   реквизитах заимствованного объекта и в реквизитах форм с 8.3.25 работает.
     # Формы (значения, СКД) и макеты не проверяются — не замерено.
     if not r.stopped and child_obj_node is not None:
         ref_type_kind = {}
@@ -1998,6 +2001,10 @@ def main():
             check19['ok'] = False
             if level == 'type':
                 r.warn(f'19. {where}: {prop} refers to {target}, which is not in the extension — below 8.3.25 it does not load («Неизвестное имя типа»), from 8.3.25 it is allowed. Borrow {target}')
+            elif level == 'adt':
+                r.warn(f'19. {where}: {prop} refers to {target}, which is not in the extension — below 8.3.25 it does not load («Неизвестное имя типа»), from 8.3.25 it is allowed only in borrowed objects and forms. Borrow {target}')
+            elif level == 'owndt':
+                r.error(f'19. {where}: type {prop} includes {target}, which is not in the extension — the platform does not load the extension («Недопустимый тип»). Borrow {target}')
             elif level == 'never':
                 r.error(f'19. {where}: {prop} refers to {target}, which is not in the extension — the platform does not load the extension. Borrow {target}')
             elif level == 'rights':
@@ -2066,7 +2073,7 @@ def main():
                 # режим расширения 8.3.24 на 8.3.27); у собственного не грузится нигде
                 if type_name == 'DefinedType':
                     type_prop = 'Type'
-                    type_level = 'type' if '<ObjectBelonging>Adopted</ObjectBelonging>' in t else 'never'
+                    type_level = 'adt' if '<ObjectBelonging>Adopted</ObjectBelonging>' in t else 'never'
                 elif type_name == 'EventSubscription':
                     type_prop, type_level = 'Source', 'never'
                 else:
@@ -2074,6 +2081,23 @@ def main():
                 scan_types(t, w, type_prop, type_level)
                 if r.stopped:
                     break
+                # Собственный объект: заимствованный определяемый тип, в составе которого объект вне расширения
+                if type_name != 'DefinedType' and '<ObjectBelonging>Adopted</ObjectBelonging>' not in t:
+                    for dm in re.finditer(r'<v8:TypeSet>(?:\w+:)?DefinedType\.([^<.\s]+)</v8:TypeSet>', t):
+                        dt_name = dm.group(1)
+                        dt_text = read_text19(os.path.join(config_dir, CHILD_TYPE_DIR_MAP['DefinedType'], dt_name + '.xml'))
+                        if dt_text is None or '<ObjectBelonging>Adopted</ObjectBelonging>' not in dt_text:
+                            continue
+                        for m in ref_type_re.finditer(dt_text):
+                            k = ref_type_kind.get(m.group(2))
+                            if k and k != 'DefinedType':
+                                report_ref(w, f'DefinedType.{dt_name}', k, m.group(3), 'owndt')
+                            if r.stopped:
+                                break
+                        if r.stopped:
+                            break
+                    if r.stopped:
+                        break
                 # Движения последовательности не замерены
                 for lm in ([] if type_name == 'Sequence' else ref_list_re.finditer(t)):
                     for im in ref_item_re.finditer(lm.group(2)):

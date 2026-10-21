@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.27 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.28 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1937,7 +1937,10 @@ if (-not $script:stopped -and $childObjNode) {
 #   счетов регистра, задача БП): ниже 8.3.25 — «Неизвестный объект метаданных», с 8.3.25 грузится,
 #   но в рантайме связь пуста;
 # - права роли на такой объект платформа выбрасывает;
-# - тип собственного определяемого типа, источник подписки, виды субконто плана счетов не грузятся нигде.
+# - тип собственного определяемого типа, источник подписки, виды субконто плана счетов не грузятся нигде;
+# - заимствованный определяемый тип с таким составом в реквизите, колонке, измерении собственного объекта
+#   или в собственной константе — «Недопустимый тип» на любой платформе (замер 8.3.25/8.3.27); в
+#   реквизитах заимствованного объекта и в реквизитах форм с 8.3.25 работает.
 # Формы (значения, СКД) и макеты не проверяются — не замерено.
 $script:refTypeKind = New-Object System.Collections.Hashtable ([StringComparer]::Ordinal)
 foreach ($k in @("Catalog","Document","Enum","ChartOfCharacteristicTypes","ChartOfAccounts","ChartOfCalculationTypes","ExchangePlan","BusinessProcess","Task")) {
@@ -1998,6 +2001,8 @@ if (-not $script:stopped -and $childObjNode) {
 		$script:check19Ok = $false
 		switch ($level) {
 			"type" { Report-Warn "19. ${where}: $prop refers to $target, which is not in the extension — below 8.3.25 it does not load («Неизвестное имя типа»), from 8.3.25 it is allowed. Borrow $target" }
+			"adt" { Report-Warn "19. ${where}: $prop refers to $target, which is not in the extension — below 8.3.25 it does not load («Неизвестное имя типа»), from 8.3.25 it is allowed only in borrowed objects and forms. Borrow $target" }
+			"owndt" { Report-Error "19. ${where}: type $prop includes $target, which is not in the extension — the platform does not load the extension («Недопустимый тип»). Borrow $target" }
 			"never" { Report-Error "19. ${where}: $prop refers to $target, which is not in the extension — the platform does not load the extension. Borrow $target" }
 			"rights" { Report-Error "19. ${where}: rights on $target, which is not in the extension — the platform drops them. Borrow $target" }
 			default { Report-Error "19. ${where}: $prop refers to $target, which is not in the extension — below 8.3.25 it does not load («Неизвестный объект метаданных»), from 8.3.25 it loads but the link is empty at runtime. Borrow $target" }
@@ -2048,11 +2053,26 @@ if (-not $script:stopped -and $childObjNode) {
 			# режим расширения 8.3.24 на 8.3.27); у собственного не грузится нигде
 			if ($typeName -eq "DefinedType") {
 				$typeProp = "Type"
-				if ($t -notmatch '<ObjectBelonging>Adopted</ObjectBelonging>') { $typeLevel = "never" }
+				$typeLevel = if ($t -match '<ObjectBelonging>Adopted</ObjectBelonging>') { "adt" } else { "never" }
 			}
 			elseif ($typeName -eq "EventSubscription") { $typeLevel = "never"; $typeProp = "Source" }
 			& $scanTypes $t $w $typeProp $typeLevel
 			if ($script:stopped) { break }
+			# Собственный объект: заимствованный определяемый тип, в составе которого объект вне расширения
+			if ($typeName -ne "DefinedType" -and $t -notmatch '<ObjectBelonging>Adopted</ObjectBelonging>') {
+				foreach ($dm in [regex]::Matches($t, '<v8:TypeSet>(?:\w+:)?DefinedType\.([^<.\s]+)</v8:TypeSet>')) {
+					$dtName = $dm.Groups[1].Value
+					$dtText = & $readText (Join-Path (Join-Path $configDir $childTypeDirMap["DefinedType"]) "$dtName.xml")
+					if ($null -eq $dtText -or $dtText -notmatch '<ObjectBelonging>Adopted</ObjectBelonging>') { continue }
+					foreach ($m in [regex]::Matches($dtText, $refTypeRe)) {
+						$k = $script:refTypeKind[$m.Groups[2].Value]
+						if ($k -and $k -ne "DefinedType") { & $reportRef $w "DefinedType.$dtName" $k $m.Groups[3].Value "owndt" }
+						if ($script:stopped) { break }
+					}
+					if ($script:stopped) { break }
+				}
+				if ($script:stopped) { break }
+			}
 			# Движения последовательности не замерены
 			$lists = if ($typeName -eq "Sequence") { @() } else { [regex]::Matches($t, $refListRe) }
 			foreach ($lm in $lists) {

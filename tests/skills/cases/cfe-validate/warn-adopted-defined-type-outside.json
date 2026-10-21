@@ -68,7 +68,7 @@
     ]
   },
   "expect": {
-    "stdoutContains": "[WARN]  19. DefinedType.ТипТовара: Type refers to Catalog.Номенклатура, which is not in the extension — below 8.3.25",
+    "stdoutContains": "[WARN]  19. DefinedType.ТипТовара: Type refers to Catalog.Номенклатура, which is not in the extension — below 8.3.25 it does not load («Неизвестное имя типа»), from 8.3.25 it is allowed only in borrowed objects and forms",
     "stdoutNotContains": "[ERROR]"
   }
 }

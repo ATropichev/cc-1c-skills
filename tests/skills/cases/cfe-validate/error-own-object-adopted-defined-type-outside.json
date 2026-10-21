@@ -1,0 +1,84 @@
+{
+  "name": "Ошибка: реквизит собственного справочника — заимствованный определяемый тип, в составе которого объект вне расширения (платформа: «Недопустимый тип» на любой версии)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура",
+          "attributes": [
+            "Артикул: String(25)",
+            "Вес: Number(10,3)"
+          ]
+        },
+        {
+          "type": "DefinedType",
+          "name": "ТипТовара",
+          "valueType": "CatalogRef.Номенклатура"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "DefinedType.ТипТовара"
+      }
+    },
+    {
+      "script": "cf-edit/scripts/cf-edit",
+      "args": {
+        "-ConfigPath": "{workDir}/cfe",
+        "-Operation": "remove-childObject",
+        "-Value": "Catalog.Номенклатура",
+        "-NoValidate": true
+      }
+    },
+    {
+      "deletePath": "cfe/Catalogs/Номенклатура.xml"
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "Catalog",
+        "name": "Тест_Спр",
+        "attributes": [
+          "Т: DefinedType.ТипТовара"
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] 19. Catalog.Тест_Спр: type DefinedType.ТипТовара includes Catalog.Номенклатура, which is not in the extension",
+      "[WARN]  19. DefinedType.ТипТовара: Type refers to Catalog.Номенклатура, which is not in the extension — below 8.3.25 it does not load («Неизвестное имя типа»), from 8.3.25 it is allowed only in borrowed objects and forms"
+    ]
+  },
+  "expectError": true
+}
