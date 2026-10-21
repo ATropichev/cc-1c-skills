@@ -1,0 +1,122 @@
+{
+  "name": "Глубокий путь через реквизит с определяемым типом (шапка и колонка ТЧ): объект из состава типа — с показанным реквизитом",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура",
+          "attributes": [
+            "Артикул: String(25)",
+            "Вес: Number(10,3)"
+          ]
+        },
+        {
+          "type": "DefinedType",
+          "name": "ТипТовара",
+          "valueType": "CatalogRef.Номенклатура"
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Товар: DefinedType.ТипТовара"
+          ],
+          "tabularSections": {
+            "Товары": [
+              "Аналог: DefinedType.ТипТовара"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/ЗаказКлиента.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Заказ",
+        "elements": [
+          {
+            "input": "ТоварАртикул",
+            "path": "Объект.Товар.Артикул"
+          },
+          {
+            "table": "Товары",
+            "path": "Объект.Товары",
+            "columns": [
+              {
+                "input": "Товары0",
+                "path": "Объект.Товары.Аналог"
+              },
+              {
+                "input": "Товары1",
+                "path": "Объект.Товары.Аналог.Артикул"
+              }
+            ]
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.ЗаказКлиента",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "Document.ЗаказКлиента.Form.ФормаДокумента"
+  },
+  "args_extra": [
+    "-BorrowMainAttribute",
+    "Form"
+  ],
+  "expect": {
+    "fileContains": [
+      {
+        "file": "cfe/Catalogs/Номенклатура.xml",
+        "text": [
+          "<Name>Артикул</Name>"
+        ]
+      },
+      {
+        "file": "cfe/DefinedTypes/ТипТовара.xml",
+        "text": [
+          "<Name>ТипТовара</Name>"
+        ]
+      }
+    ],
+    "fileNotContains": {
+      "file": "cfe/Catalogs/Номенклатура.xml",
+      "text": [
+        "<Name>Вес</Name>"
+      ]
+    }
+  }
+}

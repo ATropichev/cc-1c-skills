@@ -1,0 +1,195 @@
+{
+  "name": "Глубокий путь через несколько ссылок (шапка и колонка ТЧ): каждый объект цепочки — с реквизитом следующего сегмента",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Страны",
+          "attributes": [
+            "КодISO: String(3)",
+            "Столица: String(50)"
+          ]
+        },
+        {
+          "type": "Catalog",
+          "name": "Производители",
+          "attributes": [
+            "Страна: CatalogRef.Страны",
+            "Сайт: String(50)"
+          ]
+        },
+        {
+          "type": "Catalog",
+          "name": "Номенклатура",
+          "attributes": [
+            "Производитель: CatalogRef.Производители",
+            "Вес: Number(10,3)"
+          ]
+        },
+        {
+          "type": "Catalog",
+          "name": "Партнеры",
+          "attributes": [
+            "ИНН: String(12)",
+            "Телефон: String(20)"
+          ]
+        },
+        {
+          "type": "Catalog",
+          "name": "Контрагенты",
+          "attributes": [
+            "Партнер: CatalogRef.Партнеры",
+            "КПП: String(9)"
+          ]
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Контрагент: CatalogRef.Контрагенты",
+            "Комментарий: String(50)"
+          ],
+          "tabularSections": {
+            "Товары": [
+              "Номенклатура: CatalogRef.Номенклатура",
+              "Количество: Number(15,3)"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/ЗаказКлиента.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Заказ",
+        "elements": [
+          {
+            "input": "ПартнерИНН",
+            "path": "Объект.Контрагент.Партнер.ИНН"
+          },
+          {
+            "table": "Товары",
+            "path": "Объект.Товары",
+            "columns": [
+              {
+                "input": "Товары0",
+                "path": "Объект.Товары.Номенклатура"
+              },
+              {
+                "input": "Товары1",
+                "path": "Объект.Товары.Номенклатура.Производитель.Страна.КодISO"
+              }
+            ]
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.ЗаказКлиента",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "Document.ЗаказКлиента.Form.ФормаДокумента"
+  },
+  "args_extra": [
+    "-BorrowMainAttribute",
+    "Form"
+  ],
+  "expect": {
+    "fileContains": [
+      {
+        "file": "cfe/Catalogs/Контрагенты.xml",
+        "text": [
+          "<Name>Партнер</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Catalogs/Партнеры.xml",
+        "text": [
+          "<Name>ИНН</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Catalogs/Номенклатура.xml",
+        "text": [
+          "<Name>Производитель</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Catalogs/Производители.xml",
+        "text": [
+          "<Name>Страна</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Catalogs/Страны.xml",
+        "text": [
+          "<Name>КодISO</Name>"
+        ]
+      }
+    ],
+    "fileNotContains": [
+      {
+        "file": "cfe/Catalogs/Контрагенты.xml",
+        "text": [
+          "<Name>КПП</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Catalogs/Партнеры.xml",
+        "text": [
+          "<Name>Телефон</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Catalogs/Номенклатура.xml",
+        "text": [
+          "<Name>Вес</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Catalogs/Производители.xml",
+        "text": [
+          "<Name>Сайт</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Catalogs/Страны.xml",
+        "text": [
+          "<Name>Столица</Name>"
+        ]
+      }
+    ]
+  }
+}

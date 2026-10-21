@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.51 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.52 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2324,10 +2324,8 @@ function Collect-FormDataPaths {
 			if ($script:standardFields -contains $seg0) { continue }
 			$firstLevel[$seg0] = $true
 			if ($segments.Count -ge 2) {
-				$seg1 = $segments[1]
-				if ($script:standardFields -contains $seg1) { continue }
-				$seg2 = if ($segments.Count -ge 3) { $segments[2] } else { $null }
-				$deepPaths += @{ ObjectAttr = $seg0; SubAttr = $seg1; SubSubAttr = $seg2 }
+				if ($script:standardFields -contains $segments[1]) { continue }
+				$deepPaths += ,$segments
 			}
 		}
 	}
@@ -2342,9 +2340,8 @@ function Collect-FormDataPaths {
 		if ($script:standardFields -contains $seg0) { continue }
 		$firstLevel[$seg0] = $true
 		if ($segments.Count -ge 2) {
-			$seg1 = $segments[1]
-			if ($script:standardFields -contains $seg1) { continue }
-			$deepPaths += @{ ObjectAttr = $seg0; SubAttr = $seg1 }
+			if ($script:standardFields -contains $segments[1]) { continue }
+			$deepPaths += ,$segments
 		}
 	}
 
@@ -2372,14 +2369,14 @@ function Collect-FormDataPaths {
 		}
 	}
 
-	# Deduplicate deep paths
+	# Deduplicate deep paths (each is the full segment list after the root)
 	$seen = @{}
 	$uniqueDeep = @()
 	foreach ($dp in $deepPaths) {
-		$key = "$($dp.ObjectAttr).$($dp.SubAttr).$($dp.SubSubAttr)"
+		$key = $dp -join "."
 		if (-not $seen.ContainsKey($key)) {
 			$seen[$key] = $true
-			$uniqueDeep += $dp
+			$uniqueDeep += ,$dp
 		}
 	}
 
@@ -2741,6 +2738,32 @@ function Borrow-ObjectShell([string]$typeName, [string]$objName) {
 	Add-ToChildObjects $typeName $objName
 	$script:borrowedFiles += $targetFile
 	Info "  Auto-borrowed: ${typeName}.${objName}"
+	# Оболочка определяемого типа несёт его состав: объекты из состава — оболочками (эталон
+	# Конфигуратора). Без них ниже 8.3.25 загрузка падает: «Неизвестное имя типа».
+	if ($typeName -eq "DefinedType" -and $src.Properties.ContainsKey("__TypeXml")) {
+		foreach ($rt in (Collect-ReferenceTypes @($src.Properties["__TypeXml"]))) {
+			Borrow-ObjectShell $rt.TypeName $rt.ObjName
+		}
+	}
+}
+
+# Единственный объект, на который ведёт ссылочный тип: <Вид>Ref.<Имя> или определяемый тип из одной
+# такой ссылки (состав — из источника). Составной, примитивный, неизвестный вид — $null: дальше
+# такого типа путь формы не продолжается.
+function Resolve-SingleRefTarget([string]$typeXml) {
+	$types = @([regex]::Matches($typeXml, '<v8:(?:Type|TypeSet)>([^<]+)</v8:(?:Type|TypeSet)>') | ForEach-Object { $_.Groups[1].Value })
+	if ($types.Count -ne 1) { return $null }
+	$dt = [regex]::Match($types[0], '^(?:\w+:)?DefinedType\.(\w+)$')
+	if ($dt.Success) {
+		$dtFile = Join-Path (Join-Path $cfgDir $childTypeDirMap["DefinedType"]) "$($dt.Groups[1].Value).xml"
+		if (-not (Test-Path $dtFile)) { return $null }
+		$dtSrc = Read-SourceObject "DefinedType" $dt.Groups[1].Value
+		if (-not $dtSrc.Properties.ContainsKey("__TypeXml")) { return $null }
+		return Resolve-SingleRefTarget $dtSrc.Properties["__TypeXml"]
+	}
+	$ref = [regex]::Match($types[0], '^(?:\w+:)?(\w+)Ref\.(\w+)$')
+	if (-not $ref.Success -or -not $childTypeDirMap.ContainsKey($ref.Groups[1].Value)) { return $null }
+	return @{ TypeName = $ref.Groups[1].Value; ObjName = $ref.Groups[2].Value }
 }
 
 function Borrow-ReferenceTypeShells {
@@ -2888,6 +2911,15 @@ function Borrow-MainAttribute {
 		Info "  Collected $($firstLevelNames.Count) first-level DataPath references, $($deepPaths.Count) deep paths"
 	} else {
 		Info "  Mode All: borrowing all attributes and tabular sections"
+		# Первый уровень — все реквизиты, но глубокие пути формы те же: объекты по ссылкам из них
+		# нужны с показанными реквизитами в любом режиме
+		if (Test-Path $srcFormXmlPath) {
+			$dpDoc = New-Object System.Xml.XmlDocument
+			$dpDoc.PreserveWhitespace = $true
+			$dpDoc.Load($srcFormXmlPath)
+			$dpInfo = Get-MainAttributeInfo $dpDoc.DocumentElement '\s+xmlns(?::\w+)?="[^"]*"'
+			if ($dpInfo) { $deepPaths = (Collect-FormDataPaths $srcFormXmlPath $dpInfo.Name).DeepPaths }
+		}
 	}
 
 	# Step 2: Resolve source attributes
@@ -2976,48 +3008,28 @@ function Borrow-MainAttribute {
 		if ($edm.Success) { Borrow-ObjectShell $edm.Groups[1].Value $edm.Groups[2].Value }
 	}
 
-	# Step 5: Handle deep paths (Form mode only)
-	if ($mode -eq "Form" -and $deepPaths.Count -gt 0) {
-		# Top-level ref deep paths: Объект.<Ref>.<Sub> — borrow the ref attribute's catalog with the sub-attribute
-		$deepByAttr = @{}
-		foreach ($dp in $deepPaths) {
-			if ($tsNames.ContainsKey($dp.ObjectAttr)) { continue }
-			if (-not $deepByAttr.ContainsKey($dp.ObjectAttr)) { $deepByAttr[$dp.ObjectAttr] = @() }
-			if ($deepByAttr[$dp.ObjectAttr] -notcontains $dp.SubAttr) { $deepByAttr[$dp.ObjectAttr] += $dp.SubAttr }
-		}
-		if ($deepByAttr.Count -gt 0) {
-			Info "  Processing $($deepByAttr.Count) deep path attribute(s)..."
-			foreach ($attrName in $deepByAttr.Keys) {
-				$attrInfo = $srcAttrs | Where-Object { $_.Name -eq $attrName } | Select-Object -First 1
-				if (-not $attrInfo) { continue }
-				$catMatch = [regex]::Match($attrInfo.TypeXml, 'cfg:(\w+)Ref\.(\w+)')
-				if (-not $catMatch.Success) { continue }
-				Borrow-DeepTargetAttrs $catMatch.Groups[1].Value $catMatch.Groups[2].Value $deepByAttr[$attrName]
+	# Step 5: Deep paths — Объект.<Реквизит>.<…> and Объект.<ТЧ>.<Колонка>.<…>. Each reference step borrows
+	# its target object with the next segment's attribute (Designer etalon), down the whole chain
+	if ($deepPaths.Count -gt 0) {
+		Info "  Processing $($deepPaths.Count) deep path(s)..."
+		foreach ($segs in $deepPaths) {
+			if ($tsNames.ContainsKey($segs[0])) {
+				$tsInfo = $srcTS | Where-Object { $_.Name -eq $segs[0] } | Select-Object -First 1
+				$startAttr = $tsInfo.Attributes | Where-Object { $_.Name -eq $segs[1] } | Select-Object -First 1
+				$next = 2
+			} else {
+				$startAttr = $srcAttrs | Where-Object { $_.Name -eq $segs[0] } | Select-Object -First 1
+				$next = 1
 			}
-		}
-
-		# Tabular-section deep paths: Объект.<ТЧ>.<Колонка>.<Sub> — borrow the column's catalog with the sub-attribute
-		$tsDeepByCol = @{}
-		foreach ($dp in $deepPaths) {
-			if (-not $tsNames.ContainsKey($dp.ObjectAttr)) { continue }
-			if (-not $dp.SubSubAttr) { continue }
-			if ($script:standardFields -contains $dp.SubSubAttr) { continue }
-			$k = "$($dp.ObjectAttr)|$($dp.SubAttr)"
-			if (-not $tsDeepByCol.ContainsKey($k)) { $tsDeepByCol[$k] = @() }
-			if ($tsDeepByCol[$k] -notcontains $dp.SubSubAttr) { $tsDeepByCol[$k] += $dp.SubSubAttr }
-		}
-		if ($tsDeepByCol.Count -gt 0) {
-			Info "  Processing $($tsDeepByCol.Count) tabular-section deep path(s)..."
-			foreach ($k in $tsDeepByCol.Keys) {
-				$parts = $k.Split("|")
-				$tsName = $parts[0]; $colName = $parts[1]
-				$tsInfo = $srcTS | Where-Object { $_.Name -eq $tsName } | Select-Object -First 1
-				if (-not $tsInfo) { continue }
-				$colInfo = $tsInfo.Attributes | Where-Object { $_.Name -eq $colName } | Select-Object -First 1
-				if (-not $colInfo) { continue }
-				$catMatch = [regex]::Match($colInfo.TypeXml, 'cfg:(\w+)Ref\.(\w+)')
-				if (-not $catMatch.Success) { continue }
-				Borrow-DeepTargetAttrs $catMatch.Groups[1].Value $catMatch.Groups[2].Value $tsDeepByCol[$k]
+			if (-not $startAttr) { continue }
+			$typeXml = $startAttr.TypeXml
+			for ($i = $next; $i -lt $segs.Count; $i++) {
+				if ($script:standardFields -contains $segs[$i]) { break }
+				$target = Resolve-SingleRefTarget $typeXml
+				if (-not $target) { break }
+				$merged = @(Borrow-DeepTargetAttrs $target.TypeName $target.ObjName @($segs[$i]))
+				if ($merged.Count -eq 0) { break }
+				$typeXml = $merged[0].TypeXml
 			}
 		}
 	}
@@ -3025,55 +3037,24 @@ function Borrow-MainAttribute {
 	Info "  Main attribute borrowing complete"
 }
 
-# --- 11i. Helper: borrow a deep-path target catalog together with the referenced sub-attributes ---
-# Used for both Объект.<Ref>.<Sub> (top-level ref attr) and Объект.<ТЧ>.<Колонка>.<Sub> (tabular-section
-# column ref). Mirrors Designer: the referenced catalog is adopted WITH the sub-attributes the form shows,
-# otherwise the platform rejects the deep DataPath ("Неверный путь к данным").
+# --- 11i. Helper: borrow a deep-path target object together with the referenced sub-attributes ---
+# Mirrors Designer: the referenced object is adopted WITH the sub-attributes the form shows, otherwise
+# the platform rejects the deep DataPath ("Неверный путь к данным"). Returns the merged source attributes
+# (Name/TypeXml) — the chain walk continues along their types.
 function Borrow-DeepTargetAttrs {
 	param([string]$targetTypeName, [string]$targetObjName, $subAttrNames)
 
-	$encBomLocal = New-Object System.Text.UTF8Encoding($true)
+	Borrow-ObjectShell $targetTypeName $targetObjName
+	if (-not (Test-ObjectBorrowed $targetTypeName $targetObjName)) { return @() }
 
-	# Ensure target is borrowed (shell)
-	if (-not (Test-ObjectBorrowed $targetTypeName $targetObjName)) {
-		$tSrc = Read-SourceObject $targetTypeName $targetObjName
-		$tBorrowedXml = Build-BorrowedObjectXml $targetTypeName $targetObjName $tSrc.Uuid $tSrc.Properties
-		$tTargetDir = Join-Path $extDir $childTypeDirMap[$targetTypeName]
-		if (-not (Test-Path $tTargetDir)) { New-Item -ItemType Directory -Path $tTargetDir -Force | Out-Null }
-		$tTargetFile = Join-Path $tTargetDir "${targetObjName}.xml"
-		[System.IO.File]::WriteAllText($tTargetFile, $tBorrowedXml, $encBomLocal)
-		Add-ToChildObjects $targetTypeName $targetObjName
-		$script:borrowedFiles += $tTargetFile
-		Info "  Auto-borrowed for deep path: ${targetTypeName}.${targetObjName}"
-	}
-
-	# Resolve sub-attributes in target catalog and merge them in
 	$subNames = @{}
 	foreach ($sn in $subAttrNames) { $subNames[$sn] = $true }
 	$subResolved = Resolve-SourceAttributes $targetTypeName $targetObjName $subNames
-	if ($subResolved.Attributes.Count -gt 0) {
-		Merge-AttributesIntoObject $targetTypeName $targetObjName $subResolved.Attributes
-
-		# Borrow ref types referenced by the sub-attributes
-		$subTypeXmls = @()
-		foreach ($sa in $subResolved.Attributes) { $subTypeXmls += $sa.TypeXml }
-		$subRefTypes = Collect-ReferenceTypes $subTypeXmls
-		foreach ($srt in $subRefTypes) {
-			if (-not $childTypeDirMap.ContainsKey($srt.TypeName)) { continue }
-			if (Test-ObjectBorrowed $srt.TypeName $srt.ObjName) { continue }
-			$sSrcFile = Join-Path (Join-Path $cfgDir $childTypeDirMap[$srt.TypeName]) "$($srt.ObjName).xml"
-			if (-not (Test-Path $sSrcFile)) { continue }
-			$sSrc = Read-SourceObject $srt.TypeName $srt.ObjName
-			$sBorrowedXml = Build-BorrowedObjectXml $srt.TypeName $srt.ObjName $sSrc.Uuid $sSrc.Properties
-			$sTargetDir = Join-Path $extDir $childTypeDirMap[$srt.TypeName]
-			if (-not (Test-Path $sTargetDir)) { New-Item -ItemType Directory -Path $sTargetDir -Force | Out-Null }
-			$sTargetFile = Join-Path $sTargetDir "$($srt.ObjName).xml"
-			[System.IO.File]::WriteAllText($sTargetFile, $sBorrowedXml, $encBomLocal)
-			Add-ToChildObjects $srt.TypeName $srt.ObjName
-			$script:borrowedFiles += $sTargetFile
-			Info "  Auto-borrowed (deep): $($srt.TypeName).$($srt.ObjName)"
-		}
-	}
+	if ($subResolved.Attributes.Count -eq 0) { return @() }
+	Merge-AttributesIntoObject $targetTypeName $targetObjName $subResolved.Attributes
+	# Ссылочные типы смёрженных реквизитов — оболочками
+	Borrow-ReferenceTypeShells @($subResolved.Attributes | ForEach-Object { $_.TypeXml })
+	return $subResolved.Attributes
 }
 
 # --- 12. Helper: build borrowed object XML ---

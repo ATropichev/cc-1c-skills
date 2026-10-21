@@ -1,0 +1,104 @@
+{
+  "name": "Реквизит с определяемым типом на форме: тип заимствуется вместе с оболочками объектов из его состава (как Конфигуратор)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура",
+          "attributes": [
+            "Артикул: String(25)",
+            "Вес: Number(10,3)"
+          ]
+        },
+        {
+          "type": "DefinedType",
+          "name": "ТипТовара",
+          "valueType": "CatalogRef.Номенклатура"
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Товар: DefinedType.ТипТовара"
+          ],
+          "tabularSections": {
+            "Товары": [
+              "Аналог: DefinedType.ТипТовара"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/ЗаказКлиента.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Заказ",
+        "elements": [
+          {
+            "input": "Товар",
+            "path": "Объект.Товар"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.ЗаказКлиента",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "Document.ЗаказКлиента.Form.ФормаДокумента"
+  },
+  "args_extra": [
+    "-BorrowMainAttribute",
+    "Form"
+  ],
+  "expect": {
+    "fileContains": [
+      {
+        "file": "cfe/Configuration.xml",
+        "text": [
+          "<Catalog>Номенклатура</Catalog>",
+          "<DefinedType>ТипТовара</DefinedType>"
+        ]
+      }
+    ],
+    "fileNotContains": {
+      "file": "cfe/Catalogs/Номенклатура.xml",
+      "text": [
+        "<Name>Артикул</Name>",
+        "<Name>Вес</Name>"
+      ]
+    }
+  }
+}

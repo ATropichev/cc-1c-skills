@@ -1,0 +1,146 @@
+{
+  "name": "-BorrowMainAttribute All: объекты по ссылкам из глубоких путей формы (колонка ТЧ, реквизит шапки) — с показанными реквизитами",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура",
+          "attributes": [
+            "Артикул: String(25)",
+            "Вес: Number(10,3)"
+          ]
+        },
+        {
+          "type": "Catalog",
+          "name": "Контрагенты",
+          "attributes": [
+            "ИНН: String(12)",
+            "КПП: String(9)"
+          ]
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Контрагент: CatalogRef.Контрагенты",
+            "Комментарий: String(50)"
+          ],
+          "tabularSections": {
+            "Товары": [
+              "Номенклатура: CatalogRef.Номенклатура",
+              "Количество: Number(15,3)"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/ЗаказКлиента.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Заказ",
+        "elements": [
+          {
+            "input": "Контрагент",
+            "path": "Объект.Контрагент"
+          },
+          {
+            "input": "КонтрагентИНН",
+            "path": "Объект.Контрагент.ИНН"
+          },
+          {
+            "table": "Товары",
+            "path": "Объект.Товары",
+            "columns": [
+              {
+                "input": "Товары0",
+                "path": "Объект.Товары.Номенклатура"
+              },
+              {
+                "input": "Товары1",
+                "path": "Объект.Товары.Номенклатура.Артикул"
+              }
+            ]
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.ЗаказКлиента",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "Document.ЗаказКлиента.Form.ФормаДокумента"
+  },
+  "args_extra": [
+    "-BorrowMainAttribute",
+    "All"
+  ],
+  "expect": {
+    "fileContains": [
+      {
+        "file": "cfe/Catalogs/Номенклатура.xml",
+        "text": [
+          "<Name>Артикул</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Catalogs/Контрагенты.xml",
+        "text": [
+          "<Name>ИНН</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Documents/ЗаказКлиента.xml",
+        "text": [
+          "<Name>Комментарий</Name>",
+          "<Name>Количество</Name>"
+        ]
+      }
+    ],
+    "fileNotContains": [
+      {
+        "file": "cfe/Catalogs/Номенклатура.xml",
+        "text": [
+          "<Name>Вес</Name>"
+        ]
+      },
+      {
+        "file": "cfe/Catalogs/Контрагенты.xml",
+        "text": [
+          "<Name>КПП</Name>"
+        ]
+      }
+    ]
+  }
+}
