@@ -60,7 +60,7 @@
   "noSnapshot": "навык ничего не пишет, проверяется текст предупреждения",
   "expect": {
     "stdoutContains": [
-      "[WARN]  19. DataProcessor.Тест_Обр: тип ссылается на Catalog.Склады, а его нет в расширении — на платформе ниже 8.3.25"
+      "[WARN]  19. DataProcessor.Тест_Обр: type refers to Catalog.Склады, which is not in the extension — below 8.3.25"
     ],
     "stdoutNotContains": "[ERROR]"
   }

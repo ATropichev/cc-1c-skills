@@ -22,5 +22,5 @@
     { "deletePath": "cfe/CommonModules/ОбщийМодуль1/Ext/Module.bsl" }
   ],
   "params": { "extensionPath": "cfe" },
-  "expect": { "stdoutContains": "есть <xr:PropertyState> для Module, но нет Module.bsl" }
+  "expect": { "stdoutContains": "<xr:PropertyState> for Module is present but Module.bsl is missing" }
 }

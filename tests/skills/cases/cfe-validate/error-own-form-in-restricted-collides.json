@@ -62,6 +62,6 @@
   "expectError": true,
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
   "expect": {
-    "stdoutContains": "18. InformationRegister.Цены.Form.ФормаЗаписи: собственный подобъект"
+    "stdoutContains": "18. InformationRegister.Цены.Form.ФормаЗаписи: own sub-object"
   }
 }

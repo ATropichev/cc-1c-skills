@@ -143,7 +143,7 @@
   },
   "expectError": true,
   "expect": {
-    "stdoutContains": "путь 'Объект.Склад.Телефон' — у Catalog.Склады в расширении нет реквизита Телефон",
-    "stdoutNotContains": "путь 'Объект.Склад.Адрес'"
+    "stdoutContains": "path 'Объект.Склад.Телефон' — Catalog.Склады has no attribute Телефон in the extension",
+    "stdoutNotContains": "path 'Объект.Склад.Адрес'"
   }
 }

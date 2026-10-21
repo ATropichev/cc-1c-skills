@@ -6,7 +6,7 @@
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст и код возврата",
   "expect": {
     "stdoutContains": [
-      "Роль 'Расш1_ОсновнаяРоль' входит в DefaultRoles и даёт права на заимствованный HTTPService.ЭДО"
+      "Role 'Расш1_ОсновнаяРоль' is in DefaultRoles and grants rights on borrowed HTTPService.ЭДО"
     ]
   }
 }

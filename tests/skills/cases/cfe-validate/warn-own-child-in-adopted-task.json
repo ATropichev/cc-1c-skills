@@ -49,7 +49,7 @@
   "noSnapshot": "навык ничего не пишет, проверяется текст предупреждения",
   "expect": {
     "stdoutContains": [
-      "[WARN]  10. Task.ЗадачаИсполнителя: собственный Attribute.Тест_Срок в заимствованном объекте — на платформе ниже 8.3.25"
+      "[WARN]  10. Task.ЗадачаИсполнителя: own Attribute.Тест_Срок in a borrowed object — below platform 8.3.25"
     ],
     "stdoutNotContains": "[ERROR]"
   }

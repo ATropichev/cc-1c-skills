@@ -97,6 +97,6 @@
   },
   "expectError": true,
   "expect": {
-    "stdoutContains": "путь 'Объект.Статус'"
+    "stdoutContains": "path 'Объект.Статус'"
   }
 }

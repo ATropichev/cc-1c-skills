@@ -59,9 +59,9 @@
   "noSnapshot": "навык ничего не пишет, проверяется текст предупреждения",
   "expect": {
     "stdoutContains": [
-      "[WARN]  9. Task.Тест_Зад: собственный объект этого вида — на платформе ниже 8.3.25 базу не обновит",
-      "[WARN]  9. BusinessProcess.Тест_БП: собственный объект этого вида — на платформе ниже 8.3.25",
-      "[WARN]  9. DocumentJournal.Тест_Жур: собственный объект этого вида — на платформе ниже 8.3.26"
+      "[WARN]  9. Task.Тест_Зад: own object of this kind — below platform 8.3.25 the database is not updated",
+      "[WARN]  9. BusinessProcess.Тест_БП: own object of this kind — below platform 8.3.25",
+      "[WARN]  9. DocumentJournal.Тест_Жур: own object of this kind — below platform 8.3.26"
     ],
     "stdoutNotContains": "[ERROR]"
   }

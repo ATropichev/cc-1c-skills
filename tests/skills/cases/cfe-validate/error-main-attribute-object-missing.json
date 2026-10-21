@@ -73,6 +73,6 @@
   },
   "expectError": true,
   "expect": {
-    "stdoutContains": "основной реквизит 'Объект' типа DocumentObject.ЗаказКлиента — объекта Document.ЗаказКлиента в расширении нет"
+    "stdoutContains": "main attribute 'Объект' of type DocumentObject.ЗаказКлиента — object Document.ЗаказКлиента is not in the extension"
   }
 }

@@ -67,10 +67,10 @@
   },
   "expectError": true,
   "expect": {
-    "stdoutContains": "путь 'Объект.НетТакого'",
+    "stdoutContains": "path 'Объект.НетТакого'",
     "stdoutNotContains": [
-      "путь 'Объект.Тест_Код'",
-      "путь 'Объект.Description'"
+      "path 'Объект.Тест_Код'",
+      "path 'Объект.Description'"
     ]
   }
 }

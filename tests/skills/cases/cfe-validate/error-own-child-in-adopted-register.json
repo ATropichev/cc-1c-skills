@@ -84,9 +84,9 @@
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
   "expect": {
     "stdoutContains": [
-      "10. InformationRegister.Цены: собственный Attribute.Тест_Комментарий в заимствованном объекте",
-      "10. InformationRegister.Цены: собственный Dimension.Тест_Склад в заимствованном объекте",
-      "10. ChartOfCalculationTypes.Начисления: собственный TabularSection.Тест_Строки в заимствованном объекте"
+      "10. InformationRegister.Цены: own Attribute.Тест_Комментарий in a borrowed object",
+      "10. InformationRegister.Цены: own Dimension.Тест_Склад in a borrowed object",
+      "10. ChartOfCalculationTypes.Начисления: own TabularSection.Тест_Строки in a borrowed object"
     ],
     "stdoutNotContains": [
       "Command.Тест_Команда",

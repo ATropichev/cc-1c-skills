@@ -260,9 +260,9 @@ def settings_composer_error(segs):
         # Подсказка — на языке, которым записан сам компоновщик
         names = ('Настройки, ПользовательскиеНастройки, ФиксированныеНастройки' if segs[0].upper() == 'КОМПОНОВЩИКНАСТРОЕК'
                  else 'Settings, UserSettings, FixedSettings')
-        return 1, f'у компоновщика настроек нет такого свойства (форме доступны {names})'
+        return 1, f'the settings composer has no such property (available to forms: {names})'
     if len(segs) >= 3 and segs[2].upper() not in node:
-        return 2, f'у {segs[1]} нет такой колонки или коллекции настроек, доступной форме'
+        return 2, f'{segs[1]} has no such column or settings collection available to forms'
     return None
 
 
@@ -856,7 +856,7 @@ def main():
             if '#TypeSet' in types:
                 return None
             if len(types) >= 2:
-                return i, f'у {segs[i - 1]} составной тип — дальше него путь не разрешается'
+                return i, f'{segs[i - 1]} has a composite type — the path cannot continue past it'
             if len(types) != 1:
                 return None
             rm = REF_TYPE_RE.match(types[0])
@@ -880,10 +880,10 @@ def main():
             if t_entry is None:
                 if t_key.upper() in ext_obj_listed:
                     return None
-                return i, (f'у {t_key} нет в расширении реквизита {seg}: объект не заимствован, '
-                           f'без заимствования через ссылку видны только стандартные реквизиты')
+                return i, (f'{t_key} has no attribute {seg} in the extension: the object is not borrowed, '
+                           f'and through a reference only its standard attributes are visible')
             if seg_ci not in t_entry['Names']:
-                return i, f'у {t_key} в расширении нет реквизита {seg} (незаимствованный реквизит источника форме расширения не виден)'
+                return i, f'{t_key} has no attribute {seg} in the extension (an unborrowed source attribute is not visible to extension forms)'
             if seg_ci in t_entry['TSColumns']:
                 if i + 1 >= len(segs):
                     return None
@@ -891,7 +891,7 @@ def main():
                 if col.upper() in STANDARD_OBJECT_FIELDS_CI:
                     return None
                 if col.upper() not in t_entry['TSColumns'][seg_ci]:
-                    return i + 1, f'у табличной части {seg} объекта {t_key} в расширении нет колонки {col}'
+                    return i + 1, f'tabular section {seg} of {t_key} has no column {col} in the extension'
                 types = t_entry['TSColumns'][seg_ci][col.upper()]
                 i += 2
                 continue
@@ -1023,10 +1023,10 @@ def main():
             else:
                 own_obj_rule = own_object_restricted.get(type_name)
                 if own_obj_rule == 'Error':
-                    r.error(f'9. {type_name}.{child_name}: собственный объект этого вида в расширении — платформа загрузит расширение, но базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
+                    r.error(f'9. {type_name}.{child_name}: own object of this kind in an extension — the platform loads the extension but does not update the database («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
                     check9_ok = False
                 elif own_obj_rule:
-                    r.warn(f'9. {type_name}.{child_name}: собственный объект этого вида — на платформе ниже {own_obj_rule} базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
+                    r.warn(f'9. {type_name}.{child_name}: own object of this kind — below platform {own_obj_rule} the database is not updated («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
 
             # --- Check 10: Sub-items (Attribute, TabularSection, EnumValue, Form) ---
             obj_child_objects = obj_el.find(f'{{{MD}}}ChildObjects')
@@ -1092,12 +1092,12 @@ def main():
                     if r.stopped:
                         break
                     if own_rule == 'Error':
-                        r.error(f'10. {type_name}.{child_name}: собственный {own_label} в заимствованном объекте — платформа загрузит расширение, '
-                                f'но базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
+                        r.error(f'10. {type_name}.{child_name}: own {own_label} in a borrowed object — the platform loads the extension '
+                                f'but does not update the database («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
                         check10_ok = False
                     else:
-                        r.warn(f'10. {type_name}.{child_name}: собственный {own_label} в заимствованном объекте — на платформе ниже 8.3.25 '
-                               f'базу не обновит («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
+                        r.warn(f'10. {type_name}.{child_name}: own {own_label} in a borrowed object — below platform 8.3.25 '
+                               f'the database is not updated («Добавление дочерних объектов этого типа к заимствованным в расширениях недопустимо»)')
 
             if obj_child_objects is not None:
                 ctx = f'{type_name}.{child_name}'
@@ -1145,7 +1145,7 @@ def main():
                                     if not is_borrowed_sub_item(ts_attr):
                                         continue
                                     sub_item_count += 1
-                                    if not validate_borrowed_sub_item('10', f'{ctx}.ТЧ.{ts_label}', 'Attribute', ts_attr):
+                                    if not validate_borrowed_sub_item('10', f'{ctx}.TabularSection.{ts_label}', 'Attribute', ts_attr):
                                         check10_ok = False
 
                     elif sub_type == 'EnumValue' and type_name == 'Enum':
@@ -1436,7 +1436,7 @@ def main():
                 # Объекта основного реквизита в расширении нет — тип не разрешается, и платформа не читает
                 # форму целиком: «Исключение XDTO произошло при чтении файла». Это ошибка типа, а не путей,
                 # поэтому она не зависит от того, замерен ли набор стандартных реквизитов этого типа (ниже).
-                r.error(f"14. {ctx}: основной реквизит '{root_name14}' типа {target['TypeName']} — объекта {owner_key} в расширении нет (заимствуйте его)")
+                r.error(f"14. {ctx}: main attribute '{root_name14}' of type {target['TypeName']} — object {owner_key} is not in the extension (borrow it)")
                 check14_ok = False
                 continue
             std_fields = MAIN_ATTR_STANDARD_FIELDS.get(target['Category'].upper())
@@ -1469,8 +1469,8 @@ def main():
                             and not owner_entry['ExtDimTypes']):
                         bad = f'{root_name14}.{seg0}'
                         bad_paths.setdefault(bad.upper(), [bad, ''])[1] = (
-                            f'у {owner_key} в расширении не заданы свойства ExtDimensionTypes и MaxExtDimensionCount — стандартная ТЧ '
-                            f'видов субконто форме не видна (перенесите их и заимствуйте ПВХ видов субконто)')
+                            f'{owner_key} in the extension lacks ExtDimensionTypes or MaxExtDimensionCount — the standard tabular section '
+                            f'ExtDimensionTypes is not visible to the form (copy both properties and borrow the extra dimension types chart)')
                         continue
                     if target['Category'].upper() == 'REPORTOBJECT' and seg0_ci in SETTINGS_COMPOSER_NAMES:
                         sc_err = settings_composer_error(segments)
@@ -1487,8 +1487,8 @@ def main():
                 if seg0_ci not in owner_entry['Names']:
                     bad = f'{root_name14}.{seg0}'
                     bad_paths.setdefault(bad.upper(), [bad, ''])[1] = (
-                        f'у {owner_key} в расширении нет такого реквизита или табличной части '
-                        f'(незаимствованный реквизит источника форме расширения не виден)')
+                        f'{owner_key} has no such attribute or tabular section in the extension '
+                        f'(an unborrowed source attribute is not visible to extension forms)')
                     continue
                 if len(segments) < 2:
                     continue
@@ -1505,14 +1505,14 @@ def main():
                 if seg1_ci not in ts_columns[seg0_ci]:
                     bad = f'{root_name14}.{seg0}.{seg1}'
                     bad_paths.setdefault(bad.upper(), [bad, ''])[1] = (
-                        f'у табличной части {seg0} в расширении нет колонки {seg1}, и <Columns> формы её не объявляет')
+                        f'tabular section {seg0} has no column {seg1} in the extension, and the form <Columns> does not declare it')
                     continue
                 # Дальше колонки — по её типу (Объект.Товары.Номенклатура.Артикул)
                 if len(segments) > 2:
                     add_ref_tail_bad_path(bad_paths, root_name14, segments, ts_columns[seg0_ci][seg1_ci], 2)
 
             for bad, msg in sorted(bad_paths.values(), key=lambda bm: bm[0].upper()):
-                r.error(f"14. {ctx}: путь '{bad}' — {msg}")
+                r.error(f"14. {ctx}: path '{bad}' — {msg}")
                 check14_ok = False
 
         if check14_ok:
@@ -1567,12 +1567,12 @@ def main():
                     continue
                 check15_count += 1
                 if is_object_adopted(segs[0], segs[1]):
-                    r.error(f"15. Роль '{def_role_name}' входит в DefaultRoles и даёт права на заимствованный "
-                            f"{segs[0]}.{segs[1]} ({full_name}): платформа это запрещает. "
-                            "Вынесите такие права в отдельную роль вне DefaultRoles.")
+                    r.error(f"15. Role '{def_role_name}' is in DefaultRoles and grants rights on borrowed "
+                            f"{segs[0]}.{segs[1]} ({full_name}): the platform forbids this. "
+                            "Move these rights to a separate role outside DefaultRoles.")
                     check15_ok = False
         if check15_ok and check15_count > 0:
-            r.ok(f'15. Основные роли: прав на заимствованные объекты нет ({check15_count} checked)')
+            r.ok(f'15. Default roles: no rights on borrowed objects ({check15_count} checked)')
 
     if r.stopped:
         r.finalize(out_file)
@@ -1609,13 +1609,13 @@ def main():
                 has_file = os.path.isfile(os.path.join(type_dir, obj_name_val, 'Ext', f'{kind}.bsl'))
                 has_flag = f'<xr:Property>{kind}</xr:Property>' in obj_text
                 if has_file and not has_flag:
-                    state_issues.append(f'{type_name}.{obj_name_val} — есть {kind}.bsl, но нет <xr:PropertyState> для {kind}')
+                    state_issues.append(f'{type_name}.{obj_name_val} — {kind}.bsl exists but <xr:PropertyState> for {kind} is missing')
                 elif has_flag and not has_file:
-                    state_issues.append(f'{type_name}.{obj_name_val} — есть <xr:PropertyState> для {kind}, но нет {kind}.bsl')
+                    state_issues.append(f'{type_name}.{obj_name_val} — <xr:PropertyState> for {kind} is present but {kind}.bsl is missing')
 
         if state_checked > 0:
             if not state_issues:
-                r.ok(f'16. Модули заимствованных объектов: пометки расширенных свойств согласованы ({state_checked})')
+                r.ok(f'16. Borrowed object modules: extended property marks are consistent ({state_checked})')
             else:
                 for issue in state_issues:
                     r.warn(f'16. {issue}')
@@ -1853,13 +1853,13 @@ def main():
             src_root = source_config_root()
             src_cfg_file = os.path.join(src_root, 'Configuration.xml')
             if not os.path.isfile(src_cfg_file):
-                r.warn(f"18. -ConfigPath '{config_path_arg}': Configuration.xml не найден — сверка с конфигурацией-источником пропущена")
+                r.warn(f"18. -ConfigPath '{config_path_arg}': Configuration.xml not found — comparison with the source configuration skipped")
                 src_root = None
             else:
                 try:
                     src_cfg_root = etree.parse(src_cfg_file).getroot()
                 except Exception:
-                    r.warn(f"18. -ConfigPath '{config_path_arg}': Configuration.xml не читается — сверка с конфигурацией-источником пропущена")
+                    r.warn(f"18. -ConfigPath '{config_path_arg}': Configuration.xml is unreadable — comparison with the source configuration skipped")
                     src_root = None
 
         check18_ok = True
@@ -1872,7 +1872,7 @@ def main():
             if ext_def_lang and src_def_lang:
                 check18_count += 1
                 if ext_def_lang != src_def_lang:
-                    r.error(f'18. DefaultLanguage расширения "{def_lang}", а у конфигурации-источника "{src_def_lang}" — платформа загрузит расширение, но не применит («ОсновнойЯзык не совпадает»)')
+                    r.error(f'18. Extension DefaultLanguage "{def_lang}" differs from the source configuration "{src_def_lang}" — the platform loads the extension but does not apply it («ОсновнойЯзык не совпадает»)')
                     check18_ok = False
 
         for child in child_obj_node:
@@ -1895,12 +1895,12 @@ def main():
                 for key, ext_id in ext_idx.items():
                     check18_count += 1
                     if ext_id == zero_guid:
-                        r.warn(f'18. {key}: ExtendedConfigurationObject нулевой — платформа загрузит расширение, но не применит. Создайте расширение и заимствуйте объекты с -ConfigPath')
+                        r.warn(f'18. {key}: ExtendedConfigurationObject is zero — the platform loads the extension but does not apply it. Create the extension and borrow objects with -ConfigPath')
                 continue
 
             src_idx = md_id_index(os.path.join(src_root, dir_name), type_name, obj_name18, False)
             if src_idx is None:
-                r.error(f'18. {type_name}.{obj_name18}: заимствованного объекта нет в конфигурации-источнике ({dir_name}/{obj_name18}.xml)')
+                r.error(f'18. {type_name}.{obj_name18}: borrowed object is missing from the source configuration ({dir_name}/{obj_name18}.xml)')
                 check18_ok = False
                 continue
             for key, ext_id in ext_idx.items():
@@ -1909,13 +1909,13 @@ def main():
                 if src_id is None:
                     case_twin = next((sk for sk in src_idx if sk.upper() == key.upper()), None)
                     if case_twin:
-                        r.error(f'18. {key}: в конфигурации-источнике имя в другом регистре ({case_twin}) — платформа загрузит расширение, но не применит («контролируемое свойство Имя не совпадает»)')
+                        r.error(f'18. {key}: the source configuration has this name in a different case ({case_twin}) — the platform loads the extension but does not apply it («контролируемое свойство Имя не совпадает»)')
                     else:
-                        r.error(f'18. {key}: заимствованного подобъекта нет в конфигурации-источнике')
+                        r.error(f'18. {key}: borrowed sub-object is missing from the source configuration')
                     check18_ok = False
                 elif ext_id.lower() != src_id.lower():
-                    what = 'нулевой' if ext_id == zero_guid else ext_id
-                    r.error(f'18. {key}: ExtendedConfigurationObject {what}, а UUID в конфигурации-источнике {src_id} — платформа загрузит расширение, но не применит («ОбъектРасширяемойКонфигурации не совпадает»)')
+                    what = 'zero' if ext_id == zero_guid else ext_id
+                    r.error(f'18. {key}: ExtendedConfigurationObject is {what}, but the UUID in the source configuration is {src_id} — the platform loads the extension but does not apply it («ОбъектРасширяемойКонфигурации не совпадает»)')
                     check18_ok = False
                 if r.stopped:
                     break
@@ -1927,13 +1927,13 @@ def main():
             for nc in get_own_name_collisions(os.path.join(config_dir, dir_name, f'{obj_name18}.xml'), f'{type_name}.{obj_name18}', ext_idx, src_idx):
                 if data_banned and nc['Own'].split('.')[2] not in ('Form', 'Command', 'Template'):
                     continue
-                r.error(f"18. {nc['Own']}: собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем ({nc['Src']}) — платформа загрузит расширение, но базу не обновит («Уже существует объект с именем …»)")
+                r.error(f"18. {nc['Own']}: own sub-object, but the source configuration has an unborrowed sub-object with this name ({nc['Src']}) — the platform loads the extension but does not update the database («Уже существует объект с именем …»)")
                 check18_ok = False
                 if r.stopped:
                     break
 
         if not config_path_arg:
-            r.out('[INFO]  18. Заимствованные объекты и основной язык против конфигурации-источника не сверялись: не задан -ConfigPath')
+            r.out('[INFO]  18. Borrowed objects and the default language were not compared with the source configuration: -ConfigPath not set')
         elif src_root and check18_ok and check18_count > 0:
             r.ok(f'18. Source config: {check18_count} link(s) agree (DefaultLanguage, ExtendedConfigurationObject)')
 
@@ -1983,13 +1983,13 @@ def main():
             ref_seen.add(key)
             check19['ok'] = False
             if level == 'type':
-                r.warn(f'19. {where}: {prop} ссылается на {target}, а его нет в расширении — на платформе ниже 8.3.25 не загрузится («Неизвестное имя типа»), с 8.3.25 можно. Заимствуйте {target}')
+                r.warn(f'19. {where}: {prop} refers to {target}, which is not in the extension — below 8.3.25 it does not load («Неизвестное имя типа»), from 8.3.25 it is allowed. Borrow {target}')
             elif level == 'never':
-                r.error(f'19. {where}: {prop} ссылается на {target}, а его нет в расширении — платформа расширение не загрузит. Заимствуйте {target}')
+                r.error(f'19. {where}: {prop} refers to {target}, which is not in the extension — the platform does not load the extension. Borrow {target}')
             elif level == 'rights':
-                r.error(f'19. {where}: права на {target}, а его нет в расширении — платформа их выбросит. Заимствуйте {target}')
+                r.error(f'19. {where}: rights on {target}, which is not in the extension — the platform drops them. Borrow {target}')
             else:
-                r.error(f'19. {where}: {prop} ссылается на {target}, а его нет в расширении — ниже 8.3.25 не загрузится («Неизвестный объект метаданных»), с 8.3.25 загрузится, но связь в рантайме будет пустой. Заимствуйте {target}')
+                r.error(f'19. {where}: {prop} refers to {target}, which is not in the extension — below 8.3.25 it does not load («Неизвестный объект метаданных»), from 8.3.25 it loads but the link is empty at runtime. Borrow {target}')
 
         def read_text19(f):
             try:
@@ -2053,7 +2053,7 @@ def main():
                 elif type_name == 'EventSubscription':
                     type_prop, type_level = 'Source', 'never'
                 else:
-                    type_prop, type_level = 'тип', 'type'
+                    type_prop, type_level = 'type', 'type'
                 scan_types(t, w, type_prop, type_level)
                 if r.stopped:
                     break
@@ -2084,7 +2084,7 @@ def main():
                         continue
                     # Общая форма — сам объект (Ext/Form.xml), форма объекта — <Объект>/Forms/<Имя>
                     rel = where if len(segs) == 2 else f'{where}/' + '/'.join(segs[:-2])
-                    scan_types(t, rel, 'тип', 'type')
+                    scan_types(t, rel, 'type', 'type')
                     if r.stopped:
                         break
             if r.stopped:
@@ -2094,7 +2094,7 @@ def main():
                 t = read_text19(os.path.join(obj_dir, child_name, 'Ext', 'Rights.xml'))
                 if t is not None:
                     for rm in ref_rights_re.finditer(t):
-                        report_ref(where, 'права', rm.group(1), rm.group(2), 'rights')
+                        report_ref(where, 'rights', rm.group(1), rm.group(2), 'rights')
                         if r.stopped:
                             break
 
@@ -2116,7 +2116,7 @@ def main():
                 except OSError:
                     pass
     if ctrl_count > 0:
-        r.out('[INFO]  Контролируемых методов (&ИзменениеИКонтроль): %d — их актуальность здесь не проверяется. Сверьте: /cfe-patch-method -Check -ExtensionPath <ext> -ConfigPath <cf>' % ctrl_count)
+        r.out('[INFO]  Controlled methods (&ИзменениеИКонтроль): %d — not checked for staleness here. Check with: /cfe-patch-method -Check -ExtensionPath <ext> -ConfigPath <cf>' % ctrl_count)
 
     # --- Final output ---
     r.finalize(out_file)

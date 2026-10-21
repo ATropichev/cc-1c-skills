@@ -124,11 +124,11 @@
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
   "expect": {
     "stdoutContains": [
-      "18. Document.ЗаказКлиента.TabularSection.Товары: собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем",
-      "18. Document.ЗаказКлиента.Attribute.КОММЕНТАРИЙ: собственный подобъект, а в конфигурации-источнике есть незаимствованный подобъект с этим именем (Document.ЗаказКлиента.Attribute.Комментарий)",
-      "18. Enum.Статусы.EnumValue.Закрыт: собственный подобъект",
-      "18. Document.ЗаказКлиента.Command.Печать: собственный подобъект",
-      "18. Document.ЗаказКлиента.Template.ПечатьЗаказа: собственный подобъект"
+      "18. Document.ЗаказКлиента.TabularSection.Товары: own sub-object, but the source configuration has an unborrowed sub-object with this name",
+      "18. Document.ЗаказКлиента.Attribute.КОММЕНТАРИЙ: own sub-object, but the source configuration has an unborrowed sub-object with this name (Document.ЗаказКлиента.Attribute.Комментарий)",
+      "18. Enum.Статусы.EnumValue.Закрыт: own sub-object",
+      "18. Document.ЗаказКлиента.Command.Печать: own sub-object",
+      "18. Document.ЗаказКлиента.Template.ПечатьЗаказа: own sub-object"
     ],
     "stdoutNotContains": "TabularSection.Статус:"
   }

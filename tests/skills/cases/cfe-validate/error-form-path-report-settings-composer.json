@@ -79,14 +79,14 @@
   "expectError": true,
   "expect": {
     "stdoutContains": [
-      "путь 'Отчет.SettingsComposerX'",
-      "путь 'Отчет.SettingsComposer.НетТакого' — у компоновщика настроек нет такого свойства (форме доступны Settings, UserSettings, FixedSettings)",
-      "путь 'Отчет.КомпоновщикНастроек.Настройкии' — у компоновщика настроек нет такого свойства (форме доступны Настройки, ПользовательскиеНастройки, ФиксированныеНастройки)",
-      "путь 'Отчет.SettingsComposer.Settings.Structure' — у Settings нет такой колонки или коллекции",
-      "путь 'Отчет.КомпоновщикНастроек.ПользовательскиеНастройки.Элементы'"
+      "path 'Отчет.SettingsComposerX'",
+      "path 'Отчет.SettingsComposer.НетТакого' — the settings composer has no such property (available to forms: Settings, UserSettings, FixedSettings)",
+      "path 'Отчет.КомпоновщикНастроек.Настройкии' — the settings composer has no such property (available to forms: Настройки, ПользовательскиеНастройки, ФиксированныеНастройки)",
+      "path 'Отчет.SettingsComposer.Settings.Structure' — Settings has no such column or settings collection",
+      "path 'Отчет.КомпоновщикНастроек.ПользовательскиеНастройки.Элементы'"
     ],
     "stdoutNotContains": [
-      "путь 'Отчет.SettingsComposer.Settings.Filter'"
+      "path 'Отчет.SettingsComposer.Settings.Filter'"
     ]
   }
 }

@@ -137,6 +137,6 @@
   },
   "expectError": true,
   "expect": {
-    "stdoutContains": "путь 'Объект.Тест_Ссылка.Ref' — у Тест_Ссылка составной тип"
+    "stdoutContains": "path 'Объект.Тест_Ссылка.Ref' — Тест_Ссылка has a composite type"
   }
 }

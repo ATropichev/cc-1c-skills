@@ -6,6 +6,6 @@
   "expectError": true,
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст и код возврата",
   "expect": {
-    "stdoutContains": "18. Catalog.Товары.Attribute.артикул: в конфигурации-источнике имя в другом регистре (Catalog.Товары.Attribute.Артикул)"
+    "stdoutContains": "18. Catalog.Товары.Attribute.артикул: the source configuration has this name in a different case (Catalog.Товары.Attribute.Артикул)"
   }
 }

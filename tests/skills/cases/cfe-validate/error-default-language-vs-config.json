@@ -13,8 +13,8 @@
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст и код возврата",
   "expect": {
     "stdoutContains": [
-      "18. DefaultLanguage расширения \"Language.Русский\", а у конфигурации-источника \"Language.Английский\"",
-      "18. Language.Русский: ExtendedConfigurationObject нулевой"
+      "18. Extension DefaultLanguage \"Language.Русский\" differs from the source configuration \"Language.Английский\"",
+      "18. Language.Русский: ExtendedConfigurationObject is zero"
     ]
   }
 }

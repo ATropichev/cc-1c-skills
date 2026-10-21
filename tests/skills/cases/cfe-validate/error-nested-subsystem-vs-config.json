@@ -6,6 +6,6 @@
   "expectError": true,
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст и код возврата",
   "expect": {
-    "stdoutContains": "18. Subsystem.Родитель.Subsystem.Дочерняя: ExtendedConfigurationObject 11111111-2222-3333-4444-555555555555"
+    "stdoutContains": "18. Subsystem.Родитель.Subsystem.Дочерняя: ExtendedConfigurationObject is 11111111-2222-3333-4444-555555555555"
   }
 }

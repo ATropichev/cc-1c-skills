@@ -82,6 +82,6 @@
       "18. Catalog.Товары.Attribute.Артикул: ExtendedConfigurationObject",
       "18. Catalog.Товары.Form.ФормаЭлемента: ExtendedConfigurationObject"
     ],
-    "stdoutNotContains": "нет в конфигурации-источнике"
+    "stdoutNotContains": "missing from the source configuration"
   }
 }

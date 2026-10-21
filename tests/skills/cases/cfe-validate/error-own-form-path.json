@@ -130,7 +130,7 @@
   },
   "expectError": true,
   "expect": {
-    "stdoutContains": "Form.Тест_Форма: путь 'Объект.Комментарий'",
-    "stdoutNotContains": "путь 'Объект.Тест_Склад'"
+    "stdoutContains": "Form.Тест_Форма: path 'Объект.Комментарий'",
+    "stdoutNotContains": "path 'Объект.Тест_Склад'"
   }
 }

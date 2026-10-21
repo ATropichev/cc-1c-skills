@@ -63,12 +63,12 @@
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
   "expect": {
     "stdoutContains": [
-      "[ERROR] 9. Sequence.Тест_Посл: собственный объект этого вида в расширении — платформа загрузит расширение, но базу не обновит",
-      "[ERROR] 9. SettingsStorage.Тест_ХН: собственный объект этого вида в расширении",
-      "[ERROR] 9. CommonAttribute.Тест_ОР: собственный объект этого вида в расширении"
+      "[ERROR] 9. Sequence.Тест_Посл: own object of this kind in an extension — the platform loads the extension but does not update the database",
+      "[ERROR] 9. SettingsStorage.Тест_ХН: own object of this kind in an extension",
+      "[ERROR] 9. CommonAttribute.Тест_ОР: own object of this kind in an extension"
     ],
     "stdoutNotContains": [
-      "Document.Тест_Док: собственный",
+      "Document.Тест_Док: own",
       "9. Borrowed objects"
     ]
   }

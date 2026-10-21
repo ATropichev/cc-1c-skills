@@ -29,5 +29,5 @@
   ],
   "params": { "extensionPath": "cfe" },
   "args_extra": ["-Detailed"],
-  "expect": { "stdoutContains": "Контролируемых методов (&ИзменениеИКонтроль): 1" }
+  "expect": { "stdoutContains": "Controlled methods (&ИзменениеИКонтроль): 1" }
 }

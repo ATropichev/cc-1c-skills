@@ -140,7 +140,7 @@
   ],
   "expectError": true,
   "expect": {
-    "stdoutContains": "путь 'Объект.Тест_Услуги.НетКолонки'",
-    "stdoutNotContains": "путь 'Объект.Тест_Услуги' —"
+    "stdoutContains": "path 'Объект.Тест_Услуги.НетКолонки'",
+    "stdoutNotContains": "path 'Объект.Тест_Услуги' —"
   }
 }

@@ -145,14 +145,14 @@
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
   "expect": {
     "stdoutContains": [
-      "[ERROR] 19. Catalog.Тест_Спр: Owners ссылается на Catalog.Номенклатура, а его нет в расширении — ниже 8.3.25 не загрузится",
-      "[ERROR] 19. Document.Тест_Док: RegisterRecords ссылается на AccumulationRegister.Остатки",
-      "[ERROR] 19. DefinedType.Тест_ОТ: Type ссылается на Catalog.Номенклатура, а его нет в расширении — платформа расширение не загрузит",
-      "[ERROR] 19. Subsystem.Тест_Подс: Content ссылается на Catalog.Номенклатура",
-      "[ERROR] 19. Role.Тест_Роль: права на Catalog.Номенклатура, а его нет в расширении — платформа их выбросит",
-      "[WARN]  19. DataProcessor.Тест_Обр: тип ссылается на Catalog.Склады",
-      "[ERROR] 19. Subsystem.Тест_Подс/Subsystems/Тест_Вл.xml: Content ссылается на Catalog.Склады",
-      "[WARN]  19. CommonForm.Тест_ОФ: тип ссылается на Catalog.Склады"
+      "[ERROR] 19. Catalog.Тест_Спр: Owners refers to Catalog.Номенклатура, which is not in the extension — below 8.3.25 it does not load",
+      "[ERROR] 19. Document.Тест_Док: RegisterRecords refers to AccumulationRegister.Остатки",
+      "[ERROR] 19. DefinedType.Тест_ОТ: Type refers to Catalog.Номенклатура, which is not in the extension — the platform does not load the extension",
+      "[ERROR] 19. Subsystem.Тест_Подс: Content refers to Catalog.Номенклатура",
+      "[ERROR] 19. Role.Тест_Роль: rights on Catalog.Номенклатура, which is not in the extension — the platform drops them",
+      "[WARN]  19. DataProcessor.Тест_Обр: type refers to Catalog.Склады",
+      "[ERROR] 19. Subsystem.Тест_Подс/Subsystems/Тест_Вл.xml: Content refers to Catalog.Склады",
+      "[WARN]  19. CommonForm.Тест_ОФ: type refers to Catalog.Склады"
     ]
   }
 }

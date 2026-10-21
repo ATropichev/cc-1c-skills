@@ -56,6 +56,6 @@
   "noSnapshot": "негативный кейс: навык ничего не пишет, проверяется текст ошибки",
   "expect": {
     "stdoutContains": "10. Catalog.Склады: Form.ФормаЭлемента metadata file missing",
-    "stdoutNotContains": "собственный подобъект"
+    "stdoutNotContains": "own sub-object"
   }
 }
