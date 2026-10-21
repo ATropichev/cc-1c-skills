@@ -6,8 +6,8 @@
   },
   "expect": {
     "stdoutContains": [
-      "23. Составной тип содержит 'DefinedType.Сумма'",
-      "только единственным"
+      "23. Composite type contains 'DefinedType.Сумма'",
+      "only as the sole type"
     ]
   }
 }

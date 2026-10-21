@@ -6,7 +6,7 @@
   },
   "expect": {
     "stdoutContains": [
-      "23. План видов характеристик 'Виды': тип значения 'DocumentRef' Конфигуратор не предлагает"
+      "23. Chart of characteristic types 'Виды': value type 'DocumentRef' is not offered by Designer"
     ]
   }
 }

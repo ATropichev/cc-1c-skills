@@ -5,8 +5,8 @@
   "expectError": true,
   "expect": {
     "stdoutContains": [
-      "<LineNumberLength> появился в формате 2.20, а файл объявлен как 2.17",
-      "<TypeReductionMode> появился в формате 2.18, а файл объявлен как 2.17"
+      "<LineNumberLength> appeared in format 2.20, but the file declares 2.17",
+      "<TypeReductionMode> appeared in format 2.18, but the file declares 2.17"
     ]
   }
 }

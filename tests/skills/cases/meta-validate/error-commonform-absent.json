@@ -4,6 +4,6 @@
   "params": { "objectPath": "Catalogs/Товары.xml" },
   "expectError": true,
   "expect": {
-    "stdoutContains": "общей формы нет в составе конфигурации"
+    "stdoutContains": "the common form is not in the configuration"
   }
 }

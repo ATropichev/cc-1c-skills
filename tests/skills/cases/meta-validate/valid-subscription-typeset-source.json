@@ -9,7 +9,7 @@
   "expect": {
     "stdoutNotContains": [
       "[ERROR]",
-      "источник событий не задан"
+      "event source is not set"
     ]
   }
 }

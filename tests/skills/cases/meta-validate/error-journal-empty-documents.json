@@ -6,6 +6,6 @@
   },
   "expectError": true,
   "expect": {
-    "stdoutContains": "регистрируемые документы не заданы"
+    "stdoutContains": "no registered documents"
   }
 }

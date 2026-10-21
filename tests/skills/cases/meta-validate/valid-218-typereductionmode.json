@@ -4,7 +4,7 @@
   "params": { "objectPath": "Catalogs/Договоры.xml" },
   "noSnapshot": "meta-validate только читает и печатает — эталон зафиксировал бы фикстуру, а не выход проверяемого навыка; проверяется stdout",
   "expect": {
-    "stdoutNotContains": ["появился в формате", "Unusual version"]
+    "stdoutNotContains": ["appeared in format", "Unusual version"]
   },
   "skipPlatformVerify": "фикстура — одиночный объект без Configuration.xml: загружать нечего"
 }

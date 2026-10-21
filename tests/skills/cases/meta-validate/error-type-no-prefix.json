@@ -5,10 +5,10 @@
   "expectError": true,
   "expect": {
     "stdoutContains": [
-      "22. Тип 'varchar(20)'",
+      "22. Type 'varchar(20)'",
       "Неизвестное имя типа",
-      "22. Тип 'v8:ValueTable'",
-      "не у хранимых в базе"
+      "22. Type 'v8:ValueTable'",
+      "not of objects stored in the infobase"
     ]
   }
 }

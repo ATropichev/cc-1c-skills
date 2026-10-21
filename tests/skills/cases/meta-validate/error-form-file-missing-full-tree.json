@@ -4,6 +4,6 @@
   "params": { "objectPath": "Catalogs/Товары.xml" },
   "expectError": true,
   "expect": {
-    "stdoutContains": "но файл формы отсутствует"
+    "stdoutContains": "but the form file is missing"
   }
 }

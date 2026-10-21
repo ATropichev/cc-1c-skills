@@ -4,6 +4,6 @@
   "params": { "objectPath": "Catalogs/Товары.xml" },
   "expectError": true,
   "expect": {
-    "stdoutContains": "объекта 'Document.НетТакого' нет в составе конфигурации"
+    "stdoutContains": "object 'Document.НетТакого' is not in the configuration"
   }
 }

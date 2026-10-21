@@ -4,6 +4,6 @@
   "params": { "objectPath": "Catalogs/Договоры.xml" },
   "expectError": true,
   "expect": {
-    "stdoutContains": "19. LineNumberLength=12 вне допустимого диапазона 5..9"
+    "stdoutContains": "19. LineNumberLength=12 is out of range 5..9"
   }
 }

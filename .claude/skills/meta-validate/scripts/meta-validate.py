@@ -1,4 +1,4 @@
-# meta-validate v1.40 — Validate 1C metadata object structure (Python port)
+# meta-validate v1.41 — Validate 1C metadata object structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -830,7 +830,7 @@ def check4():
             v8_types = find_all(root_type_el, "v8:Type")
             v8_type_sets = find_all(root_type_el, "v8:TypeSet")
             if len(v8_types) == 0 and len(v8_type_sets) == 0 and scalar_text:
-                report_error(f"4. Property <Type> содержит скалярный текст '{scalar_text}' без структуры типа (<v8:Type>/<v8:TypeSet>) — повреждённый дескриптор типа значения")
+                report_error(f"4. Property <Type> contains scalar text '{scalar_text}' without a type structure (<v8:Type>/<v8:TypeSet>) — corrupted value type descriptor")
                 check4_ok = False
 
         if check4_ok:
@@ -846,7 +846,7 @@ if md_type in structural_only_types:
     elif not ident_pattern.match(obj_name):
         report_error(f"3. Properties: Name '{obj_name}' is not a valid 1C identifier")
     else:
-        report_ok(f'3. Properties: Name="{obj_name}" (базовая структурная проверка для {md_type})')
+        report_ok(f'3. Properties: Name="{obj_name}" (basic structure check for {md_type})')
     check4()
     finalize()
     sys.exit(1 if errors > 0 else 0)
@@ -858,7 +858,7 @@ if md_type in nested_descriptor_types:
     elif not ident_pattern.match(obj_name):
         report_error(f"3. Properties: Name '{obj_name}' is not a valid 1C identifier")
     else:
-        report_ok(f'3. Properties: Name="{obj_name}" (базовая структурная проверка для {md_type})')
+        report_ok(f'3. Properties: Name="{obj_name}" (basic structure check for {md_type})')
     kind_prop = "FormType" if md_type == "Form" else "TemplateType"
     kind_node = find(props_node, f"md:{kind_prop}") if props_node is not None else None
     kind_value = inner_text(kind_node) if kind_node is not None else ""
@@ -1116,7 +1116,7 @@ def check_child_element(node, kind, require_type):
         if type_el is None:
             # Блока Type нет вовсе: загрузка проходит, но платформа молча подставляет тип нового
             # реквизита — Строка(10). Загрузку это не рвёт, а замысел теряет, отсюда WARN.
-            report_warn(f"7. {kind} '{name_val}' — блок Type не задан; при загрузке платформа подставит Строка(10)")
+            report_warn(f"7. {kind} '{name_val}' — no Type block; on load the platform substitutes String(10)")
 
     return True
 
@@ -1452,7 +1452,7 @@ if props_node is not None:
             if len(source_types) > 0 or len(source_type_sets) > 0:
                 has_source = True
         if not has_source:
-            report_error("10. EventSubscription: источник событий не задан — платформа отвергнет загрузку")
+            report_error("10. EventSubscription: event source is not set — the platform rejects the load")
             check10_issues += 1
 
     # ScheduledJob: empty MethodName
@@ -1511,7 +1511,7 @@ if props_node is not None:
             if len(items) > 0 or len(ref_items) > 0:
                 has_reg_docs = True
         if not has_reg_docs:
-            report_error('10. DocumentJournal: регистрируемые документы не заданы — платформа отвергнет загрузку')
+            report_error('10. DocumentJournal: no registered documents — the platform rejects the load')
             check10_issues += 1
 
     # ChartOfAccounts: ExtDimensionTypes should be set if MaxExtDimensionCount > 0
@@ -1827,18 +1827,18 @@ if child_obj_node is not None:
         group_node = find(cmd_props, "md:Group") if cmd_props is not None else None
         group_val = inner_text(group_node).strip() if group_node is not None else ""
         if not group_val:
-            report_error(f"15. Command '{cmd_name}': не задана группа (Group) — 1С отвергает при загрузке")
+            report_error(f"15. Command '{cmd_name}': group (Group) is not set — the platform rejects the load")
             check15_ok = False
         elif group_val not in VALID_COMMAND_GROUPS and not group_val.startswith("CommandGroup."):
-            report_error(f"15. Command '{cmd_name}': неизвестная группа '{group_val}'. "
-                         f"Валидные: {', '.join(VALID_COMMAND_GROUPS)}; либо CommandGroup.<Имя>")
+            report_error(f"15. Command '{cmd_name}': unknown group '{group_val}'. "
+                         f"Valid: {', '.join(VALID_COMMAND_GROUPS)}; or CommandGroup.<Name>")
             check15_ok = False
         elif group_val in SECTION_COMMAND_GROUPS:
             cpt_node = find(cmd_props, "md:CommandParameterType") if cmd_props is not None else None
             has_cpt = cpt_node is not None and (len(find_all(cpt_node, "v8:Type")) > 0 or len(find_all(cpt_node, "v8:TypeSet")) > 0)
             if has_cpt:
-                report_error(f"15. Command '{cmd_name}': тип параметра (CommandParameterType) недоступен "
-                             f"для команд командного интерфейса раздела ('{group_val}')")
+                report_error(f"15. Command '{cmd_name}': parameter type (CommandParameterType) is not available "
+                             f"for commands of the section command interface ('{group_val}')")
                 check15_ok = False
     if check15_ok and cmd_count > 0:
         report_ok(f"15. Commands: {cmd_count} command(s), groups valid")
@@ -1961,11 +1961,11 @@ if config_dir:
                 else:
                     unknown_refs[ref_key] = ref_dir
         for ak in sorted(absent_refs):
-            report_error(f"16. Ссылочный тип '{ak}' — объекта нет в составе конфигурации ({absent_refs[ak]}/) — «Неизвестное имя типа» при загрузке")
+            report_error(f"16. Reference type '{ak}' — the object is not in the configuration ({absent_refs[ak]}/) — «Неизвестное имя типа» on load")
         for mk in sorted(missing_refs):
-            report_warn(f"16. Ссылочный тип '{mk}' — объект есть в составе конфигурации, файла объекта в выгрузке нет ({missing_refs[mk]}/)")
+            report_warn(f"16. Reference type '{mk}' — the object is in the configuration, but its file is not in the dump ({missing_refs[mk]}/)")
         for uk in sorted(unknown_refs):
-            report_warn(f"16. Ссылочный тип '{uk}' не найден в конфигурации ({unknown_refs[uk]}/)")
+            report_warn(f"16. Reference type '{uk}' not found in the configuration ({unknown_refs[uk]}/)")
         if not absent_refs and not missing_refs and not unknown_refs and checked_refs:
             report_ok(f"16. Reference types: {len(checked_refs)} resolved")
 
@@ -2055,14 +2055,14 @@ for tn in type_nodes_22:
             not_storable[t] = etree.QName(child).localname
 
 for bk in sorted(bad_grammar):
-    report_error(f"22. Тип '{bk}' — не имя типа платформы: нет префикса пространства имён либо "
-                 "неверна форма ссылочного типа. При загрузке — «Неизвестное имя типа»")
+    report_error(f"22. Type '{bk}' — not a platform type name: the namespace prefix is missing or "
+                 "the reference type form is wrong. On load: «Неизвестное имя типа»")
 for nk in sorted(not_storable):
-    report_warn(f"22. Тип '{nk}' у элемента {not_storable[nk]} объекта {md_type}: такие типы "
-                "бывают у реквизитов обработок и отчётов, но не у хранимых в базе")
+    report_warn(f"22. Type '{nk}' on element {not_storable[nk]} of object {md_type}: such types "
+                "occur on attributes of data processors and reports, but not of objects stored in the infobase")
 for uk in sorted(unknown_vocab):
-    report_warn(f"22. Тип '{uk}' не в списке известных платформенных типов — проверьте написание "
-                "(список пополняется с версиями платформы)")
+    report_warn(f"22. Type '{uk}' is not in the list of known platform types — check the spelling "
+                "(the list grows with platform versions)")
 if not bad_grammar and not not_storable and not unknown_vocab and types_seen:
     report_ok(f"22. Type names: {types_seen} checked")
 
@@ -2091,14 +2091,14 @@ for tb in root.xpath("//md:Type | //md:ValueType", namespaces=NS):
         raw = re.sub(r'^(?:cfg|d\d+p\d+):', '', (st.text or "").strip())
         if owner_kind == "DefinedType":
             dt_sets_bad = True
-            report_error(f"23. Определяемый тип '{obj_name}': в составе тип-множество '{raw}' — платформа не загрузит такой файл («Недопустимый тип»). Состав определяемого типа — только конкретные типы")
+            report_error(f"23. Defined type '{obj_name}': contains the type set '{raw}' — the platform will not load such a file («Недопустимый тип»). A defined type may contain only concrete types")
             continue
         if owner_kind == "ChartOfCharacteristicTypes" and not re.match(r'^DefinedType[.]', raw):
             dt_sets_bad = True
-            report_warn(f"23. План видов характеристик '{obj_name}': тип значения '{raw}' Конфигуратор не предлагает (в дереве выбора это папка без флажка); ЛюбаяСсылка на выгрузке вернётся как ЛюбаяСсылкаИБ")
+            report_warn(f"23. Chart of characteristic types '{obj_name}': value type '{raw}' is not offered by Designer (in the type picker it is a folder without a checkbox); AnyRef comes back as AnyIBRef on dump")
         if members > 1 and re.match(r'^(DefinedType|Characteristic)[.]', raw):
             dt_sets_bad = True
-            report_warn(f"23. Составной тип содержит '{raw}' — Конфигуратор даёт выбрать определяемый тип и характеристику только единственным; платформа загрузит")
+            report_warn(f"23. Composite type contains '{raw}' — Designer allows a defined type or a characteristic only as the sole type; the platform loads it")
 if dt_sets_seen and not dt_sets_bad:
     report_ok(f"23. Type sets: {dt_sets_seen} block(s) checked")
 
@@ -2121,16 +2121,16 @@ if file_rank > 0:
     for vp in sorted(versioned_props):
         nodes = find_all(root, f"//md:{vp} | //xr:{vp}")
         if nodes and file_rank < format_rank(versioned_props[vp]):
-            report_error(f"18. <{vp}> появился в формате {versioned_props[vp]}, а файл объявлен как {version} — на платформе этой версии свойство будет отброшено при загрузке")
+            report_error(f"18. <{vp}> appeared in format {versioned_props[vp]}, but the file declares {version} — the platform of that version drops the property on load")
 
 # ── Check 19: LineNumberLength — допустимый диапазон 5..9 ──
 # Длина номера строки ТЧ: 5 (до 99 999 строк) … 9 (до 999 999 999). Границы — из документации 1С.
 for lnl in find_all(root, "//md:LineNumberLength"):
     raw = inner_text(lnl).strip()
     if not re.match(r'^\d+$', raw):
-        report_error(f"19. LineNumberLength='{raw}' — должно быть целое число 5..9")
+        report_error(f"19. LineNumberLength='{raw}' — must be an integer 5..9")
     elif int(raw) < 5 or int(raw) > 9:
-        report_error(f"19. LineNumberLength={raw} вне допустимого диапазона 5..9")
+        report_error(f"19. LineNumberLength={raw} is out of range 5..9")
 
 # ── Check 17: MDObjectRef form — ссылка на ОБЪЕКТ метаданных, а не на тип ссылки ──
 # Owners/BasedOn/RegisterRecords/RegisteredDocuments/References содержат путь вида "Catalog.Валюты".
@@ -2156,9 +2156,9 @@ if md_ref_nodes:
             unknown_root[rv] = rroot
     for bk in sorted(bad_ref_form):
         fixed = re.sub(r'^([A-Za-z]+)Ref\.', r'\1.', bk)
-        report_error(f"17. MDObjectRef '{bk}' — ссылка на ТИП, а не на объект метаданных; нужно '{fixed}' (иначе «Неизвестный объект метаданных» при загрузке)")
+        report_error(f"17. MDObjectRef '{bk}' — refers to a TYPE, not to a metadata object; should be '{fixed}' (otherwise «Неизвестный объект метаданных» on load)")
     for uk in sorted(unknown_root):
-        report_warn(f"17. MDObjectRef '{uk}' — неизвестный вид метаданных '{unknown_root[uk]}' (опечатка?)")
+        report_warn(f"17. MDObjectRef '{uk}' — unknown metadata kind '{unknown_root[uk]}' (typo?)")
     if not bad_ref_form and not unknown_root:
         report_ok(f"17. MDObjectRef form: {len(md_ref_nodes)} checked")
 
@@ -2241,11 +2241,11 @@ if not is_adopted:
                      or os.path.exists(os.path.join(cf_dir, "Form.xml")))
             if not cf_ok:
                 if in_config_composition("CommonForm", parts[1]) is True:
-                    report_warn(f"20. {tag} '{ref}' — общая форма есть в составе конфигурации, "
-                                f"файла формы в выгрузке нет (CommonForms/{parts[1]})")
+                    report_warn(f"20. {tag} '{ref}' — the common form is in the configuration, "
+                                f"but the form file is not in the dump (CommonForms/{parts[1]})")
                 else:
-                    report_error(f"20. {tag} '{ref}' — общей формы нет в составе конфигурации "
-                                 f"(CommonForms/{parts[1]}) — «Неизвестный объект метаданных» при загрузке")
+                    report_error(f"20. {tag} '{ref}' — the common form is not in the configuration "
+                                 f"(CommonForms/{parts[1]}) — «Неизвестный объект метаданных» on load")
                     form_ref_bad = True
             continue
 
@@ -2257,17 +2257,17 @@ if not is_adopted:
             parts = ["Table", parts[3], "Form", parts[5]]
 
         if len(parts) != 4 or parts[2] != "Form":
-            report_warn(f"20. {tag} '{ref}' — неожиданный вид ссылки на форму "
-                        f"(ожидается 'CommonForm.Имя' или '<Вид>.<Объект>.Form.<Форма>')")
+            report_warn(f"20. {tag} '{ref}' — unexpected form reference shape "
+                        f"(expected 'CommonForm.<Name>' or '<Kind>.<Object>.Form.<Form>')")
             continue
 
         ref_kind, ref_obj, ref_form = parts[0], parts[1], parts[3]
 
         if ref_kind.lower() == md_type.lower() and ref_obj.lower() == obj_name.lower():
             if ref_form.lower() not in own_forms:
-                known = ", ".join(sorted(own_forms.values())) if own_forms else "нет форм"
-                report_error(f"20. {tag} '{ref}' — форма '{ref_form}' не зарегистрирована в "
-                             f"ChildObjects объекта (есть: {known}) — «Неизвестный объект метаданных» при загрузке")
+                known = ", ".join(sorted(own_forms.values())) if own_forms else "no forms"
+                report_error(f"20. {tag} '{ref}' — form '{ref_form}' is not registered in "
+                             f"the object's ChildObjects (present: {known}) — «Неизвестный объект метаданных» on load")
                 form_ref_bad = True
             elif os.path.isdir(own_dir) and not _form_file_exists_20(own_dir, ref_form):
                 # Форма в составе объекта есть, файла нет. Для дерева, претендующего на полноту
@@ -2275,12 +2275,12 @@ if not is_adopted:
                 # на «Файл объекта не существует». Для фрагмента частичной выгрузки — норма:
                 # такой файл грузится через -listFile слиянием с конфигурацией БД.
                 if config_dir:
-                    report_error(f"20. {tag} '{ref}' — форма зарегистрирована в ChildObjects, но файл "
-                                 f"формы отсутствует ({obj_name}/Forms/{ref_form})")
+                    report_error(f"20. {tag} '{ref}' — the form is registered in ChildObjects, but the form "
+                                 f"file is missing ({obj_name}/Forms/{ref_form})")
                     form_ref_bad = True
                 else:
-                    report_warn(f"20. {tag} '{ref}' — форма есть в ChildObjects, файла формы "
-                                f"в выгрузке нет ({obj_name}/Forms/{ref_form})")
+                    report_warn(f"20. {tag} '{ref}' — the form is in ChildObjects, but the form file "
+                                f"is not in the dump ({obj_name}/Forms/{ref_form})")
             continue
 
         # чужой объект (например журнал документов) — нужна конфигурация
@@ -2288,24 +2288,24 @@ if not is_adopted:
             continue
         ref_dir_20 = form_owner_dir_map.get(ref_kind)
         if not ref_dir_20:
-            report_warn(f"20. {tag} '{ref}' — неизвестный вид метаданных '{ref_kind}' (опечатка?)")
+            report_warn(f"20. {tag} '{ref}' — unknown metadata kind '{ref_kind}' (typo?)")
             continue
         ref_obj_xml = os.path.join(config_dir, ref_dir_20, ref_obj + ".xml")
         if not os.path.exists(ref_obj_xml):
             obj_in_composition = in_config_composition(ref_kind, ref_obj)
             if obj_in_composition is False:
-                report_error(f"20. {tag} '{ref}' — объекта '{ref_kind}.{ref_obj}' нет в составе "
-                             f"конфигурации ({ref_dir_20}/) — «Неизвестный объект метаданных» при загрузке")
+                report_error(f"20. {tag} '{ref}' — object '{ref_kind}.{ref_obj}' is not in the "
+                             f"configuration ({ref_dir_20}/) — «Неизвестный объект метаданных» on load")
                 form_ref_bad = True
             elif obj_in_composition is True:
-                report_warn(f"20. {tag} '{ref}' — объект '{ref_kind}.{ref_obj}' есть в составе "
-                            f"конфигурации, файла объекта в выгрузке нет ({ref_dir_20}/)")
+                report_warn(f"20. {tag} '{ref}' — object '{ref_kind}.{ref_obj}' is in the "
+                            f"configuration, but its file is not in the dump ({ref_dir_20}/)")
             else:
-                report_warn(f"20. {tag} '{ref}' — объект '{ref_kind}.{ref_obj}' не найден в конфигурации ({ref_dir_20}/)")
+                report_warn(f"20. {tag} '{ref}' — object '{ref_kind}.{ref_obj}' not found in the configuration ({ref_dir_20}/)")
             continue
         if not _form_file_exists_20(os.path.join(config_dir, ref_dir_20, ref_obj), ref_form):
-            report_error(f"20. {tag} '{ref}' — форма '{ref_form}' не найдена у объекта "
-                         f"'{ref_kind}.{ref_obj}' — «Неизвестный объект метаданных» при загрузке")
+            report_error(f"20. {tag} '{ref}' — form '{ref_form}' not found on object "
+                         f"'{ref_kind}.{ref_obj}' — «Неизвестный объект метаданных» on load")
             form_ref_bad = True
 
     if form_refs_checked > 0 and not form_ref_bad:
@@ -2333,16 +2333,16 @@ if md_type == "Table":
             parts = ref.split(".")
             # Ожидается ExternalDataSource.<Источник>.Table.<Таблица>.Field.<Поле>
             if len(parts) != 6 or parts[0] != "ExternalDataSource" or parts[2] != "Table" or parts[4] != "Field":
-                report_error(f"21. {tag} '{ref}' — ожидается ExternalDataSource.<Источник>.Table.<Таблица>.Field.<Поле>")
+                report_error(f"21. {tag} '{ref}' — expected ExternalDataSource.<Source>.Table.<Table>.Field.<Field>")
                 eds_refs_bad = True
                 continue
             if parts[3] != obj_name:
-                report_error(f"21. {tag} '{ref}' — ссылка на поле ЧУЖОЙ таблицы (эта: {obj_name})")
+                report_error(f"21. {tag} '{ref}' — refers to a field of ANOTHER table (this one: {obj_name})")
                 eds_refs_bad = True
                 continue
             if parts[5] not in field_names:
-                known = ", ".join(sorted(field_names)) if field_names else "полей нет"
-                report_error(f"21. {tag} '{ref}' — поля '{parts[5]}' нет в таблице (есть: {known})")
+                known = ", ".join(sorted(field_names)) if field_names else "no fields"
+                report_error(f"21. {tag} '{ref}' — field '{parts[5]}' is not in the table (present: {known})")
                 eds_refs_bad = True
     if eds_refs_checked > 0 and not eds_refs_bad:
         report_ok(f"21. Field refs: {eds_refs_checked} resolved")
@@ -2350,7 +2350,7 @@ if md_type == "Table":
     # Ключ: загрузка XML таблицу без ключа принимает (проверено на платформе), а Конфигуратор
     # интерактивно требует. Отсюда предупреждение, а не ошибка: рабочие конфигурации без ключа есть.
     if not find_all(props_node, "md:KeyFields/xr:Field"):
-        report_warn("21. KeyFields пуст — платформа такую таблицу загрузит, но форма записи и набор записей будут недоступны")
+        report_warn("21. KeyFields is empty — the platform loads such a table, but the record form and the record set will be unavailable")
 
 
 # ── Final output ──────────────────────────────────────────────

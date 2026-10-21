@@ -7,8 +7,8 @@
   "expectError": true,
   "expect": {
     "stdoutContains": [
-      "23. Определяемый тип 'Любой': в составе тип-множество 'AnyRef'",
-      "платформа не загрузит такой файл"
+      "23. Defined type 'Любой': contains the type set 'AnyRef'",
+      "the platform will not load such a file"
     ]
   }
 }

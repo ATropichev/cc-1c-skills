@@ -22,6 +22,6 @@
   "params": { "objectPath": "ExternalDataSources/PG/Tables/products.xml" },
   "expectError": true,
   "expect": {
-    "stdoutContains": ["PresentationField", "поля 'nmae' нет в таблице"]
+    "stdoutContains": ["PresentationField", "field 'nmae' is not in the table"]
   }
 }

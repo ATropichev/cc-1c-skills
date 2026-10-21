@@ -7,7 +7,7 @@
   "noSnapshot": "фикстура статична, meta-validate только читает и печатает — эталон зафиксировал бы саму фикстуру; проверяется stdout",
   "skipPlatformVerify": "фикстура — неполная выгрузка: общая форма есть в составе, файла нет намеренно; полная загрузка такого дерева невозможна",
   "expect": {
-    "stdoutContains": "общая форма есть в составе конфигурации, файла формы в выгрузке нет",
+    "stdoutContains": "the common form is in the configuration, but the form file is not in the dump",
     "stdoutNotContains": "[ERROR]"
   }
 }

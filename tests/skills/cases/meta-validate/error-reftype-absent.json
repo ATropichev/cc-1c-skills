@@ -12,6 +12,6 @@
   "expectError": true,
   "noSnapshot": "meta-validate только читает и печатает — эталон зафиксировал бы выход preRun (meta-compile), а не проверяемого навыка; проверяется stdout",
   "expect": {
-    "stdoutContains": "16. Ссылочный тип 'CatalogRef.НетТакогоСправочника' — объекта нет в составе конфигурации"
+    "stdoutContains": "16. Reference type 'CatalogRef.НетТакогоСправочника' — the object is not in the configuration"
   }
 }

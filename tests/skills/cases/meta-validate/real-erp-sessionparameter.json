@@ -4,6 +4,6 @@
   "params": { "objectPath": "SessionParameters/АвторизованныйПользователь" },
   "args_extra": ["-Detailed"],
   "expect": {
-    "stdoutContains": "базовая структурная проверка"
+    "stdoutContains": "basic structure check"
   }
 }

@@ -9,7 +9,7 @@
   "expect": {
     "stdoutNotContains": [
       "[ERROR]",
-      "регистрируемые документы не заданы"
+      "no registered documents"
     ]
   }
 }

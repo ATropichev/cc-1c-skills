@@ -39,7 +39,7 @@
   },
   "expect": {
     "stdoutContains": [
-      "KeyFields пуст",
+      "KeyFields is empty",
       "0 errors, 1 warnings"
     ]
   }

@@ -7,7 +7,7 @@
   "noSnapshot": "фикстура статична, meta-validate только читает и печатает — эталон зафиксировал бы саму фикстуру; проверяется stdout",
   "skipPlatformVerify": "фикстура — неполная выгрузка: объект типа есть в составе, файла нет намеренно; полная загрузка такого дерева невозможна",
   "expect": {
-    "stdoutContains": "16. Ссылочный тип 'CatalogRef.Прочие' — объект есть в составе конфигурации, файла объекта в выгрузке нет",
+    "stdoutContains": "16. Reference type 'CatalogRef.Прочие' — the object is in the configuration, but its file is not in the dump",
     "stdoutNotContains": "[ERROR]"
   }
 }

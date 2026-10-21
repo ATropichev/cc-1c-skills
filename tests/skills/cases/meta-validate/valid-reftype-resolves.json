@@ -13,6 +13,6 @@
   "noSnapshot": "meta-validate только читает и печатает — эталон зафиксировал бы выход preRun (meta-compile), а не проверяемого навыка; проверяется stdout",
   "expect": {
     "stdoutContains": "16. Reference types:",
-    "stdoutNotContains": "16. Ссылочный тип"
+    "stdoutNotContains": "16. Reference type '"
   }
 }

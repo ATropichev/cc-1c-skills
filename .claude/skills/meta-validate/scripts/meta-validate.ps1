@@ -1,4 +1,4 @@
-﻿# meta-validate v1.40 — Validate 1C metadata object structure
+﻿# meta-validate v1.41 — Validate 1C metadata object structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -754,7 +754,7 @@ $check4 = {
 				}
 			}
 			if ($v8Types.Count -eq 0 -and $v8TypeSets.Count -eq 0 -and $scalarText) {
-				Report-Error "4. Property <Type> содержит скалярный текст '$scalarText' без структуры типа (<v8:Type>/<v8:TypeSet>) — повреждённый дескриптор типа значения"
+				Report-Error "4. Property <Type> contains scalar text '$scalarText' without a type structure (<v8:Type>/<v8:TypeSet>) — corrupted value type descriptor"
 				$check4Ok = $false
 			}
 		}
@@ -774,7 +774,7 @@ if ($structuralOnlyTypes -contains $mdType) {
 	} elseif ($objName -notmatch $identPattern) {
 		Report-Error "3. Properties: Name '$objName' is not a valid 1C identifier"
 	} else {
-		Report-OK "3. Properties: Name=`"$objName`" (базовая структурная проверка для $mdType)"
+		Report-OK "3. Properties: Name=`"$objName`" (basic structure check for $mdType)"
 	}
 	& $check4
 	& $finalize
@@ -789,7 +789,7 @@ if ($nestedDescriptorTypes -contains $mdType) {
 	} elseif ($objName -notmatch $identPattern) {
 		Report-Error "3. Properties: Name '$objName' is not a valid 1C identifier"
 	} else {
-		Report-OK "3. Properties: Name=`"$objName`" (базовая структурная проверка для $mdType)"
+		Report-OK "3. Properties: Name=`"$objName`" (basic structure check for $mdType)"
 	}
 	$kindProp = if ($mdType -eq "Form") { "FormType" } else { "TemplateType" }
 	$kindNode = if ($propsNode) { $propsNode.SelectSingleNode("md:$kindProp", $ns) } else { $null }
@@ -1088,7 +1088,7 @@ function Check-ChildElement {
 		if (-not $typeEl) {
 			# Блока Type нет вовсе: загрузка проходит, но платформа молча подставляет тип нового
 			# реквизита — Строка(10). Загрузку это не рвёт, а замысел теряет, отсюда WARN.
-			Report-Warn "7. $kind '$nameVal' — блок Type не задан; при загрузке платформа подставит Строка(10)"
+			Report-Warn "7. $kind '$nameVal' — no Type block; on load the platform substitutes String(10)"
 		}
 	}
 
@@ -1454,7 +1454,7 @@ if ($propsNode) {
 			if ($sourceTypes.Count -gt 0 -or $sourceTypeSets.Count -gt 0) { $hasSource = $true }
 		}
 		if (-not $hasSource) {
-			Report-Error "10. EventSubscription: источник событий не задан — платформа отвергнет загрузку"
+			Report-Error "10. EventSubscription: event source is not set — the platform rejects the load"
 			$check10Issues++
 		}
 	}
@@ -1526,7 +1526,7 @@ if ($propsNode) {
 			if ($items.Count -gt 0 -or $refItems.Count -gt 0) { $hasRegDocs = $true }
 		}
 		if (-not $hasRegDocs) {
-			Report-Error "10. DocumentJournal: регистрируемые документы не заданы — платформа отвергнет загрузку"
+			Report-Error "10. DocumentJournal: no registered documents — the platform rejects the load"
 			$check10Issues++
 		}
 	}
@@ -1870,14 +1870,14 @@ if ($childObjNode) {
 		$groupNode = if ($cmdProps) { $cmdProps.SelectSingleNode("md:Group", $ns) } else { $null }
 		$groupVal = if ($groupNode) { $groupNode.InnerText.Trim() } else { "" }
 		if (-not $groupVal) {
-			Report-Error "15. Command '$cmdName': не задана группа (Group) — 1С отвергает при загрузке"; $check15Ok = $false
+			Report-Error "15. Command '$cmdName': group (Group) is not set — the platform rejects the load"; $check15Ok = $false
 		} elseif (($validCommandGroups -notcontains $groupVal) -and ($groupVal -notmatch '^CommandGroup\.')) {
-			Report-Error "15. Command '$cmdName': неизвестная группа '$groupVal'. Валидные: $($validCommandGroups -join ', '); либо CommandGroup.<Имя>"; $check15Ok = $false
+			Report-Error "15. Command '$cmdName': unknown group '$groupVal'. Valid: $($validCommandGroups -join ', '); or CommandGroup.<Name>"; $check15Ok = $false
 		} elseif ($sectionCommandGroups -contains $groupVal) {
 			$cptNode = if ($cmdProps) { $cmdProps.SelectSingleNode("md:CommandParameterType", $ns) } else { $null }
 			$hasCpt = $cptNode -and (($cptNode.SelectNodes("v8:Type", $ns).Count -gt 0) -or ($cptNode.SelectNodes("v8:TypeSet", $ns).Count -gt 0))
 			if ($hasCpt) {
-				Report-Error "15. Command '$cmdName': тип параметра (CommandParameterType) недоступен для команд командного интерфейса раздела ('$groupVal')"; $check15Ok = $false
+				Report-Error "15. Command '$cmdName': parameter type (CommandParameterType) is not available for commands of the section command interface ('$groupVal')"; $check15Ok = $false
 			}
 		}
 	}
@@ -1996,17 +1996,17 @@ if ($script:configDir) {
 		}
 		if ($absentRefs.Count -gt 0) {
 			foreach ($ak in ($absentRefs.Keys | Sort-Object)) {
-				Report-Error "16. Ссылочный тип '$ak' — объекта нет в составе конфигурации ($($absentRefs[$ak])/) — «Неизвестное имя типа» при загрузке"
+				Report-Error "16. Reference type '$ak' — the object is not in the configuration ($($absentRefs[$ak])/) — «Неизвестное имя типа» on load"
 			}
 		}
 		if ($missingRefs.Count -gt 0) {
 			foreach ($mk in ($missingRefs.Keys | Sort-Object)) {
-				Report-Warn "16. Ссылочный тип '$mk' — объект есть в составе конфигурации, файла объекта в выгрузке нет ($($missingRefs[$mk])/)"
+				Report-Warn "16. Reference type '$mk' — the object is in the configuration, but its file is not in the dump ($($missingRefs[$mk])/)"
 			}
 		}
 		if ($unknownRefs.Count -gt 0) {
 			foreach ($uk in ($unknownRefs.Keys | Sort-Object)) {
-				Report-Warn "16. Ссылочный тип '$uk' не найден в конфигурации ($($unknownRefs[$uk])/)"
+				Report-Warn "16. Reference type '$uk' not found in the configuration ($($unknownRefs[$uk])/)"
 			}
 		}
 		if ($absentRefs.Count -eq 0 -and $missingRefs.Count -eq 0 -and $unknownRefs.Count -eq 0 -and $checkedRefs.Count -gt 0) {
@@ -2098,17 +2098,17 @@ foreach ($tn in $typeNodes22) {
 
 if ($badGrammar.Count -gt 0) {
 	foreach ($bk in ($badGrammar.Keys | Sort-Object)) {
-		Report-Error "22. Тип '$bk' — не имя типа платформы: нет префикса пространства имён либо неверна форма ссылочного типа. При загрузке — «Неизвестное имя типа»"
+		Report-Error "22. Type '$bk' — not a platform type name: the namespace prefix is missing or the reference type form is wrong. On load: «Неизвестное имя типа»"
 	}
 }
 if ($notStorable.Count -gt 0) {
 	foreach ($nk in ($notStorable.Keys | Sort-Object)) {
-		Report-Warn "22. Тип '$nk' у элемента $($notStorable[$nk]) объекта ${mdType}: такие типы бывают у реквизитов обработок и отчётов, но не у хранимых в базе"
+		Report-Warn "22. Type '$nk' on element $($notStorable[$nk]) of object ${mdType}: such types occur on attributes of data processors and reports, but not of objects stored in the infobase"
 	}
 }
 if ($unknownVocab.Count -gt 0) {
 	foreach ($uk in ($unknownVocab.Keys | Sort-Object)) {
-		Report-Warn "22. Тип '$uk' не в списке известных платформенных типов — проверьте написание (список пополняется с версиями платформы)"
+		Report-Warn "22. Type '$uk' is not in the list of known platform types — check the spelling (the list grows with platform versions)"
 	}
 }
 if ($badGrammar.Count -eq 0 -and $notStorable.Count -eq 0 -and $unknownVocab.Count -eq 0 -and $typesSeen -gt 0) {
@@ -2139,16 +2139,16 @@ foreach ($tb in $typeBlocks23) {
 		$raw = $st.InnerText.Trim() -replace '^(?:cfg|d\d+p\d+):', ''
 		if ($ownerKind -eq "DefinedType") {
 			$dtSetsBad = $true
-			Report-Error "23. Определяемый тип '$objName': в составе тип-множество '$raw' — платформа не загрузит такой файл («Недопустимый тип»). Состав определяемого типа — только конкретные типы"
+			Report-Error "23. Defined type '$objName': contains the type set '$raw' — the platform will not load such a file («Недопустимый тип»). A defined type may contain only concrete types"
 			continue
 		}
 		if ($ownerKind -eq "ChartOfCharacteristicTypes" -and $raw -notmatch '^DefinedType\.') {
 			$dtSetsBad = $true
-			Report-Warn "23. План видов характеристик '$objName': тип значения '$raw' Конфигуратор не предлагает (в дереве выбора это папка без флажка); ЛюбаяСсылка на выгрузке вернётся как ЛюбаяСсылкаИБ"
+			Report-Warn "23. Chart of characteristic types '$objName': value type '$raw' is not offered by Designer (in the type picker it is a folder without a checkbox); AnyRef comes back as AnyIBRef on dump"
 		}
 		if ($members -gt 1 -and $raw -match '^(DefinedType|Characteristic)\.') {
 			$dtSetsBad = $true
-			Report-Warn "23. Составной тип содержит '$raw' — Конфигуратор даёт выбрать определяемый тип и характеристику только единственным; платформа загрузит"
+			Report-Warn "23. Composite type contains '$raw' — Designer allows a defined type or a characteristic only as the sole type; the platform loads it"
 		}
 	}
 }
@@ -2172,7 +2172,7 @@ if ($fileRank -gt 0) {
 	foreach ($vp in ($versionedProps.Keys | Sort-Object)) {
 		$nodes = $xmlDoc.SelectNodes("//md:$vp | //xr:$vp", $ns)
 		if ($nodes -and $nodes.Count -gt 0 -and $fileRank -lt (Get-FormatRank $versionedProps[$vp])) {
-			Report-Error "18. <$vp> появился в формате $($versionedProps[$vp]), а файл объявлен как $version — на платформе этой версии свойство будет отброшено при загрузке"
+			Report-Error "18. <$vp> appeared in format $($versionedProps[$vp]), but the file declares $version — the platform of that version drops the property on load"
 		}
 	}
 }
@@ -2182,9 +2182,9 @@ if ($fileRank -gt 0) {
 foreach ($lnl in @($xmlDoc.SelectNodes("//md:LineNumberLength", $ns))) {
 	$raw = $lnl.InnerText.Trim()
 	if ($raw -notmatch '^\d+$') {
-		Report-Error "19. LineNumberLength='$raw' — должно быть целое число 5..9"
+		Report-Error "19. LineNumberLength='$raw' — must be an integer 5..9"
 	} elseif ([int]$raw -lt 5 -or [int]$raw -gt 9) {
-		Report-Error "19. LineNumberLength=$raw вне допустимого диапазона 5..9"
+		Report-Error "19. LineNumberLength=$raw is out of range 5..9"
 	}
 }
 
@@ -2208,10 +2208,10 @@ if ($mdRefNodes -and $mdRefNodes.Count -gt 0) {
 	}
 	foreach ($bk in ($badRefForm.Keys | Sort-Object)) {
 		$fixed = $bk -replace '^([A-Za-z]+)Ref\.', '$1.'
-		Report-Error "17. MDObjectRef '$bk' — ссылка на ТИП, а не на объект метаданных; нужно '$fixed' (иначе «Неизвестный объект метаданных» при загрузке)"
+		Report-Error "17. MDObjectRef '$bk' — refers to a TYPE, not to a metadata object; should be '$fixed' (otherwise «Неизвестный объект метаданных» on load)"
 	}
 	foreach ($uk in ($unknownRoot.Keys | Sort-Object)) {
-		Report-Warn "17. MDObjectRef '$uk' — неизвестный вид метаданных '$($unknownRoot[$uk])' (опечатка?)"
+		Report-Warn "17. MDObjectRef '$uk' — unknown metadata kind '$($unknownRoot[$uk])' (typo?)"
 	}
 	if ($badRefForm.Count -eq 0 -and $unknownRoot.Count -eq 0) {
 		Report-OK "17. MDObjectRef form: $($mdRefNodes.Count) checked"
@@ -2291,9 +2291,9 @@ if (-not $isAdopted) {
 			if (-not $cfOk) {
 				$cfInComposition = Test-InConfigComposition "CommonForm" $parts[1]
 				if ($cfInComposition -eq $true) {
-					Report-Warn "20. $tag '$ref' — общая форма есть в составе конфигурации, файла формы в выгрузке нет (CommonForms/$($parts[1]))"
+					Report-Warn "20. $tag '$ref' — the common form is in the configuration, but the form file is not in the dump (CommonForms/$($parts[1]))"
 				} else {
-					Report-Error "20. $tag '$ref' — общей формы нет в составе конфигурации (CommonForms/$($parts[1])) — «Неизвестный объект метаданных» при загрузке"
+					Report-Error "20. $tag '$ref' — the common form is not in the configuration (CommonForms/$($parts[1])) — «Неизвестный объект метаданных» on load"
 					$formRefBad = $true
 				}
 			}
@@ -2308,7 +2308,7 @@ if (-not $isAdopted) {
 		}
 
 		if ($parts.Count -ne 4 -or $parts[2] -ne "Form") {
-			Report-Warn "20. $tag '$ref' — неожиданный вид ссылки на форму (ожидается 'CommonForm.Имя' или '<Вид>.<Объект>.Form.<Форма>')"
+			Report-Warn "20. $tag '$ref' — unexpected form reference shape (expected 'CommonForm.<Name>' or '<Kind>.<Object>.Form.<Form>')"
 			continue
 		}
 
@@ -2316,8 +2316,8 @@ if (-not $isAdopted) {
 
 		if ($refKind.ToLowerInvariant() -eq $mdType.ToLowerInvariant() -and $refObj.ToLowerInvariant() -eq $objName.ToLowerInvariant()) {
 			if (-not $ownForms.ContainsKey($refForm.ToLowerInvariant())) {
-				$known = if ($ownForms.Count -gt 0) { ($ownForms.Values | Sort-Object) -join ", " } else { "нет форм" }
-				Report-Error "20. $tag '$ref' — форма '$refForm' не зарегистрирована в ChildObjects объекта (есть: $known) — «Неизвестный объект метаданных» при загрузке"
+				$known = if ($ownForms.Count -gt 0) { ($ownForms.Values | Sort-Object) -join ", " } else { "no forms" }
+				Report-Error "20. $tag '$ref' — form '$refForm' is not registered in the object's ChildObjects (present: $known) — «Неизвестный объект метаданных» on load"
 				$formRefBad = $true
 			} elseif ((Test-Path $ownDir) -and -not (Test-FormFile20 $ownDir $refForm)) {
 				# Форма в составе объекта есть, файла нет. Для дерева, претендующего на полноту
@@ -2325,10 +2325,10 @@ if (-not $isAdopted) {
 				# на «Файл объекта не существует». Для фрагмента частичной выгрузки — норма:
 				# такой файл грузится через -listFile слиянием с конфигурацией БД.
 				if ($script:configDir) {
-					Report-Error "20. $tag '$ref' — форма зарегистрирована в ChildObjects, но файл формы отсутствует ($objName/Forms/$refForm)"
+					Report-Error "20. $tag '$ref' — the form is registered in ChildObjects, but the form file is missing ($objName/Forms/$refForm)"
 					$formRefBad = $true
 				} else {
-					Report-Warn "20. $tag '$ref' — форма есть в ChildObjects, файла формы в выгрузке нет ($objName/Forms/$refForm)"
+					Report-Warn "20. $tag '$ref' — the form is in ChildObjects, but the form file is not in the dump ($objName/Forms/$refForm)"
 				}
 			}
 			continue
@@ -2338,24 +2338,24 @@ if (-not $isAdopted) {
 		if ($isExtension20 -or -not $script:configDir) { continue }
 		$refDir20 = $formOwnerDirMap[$refKind]
 		if (-not $refDir20) {
-			Report-Warn "20. $tag '$ref' — неизвестный вид метаданных '$refKind' (опечатка?)"
+			Report-Warn "20. $tag '$ref' — unknown metadata kind '$refKind' (typo?)"
 			continue
 		}
 		$refObjXml = Join-Path (Join-Path $script:configDir $refDir20) "$refObj.xml"
 		if (-not (Test-Path $refObjXml)) {
 			$objInComposition = Test-InConfigComposition $refKind $refObj
 			if ($objInComposition -eq $false) {
-				Report-Error "20. $tag '$ref' — объекта '$refKind.$refObj' нет в составе конфигурации ($refDir20/) — «Неизвестный объект метаданных» при загрузке"
+				Report-Error "20. $tag '$ref' — object '$refKind.$refObj' is not in the configuration ($refDir20/) — «Неизвестный объект метаданных» on load"
 				$formRefBad = $true
 			} elseif ($objInComposition -eq $true) {
-				Report-Warn "20. $tag '$ref' — объект '$refKind.$refObj' есть в составе конфигурации, файла объекта в выгрузке нет ($refDir20/)"
+				Report-Warn "20. $tag '$ref' — object '$refKind.$refObj' is in the configuration, but its file is not in the dump ($refDir20/)"
 			} else {
-				Report-Warn "20. $tag '$ref' — объект '$refKind.$refObj' не найден в конфигурации ($refDir20/)"
+				Report-Warn "20. $tag '$ref' — object '$refKind.$refObj' not found in the configuration ($refDir20/)"
 			}
 			continue
 		}
 		if (-not (Test-FormFile20 (Join-Path (Join-Path $script:configDir $refDir20) $refObj) $refForm)) {
-			Report-Error "20. $tag '$ref' — форма '$refForm' не найдена у объекта '$refKind.$refObj' — «Неизвестный объект метаданных» при загрузке"
+			Report-Error "20. $tag '$ref' — form '$refForm' not found on object '$refKind.$refObj' — «Неизвестный объект метаданных» on load"
 			$formRefBad = $true
 		}
 	}
@@ -2393,18 +2393,18 @@ if ($mdType -eq "Table") {
 			$parts = $ref -split '\.'
 			# Ожидается ExternalDataSource.<Источник>.Table.<Таблица>.Field.<Поле>
 			if ($parts.Count -ne 6 -or $parts[0] -ne "ExternalDataSource" -or $parts[2] -ne "Table" -or $parts[4] -ne "Field") {
-				Report-Error "21. $tag '$ref' — ожидается ExternalDataSource.<Источник>.Table.<Таблица>.Field.<Поле>"
+				Report-Error "21. $tag '$ref' — expected ExternalDataSource.<Source>.Table.<Table>.Field.<Field>"
 				$edsRefsBad = $true
 				continue
 			}
 			if ($parts[3] -ne $objName) {
-				Report-Error "21. $tag '$ref' — ссылка на поле ЧУЖОЙ таблицы (эта: $objName)"
+				Report-Error "21. $tag '$ref' — refers to a field of ANOTHER table (this one: $objName)"
 				$edsRefsBad = $true
 				continue
 			}
 			if (-not $fieldNames.ContainsKey($parts[5])) {
-				$known = if ($fieldNames.Count -gt 0) { ($fieldNames.Keys | Sort-Object) -join ", " } else { "полей нет" }
-				Report-Error "21. $tag '$ref' — поля '$($parts[5])' нет в таблице (есть: $known)"
+				$known = if ($fieldNames.Count -gt 0) { ($fieldNames.Keys | Sort-Object) -join ", " } else { "no fields" }
+				Report-Error "21. $tag '$ref' — field '$($parts[5])' is not in the table (present: $known)"
 				$edsRefsBad = $true
 			}
 		}
@@ -2415,7 +2415,7 @@ if ($mdType -eq "Table") {
 	# интерактивно требует. Отсюда предупреждение, а не ошибка: рабочие конфигурации без ключа есть.
 	$keyNodes = @($propsNode.SelectNodes("md:KeyFields/xr:Field", $ns))
 	if ($keyNodes.Count -eq 0) {
-		Report-Warn "21. KeyFields пуст — платформа такую таблицу загрузит, но форма записи и набор записей будут недоступны"
+		Report-Warn "21. KeyFields is empty — the platform loads such a table, but the record form and the record set will be unavailable"
 	}
 }
 

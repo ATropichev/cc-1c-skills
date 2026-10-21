@@ -6,6 +6,6 @@
   },
   "expectError": true,
   "expect": {
-    "stdoutContains": "источник событий не задан"
+    "stdoutContains": "event source is not set"
   }
 }
