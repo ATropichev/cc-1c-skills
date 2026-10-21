@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.26 —Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.26 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -257,13 +257,16 @@ def settings_composer_error(segs):
         return None
     node = SETTINGS_COMPOSER_TREE.get(segs[1].upper())
     if node is None:
-        return 1, 'у компоновщика настроек нет такого свойства (форме доступны Settings, UserSettings, FixedSettings)'
+        # Подсказка — на языке, которым записан сам компоновщик
+        names = ('Настройки, ПользовательскиеНастройки, ФиксированныеНастройки' if segs[0].upper() == 'КОМПОНОВЩИКНАСТРОЕК'
+                 else 'Settings, UserSettings, FixedSettings')
+        return 1, f'у компоновщика настроек нет такого свойства (форме доступны {names})'
     if len(segs) >= 3 and segs[2].upper() not in node:
         return 2, f'у {segs[1]} нет такой колонки или коллекции настроек, доступной форме'
     return None
 
 
-REF_TYPE_RE =re.compile(r'^(?:\w+:)?(\w+?)Ref\.(.+)$')
+REF_TYPE_RE = re.compile(r'^(?:\w+:)?(\w+?)Ref\.(.+)$')
 
 
 # Стандартные поля строки табличной части: в ChildObjects их нет, но пути Объект.<ТЧ>.<Стандартный>

@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.26 —Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.26 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -295,7 +295,9 @@ function Get-SettingsComposerError([string[]]$segs) {
 	if ($segs.Count -lt 2) { return $null }
 	$node = $script:settingsComposerTree[$segs[1]]
 	if ($null -eq $node) {
-		return @(1, 'у компоновщика настроек нет такого свойства (форме доступны Settings, UserSettings, FixedSettings)')
+		# Подсказка — на языке, которым записан сам компоновщик
+		$names = if ($segs[0] -eq 'КомпоновщикНастроек') { 'Настройки, ПользовательскиеНастройки, ФиксированныеНастройки' } else { 'Settings, UserSettings, FixedSettings' }
+		return @(1, "у компоновщика настроек нет такого свойства (форме доступны $names)")
 	}
 	if ($segs.Count -ge 3 -and -not $node.ContainsKey($segs[2])) {
 		return @(2, "у $($segs[1]) нет такой колонки или коллекции настроек, доступной форме")
