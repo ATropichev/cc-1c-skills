@@ -1,4 +1,4 @@
-# xdto-validate v1.4 — Validate a 1C XDTO package (Python port)
+# xdto-validate v1.5 — Validate a 1C XDTO package (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -115,7 +115,7 @@ elif os.path.isdir(package_path):
             md_path = m
 
 if not bin_path:
-    print(f"[ERROR] Не найден Ext/Package.bin для пути: {package_path}")
+    print(f"[ERROR] Ext/Package.bin not found for path: {package_path}")
     sys.exit(1)
 
 file_name = os.path.basename(os.path.dirname(os.path.dirname(bin_path)))
@@ -166,20 +166,20 @@ def local(el):
 try:
     doc = _parse_xml(bin_path)
 except Exception as e:  # noqa: BLE001
-    report_error(f"Package.bin не является корректным XML: {e}")
+    report_error(f"Package.bin is not well-formed XML: {e}")
     finalize()
     sys.exit(1)
 
 pkg = doc.getroot()
 if local(pkg) != "package":
-    report_error(f"Ожидался корневой <package>, найден <{local(pkg)}>")
+    report_error(f"Expected root <package>, found <{local(pkg)}>")
     finalize()
     sys.exit(1)
-report_ok("Package.bin: корректный XML, корень <package>")
+report_ok("Package.bin: well-formed XML, root <package>")
 
 target_ns = pkg.get("targetNamespace")
 if not target_ns:
-    report_error("У <package> не задан targetNamespace")
+    report_error("<package> has no targetNamespace")
 else:
     report_ok(f"targetNamespace: {target_ns}")
 
@@ -188,9 +188,9 @@ else:
 with open(bin_path, "rb") as f:
     head = f.read(3)
 if head != b"\xef\xbb\xbf":
-    report_warn("Package.bin без BOM UTF-8 — платформа пишет файл с BOM")
+    report_warn("Package.bin has no UTF-8 BOM — the platform writes the file with a BOM")
 else:
-    report_ok("Кодировка: UTF-8 с BOM")
+    report_ok("Encoding: UTF-8 with BOM")
 
 # ── 3. declarations ──────────────────────────────────────────
 
@@ -228,14 +228,14 @@ for t in top_sequence:
         continue
     rank = TOP_ORDER.index(t)
     if rank < prev_rank:
-        report_error(f"Нарушен порядок элементов верхнего уровня: <{t}> после <{TOP_ORDER[prev_rank]}>. "
-                     "Модель требует import -> property -> valueType -> objectType; "
-                     "платформа отвергнет пакет при обновлении конфигурации")
+        report_error(f"Top-level element order violated: <{t}> after <{TOP_ORDER[prev_rank]}>. "
+                     "The model requires import -> property -> valueType -> objectType; "
+                     "the platform rejects the package on configuration update")
         order_ok = False
         break
     prev_rank = rank
 if order_ok:
-    report_ok("Порядок элементов верхнего уровня корректен")
+    report_ok("Top-level element order is correct")
 
 # ── 4. duplicate type names ──────────────────────────────────
 
@@ -245,14 +245,14 @@ for n in pkg:
         continue
     nm = n.get("name")
     if not nm:
-        report_error(f"<{local(n)}> без атрибута name")
+        report_error(f"<{local(n)}> has no name attribute")
         continue
     if nm in seen:
-        report_error(f"Дублирующееся имя типа: {nm}")
+        report_error(f"Duplicate type name: {nm}")
     else:
         seen.add(nm)
 if local_types:
-    report_ok(f"{len(local_types)} тип(ов), имена уникальны")
+    report_ok(f"{len(local_types)} type(s), names are unique")
 
 # ── 5. type references resolve ───────────────────────────────
 
@@ -267,7 +267,7 @@ def resolve_ref(el, attr, raw):
     if raw.startswith("{"):
         close = raw.find("}")
         if close < 0:
-            report_error(f'Некорректная нотация Кларка в {attr}="{raw}"')
+            report_error(f'Invalid Clark notation in {attr}="{raw}"')
             return
         ns = raw[1:close]
         loc = raw[close + 1:]
@@ -277,7 +277,7 @@ def resolve_ref(el, attr, raw):
             ns = el.nsmap.get(parts[0])
             loc = parts[1]
             if not ns:
-                report_error(f'Префикс "{parts[0]}" не объявлен: {attr}="{raw}" (тип {local(el)})')
+                report_error(f'Prefix "{parts[0]}" is not declared: {attr}="{raw}" (element {local(el)})')
                 return
         else:
             ns = None
@@ -290,14 +290,14 @@ def resolve_ref(el, attr, raw):
     if ns == target_ns:
         if attr == "ref":
             if loc not in global_props:
-                report_error(f'ref="{raw}" не разрешается: в пакете нет глобального свойства "{loc}"')
+                report_error(f'ref="{raw}" does not resolve: the package has no global property "{loc}"')
         elif loc not in local_types:
-            report_error(f'{attr}="{raw}" не разрешается: в пакете нет типа "{loc}"')
+            report_error(f'{attr}="{raw}" does not resolve: the package has no type "{loc}"')
         return
     if ns:
         used_namespaces.add(ns)
         if ns not in imports:
-            report_error(f'{attr}="{raw}" ссылается на "{ns}", но <import namespace="{ns}"/> не объявлен')
+            report_error(f'{attr}="{raw}" refers to "{ns}", but <import namespace="{ns}"/> is not declared')
 
 
 node_count = 0
@@ -314,7 +314,7 @@ for el in pkg.iter():
     if state["stopped"]:
         break
 if not state["stopped"]:
-    report_ok(f"{node_count} узлов: ссылки на типы разрешаются")
+    report_ok(f"{node_count} nodes: type references resolve")
 
 if state["stopped"]:
     finalize()
@@ -326,9 +326,9 @@ if any_type_props and imports:
     names = [p.get("name") for p in any_type_props if p.get("name")]
     shown = ", ".join(names[:5])
     report_warn(
-        f'Свойств с type="xs:anyType": {len(any_type_props)} при объявленных импортах ({shown}). '
-        "Тип не разрешён — заполнить структурно такое свойство нельзя. Обычно это след импорта XML-схемы: платформа заменяет неразрешённый "
-        "чужой тип на anyType без ошибки"
+        f'Properties with type="xs:anyType": {len(any_type_props)} despite declared imports ({shown}). '
+        "The type is unresolved — such a property cannot be filled structurally. Usually a trace of an XML Schema import: the platform silently replaces an unresolved "
+        "foreign type with anyType"
     )
 
 # ── 7. unused imports ────────────────────────────────────────
@@ -337,10 +337,10 @@ if any_type_props and imports:
 # типовых конфигураций. Сигналом он становится только вместе с anyType.
 unused = [i for i in imports if i not in used_namespaces]
 if unused and any_type_props:
-    report_warn(f'Импорт(ы) без единого использованного типа: {", ".join(unused)} — '
-                "вместе с anyType это признак неразрешённой зависимости")
+    report_warn(f'Import(s) with no type used: {", ".join(unused)} — '
+                "together with anyType this indicates an unresolved dependency")
 if imports and not unused:
-    report_ok(f"{len(imports)} импорт(ов) — все используются")
+    report_ok(f"{len(imports)} import(s) — all used")
 
 # ── 8. nillable on attribute-form properties ─────────────────
 
@@ -349,8 +349,8 @@ nill_attrs = [p.get("name") for p in pkg.iter()
               and p.get("form") == "Attribute" and p.get("nillable") == "true"]
 if nill_attrs:
     report_warn(
-        f'Свойств с nillable="true" и form="Attribute": {len(nill_attrs)} ({", ".join(nill_attrs[:5])}). '
-        "Спецификация XSD не допускает nillable у атрибутов — экспорт XML-схемы в Конфигураторе их потеряет"
+        f'Properties with nillable="true" and form="Attribute": {len(nill_attrs)} ({", ".join(nill_attrs[:5])}). '
+        "The XSD specification does not allow nillable on attributes — XML Schema export in Designer will lose them"
     )
 
 # ── 9. facet consistency ─────────────────────────────────────
@@ -362,30 +362,30 @@ for t in pkg.iter():
     if local(t) == "typeDef" and t.get(f"{{{XSI_NS}}}type") == "ObjectType":
         continue
     facet_checked += 1
-    nm = t.get("name") or "(анонимный тип)"
+    nm = t.get("name") or "(anonymous type)"
 
     if t.get("length") and (t.get("minLength") or t.get("maxLength")):
         # Спецификация XSD это запрещает, но платформа такие типы хранит — предупреждение, не ошибка
-        report_warn(f"{nm} : length задан вместе с minLength/maxLength — "
-                    "спецификация XSD считает их взаимоисключающими")
+        report_warn(f"{nm} : length is set together with minLength/maxLength — "
+                    "the XSD specification treats them as mutually exclusive")
     min_l, max_l = t.get("minLength"), t.get("maxLength")
     if min_l and max_l and int(min_l) > int(max_l):
-        report_error(f"{nm} : minLength ({min_l}) больше maxLength ({max_l})")
+        report_error(f"{nm} : minLength ({min_l}) is greater than maxLength ({max_l})")
     td, fd = t.get("totalDigits"), t.get("fractionDigits")
     if td and fd and int(fd) > int(td):
-        report_error(f"{nm} : fractionDigits ({fd}) больше totalDigits ({td})")
+        report_error(f"{nm} : fractionDigits ({fd}) is greater than totalDigits ({td})")
     ws = t.get("whiteSpace")
     if ws and ws not in ("preserve", "replace", "collapse"):
-        report_error(f'{nm} : недопустимое whiteSpace="{ws}"')
+        report_error(f'{nm} : invalid whiteSpace="{ws}"')
     var = t.get("variety")
     if var and var not in ("Atomic", "List", "Union"):
-        report_error(f'{nm} : недопустимое variety="{var}"')
+        report_error(f'{nm} : invalid variety="{var}"')
     if var == "List" and t.get("itemType") is None:
-        report_warn(f'{nm} : variety="List" без itemType')
+        report_warn(f'{nm} : variety="List" without itemType')
     if state["stopped"]:
         break
 if facet_checked and not state["stopped"]:
-    report_ok(f"{facet_checked} простых тип(ов): фасеты согласованы")
+    report_ok(f"{facet_checked} simple type(s): facets are consistent")
 
 if state["stopped"]:
     finalize()
@@ -398,15 +398,15 @@ for p in pkg.iter():
         continue
     form = p.get("form")
     if form and form not in ("Element", "Attribute", "Text"):
-        report_error(f'Свойство "{p.get("name")}": недопустимое form="{form}"')
+        report_error(f'Property "{p.get("name")}": invalid form="{form}"')
     ub = p.get("upperBound")
     if ub and ub != "-1" and int(ub) < 1:
-        report_error(f'Свойство "{p.get("name")}": upperBound="{ub}" (допустимы -1 или число ≥ 1)')
+        report_error(f'Property "{p.get("name")}": upperBound="{ub}" (allowed: -1 or a number ≥ 1)')
     lb = p.get("lowerBound")
     if lb and ub and ub != "-1" and int(lb) > int(ub):
-        report_error(f'Свойство "{p.get("name")}": lowerBound ({lb}) больше upperBound ({ub})')
+        report_error(f'Property "{p.get("name")}": lowerBound ({lb}) is greater than upperBound ({ub})')
     if p.get("name") is None and p.get("ref") is None:
-        report_error("Свойство без name и без ref")
+        report_error("Property without name or ref")
     # В модели XDTO fixed — булев признак, само значение лежит в default.
     # В XML-схеме наоборот: fixed="V" совмещает признак и значение.
     fx = p.get("fixed")
@@ -414,18 +414,18 @@ for p in pkg.iter():
         p_name = p.get("name") if p.get("name") is not None else p.get("ref")
         if fx not in ("true", "false"):
             report_error(
-                f'Свойство "{p_name}": fixed="{fx}" — в модели это булев признак, '
-                "значение задаётся в default (в XML-схеме признак и значение совмещены в fixed)"
+                f'Property "{p_name}": fixed="{fx}" — in the model this is a boolean flag; '
+                "the value goes in default (XML Schema combines flag and value in fixed)"
             )
         elif fx == "true" and p.get("default") is None:
             report_error(
-                f"Отсутствует фиксированное значение свойства '{p_name}': "
-                'есть fixed="true", нет default'
+                f'Property "{p_name}": fixed="true" without default — '
+                f"the platform rejects the package («Отсутствует фиксированное значение свойства '{p_name}'»)"
             )
     if state["stopped"]:
         break
 if not state["stopped"]:
-    report_ok("Свойства: form, кратности и фиксированные значения корректны")
+    report_ok("Properties: form, cardinalities and fixed values are correct")
 
 # ── 10b. structural consistency ──────────────────────────────
 
@@ -435,7 +435,7 @@ for t in pkg.iter():
         continue
     if local(t) == "typeDef" and t.get(f"{{{XSI_NS}}}type") != "ObjectType":
         continue
-    tn = t.get("name") or "(анонимный тип)"
+    tn = t.get("name") or "(anonymous type)"
     prop_names = set()
     for c in t:
         if not isinstance(c.tag, str) or local(c) != "property":
@@ -443,7 +443,7 @@ for t in pkg.iter():
         pn = c.get("name")
         if pn:
             if pn in prop_names:
-                report_error(f'{tn} : дублирующееся имя свойства "{pn}"')
+                report_error(f'{tn} : duplicate property name "{pn}"')
                 struct_ok = False
             prop_names.add(pn)
     if state["stopped"]:
@@ -454,14 +454,14 @@ for p_ in pkg.iter():
         continue
     pn = p_.get("name") or p_.get("ref")
     if p_.get("name") is not None and p_.get("ref") is not None:
-        report_error(f'Свойство "{pn}": заданы одновременно name и ref — допустимо только одно')
+        report_error(f'Property "{pn}": both name and ref are set — only one is allowed')
         struct_ok = False
     inline = next((c for c in p_ if isinstance(c.tag, str) and local(c) == "typeDef"), None)
     if inline is not None and p_.get("type") is not None:
-        report_error(f'Свойство "{pn}": заданы одновременно type и вложенный <typeDef> — допустимо только одно')
+        report_error(f'Property "{pn}": both type and a nested <typeDef> are set — only one is allowed')
         struct_ok = False
     if inline is not None and inline.get(f"{{{XSI_NS}}}type") is None:
-        report_error(f'Свойство "{pn}": у вложенного <typeDef> не задан xsi:type (ValueType или ObjectType)')
+        report_error(f'Property "{pn}": nested <typeDef> has no xsi:type (ValueType or ObjectType)')
         struct_ok = False
     if state["stopped"]:
         break
@@ -472,8 +472,8 @@ for vt in pkg.iter():
         continue
     for c in vt:
         if isinstance(c.tag, str) and local(c) == "typeDef" and c.get(f"{{{XSI_NS}}}type") is not None:
-            report_warn(f'{vt.get("name")} : у <typeDef> внутри <valueType> задан xsi:type — '
-                        "платформа его здесь не пишет")
+            report_warn(f'{vt.get("name")} : <typeDef> inside <valueType> has xsi:type — '
+                        "the platform does not write it here")
 
 # Род базового типа должен совпадать
 for t in pkg.iter():
@@ -488,12 +488,12 @@ for t in pkg.iter():
     if t.nsmap.get(parts[0]) != target_ns:
         continue
     if kind == "objectType" and parts[1] in value_type_names:
-        report_error(f'{t.get("name")} : base="{t.get("base")}" ссылается на valueType, '
-                     "а objectType может наследоваться только от objectType")
+        report_error(f'{t.get("name")} : base="{t.get("base")}" refers to a valueType, '
+                     "but an objectType can only inherit from an objectType")
         struct_ok = False
     if kind == "valueType" and parts[1] in object_type_names:
-        report_error(f'{t.get("name")} : base="{t.get("base")}" ссылается на objectType, '
-                     "а valueType может строиться только на простом типе")
+        report_error(f'{t.get("name")} : base="{t.get("base")}" refers to an objectType, '
+                     "but a valueType can only be built on a simple type")
         struct_ok = False
 
 # Union без состава
@@ -503,11 +503,11 @@ for t in pkg.iter():
     if t.get("variety") != "Union" or t.get("memberTypes") is not None:
         continue
     if not any(isinstance(c.tag, str) and local(c) == "typeDef" for c in t):
-        tn = t.get("name") or "(анонимный тип)"
-        report_warn(f'{tn} : variety="Union" без memberTypes и без вложенных типов — состав объединения пуст')
+        tn = t.get("name") or "(anonymous type)"
+        report_warn(f'{tn} : variety="Union" without memberTypes or nested types — the union is empty')
 
 if struct_ok and not state["stopped"]:
-    report_ok("Структура типов и свойств согласована")
+    report_ok("Type and property structure is consistent")
 
 if state["stopped"]:
     finalize()
@@ -520,17 +520,17 @@ if md_path:
     md_name = md.find(f".//{{{MD_NS}}}XDTOPackage/{{{MD_NS}}}Properties/{{{MD_NS}}}Name")
     md_ns = md.find(f".//{{{MD_NS}}}XDTOPackage/{{{MD_NS}}}Properties/{{{MD_NS}}}Namespace")
     if md_name is None:
-        report_error("В объекте метаданных не задано <Name>")
+        report_error("The metadata object has no <Name>")
     elif (md_name.text or "") != file_name:
-        report_error(f'<Name>{md_name.text}</Name> не совпадает с именем каталога "{file_name}"')
+        report_error(f'<Name>{md_name.text}</Name> does not match the directory name "{file_name}"')
     else:
-        report_ok(f"Объект метаданных: Name = {md_name.text}")
+        report_ok(f"Metadata object: Name = {md_name.text}")
     if md_ns is not None and (md_ns.text or "") != target_ns:
-        report_error(f"<Namespace>{md_ns.text}</Namespace> не совпадает с targetNamespace пакета ({target_ns})")
+        report_error(f"<Namespace>{md_ns.text}</Namespace> does not match the package targetNamespace ({target_ns})")
     elif md_ns is not None:
-        report_ok("Namespace объекта метаданных совпадает с targetNamespace")
+        report_ok("Metadata object Namespace matches targetNamespace")
 else:
-    report_warn("Файл объекта метаданных <Имя>.xml не найден рядом с каталогом пакета")
+    report_warn("Metadata object file <Name>.xml not found next to the package directory")
 
 # ── 12. registration + namespace uniqueness ──────────────────
 
@@ -540,10 +540,10 @@ if os.path.exists(config_xml):
     registered = any((e.text or "") == file_name
                      for e in cfg.iterfind(f".//{{{MD_NS}}}Configuration/{{{MD_NS}}}ChildObjects/{{{MD_NS}}}XDTOPackage"))
     if registered:
-        report_ok("Зарегистрирован в Configuration.xml")
+        report_ok("Registered in Configuration.xml")
     else:
-        report_error(f"<XDTOPackage>{file_name}</XDTOPackage> отсутствует в ChildObjects файла "
-                     "Configuration.xml — платформа пакет не увидит")
+        report_error(f"<XDTOPackage>{file_name}</XDTOPackage> is missing from ChildObjects in "
+                     "Configuration.xml — the platform will not see the package")
 
     pkg_root = os.path.join(config_dir, "XDTOPackages")
     if os.path.isdir(pkg_root):
@@ -572,20 +572,20 @@ if os.path.exists(config_xml):
                 pass
         missing_imports = [i for i in imports if i not in known_ns and i not in PLATFORM_NS]
         if missing_imports:
-            report_error("Импортируемые пакеты не определены в конфигурации: "
+            report_error("Imported packages are not defined in the configuration: "
                          + ", ".join(missing_imports)
-                         + ". Платформа отвергнет пакет при обновлении конфигурации — "
-                           "соберите зависимости первыми")
+                         + ". The platform rejects the package on configuration update — "
+                           "build the dependencies first")
         elif imports:
-            report_ok("Все импорты разрешаются в пакеты конфигурации")
+            report_ok("All imports resolve to configuration packages")
 
         if clash:
-            report_warn(f'targetNamespace "{target_ns}" объявлен также в пакет(ах): {", ".join(clash)}. '
-                        "Платформа это допускает, но <import> на это пространство имён становится неоднозначным")
+            report_warn(f'targetNamespace "{target_ns}" is also declared in package(s): {", ".join(clash)}. '
+                        "The platform allows this, but an <import> of this namespace becomes ambiguous")
         else:
-            report_ok("targetNamespace уникален в конфигурации")
+            report_ok("targetNamespace is unique in the configuration")
 else:
-    report_warn(f"Configuration.xml не найден ({config_dir}) — проверки регистрации и уникальности namespace пропущены")
+    report_warn(f"Configuration.xml not found ({config_dir}) — registration and namespace uniqueness checks skipped")
 
 finalize()
 sys.exit(1 if state["errors"] > 0 else 0)

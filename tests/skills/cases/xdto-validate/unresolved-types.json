@@ -8,8 +8,8 @@
   "expectError": true,
   "expect": {
     "stdoutContains": [
-      "не разрешается: в пакете нет типа \"НетТакогоТипа\"",
-      "не объявлен"
+      "does not resolve: the package has no type \"НетТакогоТипа\"",
+      "is not declared"
     ]
   },
   "noSnapshot": "навык только читает — сравнивать нечего, проверка через stdoutContains"

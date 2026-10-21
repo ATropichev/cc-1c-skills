@@ -8,10 +8,10 @@
   "expectError": true,
   "expect": {
     "stdoutContains": [
-      "заданы одновременно name и ref",
-      "дублирующееся имя свойства",
-      "не задан xsi:type",
-      "ссылается на valueType"
+      "both name and ref are set",
+      "duplicate property name",
+      "has no xsi:type",
+      "refers to a valueType"
     ]
   },
   "noSnapshot": "навык только читает — проверка через stdoutContains"

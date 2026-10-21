@@ -7,7 +7,7 @@
   "params": { "packagePath": "pkg-badorder/XDTOPackages/badorder" },
   "expectError": true,
   "expect": {
-    "stdoutContains": ["Нарушен порядок элементов верхнего уровня"]
+    "stdoutContains": ["Top-level element order violated"]
   },
   "noSnapshot": "навык только читает — проверка через stdoutContains"
 }
