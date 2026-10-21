@@ -4,6 +4,6 @@
   "params": { "objectPath": "Тест.xml" },
   "expectError": true,
   "expect": {
-    "stdoutContains": ["у внешней обработки/отчёта команд объекта нет"]
+    "stdoutContains": ["external data processors/reports have no object commands"]
   }
 }

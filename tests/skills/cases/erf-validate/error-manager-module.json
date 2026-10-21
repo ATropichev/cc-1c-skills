@@ -15,6 +15,6 @@
   "params": { "objectPath": "ТестовыйОтчёт.xml" },
   "expectError": true,
   "expect": {
-    "stdoutContains": ["нет модуля менеджера"]
+    "stdoutContains": ["have no manager module"]
   }
 }

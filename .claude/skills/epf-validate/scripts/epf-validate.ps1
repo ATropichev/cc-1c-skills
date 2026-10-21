@@ -1,4 +1,4 @@
-﻿# epf-validate v1.9 — Validate 1C external data processor / report structure
+﻿# epf-validate v1.10 — Validate 1C external data processor / report structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # Works for both EPF (ExternalDataProcessor) and ERF (ExternalReport) — auto-detects
 [CmdletBinding(PositionalBinding=$false)]
@@ -426,7 +426,7 @@ if ($childObjNode) {
 		$childTag = $child.LocalName
 
 		if ($childTag -eq "Command") {
-			Report-Error "4. ChildObjects: Command — у внешней обработки/отчёта команд объекта нет, платформа выбросит его при сборке"
+			Report-Error "4. ChildObjects: Command — external data processors/reports have no object commands; the platform drops it on build"
 			$check4Ok = $false
 			continue
 		}
@@ -799,7 +799,7 @@ if (Test-Path $objModule) {
 # Модуля менеджера у внешней обработки/отчёта нет: платформа выбрасывает файл без сообщения.
 $mgrModule = Join-Path (Join-Path $objDir "Ext") "ManagerModule.bsl"
 if (Test-Path $mgrModule) {
-	Report-Error "9. Ext/ManagerModule.bsl — у внешней обработки/отчёта нет модуля менеджера, платформа выбросит его молча"
+	Report-Error "9. Ext/ManagerModule.bsl — external data processors/reports have no manager module; the platform drops it silently"
 	$check9Ok = $false
 }
 
