@@ -1,4 +1,4 @@
-﻿# meta-compile v1.121 — Compile 1C metadata object from JSON
+﻿# meta-compile v1.122 — Compile 1C metadata object from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1899,6 +1899,34 @@ $script:reservedAttrNames = @{
 	"Account"="Счет"; "ValueType"="ТипЗначения"; "ActionPeriodIsBasic"="ПериодДействияБазовый"
 }
 
+# Имена стандартных команд вида — англ. и рус., в нижнем регистре: команда объекта с таким именем
+# не загрузится («Имя команды не может совпадать с именем стандартной команды»; регистр не важен, от
+# UseStandardCommands не зависит — замер 8.3.24/8.3.27). Вида нет в карте — ограничения нет
+# (перечисление, план обмена; критерий отбора и таблица внешнего источника не замерены).
+function Get-ReservedCommandNames {
+	$openList = @("openlist", "открытьсписок")
+	$create = @("create", "создать")
+	$folder = @("createfolder", "создатьгруппу")
+	$byValue = @("openbyvalue", "открытьпозначению")
+	$basedOn = @("createbasedon", "создатьнаосновании")
+	return @{
+		"Catalog"                    = $openList + $create + $folder + $byValue + $basedOn
+		"ChartOfCharacteristicTypes" = $openList + $create + $folder + $basedOn
+		"Task"                       = $openList + $create + $byValue + $basedOn
+		"Document"                   = $openList + $create + $basedOn
+		"BusinessProcess"            = $openList + $create + $basedOn
+		"ChartOfAccounts"            = $openList + $create + $basedOn
+		"ChartOfCalculationTypes"    = $openList + $create + $basedOn
+		"InformationRegister"        = $openList + $create + $byValue
+		"AccumulationRegister"       = $openList
+		"AccountingRegister"         = $openList
+		"CalculationRegister"        = $openList
+		"DocumentJournal"            = $openList
+		"DataProcessor"              = @("open", "открыть")
+		"Report"                     = @("open", "открыть")
+	}
+}
+
 # Стандартные реквизиты по типу объекта (ключи из reservedAttrNames). Имя реквизита, совпадающее
 # с ними (англ. ИЛИ рус.), платформа не позволит — жёсткий отказ. Контексты вне карты → мягкое предупреждение.
 $script:reservedByContext = @{
@@ -2492,6 +2520,11 @@ function Emit-CommandPicture {
 # picture, shortcut, onMainServerUnavalableBehavior (Auto).
 function Emit-Command {
 	param([string]$indent, [string]$cmdName, $cmd)
+	$reservedCmd = (Get-ReservedCommandNames)[$objType]
+	if ($reservedCmd -and ($reservedCmd -contains $cmdName)) {
+		[Console]::Error.WriteLine("meta-compile: имя команды '$cmdName' совпадает со стандартной командой объекта '$objType'. Выберите другое имя.")
+		exit 1
+	}
 	X "$indent<Command uuid=`"$(New-Guid-String)`">"
 	X "$indent`t<Properties>"
 	X "$indent`t`t<Name>$(Esc-XmlText $cmdName)</Name>"

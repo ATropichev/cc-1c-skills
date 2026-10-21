@@ -688,6 +688,14 @@ const FAMILIES = [
         consumers: ['cf-edit', 'cfe-borrow', 'role-compile', 'xdto-compile'] },
     ],
   },
+  // ─── Имя команды объекта ≠ стандартная команда вида (замер 8.3.24/8.3.27) ─────
+  {
+    name: 'Команды объекта: имена стандартных команд по виду',
+    py: 'reserved_command_names', ps1: 'Get-ReservedCommandNames',
+    variants: [
+      { id: 'base', authority: 'meta-validate', consumers: ['meta-compile', 'meta-edit'] },
+    ],
+  },
   // ─── Порядок групп в <ChildObjects> ОБЪЕКТА (#123) ──────────────────────
   // Канон зависит от вида (у документа Form до TabularSection) и равен xs:sequence <Вид>ChildObjects
   // из MDClasses XSD; таблицу в коде с таблицей спеки (и с XSD, если скачан) сверяет check-object-child-order.

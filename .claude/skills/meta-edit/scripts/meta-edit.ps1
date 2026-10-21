@@ -1,4 +1,4 @@
-﻿# meta-edit v1.66 — Edit existing 1C metadata object XML
+﻿# meta-edit v1.67 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1217,6 +1217,34 @@ $script:reservedAttrNames = @{
 	"ThisNode"="ЭтотУзел"; "SentNo"="НомерОтправленного"; "ReceivedNo"="НомерПринятого"
 	"CalculationType"="ВидРасчета"; "RegistrationPeriod"="ПериодРегистрации"; "ReversingEntry"="СторноЗапись"
 	"Account"="Счет"; "ValueType"="ТипЗначения"; "ActionPeriodIsBasic"="ПериодДействияБазовый"
+}
+
+# Имена стандартных команд вида — англ. и рус., в нижнем регистре: команда объекта с таким именем
+# не загрузится («Имя команды не может совпадать с именем стандартной команды»; регистр не важен, от
+# UseStandardCommands не зависит — замер 8.3.24/8.3.27). Вида нет в карте — ограничения нет
+# (перечисление, план обмена; критерий отбора и таблица внешнего источника не замерены).
+function Get-ReservedCommandNames {
+	$openList = @("openlist", "открытьсписок")
+	$create = @("create", "создать")
+	$folder = @("createfolder", "создатьгруппу")
+	$byValue = @("openbyvalue", "открытьпозначению")
+	$basedOn = @("createbasedon", "создатьнаосновании")
+	return @{
+		"Catalog"                    = $openList + $create + $folder + $byValue + $basedOn
+		"ChartOfCharacteristicTypes" = $openList + $create + $folder + $basedOn
+		"Task"                       = $openList + $create + $byValue + $basedOn
+		"Document"                   = $openList + $create + $basedOn
+		"BusinessProcess"            = $openList + $create + $basedOn
+		"ChartOfAccounts"            = $openList + $create + $basedOn
+		"ChartOfCalculationTypes"    = $openList + $create + $basedOn
+		"InformationRegister"        = $openList + $create + $byValue
+		"AccumulationRegister"       = $openList
+		"AccountingRegister"         = $openList
+		"CalculationRegister"        = $openList
+		"DocumentJournal"            = $openList
+		"DataProcessor"              = @("open", "открыть")
+		"Report"                     = @("open", "открыть")
+	}
 }
 
 # Стандартные реквизиты по типу объекта (ключи из reservedAttrNames). Имя реквизита, совпадающее
@@ -2656,6 +2684,10 @@ function Process-Add($addDef) {
 						Warn "Command '$itemName' already exists, skipping"
 						continue
 					}
+					$reservedCmd = (Get-ReservedCommandNames)[$script:objType]
+					if ($reservedCmd -and ($reservedCmd -contains $itemName)) {
+						Die "meta-edit: имя команды '$itemName' совпадает со стандартной командой объекта '$($script:objType)'. Выберите другое имя."
+					}
 					# У команды есть модуль обработчика (Commands/<Имя>/Ext/CommandModule.bsl) — в корпусе
 					# он есть у всех команд без исключения. Пишем ту же заготовку, что и meta-compile.
 					$cmdExtDir = Join-Path (Join-Path (Join-Path (Join-Path (Split-Path -Parent $resolvedPath) $script:objName) "Commands") $itemName) "Ext"
@@ -2981,6 +3013,12 @@ function Modify-ChildElements($modifyDef, [string]$childType) {
 					if ($nameEl) {
 						$oldName = $nameEl.InnerText.Trim()
 						$newName = "$changeValue"
+						if ($xmlTag -eq "Command") {
+							$reservedCmd = (Get-ReservedCommandNames)[$script:objType]
+							if ($reservedCmd -and ($reservedCmd -contains $newName)) {
+								Die "meta-edit: имя команды '$newName' совпадает со стандартной командой объекта '$($script:objType)'. Выберите другое имя."
+							}
+						}
 						$nameEl.InnerText = $newName
 
 						# Update Synonym if it was auto-generated (matches old CamelCase split)

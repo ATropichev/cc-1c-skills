@@ -1,0 +1,9 @@
+{
+  "name": "Ошибка: имя команды справочника совпадает со стандартной командой (OpenList)",
+  "input": {
+    "type": "Catalog",
+    "name": "Товары",
+    "commands": { "OpenList": { "group": "NavigationPanelOrdinary" } }
+  },
+  "expectError": "совпадает со стандартной командой объекта 'Catalog'"
+}

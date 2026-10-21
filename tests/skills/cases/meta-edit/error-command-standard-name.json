@@ -1,0 +1,19 @@
+{
+  "name": "Отказ: имя добавляемой команды документа совпадает со стандартной командой (СоздатьНаОсновании)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Document", "name": "Заказ" },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    }
+  ],
+  "params": { "objectPath": "Documents/Заказ" },
+  "input": { "add": { "commands": ["СоздатьНаОсновании"] } },
+  "expectError": "совпадает со стандартной командой объекта 'Document'",
+  "expect": {
+    "fileNotContains": [
+      { "file": "Documents/Заказ.xml", "text": ["<Command uuid="] }
+    ],
+    "filesAbsent": ["Documents/Заказ/Commands/СоздатьНаОсновании/Ext/CommandModule.bsl"]
+  }
+}

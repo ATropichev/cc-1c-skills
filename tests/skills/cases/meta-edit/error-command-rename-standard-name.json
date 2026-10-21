@@ -1,0 +1,19 @@
+{
+  "name": "Отказ: переименование команды справочника в стандартную (openlist, регистр не важен)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": { "type": "Catalog", "name": "Товары",
+        "commands": { "МояКоманда": { "group": "NavigationPanelOrdinary" } } },
+      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+    }
+  ],
+  "params": { "objectPath": "Catalogs/Товары" },
+  "input": { "modify": { "commands": { "МояКоманда": { "name": "openlist" } } } },
+  "expectError": "совпадает со стандартной командой объекта 'Catalog'",
+  "expect": {
+    "fileContains": [
+      { "file": "Catalogs/Товары.xml", "text": ["<Name>МояКоманда</Name>"] }
+    ]
+  }
+}

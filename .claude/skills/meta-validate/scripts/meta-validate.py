@@ -1,4 +1,4 @@
-# meta-validate v1.39 — Validate 1C metadata object structure (Python port)
+# meta-validate v1.40 — Validate 1C metadata object structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -369,6 +369,33 @@ types_with_std_attrs = (
     "ChartOfAccounts", "ChartOfCharacteristicTypes", "ChartOfCalculationTypes",
     "BusinessProcess", "Task", "ExchangePlan", "DocumentJournal",
 )
+
+def reserved_command_names():
+    """Имена стандартных команд вида — англ. и рус., в нижнем регистре: команда объекта с таким именем
+    не загрузится («Имя команды не может совпадать с именем стандартной команды»; регистр не важен, от
+    UseStandardCommands не зависит — замер 8.3.24/8.3.27). Вида нет в карте — ограничения нет
+    (перечисление, план обмена; критерий отбора и таблица внешнего источника не замерены)."""
+    open_list = {"openlist", "открытьсписок"}
+    create = {"create", "создать"}
+    folder = {"createfolder", "создатьгруппу"}
+    by_value = {"openbyvalue", "открытьпозначению"}
+    based_on = {"createbasedon", "создатьнаосновании"}
+    return {
+        "Catalog":                    open_list | create | folder | by_value | based_on,
+        "ChartOfCharacteristicTypes": open_list | create | folder | based_on,
+        "Task":                       open_list | create | by_value | based_on,
+        "Document":                   open_list | create | based_on,
+        "BusinessProcess":            open_list | create | based_on,
+        "ChartOfAccounts":            open_list | create | based_on,
+        "ChartOfCalculationTypes":    open_list | create | based_on,
+        "InformationRegister":        open_list | create | by_value,
+        "AccumulationRegister":       open_list,
+        "AccountingRegister":         open_list,
+        "CalculationRegister":        open_list,
+        "DocumentJournal":            open_list,
+        "DataProcessor":              {"open", "открыть"},
+        "Report":                     {"open", "открыть"},
+    }
 
 def object_child_order():
     """Порядок групп в <ChildObjects> объекта по виду. Это xs:sequence <Вид>ChildObjects из MDClasses XSD,
@@ -1779,6 +1806,7 @@ if child_obj_node is not None:
     commands = find_all(child_obj_node, "md:Command")
     check15_ok = True
     cmd_count = 0
+    reserved_cmd = reserved_command_names().get(md_type, set())
     for cmd in commands:
         if stopped:
             break
@@ -1792,6 +1820,9 @@ if child_obj_node is not None:
             check15_ok = False
         if cmd_name == "(unnamed)":
             report_error(f"15. Command (uuid={cuuid}): missing or empty Name")
+            check15_ok = False
+        elif cmd_name.lower() in reserved_cmd:
+            report_error(f"15. Command '{cmd_name}': name conflicts with a standard command of {md_type}")
             check15_ok = False
         group_node = find(cmd_props, "md:Group") if cmd_props is not None else None
         group_val = inner_text(group_node).strip() if group_node is not None else ""

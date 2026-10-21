@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.66 — Edit existing 1C metadata object XML
+# meta-edit v1.67 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1270,6 +1270,33 @@ RESERVED_ATTR_NAMES_RU = {
     'Счет', 'ТипЗначения', 'ПериодДействияБазовый',
 }
 
+
+def reserved_command_names():
+    """Имена стандартных команд вида — англ. и рус., в нижнем регистре: команда объекта с таким именем
+    не загрузится («Имя команды не может совпадать с именем стандартной команды»; регистр не важен, от
+    UseStandardCommands не зависит — замер 8.3.24/8.3.27). Вида нет в карте — ограничения нет
+    (перечисление, план обмена; критерий отбора и таблица внешнего источника не замерены)."""
+    open_list = {"openlist", "открытьсписок"}
+    create = {"create", "создать"}
+    folder = {"createfolder", "создатьгруппу"}
+    by_value = {"openbyvalue", "открытьпозначению"}
+    based_on = {"createbasedon", "создатьнаосновании"}
+    return {
+        "Catalog":                    open_list | create | folder | by_value | based_on,
+        "ChartOfCharacteristicTypes": open_list | create | folder | based_on,
+        "Task":                       open_list | create | by_value | based_on,
+        "Document":                   open_list | create | based_on,
+        "BusinessProcess":            open_list | create | based_on,
+        "ChartOfAccounts":            open_list | create | based_on,
+        "ChartOfCalculationTypes":    open_list | create | based_on,
+        "InformationRegister":        open_list | create | by_value,
+        "AccumulationRegister":       open_list,
+        "AccountingRegister":         open_list,
+        "CalculationRegister":        open_list,
+        "DocumentJournal":            open_list,
+        "DataProcessor":              {"open", "открыть"},
+        "Report":                     {"open", "открыть"},
+    }
 
 # Стандартные реквизиты по типу объекта (EN + RU). Совпадение имени реквизита с ними платформа
 # не позволит — жёсткий отказ. Контексты вне карты → предупреждение по плоскому списку.
@@ -2615,6 +2642,8 @@ def process_add(add_def):
                 if item_name in existing_names:
                     warn(f"Command '{item_name}' already exists, skipping")
                     continue
+                if item_name.lower() in reserved_command_names().get(obj_type, set()):
+                    die(f"meta-edit: имя команды '{item_name}' совпадает со стандартной командой объекта '{obj_type}'. Выберите другое имя.")
                 # У команды есть модуль обработчика (Commands/<Имя>/Ext/CommandModule.bsl) — в корпусе
                 # он есть у всех команд без исключения. Пишем ту же заготовку, что и meta-compile.
                 cmd_ext_dir = os.path.join(os.path.dirname(resolved_path), obj_name, "Commands", item_name, "Ext")
@@ -2860,6 +2889,8 @@ def modify_child_elements(modify_def, child_type):
                 if name_el is not None:
                     old_name = (name_el.text or "").strip()
                     new_name = str(change_value)
+                    if xml_tag == "Command" and new_name.lower() in reserved_command_names().get(obj_type, set()):
+                        die(f"meta-edit: имя команды '{new_name}' совпадает со стандартной командой объекта '{obj_type}'. Выберите другое имя.")
                     name_el.text = new_name
 
                     # Update Synonym if it was auto-generated

@@ -1,4 +1,4 @@
-﻿# meta-validate v1.39 — Validate 1C metadata object structure
+﻿# meta-validate v1.40 — Validate 1C metadata object structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -316,6 +316,34 @@ $typesWithStdAttrs = @(
 	"ChartOfAccounts","ChartOfCharacteristicTypes","ChartOfCalculationTypes",
 	"BusinessProcess","Task","ExchangePlan","DocumentJournal"
 )
+
+# Имена стандартных команд вида — англ. и рус., в нижнем регистре: команда объекта с таким именем
+# не загрузится («Имя команды не может совпадать с именем стандартной команды»; регистр не важен, от
+# UseStandardCommands не зависит — замер 8.3.24/8.3.27). Вида нет в карте — ограничения нет
+# (перечисление, план обмена; критерий отбора и таблица внешнего источника не замерены).
+function Get-ReservedCommandNames {
+	$openList = @("openlist", "открытьсписок")
+	$create = @("create", "создать")
+	$folder = @("createfolder", "создатьгруппу")
+	$byValue = @("openbyvalue", "открытьпозначению")
+	$basedOn = @("createbasedon", "создатьнаосновании")
+	return @{
+		"Catalog"                    = $openList + $create + $folder + $byValue + $basedOn
+		"ChartOfCharacteristicTypes" = $openList + $create + $folder + $basedOn
+		"Task"                       = $openList + $create + $byValue + $basedOn
+		"Document"                   = $openList + $create + $basedOn
+		"BusinessProcess"            = $openList + $create + $basedOn
+		"ChartOfAccounts"            = $openList + $create + $basedOn
+		"ChartOfCalculationTypes"    = $openList + $create + $basedOn
+		"InformationRegister"        = $openList + $create + $byValue
+		"AccumulationRegister"       = $openList
+		"AccountingRegister"         = $openList
+		"CalculationRegister"        = $openList
+		"DocumentJournal"            = $openList
+		"DataProcessor"              = @("open", "открыть")
+		"Report"                     = @("open", "открыть")
+	}
+}
 
 # Порядок групп в <ChildObjects> объекта по виду. Это xs:sequence <Вид>ChildObjects из MDClasses XSD,
 # сверенный выгрузкой платформы: выгрузка сама ставит группы в этот порядок, так что вставка не на место
@@ -1822,6 +1850,8 @@ if ($childObjNode) {
 	$commands = $childObjNode.SelectNodes("md:Command", $ns)
 	$check15Ok = $true
 	$cmdCount = 0
+	$reservedCmd = (Get-ReservedCommandNames)[$mdType]
+	if (-not $reservedCmd) { $reservedCmd = @() }
 	foreach ($cmd in $commands) {
 		if ($script:stopped) { break }
 		$cmdCount++
@@ -1834,6 +1864,8 @@ if ($childObjNode) {
 		}
 		if ($cmdName -eq "(unnamed)") {
 			Report-Error "15. Command (uuid=$cuuid): missing or empty Name"; $check15Ok = $false
+		} elseif ($reservedCmd -contains $cmdName) {
+			Report-Error "15. Command '${cmdName}': name conflicts with a standard command of $mdType"; $check15Ok = $false
 		}
 		$groupNode = if ($cmdProps) { $cmdProps.SelectSingleNode("md:Group", $ns) } else { $null }
 		$groupVal = if ($groupNode) { $groupNode.InnerText.Trim() } else { "" }

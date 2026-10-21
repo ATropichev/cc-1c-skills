@@ -1,0 +1,11 @@
+{
+  "name": "Имя команды обработки совпадает со стандартной командой (регистр не важен: «открыть») — ошибка, платформа не загрузит",
+  "setup": "fixture:dataprocessor-command-standard-name",
+  "params": { "objectPath": "DataProcessors/Загрузка.xml" },
+  "noSnapshot": "фикстура статична, meta-validate только читает и печатает — эталон зафиксировал бы саму фикстуру; проверяется stdout",
+  "skipPlatformVerify": "фикстура — один объект без остальной конфигурации; полная загрузка такого дерева невозможна",
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "15. Command 'открыть': name conflicts with a standard command of DataProcessor"
+  }
+}
