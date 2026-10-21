@@ -1,5 +1,5 @@
 {
-  "name": "Заимствованный определяемый тип ссылается на незаимствованный объект: предупреждение (ниже 8.3.25 не грузится), не ошибка",
+  "name": "Заимствованный определяемый тип ссылается на незаимствованный объект (оболочку из состава убрали): предупреждение (ниже 8.3.25 не грузится), не ошибка",
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
@@ -39,6 +39,18 @@
         "-ConfigPath": "{workDir}",
         "-Object": "DefinedType.ТипТовара"
       }
+    },
+    {
+      "script": "cf-edit/scripts/cf-edit",
+      "args": {
+        "-ConfigPath": "{workDir}/cfe",
+        "-Operation": "remove-childObject",
+        "-Value": "Catalog.Номенклатура",
+        "-NoValidate": true
+      }
+    },
+    {
+      "deletePath": "cfe/Catalogs/Номенклатура.xml"
     }
   ],
   "params": {

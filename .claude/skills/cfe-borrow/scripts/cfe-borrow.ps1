@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.52 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.53 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -3463,6 +3463,7 @@ foreach ($item in $items) {
 		# Уже заимствованный объект НЕ переписываем: в его XML лежат собственные реквизиты
 		# расширения, заимствованные подобъекты и состояния, которые из источника не выводятся.
 		# Повторный вызов — законный способ доделать модуль (-Module), а не переиздать заготовку.
+		$src = $null
 		if (Test-ObjectBorrowed $typeName $objName) {
 			Info "Already borrowed: ${typeName}.${objName} — XML сохранён без изменений"
 		} else {
@@ -3483,6 +3484,12 @@ foreach ($item in $items) {
 		}
 
 		Add-ToChildObjects $typeName $objName
+		# Определяемый тип — с оболочками объектов своего состава, как у Конфигуратора
+		if ($src -and $typeName -eq "DefinedType" -and $src.Properties.ContainsKey("__TypeXml")) {
+			foreach ($rt in (Collect-ReferenceTypes @($src.Properties["__TypeXml"]))) {
+				Borrow-ObjectShell $rt.TypeName $rt.ObjName
+			}
+		}
 
 		$script:borrowedFiles += $targetFile
 		foreach ($kind in (Resolve-ModuleKinds $typeName)) {

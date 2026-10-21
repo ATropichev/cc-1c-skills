@@ -1,0 +1,54 @@
+{
+  "name": "Определяемый тип заимствуется вместе с оболочками объектов из его состава (как Конфигуратор)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура",
+          "attributes": [
+            "Артикул: String(25)"
+          ]
+        },
+        {
+          "type": "DefinedType",
+          "name": "ТипТовара",
+          "valueType": "CatalogRef.Номенклатура"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "DefinedType.ТипТовара"
+  },
+  "expect": {
+    "fileContains": [
+      {
+        "file": "cfe/Configuration.xml",
+        "text": [
+          "<DefinedType>ТипТовара</DefinedType>",
+          "<Catalog>Номенклатура</Catalog>"
+        ]
+      },
+      {
+        "file": "cfe/Catalogs/Номенклатура.xml",
+        "text": "<ChildObjects/>"
+      }
+    ]
+  }
+}

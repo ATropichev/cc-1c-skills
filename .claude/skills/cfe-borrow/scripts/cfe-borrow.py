@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.52 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.53 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -3353,6 +3353,7 @@ def main():
             # расширения, заимствованные подобъекты и состояния, которые из источника не
             # выводятся. Повторный вызов — законный способ доделать модуль (-Module), а не
             # переиздать заготовку.
+            src = None
             if test_object_borrowed(type_name, obj_name):
                 info(f"Already borrowed: {type_name}.{obj_name} — XML сохранён без изменений")
             else:
@@ -3368,6 +3369,10 @@ def main():
                 info(f"  Created: {target_file}")
 
             add_to_child_objects(type_name, obj_name)
+            # Определяемый тип — с оболочками объектов своего состава, как у Конфигуратора
+            if src and type_name == "DefinedType" and "__TypeXml" in src["Properties"]:
+                for rt in collect_reference_types([src["Properties"]["__TypeXml"]]):
+                    borrow_object_shell(rt["TypeName"], rt["ObjName"])
 
             borrowed_files.append(target_file)
             for kind in resolve_module_kinds(type_name):
