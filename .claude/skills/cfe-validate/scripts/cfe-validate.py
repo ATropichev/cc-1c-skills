@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.25 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.26 —Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -223,7 +223,7 @@ MAIN_ATTR_STANDARD_FIELDS = {k.upper(): {n.upper() for n in v.split()} for k, v 
     'TaskObject': 'Number Date Description Ref DeletionMark BusinessProcess RoutePoint Executed Номер Дата Наименование Ссылка ПометкаУдаления БизнесПроцесс ТочкаМаршрута Выполнена',
     'BusinessProcessObject': 'Number Date Ref DeletionMark Started Completed HeadTask Номер Дата Ссылка ПометкаУдаления Стартован Завершен ВедущаяЗадача',
     'DataProcessorObject': '',
-    'ReportObject': '',
+    'ReportObject': 'SettingsComposer КомпоновщикНастроек',
     'InformationRegisterRecordManager': 'Period Recorder LineNumber Active Период Регистратор НомерСтроки Активность',
     'InformationRegisterRecordSet': 'Period Recorder LineNumber Active RowsCount Период Регистратор НомерСтроки Активность КоличествоСтрок',
     'AccumulationRegisterRecordSet': 'Period Recorder LineNumber Active RecordType RowsCount Период Регистратор НомерСтроки Активность ВидДвижения КоличествоСтрок',
@@ -231,8 +231,39 @@ MAIN_ATTR_STANDARD_FIELDS = {k.upper(): {n.upper() for n in v.split()} for k, v 
     'CalculationRegisterRecordSet': 'Recorder LineNumber Active RowsCount CalculationType RegistrationPeriod ReversingEntry ActionPeriod BegOfActionPeriod EndOfActionPeriod BegOfBasePeriod EndOfBasePeriod Регистратор НомерСтроки Активность КоличествоСтрок ВидРасчета ПериодРегистрации Сторно ПериодДействия ПериодДействияНачало ПериодДействияКонец БазовыйПериодНачало БазовыйПериодКонец',
 }.items()}
 
+# Путь через компоновщик настроек отчёта (<Отчет>.SettingsComposer.<Свойство>.<Колонка или коллекция>) —
+# по дереву реквизита формы в конфигураторе (замер 8.3.24, 8.3.27, 8.5). Справка синтакс-помощника тут не
+# источник: Structure, Parent, UserSettings.Items во встроенном языке есть, а в пути формы — «Неверный путь
+# к данным». Платформа проверяет путь на всю глубину; здесь — два уровня после компоновщика, поля строк
+# коллекций (Filter.Use) не проверяем.
+SETTINGS_COMPOSER_NAMES = {'SETTINGSCOMPOSER', 'КОМПОНОВЩИКНАСТРОЕК'}
+_SC_SETTINGS = ('Use ReportStructurePicture ReportStructure HasSelection HasFilter HasOrder HasConditionalAppearance '
+                'HasOutputParameters DataParameters Filter Selection Order ConditionalAppearance OutputParameters UserFields '
+                'Использование КартинкаСтруктурыОтчета СтруктураОтчета НаличиеВыбора НаличиеОтбора НаличиеПорядка '
+                'НаличиеУсловногоОформления НаличиеПараметровВывода ПараметрыДанных Отбор Выбор Порядок УсловноеОформление '
+                'ПараметрыВывода ПользовательскиеПоля')
+_SC_USER_SETTINGS = ('Use SettingPicture Setting ComparisonType ValuePicture Value EditInReportForm '
+                     'Использование КартинкаНастройки Настройка ВидСравнения КартинкаЗначения Значение РедактированиеВФормеОтчета')
+SETTINGS_COMPOSER_TREE = {k.upper(): {n.upper() for n in v.split()} for k, v in {
+    'Settings': _SC_SETTINGS, 'Настройки': _SC_SETTINGS,
+    'FixedSettings': _SC_SETTINGS, 'ФиксированныеНастройки': _SC_SETTINGS,
+    'UserSettings': _SC_USER_SETTINGS, 'ПользовательскиеНастройки': _SC_USER_SETTINGS,
+}.items()}
 
-REF_TYPE_RE = re.compile(r'^(?:\w+:)?(\w+?)Ref\.(.+)$')
+
+def settings_composer_error(segs):
+    """Путь после компоновщика настроек (segs[0]): (номер неверного сегмента, текст) или None."""
+    if len(segs) < 2:
+        return None
+    node = SETTINGS_COMPOSER_TREE.get(segs[1].upper())
+    if node is None:
+        return 1, 'у компоновщика настроек нет такого свойства (форме доступны Settings, UserSettings, FixedSettings)'
+    if len(segs) >= 3 and segs[2].upper() not in node:
+        return 2, f'у {segs[1]} нет такой колонки или коллекции настроек, доступной форме'
+    return None
+
+
+REF_TYPE_RE =re.compile(r'^(?:\w+:)?(\w+?)Ref\.(.+)$')
 
 
 # Стандартные поля строки табличной части: в ChildObjects их нет, но пути Объект.<ТЧ>.<Стандартный>
@@ -1437,6 +1468,12 @@ def main():
                         bad_paths.setdefault(bad.upper(), [bad, ''])[1] = (
                             f'у {owner_key} в расширении не заданы свойства ExtDimensionTypes и MaxExtDimensionCount — стандартная ТЧ '
                             f'видов субконто форме не видна (перенесите их и заимствуйте ПВХ видов субконто)')
+                        continue
+                    if target['Category'].upper() == 'REPORTOBJECT' and seg0_ci in SETTINGS_COMPOSER_NAMES:
+                        sc_err = settings_composer_error(segments)
+                        if sc_err:
+                            bad = f"{root_name14}.{'.'.join(segments[:sc_err[0] + 1])}"
+                            bad_paths.setdefault(bad.upper(), [bad, ''])[1] = sc_err[1]
                         continue
                     if len(segments) >= 2:
                         target_kind, target_name = owner_key.split('.', 1)

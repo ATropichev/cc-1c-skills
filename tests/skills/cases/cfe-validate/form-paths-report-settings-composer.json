@@ -1,0 +1,156 @@
+{
+  "name": "Пути через компоновщик настроек отчёта: заимствованная и собственная форма, оба написания, колонки и коллекции настроек",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Report",
+          "name": "Остатки"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "template-add/scripts/add-template",
+      "args": {
+        "-ObjectName": "Остатки",
+        "-TemplateName": "ОсновнаяСхемаКомпоновкиДанных",
+        "-TemplateType": "DataCompositionSchema",
+        "-SrcDir": "{workDir}/Reports"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Reports/Остатки.xml",
+        "-FormName": "ФормаОтчета"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Остатки",
+        "elements": [
+          {
+            "table": "КомпоновщикНастроекПользовательскиеНастройки",
+            "path": "Отчет.SettingsComposer.UserSettings"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Отчет",
+            "type": "ReportObject.Остатки",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Reports/Остатки/Forms/ФормаОтчета/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Report.Остатки.Form.ФормаОтчета",
+        "-BorrowMainAttribute": "Form"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Report",
+          "name": "Тест_Отчет"
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}/cfe"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/cfe/Reports/Тест_Отчет.xml",
+        "-FormName": "Тест_ФормаОтчета"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Отчет",
+        "elements": [
+          {
+            "table": "Тест_ПользовательскиеНастройки",
+            "path": "Отчет.SettingsComposer.UserSettings"
+          },
+          {
+            "input": "Тест_Использование",
+            "path": "Отчет.SettingsComposer.UserSettings.Use"
+          },
+          {
+            "input": "Тест_РедактированиеВФормеОтчета",
+            "path": "Отчет.КомпоновщикНастроек.ПользовательскиеНастройки.РедактированиеВФормеОтчета"
+          },
+          {
+            "table": "Тест_Отбор",
+            "path": "Отчет.SettingsComposer.Settings.Filter"
+          },
+          {
+            "input": "Тест_ОтборИспользование",
+            "path": "Отчет.SettingsComposer.Settings.Filter.Use"
+          },
+          {
+            "input": "Тест_НаличиеОтбора",
+            "path": "Отчет.КомпоновщикНастроек.Настройки.НаличиеОтбора"
+          },
+          {
+            "table": "Тест_ФиксированныйПорядок",
+            "path": "Отчет.settingscomposer.FixedSettings.Order"
+          },
+          {
+            "table": "Тест_Компоновщик",
+            "path": "Отчет.SettingsComposer"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Отчет",
+            "type": "ReportObject.Тест_Отчет",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/cfe/Reports/Тест_Отчет/Forms/Тест_ФормаОтчета/Ext/Form.xml"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expect": {
+    "stdoutContains": "=== Validation OK: Extension.Тест"
+  }
+}

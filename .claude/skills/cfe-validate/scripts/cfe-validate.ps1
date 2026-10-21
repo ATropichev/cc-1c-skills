@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.25 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.26 —Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -254,7 +254,7 @@ foreach ($entry in @(
 	@("TaskObject", "Number Date Description Ref DeletionMark BusinessProcess RoutePoint Executed Номер Дата Наименование Ссылка ПометкаУдаления БизнесПроцесс ТочкаМаршрута Выполнена"),
 	@("BusinessProcessObject", "Number Date Ref DeletionMark Started Completed HeadTask Номер Дата Ссылка ПометкаУдаления Стартован Завершен ВедущаяЗадача"),
 	@("DataProcessorObject", ""),
-	@("ReportObject", ""),
+	@("ReportObject", "SettingsComposer КомпоновщикНастроек"),
 	@("InformationRegisterRecordManager", "Period Recorder LineNumber Active Период Регистратор НомерСтроки Активность"),
 	@("InformationRegisterRecordSet", "Period Recorder LineNumber Active RowsCount Период Регистратор НомерСтроки Активность КоличествоСтрок"),
 	@("AccumulationRegisterRecordSet", "Period Recorder LineNumber Active RecordType RowsCount Период Регистратор НомерСтроки Активность ВидДвижения КоличествоСтрок"),
@@ -264,6 +264,43 @@ foreach ($entry in @(
 	$set = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
 	foreach ($n in ($entry[1] -split ' ' | Where-Object { $_ })) { $set[$n] = $true }
 	$script:mainAttrStandardFields[$entry[0]] = $set
+}
+
+# Путь через компоновщик настроек отчёта (<Отчет>.SettingsComposer.<Свойство>.<Колонка или коллекция>) —
+# по дереву реквизита формы в конфигураторе (замер 8.3.24, 8.3.27, 8.5). Справка синтакс-помощника тут не
+# источник: Structure, Parent, UserSettings.Items во встроенном языке есть, а в пути формы — «Неверный путь
+# к данным». Платформа проверяет путь на всю глубину; здесь — два уровня после компоновщика, поля строк
+# коллекций (Filter.Use) не проверяем.
+$script:settingsComposerNames = @('SettingsComposer', 'КомпоновщикНастроек')
+$scSettings = "Use ReportStructurePicture ReportStructure HasSelection HasFilter HasOrder HasConditionalAppearance " +
+	"HasOutputParameters DataParameters Filter Selection Order ConditionalAppearance OutputParameters UserFields " +
+	"Использование КартинкаСтруктурыОтчета СтруктураОтчета НаличиеВыбора НаличиеОтбора НаличиеПорядка " +
+	"НаличиеУсловногоОформления НаличиеПараметровВывода ПараметрыДанных Отбор Выбор Порядок УсловноеОформление " +
+	"ПараметрыВывода ПользовательскиеПоля"
+$scUserSettings = "Use SettingPicture Setting ComparisonType ValuePicture Value EditInReportForm " +
+	"Использование КартинкаНастройки Настройка ВидСравнения КартинкаЗначения Значение РедактированиеВФормеОтчета"
+$script:settingsComposerTree = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+foreach ($entry in @(
+	@("Settings", $scSettings), @("Настройки", $scSettings),
+	@("FixedSettings", $scSettings), @("ФиксированныеНастройки", $scSettings),
+	@("UserSettings", $scUserSettings), @("ПользовательскиеНастройки", $scUserSettings)
+)) {
+	$set = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+	foreach ($n in ($entry[1] -split ' ' | Where-Object { $_ })) { $set[$n] = $true }
+	$script:settingsComposerTree[$entry[0]] = $set
+}
+
+# Путь после компоновщика настроек ($segs[0]): @(номер неверного сегмента, текст) или $null
+function Get-SettingsComposerError([string[]]$segs) {
+	if ($segs.Count -lt 2) { return $null }
+	$node = $script:settingsComposerTree[$segs[1]]
+	if ($null -eq $node) {
+		return @(1, 'у компоновщика настроек нет такого свойства (форме доступны Settings, UserSettings, FixedSettings)')
+	}
+	if ($segs.Count -ge 3 -and -not $node.ContainsKey($segs[2])) {
+		return @(2, "у $($segs[1]) нет такой колонки или коллекции настроек, доступной форме")
+	}
+	return $null
 }
 
 # Объект, по которому разрешаются пути формы, — тип её основного реквизита, а не владелец формы:
@@ -1412,6 +1449,11 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 				# метаданных», это не про пути.
 				if ($target.Category -eq 'ChartOfAccountsObject' -and $seg0 -in @('ExtDimensionTypes','ВидыСубконто') -and -not $ownerEntry.ExtDimTypes) {
 					$badPaths["${rootName}.${seg0}"] = "у ${ownerKey} в расширении не заданы свойства ExtDimensionTypes и MaxExtDimensionCount — стандартная ТЧ видов субконто форме не видна (перенесите их и заимствуйте ПВХ видов субконто)"
+					continue
+				}
+				if ($target.Category -eq 'ReportObject' -and $seg0 -in $script:settingsComposerNames) {
+					$scErr = Get-SettingsComposerError $segments
+					if ($scErr) { $badPaths["${rootName}." + ($segments[0..$scErr[0]] -join '.')] = $scErr[1] }
 					continue
 				}
 				if ($segments.Count -ge 2) {

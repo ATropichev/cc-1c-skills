@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Form xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:dcscor="http://v8.1c.ru/8.1/data-composition-system/core" xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:dcsset="http://v8.1c.ru/8.1/data-composition-system/settings" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17">
+	<Title>
+		<v8:item>
+			<v8:lang>ru</v8:lang>
+			<v8:content>Отчет</v8:content>
+		</v8:item>
+	</Title>
+	<AutoTitle>false</AutoTitle>
+	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
+	<ChildItems>
+		<Table name="Тест_ПользовательскиеНастройки" id="1">
+			<DataPath>Отчет.SettingsComposer.UserSettings</DataPath>
+			<ContextMenu name="Тест_ПользовательскиеНастройкиКонтекстноеМеню" id="2"/>
+			<AutoCommandBar name="Тест_ПользовательскиеНастройкиКоманднаяПанель" id="3"/>
+			<ExtendedTooltip name="Тест_ПользовательскиеНастройкиРасширеннаяПодсказка" id="4"/>
+			<SearchStringAddition name="Тест_ПользовательскиеНастройкиСтрокаПоиска" id="5">
+				<AdditionSource>
+					<Item>Тест_ПользовательскиеНастройки</Item>
+					<Type>SearchStringRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_ПользовательскиеНастройкиСтрокаПоискаКонтекстноеМеню" id="6"/>
+				<ExtendedTooltip name="Тест_ПользовательскиеНастройкиСтрокаПоискаРасширеннаяПодсказка" id="7"/>
+			</SearchStringAddition>
+			<ViewStatusAddition name="Тест_ПользовательскиеНастройкиСостояниеПросмотра" id="8">
+				<AdditionSource>
+					<Item>Тест_ПользовательскиеНастройки</Item>
+					<Type>ViewStatusRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_ПользовательскиеНастройкиСостояниеПросмотраКонтекстноеМеню" id="9"/>
+				<ExtendedTooltip name="Тест_ПользовательскиеНастройкиСостояниеПросмотраРасширеннаяПодсказка" id="10"/>
+			</ViewStatusAddition>
+			<SearchControlAddition name="Тест_ПользовательскиеНастройкиУправлениеПоиском" id="11">
+				<AdditionSource>
+					<Item>Тест_ПользовательскиеНастройки</Item>
+					<Type>SearchControl</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_ПользовательскиеНастройкиУправлениеПоискомКонтекстноеМеню" id="12"/>
+				<ExtendedTooltip name="Тест_ПользовательскиеНастройкиУправлениеПоискомРасширеннаяПодсказка" id="13"/>
+			</SearchControlAddition>
+		</Table>
+		<InputField name="Тест_Использование" id="14">
+			<DataPath>Отчет.SettingsComposer.UserSettings.Use</DataPath>
+			<ContextMenu name="Тест_ИспользованиеКонтекстноеМеню" id="15"/>
+			<ExtendedTooltip name="Тест_ИспользованиеРасширеннаяПодсказка" id="16"/>
+		</InputField>
+		<InputField name="Тест_РедактированиеВФормеОтчета" id="17">
+			<DataPath>Отчет.КомпоновщикНастроек.ПользовательскиеНастройки.РедактированиеВФормеОтчета</DataPath>
+			<ContextMenu name="Тест_РедактированиеВФормеОтчетаКонтекстноеМеню" id="18"/>
+			<ExtendedTooltip name="Тест_РедактированиеВФормеОтчетаРасширеннаяПодсказка" id="19"/>
+		</InputField>
+		<Table name="Тест_Отбор" id="20">
+			<DataPath>Отчет.SettingsComposer.Settings.Filter</DataPath>
+			<ContextMenu name="Тест_ОтборКонтекстноеМеню" id="21"/>
+			<AutoCommandBar name="Тест_ОтборКоманднаяПанель" id="22"/>
+			<ExtendedTooltip name="Тест_ОтборРасширеннаяПодсказка" id="23"/>
+			<SearchStringAddition name="Тест_ОтборСтрокаПоиска" id="24">
+				<AdditionSource>
+					<Item>Тест_Отбор</Item>
+					<Type>SearchStringRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_ОтборСтрокаПоискаКонтекстноеМеню" id="25"/>
+				<ExtendedTooltip name="Тест_ОтборСтрокаПоискаРасширеннаяПодсказка" id="26"/>
+			</SearchStringAddition>
+			<ViewStatusAddition name="Тест_ОтборСостояниеПросмотра" id="27">
+				<AdditionSource>
+					<Item>Тест_Отбор</Item>
+					<Type>ViewStatusRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_ОтборСостояниеПросмотраКонтекстноеМеню" id="28"/>
+				<ExtendedTooltip name="Тест_ОтборСостояниеПросмотраРасширеннаяПодсказка" id="29"/>
+			</ViewStatusAddition>
+			<SearchControlAddition name="Тест_ОтборУправлениеПоиском" id="30">
+				<AdditionSource>
+					<Item>Тест_Отбор</Item>
+					<Type>SearchControl</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_ОтборУправлениеПоискомКонтекстноеМеню" id="31"/>
+				<ExtendedTooltip name="Тест_ОтборУправлениеПоискомРасширеннаяПодсказка" id="32"/>
+			</SearchControlAddition>
+		</Table>
+		<InputField name="Тест_ОтборИспользование" id="33">
+			<DataPath>Отчет.SettingsComposer.Settings.Filter.Use</DataPath>
+			<ContextMenu name="Тест_ОтборИспользованиеКонтекстноеМеню" id="34"/>
+			<ExtendedTooltip name="Тест_ОтборИспользованиеРасширеннаяПодсказка" id="35"/>
+		</InputField>
+		<InputField name="Тест_НаличиеОтбора" id="36">
+			<DataPath>Отчет.КомпоновщикНастроек.Настройки.НаличиеОтбора</DataPath>
+			<ContextMenu name="Тест_НаличиеОтбораКонтекстноеМеню" id="37"/>
+			<ExtendedTooltip name="Тест_НаличиеОтбораРасширеннаяПодсказка" id="38"/>
+		</InputField>
+		<Table name="Тест_ФиксированныйПорядок" id="39">
+			<DataPath>Отчет.settingscomposer.FixedSettings.Order</DataPath>
+			<ContextMenu name="Тест_ФиксированныйПорядокКонтекстноеМеню" id="40"/>
+			<AutoCommandBar name="Тест_ФиксированныйПорядокКоманднаяПанель" id="41"/>
+			<ExtendedTooltip name="Тест_ФиксированныйПорядокРасширеннаяПодсказка" id="42"/>
+			<SearchStringAddition name="Тест_ФиксированныйПорядокСтрокаПоиска" id="43">
+				<AdditionSource>
+					<Item>Тест_ФиксированныйПорядок</Item>
+					<Type>SearchStringRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_ФиксированныйПорядокСтрокаПоискаКонтекстноеМеню" id="44"/>
+				<ExtendedTooltip name="Тест_ФиксированныйПорядокСтрокаПоискаРасширеннаяПодсказка" id="45"/>
+			</SearchStringAddition>
+			<ViewStatusAddition name="Тест_ФиксированныйПорядокСостояниеПросмотра" id="46">
+				<AdditionSource>
+					<Item>Тест_ФиксированныйПорядок</Item>
+					<Type>ViewStatusRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_ФиксированныйПорядокСостояниеПросмотраКонтекстноеМеню" id="47"/>
+				<ExtendedTooltip name="Тест_ФиксированныйПорядокСостояниеПросмотраРасширеннаяПодсказка" id="48"/>
+			</ViewStatusAddition>
+			<SearchControlAddition name="Тест_ФиксированныйПорядокУправлениеПоиском" id="49">
+				<AdditionSource>
+					<Item>Тест_ФиксированныйПорядок</Item>
+					<Type>SearchControl</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_ФиксированныйПорядокУправлениеПоискомКонтекстноеМеню" id="50"/>
+				<ExtendedTooltip name="Тест_ФиксированныйПорядокУправлениеПоискомРасширеннаяПодсказка" id="51"/>
+			</SearchControlAddition>
+		</Table>
+		<Table name="Тест_Компоновщик" id="52">
+			<DataPath>Отчет.SettingsComposer</DataPath>
+			<ContextMenu name="Тест_КомпоновщикКонтекстноеМеню" id="53"/>
+			<AutoCommandBar name="Тест_КомпоновщикКоманднаяПанель" id="54"/>
+			<ExtendedTooltip name="Тест_КомпоновщикРасширеннаяПодсказка" id="55"/>
+			<SearchStringAddition name="Тест_КомпоновщикСтрокаПоиска" id="56">
+				<AdditionSource>
+					<Item>Тест_Компоновщик</Item>
+					<Type>SearchStringRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_КомпоновщикСтрокаПоискаКонтекстноеМеню" id="57"/>
+				<ExtendedTooltip name="Тест_КомпоновщикСтрокаПоискаРасширеннаяПодсказка" id="58"/>
+			</SearchStringAddition>
+			<ViewStatusAddition name="Тест_КомпоновщикСостояниеПросмотра" id="59">
+				<AdditionSource>
+					<Item>Тест_Компоновщик</Item>
+					<Type>ViewStatusRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_КомпоновщикСостояниеПросмотраКонтекстноеМеню" id="60"/>
+				<ExtendedTooltip name="Тест_КомпоновщикСостояниеПросмотраРасширеннаяПодсказка" id="61"/>
+			</ViewStatusAddition>
+			<SearchControlAddition name="Тест_КомпоновщикУправлениеПоиском" id="62">
+				<AdditionSource>
+					<Item>Тест_Компоновщик</Item>
+					<Type>SearchControl</Type>
+				</AdditionSource>
+				<ContextMenu name="Тест_КомпоновщикУправлениеПоискомКонтекстноеМеню" id="63"/>
+				<ExtendedTooltip name="Тест_КомпоновщикУправлениеПоискомРасширеннаяПодсказка" id="64"/>
+			</SearchControlAddition>
+		</Table>
+	</ChildItems>
+	<Attributes>
+		<Attribute name="Отчет" id="65">
+			<Type>
+				<v8:Type>cfg:ReportObject.Тест_Отчет</v8:Type>
+			</Type>
+			<MainAttribute>true</MainAttribute>
+		</Attribute>
+	</Attributes>
+</Form>
