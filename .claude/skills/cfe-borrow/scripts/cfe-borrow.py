@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.53 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.54 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -2313,14 +2313,17 @@ def main():
             for rt in collect_reference_types([src["Properties"]["__TypeXml"]]):
                 borrow_object_shell(rt["TypeName"], rt["ObjName"])
 
-    def resolve_single_ref_target(type_xml):
+    def resolve_single_ref_target(type_xml, allow_defined=True):
         """Единственный объект, на который ведёт ссылочный тип: <Вид>Ref.<Имя> или определяемый тип из одной
         такой ссылки (состав — из источника). Составной, примитивный, неизвестный вид — None: дальше
-        такого типа путь формы не продолжается."""
+        такого типа путь формы не продолжается. Определяемый тип раскрывается один раз: в его составе
+        определяемых типов не бывает."""
         types = re.findall(r'<v8:(?:Type|TypeSet)>([^<]+)</v8:(?:Type|TypeSet)>', type_xml)
         if len(types) != 1:
             return None
         dt = re.match(r'^(?:\w+:)?DefinedType\.(\w+)$', types[0])
+        if dt and not allow_defined:
+            return None
         if dt:
             dt_file = os.path.join(cfg_dir, CHILD_TYPE_DIR_MAP["DefinedType"], f"{dt.group(1)}.xml")
             if not os.path.isfile(dt_file):
@@ -2328,7 +2331,7 @@ def main():
             dt_src = read_source_object("DefinedType", dt.group(1))
             if "__TypeXml" not in dt_src["Properties"]:
                 return None
-            return resolve_single_ref_target(dt_src["Properties"]["__TypeXml"])
+            return resolve_single_ref_target(dt_src["Properties"]["__TypeXml"], False)
         ref = re.match(r'^(?:\w+:)?(\w+)Ref\.(\w+)$', types[0])
         if not ref or ref.group(1) not in CHILD_TYPE_DIR_MAP:
             return None
@@ -2564,19 +2567,21 @@ def main():
         # its target object with the next segment's attribute (Designer etalon), down the whole chain
         if deep_paths:
             info(f"  Processing {len(deep_paths)} deep path(s)...")
+            # Имена в пути формы — без учёта регистра, как у платформы
+            std_upper = {f.upper() for f in STANDARD_FIELDS}
             for segs in deep_paths:
-                if segs[0] in ts_names:
-                    ts_info = next((t for t in src_ts if t["Name"] == segs[0]), None)
-                    start_attr = next((c for c in ts_info["Attributes"] if c["Name"] == segs[1]), None)
+                ts_info = next((t for t in src_ts if t["Name"].upper() == segs[0].upper()), None)
+                if ts_info:
+                    start_attr = next((c for c in ts_info["Attributes"] if c["Name"].upper() == segs[1].upper()), None)
                     nxt = 2
                 else:
-                    start_attr = next((a for a in src_attrs if a["Name"] == segs[0]), None)
+                    start_attr = next((a for a in src_attrs if a["Name"].upper() == segs[0].upper()), None)
                     nxt = 1
                 if not start_attr:
                     continue
                 type_xml = start_attr["TypeXml"]
                 for i in range(nxt, len(segs)):
-                    if segs[i] in STANDARD_FIELDS:
+                    if segs[i].upper() in std_upper:
                         break
                     target = resolve_single_ref_target(type_xml)
                     if not target:

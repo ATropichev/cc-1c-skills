@@ -10,7 +10,7 @@
 	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
 	<ChildItems>
 		<InputField name="ПартнерИНН" id="1">
-			<DataPath>Объект.Контрагент.Партнер.ИНН</DataPath>
+			<DataPath>Объект.контрагент.Партнер.ИНН</DataPath>
 			<ContextMenu name="ПартнерИННКонтекстноеМеню" id="2"/>
 			<ExtendedTooltip name="ПартнерИННРасширеннаяПодсказка" id="3"/>
 		</InputField>
@@ -77,7 +77,7 @@
 		<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
 		<ChildItems>
 			<InputField name="ПартнерИНН" id="1">
-				<DataPath>Объект.Контрагент.Партнер.ИНН</DataPath>
+				<DataPath>Объект.контрагент.Партнер.ИНН</DataPath>
 				<ContextMenu name="ПартнерИННКонтекстноеМеню" id="2"/>
 				<ExtendedTooltip name="ПартнерИННРасширеннаяПодсказка" id="3"/>
 			</InputField>

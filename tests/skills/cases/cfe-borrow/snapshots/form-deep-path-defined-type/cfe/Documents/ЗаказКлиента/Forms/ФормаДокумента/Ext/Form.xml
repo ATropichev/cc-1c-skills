@@ -50,7 +50,7 @@
 					<ExtendedTooltip name="Товары0РасширеннаяПодсказка" id="19"/>
 				</InputField>
 				<InputField name="Товары1" id="20">
-					<DataPath>Объект.Товары.Аналог.Артикул</DataPath>
+					<DataPath>Объект.Товары.Аналог.Вес</DataPath>
 					<ContextMenu name="Товары1КонтекстноеМеню" id="21"/>
 					<ExtendedTooltip name="Товары1РасширеннаяПодсказка" id="22"/>
 				</InputField>
@@ -117,7 +117,7 @@
 						<ExtendedTooltip name="Товары0РасширеннаяПодсказка" id="19"/>
 					</InputField>
 					<InputField name="Товары1" id="20">
-						<DataPath>Объект.Товары.Аналог.Артикул</DataPath>
+						<DataPath>Объект.Товары.Аналог.Вес</DataPath>
 						<ContextMenu name="Товары1КонтекстноеМеню" id="21"/>
 						<ExtendedTooltip name="Товары1РасширеннаяПодсказка" id="22"/>
 					</InputField>

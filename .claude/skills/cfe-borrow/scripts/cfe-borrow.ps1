@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.53 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.54 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2749,17 +2749,19 @@ function Borrow-ObjectShell([string]$typeName, [string]$objName) {
 
 # Единственный объект, на который ведёт ссылочный тип: <Вид>Ref.<Имя> или определяемый тип из одной
 # такой ссылки (состав — из источника). Составной, примитивный, неизвестный вид — $null: дальше
-# такого типа путь формы не продолжается.
-function Resolve-SingleRefTarget([string]$typeXml) {
+# такого типа путь формы не продолжается. Определяемый тип раскрывается один раз: в его составе
+# определяемых типов не бывает.
+function Resolve-SingleRefTarget([string]$typeXml, [bool]$allowDefined = $true) {
 	$types = @([regex]::Matches($typeXml, '<v8:(?:Type|TypeSet)>([^<]+)</v8:(?:Type|TypeSet)>') | ForEach-Object { $_.Groups[1].Value })
 	if ($types.Count -ne 1) { return $null }
 	$dt = [regex]::Match($types[0], '^(?:\w+:)?DefinedType\.(\w+)$')
+	if ($dt.Success -and -not $allowDefined) { return $null }
 	if ($dt.Success) {
 		$dtFile = Join-Path (Join-Path $cfgDir $childTypeDirMap["DefinedType"]) "$($dt.Groups[1].Value).xml"
 		if (-not (Test-Path $dtFile)) { return $null }
 		$dtSrc = Read-SourceObject "DefinedType" $dt.Groups[1].Value
 		if (-not $dtSrc.Properties.ContainsKey("__TypeXml")) { return $null }
-		return Resolve-SingleRefTarget $dtSrc.Properties["__TypeXml"]
+		return Resolve-SingleRefTarget $dtSrc.Properties["__TypeXml"] $false
 	}
 	$ref = [regex]::Match($types[0], '^(?:\w+:)?(\w+)Ref\.(\w+)$')
 	if (-not $ref.Success -or -not $childTypeDirMap.ContainsKey($ref.Groups[1].Value)) { return $null }
