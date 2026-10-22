@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-cfe-admin v1.3 — Configuration extensions in a 1C infobase: list, check, properties, delete
+# db-cfe-admin v1.4 — Configuration extensions in a 1C infobase: list, check, properties, delete
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -945,9 +945,12 @@ def main():
             r = invoke_designer(op_args)
             done += 1
             log_lines = [x for x in r["log"].splitlines() if x.strip()]
-            if r["exit"] == 0:
+            # Код возврата этой команды ненадёжен: часть отказов (&Вместо на несуществующий метод)
+            # приходит с кодом 0 и только строкой в /Out, а у применимого расширения лог пуст.
+            # Поэтому отказ — любая строка лога, как и в run_apply_check загрузчиков.
+            if r["exit"] == 0 and not log_lines:
                 rows.append(["применимость", "ОК", "", []])
-            elif r["exit"] == 1:
+            elif r["exit"] in (0, 1):
                 failed += 1
                 rows.append(["применимость", "ОШИБКА", "", log_lines])
             else:

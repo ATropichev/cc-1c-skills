@@ -1,4 +1,4 @@
-﻿# db-cfe-admin v1.3 — Configuration extensions in a 1C infobase: list, check, properties, delete
+﻿# db-cfe-admin v1.4 — Configuration extensions in a 1C infobase: list, check, properties, delete
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -1051,9 +1051,12 @@ if ($cmd -eq 'check') {
         $r = Invoke-Designer $opArgs
         $done++
         $logLines = @($r.Log -split "`r?`n" | Where-Object { $_.Trim() -ne '' })
-        if ($r.ExitCode -eq 0) {
+        # Код возврата этой команды ненадёжен: часть отказов (&Вместо на несуществующий метод)
+        # приходит с кодом 0 и только строкой в /Out, а у применимого расширения лог пуст.
+        # Поэтому отказ — любая строка лога, как и в Invoke-ApplyCheckReport загрузчиков.
+        if ($r.ExitCode -eq 0 -and $logLines.Count -eq 0) {
             $rows += ,@{ Label = 'применимость'; Status = 'ОК'; Note = ''; Lines = @() }
-        } elseif ($r.ExitCode -eq 1) {
+        } elseif ($r.ExitCode -eq 0 -or $r.ExitCode -eq 1) {
             $failed++
             $rows += ,@{ Label = 'применимость'; Status = 'ОШИБКА'; Note = ''; Lines = $logLines }
         } else {
