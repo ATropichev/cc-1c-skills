@@ -3,5 +3,5 @@
   "setup": "fixture:borrowed-list-path-no-main",
   "params": { "formPath": "Documents/Заказ/Forms/ФормаСписка" },
   "expectError": true,
-  "expect": { "stdoutContains": ["Список.Партнер", "rooted at 'Список'"] }
+  "expect": { "stdoutContains": ["Список.Партнер", "attribute 'Список' not found"] }
 }

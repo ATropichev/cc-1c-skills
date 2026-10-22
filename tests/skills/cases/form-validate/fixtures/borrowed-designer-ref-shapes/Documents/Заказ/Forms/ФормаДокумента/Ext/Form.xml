@@ -1,0 +1,69 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Form xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.20">
+	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1">
+		<Autofill>false</Autofill>
+	</AutoCommandBar>
+	<ChildItems>
+		<InputField name="Партнер" id="4">
+			<DataPath>306:02023637-7868-4a5f-8576-835a76e0c9ba/8:5bdad865-f2c5-434b-8041-ba4aad3b6687</DataPath>
+			<ContextMenu name="ПартнерКонтекстноеМеню" id="5"/>
+			<ExtendedTooltip name="ПартнерРасширеннаяПодсказка" id="6"/>
+		</InputField>
+		<InputField name="Склад" id="7">
+			<DataPath>381:02023637-7868-4a5f-8576-835a76e0c9ba/2</DataPath>
+			<ContextMenu name="СкладКонтекстноеМеню" id="8"/>
+			<ExtendedTooltip name="СкладРасширеннаяПодсказка" id="9"/>
+		</InputField>
+		<InputField name="Организация" id="10">
+			<DataPath>1/-5</DataPath>
+			<ContextMenu name="ОрганизацияКонтекстноеМеню" id="11"/>
+			<ExtendedTooltip name="ОрганизацияРасширеннаяПодсказка" id="12"/>
+		</InputField>
+		<InputField name="КонтактноеЛицо" id="13">
+			<ChoiceParameterLinks>
+				<xr:Link>
+					<xr:Name>Отбор.Владелец</xr:Name>
+					<xr:DataPath xsi:type="xs:string">1:02023637-7868-4a5f-8576-835a76e0c9ba/3</xr:DataPath>
+					<xr:ValueChange>Clear</xr:ValueChange>
+				</xr:Link>
+			</ChoiceParameterLinks>
+			<ContextMenu name="КонтактноеЛицоКонтекстноеМеню" id="14"/>
+			<ExtendedTooltip name="КонтактноеЛицоРасширеннаяПодсказка" id="15"/>
+		</InputField>
+	</ChildItems>
+	<Attributes/>
+	<BaseForm version="2.20">
+		<AutoCommandBar name="ФормаКоманднаяПанель" id="-1">
+			<Autofill>false</Autofill>
+		</AutoCommandBar>
+		<ChildItems>
+			<InputField name="Партнер" id="4">
+				<DataPath>306:02023637-7868-4a5f-8576-835a76e0c9ba/8:5bdad865-f2c5-434b-8041-ba4aad3b6687</DataPath>
+				<ContextMenu name="ПартнерКонтекстноеМеню" id="5"/>
+				<ExtendedTooltip name="ПартнерРасширеннаяПодсказка" id="6"/>
+			</InputField>
+			<InputField name="Склад" id="7">
+				<DataPath>381:02023637-7868-4a5f-8576-835a76e0c9ba/2</DataPath>
+				<ContextMenu name="СкладКонтекстноеМеню" id="8"/>
+				<ExtendedTooltip name="СкладРасширеннаяПодсказка" id="9"/>
+			</InputField>
+			<InputField name="Организация" id="10">
+				<DataPath>1/-5</DataPath>
+				<ContextMenu name="ОрганизацияКонтекстноеМеню" id="11"/>
+				<ExtendedTooltip name="ОрганизацияРасширеннаяПодсказка" id="12"/>
+			</InputField>
+			<InputField name="КонтактноеЛицо" id="13">
+				<ChoiceParameterLinks>
+					<xr:Link>
+						<xr:Name>Отбор.Владелец</xr:Name>
+						<xr:DataPath xsi:type="xs:string">1:02023637-7868-4a5f-8576-835a76e0c9ba/3</xr:DataPath>
+						<xr:ValueChange>Clear</xr:ValueChange>
+					</xr:Link>
+				</ChoiceParameterLinks>
+				<ContextMenu name="КонтактноеЛицоКонтекстноеМеню" id="14"/>
+				<ExtendedTooltip name="КонтактноеЛицоРасширеннаяПодсказка" id="15"/>
+			</InputField>
+		</ChildItems>
+		<Attributes/>
+	</BaseForm>
+</Form>

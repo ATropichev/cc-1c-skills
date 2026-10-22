@@ -1,0 +1,116 @@
+{
+  "name": "Ошибка: корень пути — реквизит, которого форма не объявляет (не основной) — без подсказки про -BorrowMainAttribute",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура",
+          "attributes": [
+            "Артикул: String(25)"
+          ]
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "tabularSections": {
+            "Товары": [
+              "Номенклатура: CatalogRef.Номенклатура",
+              "Количество: Number(15,3)"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/ЗаказКлиента.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Заказ",
+        "elements": [
+          {
+            "table": "Товары",
+            "path": "Объект.Товары",
+            "columns": [
+              {
+                "input": "ТоварыНоменклатура",
+                "path": "Объект.Товары.Номенклатура"
+              },
+              {
+                "input": "ТоварыКоличество",
+                "path": "Объект.Товары.Количество"
+              }
+            ]
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.ЗаказКлиента",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Document.ЗаказКлиента.Form.ФормаДокумента",
+        "-BorrowMainAttribute": "Form"
+      }
+    },
+    {
+      "script": "form-edit/scripts/form-edit",
+      "input": {
+        "elements": [
+          {
+            "input": "Тест_Поле",
+            "path": "Тест_Буфер.Значение"
+          }
+        ]
+      },
+      "args": {
+        "-FormPath": "{workDir}/cfe/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml",
+        "-JsonPath": "{inputFile}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "form attribute 'Тест_Буфер' is not declared",
+    "stdoutNotContains": "-BorrowMainAttribute"
+  }
+}

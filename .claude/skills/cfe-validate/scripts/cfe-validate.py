@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.28 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.29 — Validate 1C configuration extension XML structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -1264,6 +1264,7 @@ def main():
             form_raw_text = f.read()
         forms_with_text.append({
             'RawText': form_raw_text, 'Context': ctx, 'OwnerKey': f"{fi['TypeName']}.{fi['ObjName']}",
+            'DirName': fi['DirName'], 'ObjName': fi['ObjName'], 'FormName': fi['FormName'],
         })
 
         if '<BaseForm' in form_raw_text:
@@ -1429,9 +1430,47 @@ def main():
             # Только своя часть формы: <BaseForm> — снимок исходной формы, его платформа разрешает по
             # конфигурации, а не по расширению.
             own = raw.split('<BaseForm', 1)[0]
-            # Корень путей — имя основного реквизита формы (см. проверку 12). Нет его в <Attributes>
-            # формы — путей с корнем не бывает, проверять нечего.
             root_match14 = MAIN_ATTR_RE.search(own)
+
+            # Корень любого пути — реквизит, объявленный в <Attributes> самой формы, иначе «Неверный путь к
+            # данным». Заимствованная без основного реквизита форма его не объявляет, а поле Объект.* на неё
+            # дописать можно. Пропускаются Items.* (текущая строка таблицы) и ссылки, которые Конфигуратор
+            # пишет номерами (58, 1/0:<uuid>, 306:<uuid>/8:<uuid>) — имя реквизита с цифры не начинается.
+            declared = set()
+            attr_section = re.search(r'(?s)<Attributes>(.*?)</Attributes>', own)
+            if attr_section:
+                declared = {n.upper() for n in re.findall(r'<Attribute name="([^"]+)"', attr_section.group(1))}
+            undeclared = {}   # корень в верхнем регистре -> (корень как в первом пути, пути)
+            for m in re.finditer(r'<(?:\w+:)?\w*DataPath[^>]*>([^<]+)</(?:\w+:)?\w*DataPath>', own):
+                dp = m.group(1).strip()
+                if not dp or dp[0].isdigit():
+                    continue
+                root = re.sub(r'^~', '', re.sub(r'\[\d+\]', '', dp)).split('.', 1)[0]
+                if root.upper() == 'ITEMS' or root.upper() in declared:
+                    continue
+                entry = undeclared.setdefault(root.upper(), (root, []))
+                if dp not in entry[1]:
+                    entry[1].append(dp)
+            if undeclared:
+                # Подсказка — только когда корень и есть основной реквизит исходной формы
+                src_main = ''
+                if not root_match14 and '<BaseForm' in raw and config_path_arg:
+                    src_form = os.path.join(source_config_root(), fw['DirName'], fw['ObjName'], 'Forms', fw['FormName'], 'Ext', 'Form.xml')
+                    if os.path.isfile(src_form):
+                        with open(src_form, 'r', encoding='utf-8-sig') as f:
+                            src_match = MAIN_ATTR_RE.search(f.read().split('<BaseForm', 1)[0])
+                        if src_match:
+                            src_main = src_match.group(1)
+                for root, paths in sorted(undeclared.values()):
+                    sample = "', '".join(paths[:3])
+                    more = f' (and {len(paths) - 3} more)' if len(paths) > 3 else ''
+                    hint = (' — the form was borrowed without its main attribute, re-borrow it with -BorrowMainAttribute Form'
+                            if src_main and root.upper() == src_main.upper() else '')
+                    r.error(f"14. {ctx}: path '{sample}'{more} — form attribute '{root}' is not declared in the form{hint}")
+                check14_ok = False
+
+            # Дальше — хвост путей от основного реквизита по составу объекта (см. проверку 12). Основного
+            # реквизита нет — проверять хвост не по чему.
             if not root_match14:
                 continue
             root_name14 = root_match14.group(1)

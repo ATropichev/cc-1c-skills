@@ -1,4 +1,4 @@
-﻿# form-validate v1.27 — Validate 1C managed form
+﻿# form-validate v1.28 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -454,11 +454,22 @@ if (-not $stopped) {
 if (-not $stopped) {
 	$pathErrors = 0
 	$pathChecked = 0
-	$pathBaseSkipped = 0
+	# Пути, о которых уже сказано поэлементно, — проход по прочим привязкам ниже их не повторяет
+	$reportedPaths = @{}
 
 	# All data-binding tags whose value is an attribute path (root must exist in <Attributes>).
 	$bindingTags = @('DataPath','TitleDataPath','FooterDataPath','HeaderDataPath',
 		'MultipleValueDataPath','MultipleValuePresentDataPath','RowPictureDataPath','MultipleValuePictureDataPath')
+
+	# Заимствованная форма без основного реквизита: путь Объект.* на ней — ровно этот случай
+	$noMainHint = ""
+	if ($hasBaseForm) {
+		$noMainHint = " (the borrowed form declares no MainAttribute)"
+		foreach ($attr in $attrNodes) {
+			$maNode = $attr.SelectSingleNode("f:MainAttribute", $nsMgr)
+			if ($maNode -and $maNode.InnerText.Trim() -eq "true") { $noMainHint = ""; break }
+		}
+	}
 
 	foreach ($el in $allElements) {
 		if ($stopped) { break }
@@ -471,11 +482,8 @@ if (-not $stopped) {
 			continue
 		}
 
-		# In borrowed forms, skip DataPath check for base elements (id < 1000000)
-		if ($hasBaseForm -and $el.Id) {
-			try { if ([int]$el.Id -lt 1000000) { $pathBaseSkipped++; continue } } catch {}
-		}
-
+		# Базовые элементы заимствованной формы (id < 1000000) проверяются так же: висячую привязку
+		# платформа отвергает и на них — «Неверный путь к данным».
 		foreach ($bTag in $bindingTags) {
 			if ($stopped) { break }
 			$dpNode = $node.SelectSingleNode("f:$bTag", $nsMgr)
@@ -484,10 +492,9 @@ if (-not $stopped) {
 			$dataPath = $dpNode.InnerText.Trim()
 			if (-not $dataPath) { continue }
 
-			# Opaque platform-internal shapes — not validatable from Form.xml alone:
-			#   - bare numeric (e.g. "10", "1000003") — internal index
-			#   - "N/M:<uuid>" — metadata reference by UUID
-			if ($dataPath -match '^\d+$' -or $dataPath -match '^\d+/\d+:[0-9a-fA-F-]+$') {
+			# Ссылки, которые Конфигуратор пишет номерами, по Form.xml не разрешить: «10», «1/0:<uuid>»,
+			# «306:<uuid>/8:<uuid>», «1/-5». Имя реквизита с цифры не начинается.
+			if ($dataPath -match '^\d') {
 				continue
 			}
 
@@ -542,20 +549,36 @@ if (-not $stopped) {
 			if ($itemsBroken) { continue }
 
 			if (-not $attrMap.ContainsKey($rootAttr)) {
-				Report-Error "[$tag] '$elName': $bTag='$dataPath' — attribute '$rootAttr' not found"
+				Report-Error "[$tag] '$elName': $bTag='$dataPath' — attribute '$rootAttr' not found$noMainHint"
 				$pathErrors++
+				$reportedPaths[$dataPath] = $true
 			}
 		}
 	}
 
-	$pathMsg = ""
-	if ($pathChecked -gt 0) { $pathMsg = "$pathChecked paths checked" }
-	if ($pathBaseSkipped -gt 0) {
-		$skipNote = "$pathBaseSkipped base skipped"
-		$pathMsg = if ($pathMsg) { "$pathMsg, $skipNote" } else { $skipNote }
+	# Прочие привязки — <xr:DataPath> в <ChoiceParameterLinks>/<TypeLink> и любой *DataPath вне тегов
+	# выше: корень тоже должен быть реквизитом формы. Только своя часть: <BaseForm> — снимок исходной
+	# формы, его платформа разрешает по конфигурации. Items.* и номерные ссылки — как выше.
+	$ownText = ([System.IO.File]::ReadAllText($FormPath, [System.Text.Encoding]::UTF8) -split '<BaseForm', 2)[0]
+	$undeclared = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+	foreach ($m in [regex]::Matches($ownText, '<(?:\w+:)?\w*DataPath[^>]*>([^<]+)</(?:\w+:)?\w*DataPath>')) {
+		$dp = $m.Groups[1].Value.Trim()
+		if (-not $dp -or $dp -match '^\d' -or $reportedPaths.ContainsKey($dp)) { continue }
+		$rootAttr = ((($dp -replace '\[\d+\]', '') -replace '^~', '') -split '\.', 2)[0]
+		if ($rootAttr -eq 'Items' -or $attrMap.ContainsKey($rootAttr)) { continue }
+		if (-not $undeclared.ContainsKey($rootAttr)) { $undeclared[$rootAttr] = New-Object System.Collections.Generic.List[string] }
+		if (-not $undeclared[$rootAttr].Contains($dp)) { $undeclared[$rootAttr].Add($dp) }
 	}
-	if ($pathErrors -eq 0 -and $pathMsg) {
-		Report-OK "Data bindings: $pathMsg"
+	foreach ($rootAttr in ($undeclared.Keys | Sort-Object)) {
+		$shown = $undeclared[$rootAttr]
+		$sample = ($shown | Select-Object -First 3) -join ", "
+		$suffix = if ($shown.Count -gt 3) { " (and $($shown.Count - 3) more)" } else { "" }
+		Report-Error "Path(s) rooted at '${rootAttr}' — attribute '${rootAttr}' not found${noMainHint}: $sample$suffix"
+		$pathErrors++
+	}
+
+	if ($pathErrors -eq 0 -and $pathChecked -gt 0) {
+		Report-OK "Data bindings: $pathChecked paths checked"
 	} elseif ($pathErrors -eq 0) {
 		Report-OK "Data bindings: none"
 	}
@@ -830,41 +853,6 @@ if (-not $stopped -and $isExtension) {
 		$extCmdCount = ($cmdNodes | Where-Object { -not $baseCmdNames.ContainsKey($_.GetAttribute("name")) }).Count
 		if (($extAttrCount + $extCmdCount) -gt 0) {
 			Report-OK "Extension ID ranges: $extAttrCount attr(s), $extCmdCount cmd(s) — all >= 1000000"
-		}
-	}
-
-	# 11d. Пути на основной реквизит, которого форма не объявляет.
-	# Check 5 такое пропускает: у заимствованной формы он не проверяет базовые элементы (id < 1000000),
-	# а привязки в <xr:Link> вообще вне его списка тегов. Между тем это ровно тот случай, на котором
-	# платформа отвергает загрузку: «Неверный путь к полю - Объект.X». Правило: если основной реквизит
-	# не объявлен в <Attributes> формы, любой путь с его корнем не разрешится.
-	# Корень берётся из основного реквизита BaseForm: «Объект» он только у формы объекта, у формы
-	# списка это «Список», у формы записи регистра «Запись». С зашитым «Объект» проверка на таких
-	# формах молча не срабатывала — валидатор рапортовал «чисто» на форме, которую платформа не примет.
-	$mainAttrDeclared = $false
-	foreach ($attr in $attrNodes) {
-		$maNode = $attr.SelectSingleNode("f:MainAttribute", $nsMgr)
-		if ($maNode -and $maNode.InnerText.Trim() -eq "true") { $mainAttrDeclared = $true; break }
-	}
-
-	if (-not $mainAttrDeclared) {
-		# Значения привязок ищем текстом: интересуют и обычные теги, и <xr:DataPath> внутри
-		# <ChoiceParameterLinks>, а те живут в чужом пространстве имён.
-		$rawForm = [System.IO.File]::ReadAllText($FormPath, [System.Text.Encoding]::UTF8)
-		$mainBase = $baseFormNode.SelectSingleNode("f:Attributes/f:Attribute[f:MainAttribute='true']", $bfNs)
-		$rootName = if ($mainBase -and $mainBase.GetAttribute("name")) { $mainBase.GetAttribute("name") } else { "Объект" }
-		$rootPat = [regex]::Escape($rootName)
-		$danglingPaths = @{}
-		foreach ($m in [regex]::Matches($rawForm, "<(?:\w+:)?\w*DataPath[^>]*>(${rootPat}\.[^<]+)</(?:\w+:)?\w*DataPath>")) {
-			$danglingPaths[$m.Groups[1].Value] = $true
-		}
-		if ($danglingPaths.Count -gt 0) {
-			$shown = @($danglingPaths.Keys | Sort-Object)
-			$sample = ($shown | Select-Object -First 3) -join ", "
-			$suffix = if ($shown.Count -gt 3) { " (and $($shown.Count - 3) more)" } else { "" }
-			Report-Error "Path(s) rooted at '${rootName}' but the form declares no MainAttribute: $sample$suffix"
-		} elseif ($mainBase) {
-			Report-OK "Object paths: none dangling (MainAttribute not declared)"
 		}
 	}
 }

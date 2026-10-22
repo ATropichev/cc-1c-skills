@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Form xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.20">
+	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
+	<ChildItems>
+		<InputField name="Склад" id="1">
+			<DataPath>Объект.Склад</DataPath>
+			<ContextMenu name="СкладКонтекстноеМеню" id="2"/>
+			<ExtendedTooltip name="СкладРасширеннаяПодсказка" id="3"/>
+		</InputField>
+		<InputField name="Помещение" id="4">
+			<DataPath>Объект.Помещение</DataPath>
+			<ChoiceParameterLinks>
+				<xr:Link>
+					<xr:Name>Отбор.Владелец</xr:Name>
+					<xr:DataPath xsi:type="xs:string">Отбор.Склад</xr:DataPath>
+					<xr:ValueChange>Clear</xr:ValueChange>
+				</xr:Link>
+			</ChoiceParameterLinks>
+			<ContextMenu name="ПомещениеКонтекстноеМеню" id="5"/>
+			<ExtendedTooltip name="ПомещениеРасширеннаяПодсказка" id="6"/>
+		</InputField>
+		<InputField name="Ячейка" id="7">
+			<DataPath>Объект.Ячейка</DataPath>
+			<ChoiceParameterLinks>
+				<xr:Link>
+					<xr:Name>Отбор.Владелец</xr:Name>
+					<xr:DataPath xsi:type="xs:string">объект.Склад</xr:DataPath>
+					<xr:ValueChange>Clear</xr:ValueChange>
+				</xr:Link>
+			</ChoiceParameterLinks>
+			<ContextMenu name="ЯчейкаКонтекстноеМеню" id="8"/>
+			<ExtendedTooltip name="ЯчейкаРасширеннаяПодсказка" id="9"/>
+		</InputField>
+	</ChildItems>
+	<Attributes>
+		<Attribute name="Объект" id="20">
+			<Type>
+				<v8:Type xmlns:d5p1="http://v8.1c.ru/8.1/data/enterprise/current-config">d5p1:DocumentObject.Перемещение</v8:Type>
+			</Type>
+			<MainAttribute>true</MainAttribute>
+		</Attribute>
+	</Attributes>
+</Form>

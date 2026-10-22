@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.27 — Validate 1C managed form
+# form-validate v1.28 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1254,13 +1254,26 @@ def main():
     if not stopped:
         path_errors = 0
         path_checked = 0
-        path_base_skipped = 0
+        # \u041f\u0443\u0442\u0438, \u043e \u043a\u043e\u0442\u043e\u0440\u044b\u0445 \u0443\u0436\u0435 \u0441\u043a\u0430\u0437\u0430\u043d\u043e \u043f\u043e\u044d\u043b\u0435\u043c\u0435\u043d\u0442\u043d\u043e, — \u043f\u0440\u043e\u0445\u043e\u0434 \u043f\u043e \u043f\u0440\u043e\u0447\u0438\u043c \u043f\u0440\u0438\u0432\u044f\u0437\u043a\u0430\u043c \u043d\u0438\u0436\u0435 \u0438\u0445 \u043d\u0435 \u043f\u043e\u0432\u0442\u043e\u0440\u044f\u0435\u0442
+        reported_paths = set()
+        # \u0418\u043c\u0435\u043d\u0430 \u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u043e\u0432 — \u0431\u0435\u0437 \u0443\u0447\u0451\u0442\u0430 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430, \u043a\u0430\u043a \u0443 \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u044b
+        attr_upper = {n.upper() for n in attr_map}
 
         # All data-binding tags whose value is an attribute path (root must exist in <Attributes>).
         binding_tags = ["DataPath", "TitleDataPath", "FooterDataPath", "HeaderDataPath",
                         "MultipleValueDataPath", "MultipleValuePresentDataPath", "RowPictureDataPath", "MultipleValuePictureDataPath"]
 
         skip_tags = {"ContextMenu", "ExtendedTooltip", "AutoCommandBar", "SearchStringAddition", "ViewStatusAddition", "SearchControlAddition"}
+
+        # \u0417\u0430\u0438\u043c\u0441\u0442\u0432\u043e\u0432\u0430\u043d\u043d\u0430\u044f \u0444\u043e\u0440\u043c\u0430 \u0431\u0435\u0437 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0433\u043e \u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u0430: \u043f\u0443\u0442\u044c \u041e\u0431\u044a\u0435\u043a\u0442.* \u043d\u0430 \u043d\u0435\u0439 — \u0440\u043e\u0432\u043d\u043e \u044d\u0442\u043e\u0442 \u0441\u043b\u0443\u0447\u0430\u0439
+        no_main_hint = ""
+        if has_base_form:
+            no_main_hint = " (the borrowed form declares no MainAttribute)"
+            for attr in attr_nodes:
+                ma_node = attr.find(f"{{{F_NS}}}MainAttribute")
+                if ma_node is not None and (ma_node.text or "").strip() == "true":
+                    no_main_hint = ""
+                    break
 
         for el in all_elements:
             if stopped:
@@ -1272,14 +1285,8 @@ def main():
             if tag in skip_tags:
                 continue
 
-            if has_base_form and el["Id"]:
-                try:
-                    if int(el["Id"]) < 1000000:
-                        path_base_skipped += 1
-                        continue
-                except (ValueError, TypeError):
-                    pass
-
+            # \u0411\u0430\u0437\u043e\u0432\u044b\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442\u044b \u0437\u0430\u0438\u043c\u0441\u0442\u0432\u043e\u0432\u0430\u043d\u043d\u043e\u0439 \u0444\u043e\u0440\u043c\u044b (id < 1000000) \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u044e\u0442\u0441\u044f \u0442\u0430\u043a \u0436\u0435: \u0432\u0438\u0441\u044f\u0447\u0443\u044e \u043f\u0440\u0438\u0432\u044f\u0437\u043a\u0443
+            # \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u0430 \u043e\u0442\u0432\u0435\u0440\u0433\u0430\u0435\u0442 \u0438 \u043d\u0430 \u043d\u0438\u0445 — «\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u043f\u0443\u0442\u044c \u043a \u0434\u0430\u043d\u043d\u044b\u043c».
             for b_tag in binding_tags:
                 if stopped:
                     break
@@ -1291,10 +1298,9 @@ def main():
                 if not data_path:
                     continue
 
-                # Opaque platform-internal shapes — not validatable from Form.xml alone:
-                #   - bare numeric (e.g. "10", "1000003") — internal index
-                #   - "N/M:<uuid>" — metadata reference by UUID
-                if re.match(r'^\d+$', data_path) or re.match(r'^\d+/\d+:[0-9a-fA-F-]+$', data_path):
+                # \u0421\u0441\u044b\u043b\u043a\u0438, \u043a\u043e\u0442\u043e\u0440\u044b\u0435 \u041a\u043e\u043d\u0444\u0438\u0433\u0443\u0440\u0430\u0442\u043e\u0440 \u043f\u0438\u0448\u0435\u0442 \u043d\u043e\u043c\u0435\u0440\u0430\u043c\u0438, \u043f\u043e Form.xml \u043d\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u044c: «10», «1/0:<uuid>»,
+                # «306:<uuid>/8:<uuid>», «1/-5». \u0418\u043c\u044f \u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u0430 \u0441 \u0446\u0438\u0444\u0440\u044b \u043d\u0435 \u043d\u0430\u0447\u0438\u043d\u0430\u0435\u0442\u0441\u044f.
+                if data_path[0].isdigit():
                     continue
 
                 path_checked += 1
@@ -1344,18 +1350,35 @@ def main():
                 if items_broken:
                     continue
 
-                if root_attr not in attr_map:
-                    report_error(f"[{tag}] '{el_name}': {b_tag}='{data_path}' — attribute '{root_attr}' not found")
+                if root_attr.upper() not in attr_upper:
+                    report_error(f"[{tag}] '{el_name}': {b_tag}='{data_path}' — attribute '{root_attr}' not found{no_main_hint}")
                     path_errors += 1
+                    reported_paths.add(data_path)
 
-        path_msg = ""
-        if path_checked > 0:
-            path_msg = f"{path_checked} paths checked"
-        if path_base_skipped > 0:
-            skip_note = f"{path_base_skipped} base skipped"
-            path_msg = f"{path_msg}, {skip_note}" if path_msg else skip_note
-        if path_errors == 0 and path_msg:
-            report_ok(f"Data bindings: {path_msg}")
+        # \u041f\u0440\u043e\u0447\u0438\u0435 \u043f\u0440\u0438\u0432\u044f\u0437\u043a\u0438 — <xr:DataPath> \u0432 <ChoiceParameterLinks>/<TypeLink> \u0438 \u043b\u044e\u0431\u043e\u0439 *DataPath \u0432\u043d\u0435 \u0442\u0435\u0433\u043e\u0432
+        # \u0432\u044b\u0448\u0435: \u043a\u043e\u0440\u0435\u043d\u044c \u0442\u043e\u0436\u0435 \u0434\u043e\u043b\u0436\u0435\u043d \u0431\u044b\u0442\u044c \u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u043e\u043c \u0444\u043e\u0440\u043c\u044b. \u0422\u043e\u043b\u044c\u043a\u043e \u0441\u0432\u043e\u044f \u0447\u0430\u0441\u0442\u044c: <BaseForm> — \u0441\u043d\u0438\u043c\u043e\u043a \u0438\u0441\u0445\u043e\u0434\u043d\u043e\u0439
+        # \u0444\u043e\u0440\u043c\u044b, \u0435\u0433\u043e \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u0430 \u0440\u0430\u0437\u0440\u0435\u0448\u0430\u0435\u0442 \u043f\u043e \u043a\u043e\u043d\u0444\u0438\u0433\u0443\u0440\u0430\u0446\u0438\u0438. Items.* \u0438 \u043d\u043e\u043c\u0435\u0440\u043d\u044b\u0435 \u0441\u0441\u044b\u043b\u043a\u0438 — \u043a\u0430\u043a \u0432\u044b\u0448\u0435.
+        with open(form_path, "r", encoding="utf-8-sig") as fh:
+            own_text = fh.read().split('<BaseForm', 1)[0]
+        undeclared = {}   # \u043a\u043e\u0440\u0435\u043d\u044c \u0432 \u0432\u0435\u0440\u0445\u043d\u0435\u043c \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0435 -> (\u043a\u043e\u0440\u0435\u043d\u044c \u043a\u0430\u043a \u0432 \u043f\u0435\u0440\u0432\u043e\u043c \u043f\u0443\u0442\u0438, \u043f\u0443\u0442\u0438)
+        for m in re.finditer(r'<(?:\w+:)?\w*DataPath[^>]*>([^<]+)</(?:\w+:)?\w*DataPath>', own_text):
+            dp = m.group(1).strip()
+            if not dp or dp[0].isdigit() or dp in reported_paths:
+                continue
+            root_attr = re.sub(r'^~', '', re.sub(r'\[\d+\]', '', dp)).split('.', 1)[0]
+            if root_attr.upper() == 'ITEMS' or root_attr.upper() in attr_upper:
+                continue
+            entry = undeclared.setdefault(root_attr.upper(), (root_attr, []))
+            if dp not in entry[1]:
+                entry[1].append(dp)
+        for root_attr, shown in sorted(undeclared.values()):
+            sample = ", ".join(shown[:3])
+            suffix = f" (and {len(shown) - 3} more)" if len(shown) > 3 else ""
+            report_error(f"Path(s) rooted at '{root_attr}' — attribute '{root_attr}' not found{no_main_hint}: {sample}{suffix}")
+            path_errors += 1
+
+        if path_errors == 0 and path_checked > 0:
+            report_ok(f"Data bindings: {path_checked} paths checked")
         elif path_errors == 0:
             report_ok("Data bindings: none")
 
@@ -1589,39 +1612,6 @@ def main():
             ext_cmd_count = sum(1 for c in cmd_nodes if c.get("name", "") not in base_cmd_names)
             if (ext_attr_count + ext_cmd_count) > 0:
                 report_ok(f"Extension ID ranges: {ext_attr_count} attr(s), {ext_cmd_count} cmd(s) \u2014 all >= 1000000")
-
-        # 11d. \u041f\u0443\u0442\u0438 \u043d\u0430 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442, \u043a\u043e\u0442\u043e\u0440\u043e\u0433\u043e \u0444\u043e\u0440\u043c\u0430 \u043d\u0435 \u043e\u0431\u044a\u044f\u0432\u043b\u044f\u0435\u0442.
-        # Check 5 \u0442\u0430\u043a\u043e\u0435 \u043f\u0440\u043e\u043f\u0443\u0441\u043a\u0430\u0435\u0442: \u0443 \u0437\u0430\u0438\u043c\u0441\u0442\u0432\u043e\u0432\u0430\u043d\u043d\u043e\u0439 \u0444\u043e\u0440\u043c\u044b \u043e\u043d \u043d\u0435 \u043f\u0440\u043e\u0432\u0435\u0440\u044f\u0435\u0442 \u0431\u0430\u0437\u043e\u0432\u044b\u0435 \u044d\u043b\u0435\u043c\u0435\u043d\u0442\u044b (id < 1000000),
-        # \u0430 \u043f\u0440\u0438\u0432\u044f\u0437\u043a\u0438 \u0432 <xr:Link> \u0432\u043e\u043e\u0431\u0449\u0435 \u0432\u043d\u0435 \u0435\u0433\u043e \u0441\u043f\u0438\u0441\u043a\u0430 \u0442\u0435\u0433\u043e\u0432. \u041c\u0435\u0436\u0434\u0443 \u0442\u0435\u043c \u044d\u0442\u043e \u0440\u043e\u0432\u043d\u043e \u0442\u043e\u0442 \u0441\u043b\u0443\u0447\u0430\u0439, \u043d\u0430 \u043a\u043e\u0442\u043e\u0440\u043e\u043c
-        # \u043f\u043b\u0430\u0442\u0444\u043e\u0440\u043c\u0430 \u043e\u0442\u0432\u0435\u0440\u0433\u0430\u0435\u0442 \u0437\u0430\u0433\u0440\u0443\u0437\u043a\u0443: \u00ab\u041d\u0435\u0432\u0435\u0440\u043d\u044b\u0439 \u043f\u0443\u0442\u044c \u043a \u043f\u043e\u043b\u044e - \u041e\u0431\u044a\u0435\u043a\u0442.X\u00bb. \u041f\u0440\u0430\u0432\u0438\u043b\u043e: \u0435\u0441\u043b\u0438 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0439 \u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442
-        # \u043d\u0435 \u043e\u0431\u044a\u044f\u0432\u043b\u0435\u043d \u0432 <Attributes> \u0444\u043e\u0440\u043c\u044b, \u043b\u044e\u0431\u043e\u0439 \u043f\u0443\u0442\u044c \u0441 \u0435\u0433\u043e \u043a\u043e\u0440\u043d\u0435\u043c \u043d\u0435 \u0440\u0430\u0437\u0440\u0435\u0448\u0438\u0442\u0441\u044f.
-        # \u041a\u043e\u0440\u0435\u043d\u044c \u0431\u0435\u0440\u0451\u0442\u0441\u044f \u0438\u0437 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0433\u043e \u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u0430 BaseForm: \u00ab\u041e\u0431\u044a\u0435\u043a\u0442\u00bb \u043e\u043d \u0442\u043e\u043b\u044c\u043a\u043e \u0443 \u0444\u043e\u0440\u043c\u044b \u043e\u0431\u044a\u0435\u043a\u0442\u0430, \u0443 \u0444\u043e\u0440\u043c\u044b
-        # \u0441\u043f\u0438\u0441\u043a\u0430 \u044d\u0442\u043e \u00ab\u0421\u043f\u0438\u0441\u043e\u043a\u00bb, \u0443 \u0444\u043e\u0440\u043c\u044b \u0437\u0430\u043f\u0438\u0441\u0438 \u0440\u0435\u0433\u0438\u0441\u0442\u0440\u0430 \u00ab\u0417\u0430\u043f\u0438\u0441\u044c\u00bb. \u0421 \u0437\u0430\u0448\u0438\u0442\u044b\u043c \u00ab\u041e\u0431\u044a\u0435\u043a\u0442\u00bb \u043f\u0440\u043e\u0432\u0435\u0440\u043a\u0430 \u043d\u0430 \u0442\u0430\u043a\u0438\u0445
-        # \u0444\u043e\u0440\u043c\u0430\u0445 \u043c\u043e\u043b\u0447\u0430 \u043d\u0435 \u0441\u0440\u0430\u0431\u0430\u0442\u044b\u0432\u0430\u043b\u0430.
-        main_attr_declared = False
-        for attr in attr_nodes:
-            ma_node = attr.find(f"{{{F_NS}}}MainAttribute")
-            if ma_node is not None and (ma_node.text or "").strip() == "true":
-                main_attr_declared = True
-                break
-
-        if not main_attr_declared:
-            # \u0417\u043d\u0430\u0447\u0435\u043d\u0438\u044f \u043f\u0440\u0438\u0432\u044f\u0437\u043e\u043a \u0438\u0449\u0435\u043c \u0442\u0435\u043a\u0441\u0442\u043e\u043c: \u0438\u043d\u0442\u0435\u0440\u0435\u0441\u0443\u044e\u0442 \u0438 \u043e\u0431\u044b\u0447\u043d\u044b\u0435 \u0442\u0435\u0433\u0438, \u0438 <xr:DataPath> \u0432\u043d\u0443\u0442\u0440\u0438
-            # <ChoiceParameterLinks>, \u0430 \u0442\u0435 \u0436\u0438\u0432\u0443\u0442 \u0432 \u0447\u0443\u0436\u043e\u043c \u043f\u0440\u043e\u0441\u0442\u0440\u0430\u043d\u0441\u0442\u0432\u0435 \u0438\u043c\u0451\u043d.
-            with open(form_path, "r", encoding="utf-8-sig") as fh:
-                raw_form = fh.read()
-            main_base = base_form_node.find(f"{{{F_NS}}}Attributes/{{{F_NS}}}Attribute[{{{F_NS}}}MainAttribute='true']")
-            root_name = main_base.get("name") if main_base is not None and main_base.get("name") else "\u041e\u0431\u044a\u0435\u043a\u0442"
-            root_pat = re.escape(root_name)
-            dangling_paths = set(re.findall(
-                r'<(?:\w+:)?\w*DataPath[^>]*>(' + root_pat + r'\.[^<]+)</(?:\w+:)?\w*DataPath>', raw_form))
-            if dangling_paths:
-                shown = sorted(dangling_paths)
-                sample = ", ".join(shown[:3])
-                suffix = f" (and {len(shown) - 3} more)" if len(shown) > 3 else ""
-                report_error(f"Path(s) rooted at '{root_name}' but the form declares no MainAttribute: {sample}{suffix}")
-            elif main_base is not None:
-                report_ok("Object paths: none dangling (MainAttribute not declared)")
 
     # Check callType without BaseForm
     if not stopped and not is_extension:

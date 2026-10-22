@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.28 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.29 —Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1224,6 +1224,7 @@ foreach ($fi in $script:formList) {
 	$formRawText = [System.IO.File]::ReadAllText($formXmlFile, [System.Text.Encoding]::UTF8)
 	$script:formsWithText += @{
 		RawText = $formRawText; Context = $ctx; OwnerKey = "$($fi.TypeName).$($fi.ObjName)"
+		DirName = $fi.DirName; ObjName = $fi.ObjName; FormName = $fi.FormName
 	}
 
 	if ($formRawText -match '<BaseForm') {
@@ -1412,9 +1413,49 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 		# Только своя часть формы: <BaseForm> — снимок исходной формы, его платформа разрешает по
 		# конфигурации, а не по расширению.
 		$own = ($raw -split '<BaseForm', 2)[0]
-		# Корень путей — имя основного реквизита формы (см. проверку 12). Нет его в <Attributes>
-		# формы — путей с корнем не бывает, проверять нечего.
 		$rootMatch14 = [regex]::Match($own, '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
+
+		# Корень любого пути — реквизит, объявленный в <Attributes> самой формы, иначе «Неверный путь к
+		# данным». Заимствованная без основного реквизита форма его не объявляет, а поле Объект.* на неё
+		# дописать можно. Пропускаются Items.* (текущая строка таблицы) и ссылки, которые Конфигуратор
+		# пишет номерами (58, 1/0:<uuid>, 306:<uuid>/8:<uuid>) — имя реквизита с цифры не начинается.
+		$declared = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+		$attrSection = [regex]::Match($own, '(?s)<Attributes>(.*?)</Attributes>')
+		if ($attrSection.Success) {
+			foreach ($am in [regex]::Matches($attrSection.Groups[1].Value, '<Attribute name="([^"]+)"')) { $declared[$am.Groups[1].Value] = $true }
+		}
+		$undeclared = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+		foreach ($m in [regex]::Matches($own, '<(?:\w+:)?\w*DataPath[^>]*>([^<]+)</(?:\w+:)?\w*DataPath>')) {
+			$dp = $m.Groups[1].Value.Trim()
+			if (-not $dp -or $dp -match '^\d') { continue }
+			$root = ((($dp -replace '\[\d+\]', '') -replace '^~', '') -split '\.', 2)[0]
+			if ($root -eq 'Items' -or $declared.ContainsKey($root)) { continue }
+			if (-not $undeclared.ContainsKey($root)) { $undeclared[$root] = New-Object System.Collections.Generic.List[string] }
+			if (-not $undeclared[$root].Contains($dp)) { $undeclared[$root].Add($dp) }
+		}
+		if ($undeclared.Count -gt 0) {
+			# Подсказка — только когда корень и есть основной реквизит исходной формы
+			$srcMain = ""
+			if (-not $rootMatch14.Success -and $raw -match '<BaseForm' -and $ConfigPath) {
+				$srcForm = Join-Path (Get-SourceConfigRoot) "$($fw.DirName)/$($fw.ObjName)/Forms/$($fw.FormName)/Ext/Form.xml"
+				if (Test-Path $srcForm) {
+					$srcRaw = [System.IO.File]::ReadAllText($srcForm, [System.Text.Encoding]::UTF8)
+					$srcMatch = [regex]::Match(($srcRaw -split '<BaseForm', 2)[0], '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
+					if ($srcMatch.Success) { $srcMain = $srcMatch.Groups[1].Value }
+				}
+			}
+			foreach ($root in ($undeclared.Keys | Sort-Object)) {
+				$paths = $undeclared[$root]
+				$sample = ($paths | Select-Object -First 3) -join "', '"
+				$more = if ($paths.Count -gt 3) { " (and $($paths.Count - 3) more)" } else { "" }
+				$hint = if ($srcMain -and $root -eq $srcMain) { " — the form was borrowed without its main attribute, re-borrow it with -BorrowMainAttribute Form" } else { "" }
+				Report-Error "14. ${ctx}: path '${sample}'${more} — form attribute '${root}' is not declared in the form${hint}"
+			}
+			$check14Ok = $false
+		}
+
+		# Дальше — хвост путей от основного реквизита по составу объекта (см. проверку 12). Основного
+		# реквизита нет — проверять хвост не по чему.
 		if (-not $rootMatch14.Success) { continue }
 		$rootName = $rootMatch14.Groups[1].Value
 		# Тип не объект метаданных — пути не по составу объекта. Так и у динамического списка: его поля —

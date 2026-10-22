@@ -1,0 +1,10 @@
+{
+  "name": "Ошибка: связь параметров выбора с корнем, которого форма не объявляет",
+  "setup": "fixture:choice-link-undeclared-root",
+  "params": { "formPath": "Documents/Перемещение/Forms/ФормаДокумента" },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "Path(s) rooted at 'Отбор' — attribute 'Отбор' not found: Отбор.Склад",
+    "stdoutNotContains": ["объект.Склад", "declares no MainAttribute"]
+  }
+}
