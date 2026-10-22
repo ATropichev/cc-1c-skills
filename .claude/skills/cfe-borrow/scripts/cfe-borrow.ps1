@@ -2720,7 +2720,8 @@ function Merge-AttributesIntoObject {
 
 # Блок <TabularSection> с именем $tsName среди прямых детей СОБСТВЕННОГО <ChildObjects> объекта:
 # @{ Start; End } в тексте, $null — нет. Прямые дети — по глубине, как в Insert-IntoOwnChildObjectsByCanon;
-# имя ТЧ — первый <Name> блока (в InternalInfo имён нет). Реквизит с тем же именем — не ТЧ.
+# имя ТЧ — первый <Name> блока (в InternalInfo имён нет), без учёта регистра, как имена 1С. Реквизит с тем же
+# именем — не ТЧ.
 function Find-OwnTabularSectionSpan([string]$text, [string]$tsName) {
 	$mOpen = [regex]::Match($text, '<ChildObjects\b[^>]*?(/?)>')
 	if (-not $mOpen.Success -or $mOpen.Groups[1].Value) { return $null }
@@ -2737,7 +2738,7 @@ function Find-OwnTabularSectionSpan([string]$text, [string]$tsName) {
 			if ($depth -eq 0 -and $tsStart -ge 0) {
 				$end = $bodyStart + $m.Index + $m.Length
 				$nm = [regex]::Match($text.Substring($tsStart, $end - $tsStart), '<Name>([^<]*)</Name>')
-				if ($nm.Success -and $nm.Groups[1].Value -ceq $tsName) { return @{ Start = $tsStart; End = $end } }
+				if ($nm.Success -and $nm.Groups[1].Value -eq $tsName) { return @{ Start = $tsStart; End = $end } }
 				$tsStart = -1
 			}
 			continue
@@ -2754,6 +2755,7 @@ function Merge-ColumnsIntoTabularSection {
 	param([string]$typeName, [string]$objName, [string]$tsName, $cols)
 
 	$objFile = Join-Path (Join-Path $extDir $childTypeDirMap[$typeName]) "${objName}.xml"
+	$style = Detect-XmlStyle $objFile
 	$text = [System.IO.File]::ReadAllText($objFile, (New-Object System.Text.UTF8Encoding($true)))
 	$span = Find-OwnTabularSectionSpan $text $tsName
 	if (-not $span) { return -1 }
@@ -2778,7 +2780,7 @@ function Merge-ColumnsIntoTabularSection {
 	}
 	if ($added -gt 0) {
 		$text = $text.Substring(0, $span.Start) + $block + $text.Substring($span.End)
-		[System.IO.File]::WriteAllText($objFile, $text, (New-Object System.Text.UTF8Encoding($true)))
+		[System.IO.File]::WriteAllText($objFile, $text, (New-Object System.Text.UTF8Encoding(($null -eq $style) -or $style.bom)))
 		Info "  Merged $added attribute(s) into tabular section ${tsName}: $objFile"
 	}
 	return $added
@@ -3059,7 +3061,9 @@ function Borrow-MainAttribute {
 	# доливаются в неё: пропуск по имени оставил бы форму с «Неверный путь к данным Объект.<ТЧ>.<Колонка>»
 	foreach ($ts in $srcTS) {
 		if (-not $existingChildNames.ContainsKey($ts.Name)) { continue }
-		Merge-ColumnsIntoTabularSection $typeName $objName $ts.Name $ts.Attributes | Out-Null
+		if ((Merge-ColumnsIntoTabularSection $typeName $objName $ts.Name $ts.Attributes) -lt 0) {
+			Warn "  $($ts.Name): name is taken in ${typeName}.${objName}, but not by a tabular section — its attributes not borrowed"
+		}
 	}
 
 	# Step 4: Collect all reference types and borrow as shells
@@ -3503,19 +3507,25 @@ function Borrow-SubObject($pi, $src) {
 		return
 	}
 	$ts = $src.TS
+	$style = Detect-XmlStyle $objFile
 	$text = [System.IO.File]::ReadAllText($objFile, (New-Object System.Text.UTF8Encoding($true)))
+	$tsAdded = $false
 	if (Find-OwnTabularSectionSpan $text $ts.Name) {
 		Info "  Already borrowed: TabularSection $($ts.Name)"
 	} else {
 		$text = Insert-OwnChildOrDie $text (Build-AdoptedTabularSectionXml $ts.Name $ts.Uuid $ts.GeneratedTypes @() "`t`t`t") "TabularSection" $typeName $objFile
-		[System.IO.File]::WriteAllText($objFile, $text, (New-Object System.Text.UTF8Encoding($true)))
+		[System.IO.File]::WriteAllText($objFile, $text, (New-Object System.Text.UTF8Encoding(($null -eq $style) -or $style.bom)))
 		Info "  Borrowed TabularSection $($ts.Name) (no attributes): $objFile"
+		$tsAdded = $true
 	}
-	# Свою колонку в заимствованную ТЧ этих видов платформа не примет — отказ на обновлении БД
-	if ($script:tsOwnColumnsBlocked -ccontains $typeName) {
-		Warn "  ${typeName}: own attributes cannot be added to a borrowed tabular section of this kind — the platform rejects them on database update"
-	} elseif ($script:tsOwnColumnsFromPlatform.ContainsKey($typeName)) {
-		Warn "  ${typeName}: own attributes in a borrowed tabular section are accepted only from platform $($script:tsOwnColumnsFromPlatform[$typeName])"
+	# Собственный реквизит в заимствованную ТЧ этих видов платформа не примет — отказ на обновлении БД.
+	# Предупреждаем, когда ТЧ заимствуется под собственные реквизиты: новая и без реквизита источника в элементе
+	if ($tsAdded -and -not $src.Col) {
+		if ($script:tsOwnColumnsBlocked -ccontains $typeName) {
+			Warn "  ${typeName}: own attributes cannot be added to a borrowed tabular section of this kind — the platform rejects them on database update"
+		} elseif ($script:tsOwnColumnsFromPlatform.ContainsKey($typeName)) {
+			Warn "  ${typeName}: own attributes in a borrowed tabular section are accepted only from platform $($script:tsOwnColumnsFromPlatform[$typeName])"
+		}
 	}
 	if ($src.Col) {
 		Merge-ColumnsIntoTabularSection $typeName $objName $ts.Name @($src.Col) | Out-Null

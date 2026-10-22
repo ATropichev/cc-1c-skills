@@ -444,7 +444,8 @@ def insert_own_child_or_die(text, fragment, tag, obj_type, obj_file):
 def find_own_tabular_section_span(text, ts_name):
     """Блок <TabularSection> с именем ts_name среди прямых детей СОБСТВЕННОГО <ChildObjects> объекта:
     (start, end) в тексте, None — нет. Прямые дети — по глубине, как в insert_into_own_child_objects_by_canon;
-    имя ТЧ — первый <Name> блока (в InternalInfo имён нет). Реквизит с тем же именем — не ТЧ."""
+    имя ТЧ — первый <Name> блока (в InternalInfo имён нет), без учёта регистра, как имена 1С. Реквизит с тем же
+    именем — не ТЧ."""
     m_open = re.search(r'<ChildObjects\b[^>]*?(/?)>', text)
     if not m_open or m_open.group(1):
         return None
@@ -463,7 +464,7 @@ def find_own_tabular_section_span(text, ts_name):
             if depth == 0 and ts_start >= 0:
                 end = body_start + m.end()
                 nm = re.search(r'<Name>([^<]*)</Name>', text[ts_start:end])
-                if nm and nm.group(1) == ts_name:
+                if nm and nm.group(1).lower() == ts_name.lower():
                     return (ts_start, end)
                 ts_start = -1
             continue
@@ -1192,6 +1193,13 @@ def save_xml_bom(tree, path):
         if style is None or style["bom"]:
             f.write(b"\xef\xbb\xbf")
         f.write(xml_bytes)
+
+
+def write_text_keep_bom(path, content, style):
+    """Текст в файл с BOM, как был у файла (style — _detect_xml_style до записи; файла не было — с BOM)."""
+    bom = style is None or style["bom"]
+    with open(path, 'w', encoding='utf-8-sig' if bom else 'utf-8', newline='') as f:
+        f.write(content)
 
 
 def write_utf8_bom(path, content):
@@ -2341,6 +2349,7 @@ def main():
     # и порядок остальных не трогаем). Возвращает число добавленных; ТЧ нет — -1.
     def merge_columns_into_tabular_section(type_name, obj_name, ts_name, cols):
         obj_file = os.path.join(ext_dir, CHILD_TYPE_DIR_MAP[type_name], f"{obj_name}.xml")
+        style = _detect_xml_style(obj_file)
         with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
             text = fh.read()
         span = find_own_tabular_section_span(text, ts_name)
@@ -2348,12 +2357,12 @@ def main():
             return -1
         block = text[span[0]:span[1]]
         # Имена колонок — все <Name> блока, кроме первого (имя самой ТЧ)
-        existing = {m.group(1) for m in list(re.finditer(r'<Name>([^<]*)</Name>', block))[1:]}
+        existing = {m.group(1).lower() for m in list(re.finditer(r'<Name>([^<]*)</Name>', block))[1:]}
         ls = text.rfind("\n", 0, span[0]) + 1
         col_indent = text[ls:span[0]] + "\t\t"
         added = 0
         for c in cols:
-            if c["Name"] in existing:
+            if c["Name"].lower() in existing:
                 continue
             new_block = insert_into_own_child_objects_by_canon(
                 block, build_adopted_attribute_xml(c["Name"], c["Uuid"], c["TypeXml"], col_indent), "Attribute", "TabularSection")
@@ -2361,11 +2370,11 @@ def main():
                 warn(f"  Tabular section {ts_name} has no <ChildObjects> — attribute {c['Name']} not added")
                 break
             block = new_block
-            existing.add(c["Name"])
+            existing.add(c["Name"].lower())
             added += 1
         if added > 0:
             text = text[:span[0]] + block + text[span[1]:]
-            write_utf8_bom(obj_file, text)
+            write_text_keep_bom(obj_file, text, style)
             info(f"  Merged {added} attribute(s) into tabular section {ts_name}: {obj_file}")
         return added
 
@@ -2625,7 +2634,9 @@ def main():
         for ts in src_ts:
             if ts["Name"] not in existing_child_names:
                 continue
-            merge_columns_into_tabular_section(type_name, obj_name, ts["Name"], ts["Attributes"])
+            if merge_columns_into_tabular_section(type_name, obj_name, ts["Name"], ts["Attributes"]) < 0:
+                warn(f"  {ts['Name']}: name is taken in {type_name}.{obj_name}, but not by a tabular section \u2014 "
+                     f"its attributes not borrowed")
 
         # Step 4: Collect all reference types and borrow as shells
         all_type_xmls = []
@@ -3414,30 +3425,35 @@ def main():
         obj_file = os.path.join(ext_dir, pi["DirName"], f"{obj_name}.xml")
         if pi["SubKind"] != "TabularSection":
             attr = src["Attr"]
-            if attr["Name"] in get_own_child_object_names(obj_file):
+            if attr["Name"].lower() in {n.lower() for n in get_own_child_object_names(obj_file)}:
                 info(f"  Already borrowed: {pi['SubKind']} {attr['Name']}")
             else:
                 merge_attributes_into_object(type_name, obj_name, [attr])
             borrow_reference_type_shells([attr["TypeXml"]])
             return
         ts = src["TS"]
+        style = _detect_xml_style(obj_file)
         with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
             text = fh.read()
+        ts_added = False
         if find_own_tabular_section_span(text, ts["Name"]):
             info(f"  Already borrowed: TabularSection {ts['Name']}")
         else:
             text = insert_own_child_or_die(
                 text, build_adopted_tabular_section_xml(ts["Name"], ts["Uuid"], ts["GeneratedTypes"], [], "\t\t\t"),
                 "TabularSection", type_name, obj_file)
-            write_utf8_bom(obj_file, text)
+            write_text_keep_bom(obj_file, text, style)
             info(f"  Borrowed TabularSection {ts['Name']} (no attributes): {obj_file}")
-        # Свою колонку в заимствованную ТЧ этих видов платформа не примет — отказ на обновлении БД
-        if type_name in TS_OWN_COLUMNS_BLOCKED:
-            warn(f"  {type_name}: own attributes cannot be added to a borrowed tabular section of this kind — "
-                 f"the platform rejects them on database update")
-        elif type_name in TS_OWN_COLUMNS_FROM_PLATFORM:
-            warn(f"  {type_name}: own attributes in a borrowed tabular section are accepted only from platform "
-                 f"{TS_OWN_COLUMNS_FROM_PLATFORM[type_name]}")
+            ts_added = True
+        # Собственный реквизит в заимствованную ТЧ этих видов платформа не примет — отказ на обновлении БД.
+        # Предупреждаем, когда ТЧ заимствуется под собственные реквизиты: новая и без реквизита источника в элементе
+        if ts_added and not src["Col"]:
+            if type_name in TS_OWN_COLUMNS_BLOCKED:
+                warn(f"  {type_name}: own attributes cannot be added to a borrowed tabular section of this kind \u2014 "
+                     f"the platform rejects them on database update")
+            elif type_name in TS_OWN_COLUMNS_FROM_PLATFORM:
+                warn(f"  {type_name}: own attributes in a borrowed tabular section are accepted only from platform "
+                     f"{TS_OWN_COLUMNS_FROM_PLATFORM[type_name]}")
         if src["Col"]:
             merge_columns_into_tabular_section(type_name, obj_name, ts["Name"], [src["Col"]])
             borrow_reference_type_shells([src["Col"]["TypeXml"]])
@@ -3467,8 +3483,8 @@ def main():
                       f"конфигурации-источнике — форма в расширении не загрузится. Расширение не изменено", file=sys.stderr)
                 sys.exit(1)
 
-    # \u042d\u043b\u0435\u043c\u0435\u043d\u0442\u044b \u0440\u0430\u0437\u043e\u0431\u0440\u0430\u043d\u044b \u0438 \u043f\u043e\u0434\u043e\u0431\u044a\u0435\u043a\u0442\u044b \u043d\u0430\u0439\u0434\u0435\u043d\u044b \u0432 \u0438\u0441\u0442\u043e\u0447\u043d\u0438\u043a\u0435 \u0414\u041e \u0437\u0430\u043f\u0438\u0441\u0438: \u043e\u0448\u0438\u0431\u043a\u0430 \u0432 \u043b\u044e\u0431\u043e\u043c \u044d\u043b\u0435\u043c\u0435\u043d\u0442\u0435 \u043f\u0430\u043a\u0435\u0442\u0430 \u2014
-    # \u0440\u0430\u0441\u0448\u0438\u0440\u0435\u043d\u0438\u0435 \u043d\u0435 \u0442\u0440\u043e\u043d\u0443\u0442\u043e
+    # Элементы разобраны и подобъекты найдены в источнике ДО записи: ошибка в любом элементе пакета —
+    # расширение не тронуто
     sub_object_sources = {}
     for item in items:
         pi = split_borrow_item(item)
