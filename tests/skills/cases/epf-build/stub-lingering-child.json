@@ -1,7 +1,7 @@
 {
   "name": "Временная база: платформа оставляет живого потомка — запуск стаба его не ждёт, вывод стаба доходит",
   "osOnly": "win32",
-  "fakePlatform": { "log": "", "linger": 15 },
+  "fakePlatform": { "log": "", "linger": 20 },
   "preRun": [
     {
       "script": "epf-init/scripts/init",
@@ -29,7 +29,7 @@
     "stdoutNotContains": [
       "failed to create stub database"
     ],
-    "maxDurationMs": 10000
+    "maxDurationMs": 15000
   },
   "expectError": true,
   "noSnapshot": "платформа фейковая, базу не создаёт — проверяется время и что вывод стаба дошёл"

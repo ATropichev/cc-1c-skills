@@ -572,8 +572,10 @@ public static class PlatformProcess {
             si.StartupInfo.hStdOutput = outW;
             si.StartupInfo.hStdError = errW;
             si.lpAttributeList = attrs;
-            // Same command line as Process.Start builds: quoted program, then the arguments
-            var cmd = new StringBuilder("\"" + exe + "\"" + (string.IsNullOrEmpty(arguments) ? "" : " " + arguments));
+            // Same command line as Process.Start builds: quoted program (left as is if already
+            // quoted), then the arguments
+            var program = exe.Length > 1 && exe[0] == '"' && exe[exe.Length - 1] == '"' ? exe : "\"" + exe + "\"";
+            var cmd = new StringBuilder(program + (string.IsNullOrEmpty(arguments) ? "" : " " + arguments));
             if (!CreateProcess(null, cmd, IntPtr.Zero, IntPtr.Zero, true,
                 EXTENDED_STARTUPINFO_PRESENT | CREATE_NO_WINDOW, IntPtr.Zero, null, ref si, out pi)) {
                 // System messages for a bad executable carry a %1 placeholder for its name
@@ -620,7 +622,7 @@ public static class PlatformProcess {
                     int n;
                     while ((n = fs.Read(chunk, 0, chunk.Length)) > 0) lock (buf) buf.Write(chunk, 0, n);
                 }
-            } catch (IOException) { }
+            } catch (Exception) { }   // anything escaping a background thread kills powershell
         });
         t.IsBackground = true;
         t.Start();

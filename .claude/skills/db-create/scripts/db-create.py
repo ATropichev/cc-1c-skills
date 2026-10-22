@@ -364,11 +364,28 @@ def run_platform_process(cmd):
     readers = [threading.Thread(target=drain, args=(s,), daemon=True) for s in (p.stdout, p.stderr)]
     for t in readers:
         t.start()
-    returncode = p.wait()
+    try:
+        while True:
+            try:
+                returncode = p.wait(timeout=0.5)
+                break
+            except subprocess.TimeoutExpired:
+                pass   # short waits: on Windows an endless one doesn't see Ctrl+C until the child exits
+    except BaseException:
+        # Like subprocess.run: an interrupt must not leave the platform running, holding the
+        # infobase lock and the license
+        p.kill()
+        p.wait()
+        raise
     deadline = time.monotonic() + 1
     for t in readers:
         t.join(max(0, deadline - time.monotonic()))
-    return subprocess.CompletedProcess(cmd, returncode, b"".join(chunks[p.stdout]), b"".join(chunks[p.stderr]))
+    result = subprocess.CompletedProcess(cmd, returncode, b"".join(chunks[p.stdout]), b"".join(chunks[p.stderr]))
+    # A pipe still held by a leftover process stays with its blocked reader
+    for t, stream in zip(readers, (p.stdout, p.stderr)):
+        if not t.is_alive():
+            stream.close()
+    return result
 
 
 def decode_platform_bytes(data):
