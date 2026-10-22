@@ -1270,7 +1270,8 @@ def main():
         # \u0438\u043c\u0435\u043d\u0430 \u043e\u0441\u043d\u043e\u0432\u043d\u043e\u0433\u043e \u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u0430. \u041e\u043f\u0435\u0447\u0430\u0442\u043a\u0435 \u0432 \u043a\u043e\u0440\u043d\u0435 \u0438\u043b\u0438 \u0447\u0443\u0436\u043e\u043c\u0443 \u0440\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u0443 \u043e\u043d\u0430 \u043d\u0435 \u043d\u0443\u0436\u043d\u0430.
         main_root_names = set()
         if has_base_form:
-            main_root_names = {'\u041e\u0411\u042a\u0415\u041a\u0422', '\u0421\u041f\u0418\u0421\u041e\u041a', '\u0417\u0410\u041f\u0418\u0421\u042c', 'OBJECT', 'LIST', 'RECORD'}
+            main_root_names = {'\u041e\u0411\u042a\u0415\u041a\u0422', '\u0421\u041f\u0418\u0421\u041e\u041a', '\u0417\u0410\u041f\u0418\u0421\u042c', '\u041e\u0422\u0427\u0415\u0422', '\u041d\u0410\u0411\u041e\u0420\u0417\u0410\u041f\u0418\u0421\u0415\u0419', '\u041d\u0410\u0411\u041e\u0420\u041a\u041e\u041d\u0421\u0422\u0410\u041d\u0422',
+                               'OBJECT', 'LIST', 'RECORD', 'REPORT', 'RECORDSET', 'CONSTANTSSET'}
             main_base = root.find(f"{{{F_NS}}}BaseForm/{{{F_NS}}}Attributes/{{{F_NS}}}Attribute[{{{F_NS}}}MainAttribute='true']")
             if main_base is not None and main_base.get("name"):
                 main_root_names = {main_base.get("name").upper()}

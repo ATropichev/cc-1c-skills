@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.29 — Validate 1C configuration extension XML structure (CFE)
+# cfe-validate v1.29 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -190,6 +190,9 @@ GENERATED_TYPE_CATEGORIES = {
 # Основной реквизит формы: <Attribute name="X"> с <MainAttribute>true</MainAttribute> внутри
 MAIN_ATTR_RE = re.compile(
     r'<Attribute name=\"([^\"]+)\"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>', re.DOTALL)
+# Обычные имена основного реквизита формы — когда настоящее имя взять неоткуда
+MAIN_ATTR_DEFAULT_NAMES = ['Объект', 'Список', 'Запись', 'Отчет', 'НаборЗаписей', 'НаборКонстант',
+                           'Object', 'List', 'Record', 'Report', 'RecordSet', 'ConstantsSet']
 
 MAIN_ATTR_TYPE_RE = re.compile(r'<v8:Type[^>]*>(?:\w+:)?(\w+?)(Object|RecordManager|RecordSet)\.([^<]+)</v8:Type>')
 # Вид объекта без учёта регистра — как у хеш-таблицы PS-порта
@@ -1452,20 +1455,27 @@ def main():
                 if dp not in entry[1]:
                     entry[1].append(dp)
             if undeclared:
-                # Подсказка — только когда корень и есть основной реквизит исходной формы
-                src_main = ''
-                if not root_match14 and '<BaseForm' in raw and config_path_arg:
-                    src_form = os.path.join(source_config_root(), fw['DirName'], fw['ObjName'], 'Forms', fw['FormName'], 'Ext', 'Form.xml')
-                    if os.path.isfile(src_form):
+                # Подсказка — только когда корень и есть основной реквизит исходной формы: по самой исходной
+                # форме (-ConfigPath), без неё — по снимку <BaseForm>, а нет его и там — по обычным именам
+                # основного реквизита (так же решает form-validate).
+                hint_roots = []
+                if not root_match14 and '<BaseForm' in raw:
+                    src_form = (os.path.join(source_config_root(), fw['DirName'], fw['ObjName'], 'Forms', fw['FormName'], 'Ext', 'Form.xml')
+                                if config_path_arg else '')
+                    if src_form and os.path.isfile(src_form):
                         with open(src_form, 'r', encoding='utf-8-sig') as f:
                             src_match = MAIN_ATTR_RE.search(f.read().split('<BaseForm', 1)[0])
                         if src_match:
-                            src_main = src_match.group(1)
+                            hint_roots = [src_match.group(1)]
+                    else:
+                        base_match = MAIN_ATTR_RE.search(raw.split('<BaseForm', 1)[1])
+                        hint_roots = [base_match.group(1)] if base_match else MAIN_ATTR_DEFAULT_NAMES
+                hint_roots_upper = {n.upper() for n in hint_roots}
                 for root, paths in undeclared.values():   # порядок корней — как в файле
                     sample = "', '".join(paths[:3])
                     more = f' (and {len(paths) - 3} more)' if len(paths) > 3 else ''
                     hint = (' — the form was borrowed without its main attribute, re-borrow it with -BorrowMainAttribute Form'
-                            if src_main and root.upper() == src_main.upper() else '')
+                            if root.upper() in hint_roots_upper else '')
                     r.error(f"14. {ctx}: path '{sample}'{more} — form attribute '{root}' is not declared in the form{hint}")
                 check14_ok = False
 

@@ -466,7 +466,8 @@ if (-not $stopped) {
 	# имена основного реквизита. Опечатке в корне или чужому реквизиту она не нужна.
 	$mainRootNames = @()
 	if ($hasBaseForm) {
-		$mainRootNames = @('Объект', 'Список', 'Запись', 'Object', 'List', 'Record')
+		$mainRootNames = @('Объект', 'Список', 'Запись', 'Отчет', 'НаборЗаписей', 'НаборКонстант',
+			'Object', 'List', 'Record', 'Report', 'RecordSet', 'ConstantsSet')
 		$mainBase = $root.SelectSingleNode("f:BaseForm/f:Attributes/f:Attribute[f:MainAttribute='true']", $nsMgr)
 		if ($mainBase -and $mainBase.GetAttribute("name")) { $mainRootNames = @($mainBase.GetAttribute("name")) }
 		foreach ($attr in $attrNodes) {
@@ -564,7 +565,7 @@ if (-not $stopped) {
 	# Прочие привязки — <xr:DataPath> в <ChoiceParameterLinks>/<TypeLink> и любой *DataPath вне тегов
 	# выше: корень тоже должен быть реквизитом формы. Только своя часть: <BaseForm> — снимок исходной
 	# формы, его платформа разрешает по конфигурации. Items.* и номерные ссылки — как выше.
-	$ownText = ([System.IO.File]::ReadAllText((Resolve-Path $FormPath).Path, [System.Text.Encoding]::UTF8) -split '<BaseForm', 2)[0]
+	$ownText = ([System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $FormPath).Path, [System.Text.Encoding]::UTF8) -split '<BaseForm', 2)[0]
 	# Порядок корней — как в файле: одинаков в обоих портах
 	$undeclared = New-Object System.Collections.Specialized.OrderedDictionary ([StringComparer]::OrdinalIgnoreCase)
 	foreach ($m in [regex]::Matches($ownText, '<(?:\w+:)?\w*DataPath[^>]*>([^<]+)</(?:\w+:)?\w*DataPath>')) {

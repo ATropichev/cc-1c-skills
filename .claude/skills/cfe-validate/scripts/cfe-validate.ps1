@@ -1403,6 +1403,10 @@ function Get-SourceConfigRoot {
 # на заимствованной форме, где он был в исходной: «Неверный путь к данным». Имена — без учёта
 # регистра. Стандартные реквизиты — по типу основного реквизита ($script:mainAttrStandardFields).
 # После ссылочного реквизита или колонки путь продолжается по целевому объекту (Get-RefTailError).
+$script:mainAttrPattern = '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>'
+# Обычные имена основного реквизита формы — когда настоящее имя взять неоткуда
+$script:mainAttrDefaultNames = @('Объект', 'Список', 'Запись', 'Отчет', 'НаборЗаписей', 'НаборКонстант',
+	'Object', 'List', 'Record', 'Report', 'RecordSet', 'ConstantsSet')
 if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 	$check14Ok = $true
 	$pathCheckCount = 0
@@ -1413,7 +1417,7 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 		# Только своя часть формы: <BaseForm> — снимок исходной формы, его платформа разрешает по
 		# конфигурации, а не по расширению.
 		$own = ($raw -split '<BaseForm', 2)[0]
-		$rootMatch14 = [regex]::Match($own, '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
+		$rootMatch14 = [regex]::Match($own, $script:mainAttrPattern)
 
 		# Корень любого пути — реквизит, объявленный в <Attributes> самой формы, иначе «Неверный путь к
 		# данным». Заимствованная без основного реквизита форма его не объявляет, а поле Объект.* на неё
@@ -1435,21 +1439,26 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 			if (-not $undeclared[$root].Contains($dp)) { $undeclared[$root].Add($dp) }
 		}
 		if ($undeclared.Count -gt 0) {
-			# Подсказка — только когда корень и есть основной реквизит исходной формы
-			$srcMain = ""
-			if (-not $rootMatch14.Success -and $raw -match '<BaseForm' -and $ConfigPath) {
-				$srcForm = Join-Path (Get-SourceConfigRoot) "$($fw.DirName)/$($fw.ObjName)/Forms/$($fw.FormName)/Ext/Form.xml"
-				if (Test-Path $srcForm) {
+			# Подсказка — только когда корень и есть основной реквизит исходной формы: по самой исходной
+			# форме (-ConfigPath), без неё — по снимку <BaseForm>, а нет его и там — по обычным именам
+			# основного реквизита (так же решает form-validate).
+			$hintRoots = @()
+			if (-not $rootMatch14.Success -and $raw -match '<BaseForm') {
+				$srcForm = if ($ConfigPath) { Join-Path (Get-SourceConfigRoot) "$($fw.DirName)/$($fw.ObjName)/Forms/$($fw.FormName)/Ext/Form.xml" } else { "" }
+				if ($srcForm -and (Test-Path -LiteralPath $srcForm)) {
 					$srcRaw = [System.IO.File]::ReadAllText($srcForm, [System.Text.Encoding]::UTF8)
-					$srcMatch = [regex]::Match(($srcRaw -split '<BaseForm', 2)[0], '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
-					if ($srcMatch.Success) { $srcMain = $srcMatch.Groups[1].Value }
+					$srcMatch = [regex]::Match(($srcRaw -split '<BaseForm', 2)[0], $script:mainAttrPattern)
+					if ($srcMatch.Success) { $hintRoots = @($srcMatch.Groups[1].Value) }
+				} else {
+					$baseMatch = [regex]::Match(($raw -split '<BaseForm', 2)[1], $script:mainAttrPattern)
+					$hintRoots = if ($baseMatch.Success) { @($baseMatch.Groups[1].Value) } else { $script:mainAttrDefaultNames }
 				}
 			}
 			foreach ($root in @($undeclared.Keys)) {
 				$paths = $undeclared[$root]
 				$sample = ($paths | Select-Object -First 3) -join "', '"
 				$more = if ($paths.Count -gt 3) { " (and $($paths.Count - 3) more)" } else { "" }
-				$hint = if ($srcMain -and $root -eq $srcMain) { " — the form was borrowed without its main attribute, re-borrow it with -BorrowMainAttribute Form" } else { "" }
+				$hint = if ($root -in $hintRoots) { " — the form was borrowed without its main attribute, re-borrow it with -BorrowMainAttribute Form" } else { "" }
 				Report-Error "14. ${ctx}: path '${sample}'${more} — form attribute '${root}' is not declared in the form${hint}"
 			}
 			$check14Ok = $false
