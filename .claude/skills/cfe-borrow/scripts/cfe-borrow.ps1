@@ -2780,7 +2780,7 @@ function Merge-ColumnsIntoTabularSection {
 	}
 	if ($added -gt 0) {
 		$text = $text.Substring(0, $span.Start) + $block + $text.Substring($span.End)
-		[System.IO.File]::WriteAllText($objFile, $text, (New-Object System.Text.UTF8Encoding(($null -eq $style) -or $style.bom)))
+		[System.IO.File]::WriteAllText($objFile, $text, (Get-StyleEncoding $style))
 		Info "  Merged $added attribute(s) into tabular section ${tsName}: $objFile"
 	}
 	return $added
@@ -3015,6 +3015,7 @@ function Borrow-MainAttribute {
 	$objFile = Join-Path (Join-Path $extDir $dirName) "${objName}.xml"
 
 	# Read existing object XML (needed for dedup + enrichment)
+	$objStyle = Detect-XmlStyle $objFile
 	$objContent = [System.IO.File]::ReadAllText($objFile, (New-Object System.Text.UTF8Encoding($true)))
 
 	# Dedup: skip attributes/TS already present in object's ChildObjects (idempotent re-borrow)
@@ -3053,8 +3054,7 @@ function Borrow-MainAttribute {
 		$objContent = Insert-OwnChildOrDie $objContent $part.Xml $part.Tag $typeName $objFile
 	}
 
-	$encBom = New-Object System.Text.UTF8Encoding($true)
-	[System.IO.File]::WriteAllText($objFile, $objContent, $encBom)
+	[System.IO.File]::WriteAllText($objFile, $objContent, (Get-StyleEncoding $objStyle))
 	Info "  Enriched object: $objFile"
 
 	# ТЧ уже в расширении (заимствована без формы, своими колонками) — колонки, которые нужны форме,
@@ -3214,6 +3214,11 @@ function Build-BorrowedObjectXml {
 # Стиль существующего файла для round-trip-сохранения: BOM / EOL / регистр encoding /
 # финальный перенос. $null → файл новый (сохранить текущее поведение).
 # Реестр семьи: tests/skills/check-inline-drift.mjs.
+# Кодировка записи с BOM, как был у файла ($style — Detect-XmlStyle до записи; файла не было — с BOM)
+function Get-StyleEncoding($style) {
+	return (New-Object System.Text.UTF8Encoding(($null -eq $style) -or $style.bom))
+}
+
 function Detect-XmlStyle([string]$path) {
 	if (-not (Test-Path -LiteralPath $path)) { return $null }
 	$raw = [System.IO.File]::ReadAllBytes($path)
@@ -3509,18 +3514,16 @@ function Borrow-SubObject($pi, $src) {
 	$ts = $src.TS
 	$style = Detect-XmlStyle $objFile
 	$text = [System.IO.File]::ReadAllText($objFile, (New-Object System.Text.UTF8Encoding($true)))
-	$tsAdded = $false
 	if (Find-OwnTabularSectionSpan $text $ts.Name) {
 		Info "  Already borrowed: TabularSection $($ts.Name)"
 	} else {
 		$text = Insert-OwnChildOrDie $text (Build-AdoptedTabularSectionXml $ts.Name $ts.Uuid $ts.GeneratedTypes @() "`t`t`t") "TabularSection" $typeName $objFile
-		[System.IO.File]::WriteAllText($objFile, $text, (New-Object System.Text.UTF8Encoding(($null -eq $style) -or $style.bom)))
+		[System.IO.File]::WriteAllText($objFile, $text, (Get-StyleEncoding $style))
 		Info "  Borrowed TabularSection $($ts.Name) (no attributes): $objFile"
-		$tsAdded = $true
 	}
 	# Собственный реквизит в заимствованную ТЧ этих видов платформа не примет — отказ на обновлении БД.
-	# Предупреждаем, когда ТЧ заимствуется под собственные реквизиты: новая и без реквизита источника в элементе
-	if ($tsAdded -and -not $src.Col) {
+	# Предупреждаем, когда ТЧ заимствуется под собственные реквизиты — элемент без реквизита источника
+	if (-not $src.Col) {
 		if ($script:tsOwnColumnsBlocked -ccontains $typeName) {
 			Warn "  ${typeName}: own attributes cannot be added to a borrowed tabular section of this kind — the platform rejects them on database update"
 		} elseif ($script:tsOwnColumnsFromPlatform.ContainsKey($typeName)) {

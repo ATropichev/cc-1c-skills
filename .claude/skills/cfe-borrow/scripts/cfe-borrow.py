@@ -283,12 +283,22 @@ def rewrite_type_links(xml, ctx):
     return rewrite_link_blocks(xml, r'\s*<TypeLink>.*?</TypeLink>', ctx)
 
 
+class CiNames(set):
+    """Множество имён без учёта регистра — как хеш-таблица PS (@{}): имена 1С регистронезависимы."""
+
+    def add(self, name):
+        super().add(name.lower())
+
+    def __contains__(self, name):
+        return super().__contains__(name.lower())
+
+
 def get_own_child_object_names(obj_file):
     """Имена ПРЯМЫХ детей собственного <ChildObjects> объекта — для дедупа при повторном
     заимствовании. Текстом это не снять: regex «первый <ChildObjects> до первого </ChildObjects>»
     у объекта с табличными частями обрывается на закрытии первой ТЧ, забирает имена её колонок и
-    теряет то, что идёт после неё."""
-    names = set()
+    теряет то, что идёт после неё. Без учёта регистра, как хеш-таблица PS: имена 1С регистронезависимы."""
+    names = CiNames()
     try:
         tree = etree.parse(obj_file)
     except Exception:
@@ -2325,6 +2335,7 @@ def main():
 
         # newline="" => без трансляции: иначе CRLF молча схлопнется в LF при чтении
         # и файл будет переписан в LF.
+        style = _detect_xml_style(obj_file)
         with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
             obj_content = fh.read()
 
@@ -2342,7 +2353,7 @@ def main():
             added += 1
 
         if added > 0:
-            write_utf8_bom(obj_file, obj_content)
+            write_text_keep_bom(obj_file, obj_content, style)
             info(f"  Merged {added} attribute(s) into: {obj_file}")
 
     # Колонки источника — в уже заимствованную ТЧ объекта расширения (недостающие по имени; свои колонки
@@ -2592,6 +2603,7 @@ def main():
         # Read existing object XML (needed for dedup + enrichment)
         # newline="" => без трансляции: иначе CRLF молча схлопнется в LF при чтении
         # и файл будет переписан в LF.
+        obj_style = _detect_xml_style(obj_file)
         with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
             obj_content = fh.read()
 
@@ -2626,7 +2638,7 @@ def main():
         for part_tag, part_xml in content_parts:
             obj_content = insert_own_child_or_die(obj_content, part_xml, part_tag, type_name, obj_file)
 
-        write_utf8_bom(obj_file, obj_content)
+        write_text_keep_bom(obj_file, obj_content, obj_style)
         info(f"  Enriched object: {obj_file}")
 
         # ТЧ уже в расширении (заимствована без формы, своими колонками) — колонки, которые нужны форме,
@@ -3425,7 +3437,7 @@ def main():
         obj_file = os.path.join(ext_dir, pi["DirName"], f"{obj_name}.xml")
         if pi["SubKind"] != "TabularSection":
             attr = src["Attr"]
-            if attr["Name"].lower() in {n.lower() for n in get_own_child_object_names(obj_file)}:
+            if attr["Name"] in get_own_child_object_names(obj_file):
                 info(f"  Already borrowed: {pi['SubKind']} {attr['Name']}")
             else:
                 merge_attributes_into_object(type_name, obj_name, [attr])
@@ -3435,7 +3447,6 @@ def main():
         style = _detect_xml_style(obj_file)
         with open(obj_file, "r", encoding="utf-8-sig", newline="") as fh:
             text = fh.read()
-        ts_added = False
         if find_own_tabular_section_span(text, ts["Name"]):
             info(f"  Already borrowed: TabularSection {ts['Name']}")
         else:
@@ -3444,10 +3455,9 @@ def main():
                 "TabularSection", type_name, obj_file)
             write_text_keep_bom(obj_file, text, style)
             info(f"  Borrowed TabularSection {ts['Name']} (no attributes): {obj_file}")
-            ts_added = True
         # Собственный реквизит в заимствованную ТЧ этих видов платформа не примет — отказ на обновлении БД.
-        # Предупреждаем, когда ТЧ заимствуется под собственные реквизиты: новая и без реквизита источника в элементе
-        if ts_added and not src["Col"]:
+        # Предупреждаем, когда ТЧ заимствуется под собственные реквизиты — элемент без реквизита источника
+        if not src["Col"]:
             if type_name in TS_OWN_COLUMNS_BLOCKED:
                 warn(f"  {type_name}: own attributes cannot be added to a borrowed tabular section of this kind \u2014 "
                      f"the platform rejects them on database update")
