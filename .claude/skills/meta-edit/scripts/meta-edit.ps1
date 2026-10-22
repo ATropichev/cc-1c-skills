@@ -1,4 +1,4 @@
-﻿# meta-edit v1.67 — Edit existing 1C metadata object XML
+﻿# meta-edit v1.68 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2906,7 +2906,13 @@ function Modify-ChildElements($modifyDef, [string]$childType) {
 
 		$el = Find-ElementByName $script:childObjectsEl $xmlTag $elemName
 		if (-not $el) {
-			Die "$xmlTag '$elemName' not found for modify"
+			# ТЧ заимствованного объекта появляется в расширении только заимствованием — подсказать как
+			$hint = ""
+			$belonging = Find-PropertyElement 'ObjectBelonging'
+			if ($xmlTag -ceq 'TabularSection' -and $belonging -and $belonging.InnerText -ceq 'Adopted') {
+				$hint = " — in an extension, borrow it first: cfe-borrow -Object $($script:objType).$($script:objName).TabularSection.$elemName"
+			}
+			Die "$xmlTag '$elemName' not found for modify$hint"
 		}
 
 		# Find Properties inside the element

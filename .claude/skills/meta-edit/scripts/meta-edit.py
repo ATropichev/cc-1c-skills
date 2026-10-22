@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.67 — Edit existing 1C metadata object XML
+# meta-edit v1.68 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -2804,7 +2804,13 @@ def modify_child_elements(modify_def, child_type):
     for elem_name, changes in modify_def.items():
         el = find_element_by_name(child_objects_el, xml_tag, elem_name)
         if el is None:
-            die(f"{xml_tag} '{elem_name}' not found for modify")
+            # ТЧ заимствованного объекта появляется в расширении только заимствованием — подсказать как
+            hint = ""
+            belonging = find_property_element("ObjectBelonging")
+            if xml_tag == "TabularSection" and belonging is not None and (belonging.text or "") == "Adopted":
+                hint = (f" — in an extension, borrow it first: cfe-borrow -Object "
+                        f"{obj_type}.{obj_name}.TabularSection.{elem_name}")
+            die(f"{xml_tag} '{elem_name}' not found for modify{hint}")
 
         # Find Properties inside the element
         props_el = None

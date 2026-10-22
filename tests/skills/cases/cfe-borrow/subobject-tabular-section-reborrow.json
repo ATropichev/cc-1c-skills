@@ -1,0 +1,100 @@
+{
+  "name": "Повторное заимствование ТЧ: файл объекта не меняется, своя колонка расширения сохраняется",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура"
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Комментарий: String(50)"
+          ],
+          "tabularSections": {
+            "Товары": [
+              "Номенклатура: CatalogRef.Номенклатура",
+              "Количество: Number(15,3)"
+            ]
+          }
+        },
+        {
+          "type": "InformationRegister",
+          "name": "Цены",
+          "dimensions": [
+            "Номенклатура: CatalogRef.Номенклатура"
+          ],
+          "resources": [
+            "Цена: Number(15,2)"
+          ]
+        },
+        {
+          "type": "ChartOfCharacteristicTypes",
+          "name": "ВидыСубконто",
+          "valueType": "String",
+          "tabularSections": {
+            "Строки": [
+              "Значение: String(20)"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Document.ЗаказКлиента.TabularSection.Товары"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "input": {
+        "modify": {
+          "tabularSections": {
+            "Товары": {
+              "add": [
+                "Тест_Скидка: Number(15,2)"
+              ]
+            }
+          }
+        }
+      },
+      "args": {
+        "-DefinitionFile": "{inputFile}",
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "Document.ЗаказКлиента.TabularSection.Товары"
+  },
+  "expect": {
+    "stdoutContains": [
+      "Already borrowed: TabularSection Товары"
+    ],
+    "fileContains": {
+      "file": "cfe/Documents/ЗаказКлиента.xml",
+      "text": [
+        "<Name>Тест_Скидка</Name>"
+      ]
+    }
+  }
+}

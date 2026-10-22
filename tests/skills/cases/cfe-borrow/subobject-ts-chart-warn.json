@@ -1,0 +1,69 @@
+{
+  "name": "ТЧ плана видов характеристик заимствуется, но с предупреждением: своих колонок туда платформа не примет",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура"
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Комментарий: String(50)"
+          ],
+          "tabularSections": {
+            "Товары": [
+              "Номенклатура: CatalogRef.Номенклатура",
+              "Количество: Number(15,3)"
+            ]
+          }
+        },
+        {
+          "type": "InformationRegister",
+          "name": "Цены",
+          "dimensions": [
+            "Номенклатура: CatalogRef.Номенклатура"
+          ],
+          "resources": [
+            "Цена: Number(15,2)"
+          ]
+        },
+        {
+          "type": "ChartOfCharacteristicTypes",
+          "name": "ВидыСубконто",
+          "valueType": "String",
+          "tabularSections": {
+            "Строки": [
+              "Значение: String(20)"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "ChartOfCharacteristicTypes.ВидыСубконто.TabularSection.Строки"
+  },
+  "expect": {
+    "stdoutContains": [
+      "[WARN]",
+      "own attributes cannot be added"
+    ]
+  }
+}

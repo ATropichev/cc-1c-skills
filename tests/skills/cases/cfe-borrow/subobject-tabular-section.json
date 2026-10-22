@@ -1,0 +1,81 @@
+{
+  "name": "Табличная часть без формы: родитель заимствуется сам, ТЧ — без колонок, с типами TabularSection/TabularSectionRow (как у Конфигуратора)",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура"
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Комментарий: String(50)"
+          ],
+          "tabularSections": {
+            "Товары": [
+              "Номенклатура: CatalogRef.Номенклатура",
+              "Количество: Number(15,3)"
+            ]
+          }
+        },
+        {
+          "type": "InformationRegister",
+          "name": "Цены",
+          "dimensions": [
+            "Номенклатура: CatalogRef.Номенклатура"
+          ],
+          "resources": [
+            "Цена: Number(15,2)"
+          ]
+        },
+        {
+          "type": "ChartOfCharacteristicTypes",
+          "name": "ВидыСубконто",
+          "valueType": "String",
+          "tabularSections": {
+            "Строки": [
+              "Значение: String(20)"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "Document.ЗаказКлиента.TabularSection.Товары"
+  },
+  "expect": {
+    "fileContains": {
+      "file": "cfe/Documents/ЗаказКлиента.xml",
+      "text": [
+        "<Name>Товары</Name>",
+        "category=\"TabularSection\"",
+        "category=\"TabularSectionRow\"",
+        "<ChildObjects/>"
+      ]
+    },
+    "fileNotContains": {
+      "file": "cfe/Documents/ЗаказКлиента.xml",
+      "text": [
+        "<Name>Количество</Name>",
+        "<Name>Номенклатура</Name>"
+      ]
+    }
+  }
+}

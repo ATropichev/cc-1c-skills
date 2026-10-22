@@ -1,0 +1,71 @@
+{
+  "name": "Вид подобъекта, которого у типа нет (измерение документа): отказ",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура"
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Комментарий: String(50)"
+          ],
+          "tabularSections": {
+            "Товары": [
+              "Номенклатура: CatalogRef.Номенклатура",
+              "Количество: Number(15,3)"
+            ]
+          }
+        },
+        {
+          "type": "InformationRegister",
+          "name": "Цены",
+          "dimensions": [
+            "Номенклатура: CatalogRef.Номенклатура"
+          ],
+          "resources": [
+            "Цена: Number(15,2)"
+          ]
+        },
+        {
+          "type": "ChartOfCharacteristicTypes",
+          "name": "ВидыСубконто",
+          "valueType": "String",
+          "tabularSections": {
+            "Строки": [
+              "Значение: String(20)"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "Document.ЗаказКлиента.Dimension.Номенклатура"
+  },
+  "expectError": true,
+  "noSnapshot": "негативный кейс: отказ до записи, расширение не меняется",
+  "expect": {
+    "stderrContains": "Document has no child objects of kind Dimension",
+    "filesAbsent": [
+      "cfe/Documents/ЗаказКлиента.xml"
+    ]
+  }
+}

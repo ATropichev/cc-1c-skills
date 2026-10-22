@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.55 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.56 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -33,6 +33,14 @@ $script:mainAttrId = "1000001"
 
 # Виды дочерних объектов, которые заимствуются в оболочку поимённо (табличные части — отдельно)
 $script:childObjectKinds = @('Attribute','Dimension','Resource','AddressingAttribute','AccountingFlag','ExtDimensionAccountingFlag')
+
+# Виды подобъектов в -Object (Тип.Имя.<Вид>.<Имя>). Признак учёта субконто идёт только вместе с
+# ТЧ видов субконто (свойства ExtDimensionTypes у оболочки) — по одному не заимствуется.
+$script:subObjectKinds = @('Attribute','TabularSection','Dimension','Resource','AddressingAttribute','AccountingFlag')
+# Своя колонка в заимствованной ТЧ: у этих видов — отказ UpdateDBCfg на любой платформе, у БП и
+# Задачи — ниже 8.3.25 (граница по версии платформы, не по режиму)
+$script:tsOwnColumnsBlocked = @('ChartOfCharacteristicTypes','ChartOfAccounts','ChartOfCalculationTypes')
+$script:tsOwnColumnsFromPlatform = @{ 'BusinessProcess' = '8.3.25'; 'Task' = '8.3.25' }
 
 # Прямые дети <Form>, которые в заимствованную форму не переносятся.
 # Структурные секции: AutoCommandBar и ChildItems забираются отдельно, остальные выбрасываются целиком.
@@ -2710,6 +2718,72 @@ function Merge-AttributesIntoObject {
 	}
 }
 
+# Блок <TabularSection> с именем $tsName среди прямых детей СОБСТВЕННОГО <ChildObjects> объекта:
+# @{ Start; End } в тексте, $null — нет. Прямые дети — по глубине, как в Insert-IntoOwnChildObjectsByCanon;
+# имя ТЧ — первый <Name> блока (в InternalInfo имён нет). Реквизит с тем же именем — не ТЧ.
+function Find-OwnTabularSectionSpan([string]$text, [string]$tsName) {
+	$mOpen = [regex]::Match($text, '<ChildObjects\b[^>]*?(/?)>')
+	if (-not $mOpen.Success -or $mOpen.Groups[1].Value) { return $null }
+	$closes = [regex]::Matches($text, '</ChildObjects\s*>')
+	if ($closes.Count -eq 0) { return $null }
+	$bodyStart = $mOpen.Index + $mOpen.Length
+	$bodyEnd = $closes[$closes.Count - 1].Index
+	if ($bodyEnd -lt $bodyStart) { return $null }
+	$depth = 0
+	$tsStart = -1
+	foreach ($m in [regex]::Matches($text.Substring($bodyStart, $bodyEnd - $bodyStart), '<(/?)([\w:.-]+)[^>]*?(/?)>')) {
+		if ($m.Groups[1].Value) {
+			$depth--
+			if ($depth -eq 0 -and $tsStart -ge 0) {
+				$end = $bodyStart + $m.Index + $m.Length
+				$nm = [regex]::Match($text.Substring($tsStart, $end - $tsStart), '<Name>([^<]*)</Name>')
+				if ($nm.Success -and $nm.Groups[1].Value -ceq $tsName) { return @{ Start = $tsStart; End = $end } }
+				$tsStart = -1
+			}
+			continue
+		}
+		if ($depth -eq 0) { $tsStart = if ($m.Groups[2].Value -ceq 'TabularSection') { $bodyStart + $m.Index } else { -1 } }
+		if (-not $m.Groups[3].Value) { $depth++ }
+	}
+	return $null
+}
+
+# Колонки источника — в уже заимствованную ТЧ объекта расширения (недостающие по имени; свои колонки
+# и порядок остальных не трогаем). Возвращает число добавленных; ТЧ нет — -1.
+function Merge-ColumnsIntoTabularSection {
+	param([string]$typeName, [string]$objName, [string]$tsName, $cols)
+
+	$objFile = Join-Path (Join-Path $extDir $childTypeDirMap[$typeName]) "${objName}.xml"
+	$text = [System.IO.File]::ReadAllText($objFile, (New-Object System.Text.UTF8Encoding($true)))
+	$span = Find-OwnTabularSectionSpan $text $tsName
+	if (-not $span) { return -1 }
+	$block = $text.Substring($span.Start, $span.End - $span.Start)
+	# Имена колонок — все <Name> блока, кроме первого (имя самой ТЧ)
+	$existing = @{}
+	$first = $true
+	foreach ($nm in [regex]::Matches($block, '<Name>([^<]*)</Name>')) {
+		if ($first) { $first = $false; continue }
+		$existing[$nm.Groups[1].Value] = $true
+	}
+	$ls = if ($span.Start -gt 0) { $text.LastIndexOf("`n", $span.Start - 1) + 1 } else { 0 }
+	$colIndent = $text.Substring($ls, $span.Start - $ls) + "`t`t"
+	$added = 0
+	foreach ($c in $cols) {
+		if ($existing.ContainsKey($c.Name)) { continue }
+		$newBlock = Insert-IntoOwnChildObjectsByCanon $block (Build-AdoptedAttributeXml $c.Name $c.Uuid $c.TypeXml $colIndent) "Attribute" "TabularSection"
+		if ($null -eq $newBlock) { Warn "  Tabular section ${tsName} has no <ChildObjects> — attribute $($c.Name) not added"; break }
+		$block = $newBlock
+		$existing[$c.Name] = $true
+		$added++
+	}
+	if ($added -gt 0) {
+		$text = $text.Substring(0, $span.Start) + $block + $text.Substring($span.End)
+		[System.IO.File]::WriteAllText($objFile, $text, (New-Object System.Text.UTF8Encoding($true)))
+		Info "  Merged $added attribute(s) into tabular section ${tsName}: $objFile"
+	}
+	return $added
+}
+
 # --- 11h. Borrow-MainAttribute orchestrator ---
 # Ссылочные типы → объекты-оболочки в расширении (кто уже заимствован — пропускается)
 # Объект-оболочка в расширении: кто уже заимствован — пропускается, без источника — предупреждение.
@@ -2980,6 +3054,13 @@ function Borrow-MainAttribute {
 	$encBom = New-Object System.Text.UTF8Encoding($true)
 	[System.IO.File]::WriteAllText($objFile, $objContent, $encBom)
 	Info "  Enriched object: $objFile"
+
+	# ТЧ уже в расширении (заимствована без формы, своими колонками) — колонки, которые нужны форме,
+	# доливаются в неё: пропуск по имени оставил бы форму с «Неверный путь к данным Объект.<ТЧ>.<Колонка>»
+	foreach ($ts in $srcTS) {
+		if (-not $existingChildNames.ContainsKey($ts.Name)) { continue }
+		Merge-ColumnsIntoTabularSection $typeName $objName $ts.Name $ts.Attributes | Out-Null
+	}
 
 	# Step 4: Collect all reference types and borrow as shells
 	$allTypeXmls = @()
@@ -3319,33 +3400,127 @@ $borrowedCount = 0
 # Элемент -Object: тип (синоним → английское имя), объект, форма и путь к её Form.xml в источнике.
 # Error — текст отказа для неверного элемента.
 function Split-BorrowItem([string]$item) {
+	$fmtHint = "expected 'Type.Name', 'Type.Name.Form.FormName', 'Type.Name.<Kind>.<SubName>' or 'Type.Name.TabularSection.<TS>.Attribute.<Attribute>'"
 	$dotIdx = $item.IndexOf(".")
-	if ($dotIdx -lt 1) { return @{ Error = "Invalid format '${item}', expected 'Type.Name' or 'Type.Name.Form.FormName'" } }
+	if ($dotIdx -lt 1) { return @{ Error = "Invalid format '${item}', $fmtHint" } }
 	$typeName = $item.Substring(0, $dotIdx)
 	$remainder = $item.Substring($dotIdx + 1)
 	# Resolve Russian synonym to English type name
 	if ($synonymMap.ContainsKey($typeName)) { $typeName = $synonymMap[$typeName] }
 	if (-not $childTypeDirMap.ContainsKey($typeName)) { return @{ Error = "Unknown type '${typeName}'" } }
-	# Check for .Form. pattern: Type.ObjName.Form.FormName
-	$formName = $null
-	$formIdx = $remainder.IndexOf(".Form.")
-	if ($formIdx -gt 0) {
-		$objName = $remainder.Substring(0, $formIdx)
-		$formName = $remainder.Substring($formIdx + 6) # skip ".Form."
+	# Имена метаданных без точек — разбор по сегментам: Имя | Имя.Form.Ф | Имя.<Вид>.<П> | Имя.TabularSection.<ТЧ>.Attribute.<К>
+	$segs = $remainder.Split('.')
+	if ($segs -contains '') { return @{ Error = "Invalid format '${item}', $fmtHint" } }
+	$objName = $segs[0]
+	$formName = $null; $subKind = $null; $subName = $null; $colName = $null
+	if ($segs.Count -eq 1) {
+	} elseif ($segs.Count -eq 3 -and $segs[1] -ceq 'Form') {
+		$formName = $segs[2]
+	} elseif ($segs.Count -eq 3 -and $script:subObjectKinds -ccontains $segs[1]) {
+		$subKind = $segs[1]; $subName = $segs[2]
+	} elseif ($segs.Count -eq 5 -and $segs[1] -ceq 'TabularSection' -and $segs[3] -ceq 'Attribute') {
+		$subKind = 'TabularSection'; $subName = $segs[2]; $colName = $segs[4]
+	} elseif ($segs.Count -eq 3) {
+		return @{ Error = "Unsupported child object kind '$($segs[1])' in '${item}': expected Form, $($script:subObjectKinds -join ', ')" }
 	} else {
-		$objName = $remainder
+		return @{ Error = "Invalid format '${item}', $fmtHint" }
+	}
+	# Вид подобъекта — из канона ChildObjects своего типа: измерения у документа нет
+	if ($subKind) {
+		$order = (Get-ObjectChildOrder)[$typeName]
+		if (-not $order -or $order -cnotcontains $subKind) { return @{ Error = "${typeName} has no child objects of kind ${subKind} ('${item}')" } }
 	}
 	# Общая форма — сама форма: «CommonForm.X» заимствуется вместе с содержимым, владельца у неё нет
 	$isCommonForm = $typeName -eq 'CommonForm'
 	if ($isCommonForm) {
-		if ($formName) { return @{ Error = "Invalid format '${item}': общая форма задаётся как 'CommonForm.Имя'" } }
+		if ($segs.Count -ne 1) { return @{ Error = "Invalid format '${item}': общая форма задаётся как 'CommonForm.Имя'" } }
 		$formName = $objName
 	}
 	$dirName = $childTypeDirMap[$typeName]
 	$srcFormXml = $null
 	if ($isCommonForm) { $srcFormXml = Join-Path (Join-Path (Join-Path $cfgDir $dirName) $objName) "Ext/Form.xml" }
 	elseif ($formName) { $srcFormXml = Join-Path (Join-Path (Join-Path (Join-Path (Join-Path $cfgDir $dirName) $objName) "Forms") $formName) "Ext/Form.xml" }
-	return @{ TypeName = $typeName; ObjName = $objName; FormName = $formName; IsCommonForm = $isCommonForm; DirName = $dirName; SrcFormXml = $srcFormXml }
+	return @{ TypeName = $typeName; ObjName = $objName; FormName = $formName; IsCommonForm = $isCommonForm; DirName = $dirName; SrcFormXml = $srcFormXml
+		SubKind = $subKind; SubName = $subName; ColName = $colName }
+}
+
+# Подобъект в источнике: реквизит/измерение/… своего вида, ТЧ и колонка. Имя сверяется ключом
+# запроса, как у Resolve-SourceAttributes; в расширение идёт имя из источника. Нет — Error.
+function Resolve-SubObjectSource($pi) {
+	$res = Resolve-SourceAttributes $pi.TypeName $pi.ObjName @{ $pi.SubName = $true }
+	$key = Get-QueryKey $pi.SubName
+	$where = "$($pi.TypeName).$($pi.ObjName)"
+	if ($pi.SubKind -ceq 'TabularSection') {
+		$ts = $res.TabularSections | Where-Object { (Get-QueryKey $_.Name) -ceq $key } | Select-Object -First 1
+		if (-not $ts) { return @{ Error = "TabularSection '$($pi.SubName)' not found in ${where}" } }
+		$col = $null
+		if ($pi.ColName) {
+			$colKey = Get-QueryKey $pi.ColName
+			$col = $ts.Attributes | Where-Object { (Get-QueryKey $_.Name) -ceq $colKey } | Select-Object -First 1
+			if (-not $col) { return @{ Error = "Attribute '$($pi.ColName)' not found in tabular section ${where}.$($ts.Name)" } }
+		}
+		return @{ TS = $ts; Col = $col }
+	}
+	$attr = $res.Attributes | Where-Object { $_.Kind -ceq $pi.SubKind -and (Get-QueryKey $_.Name) -ceq $key } | Select-Object -First 1
+	if (-not $attr) { return @{ Error = "$($pi.SubKind) '$($pi.SubName)' not found in ${where}" } }
+	return @{ Attr = $attr }
+}
+
+# Объект-родитель формы или подобъекта: не заимствован — заимствовать заготовкой
+function Ensure-ParentBorrowed([string]$typeName, [string]$objName) {
+	if (Test-ObjectBorrowed $typeName $objName) { return }
+	Info "  Parent object ${typeName}.${objName} not yet borrowed — borrowing first..."
+	$src = Read-SourceObject $typeName $objName
+	Info "  Source UUID: $($src.Uuid)"
+	$borrowedXml = Build-BorrowedObjectXml $typeName $objName $src.Uuid $src.Properties
+	$targetDir = Join-Path $extDir $childTypeDirMap[$typeName]
+	if (-not (Test-Path $targetDir)) {
+		New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+	}
+	$targetFile = Join-Path $targetDir "${objName}.xml"
+	$enc = New-Object System.Text.UTF8Encoding($true)
+	[System.IO.File]::WriteAllText($targetFile, $borrowedXml, $enc)
+	Info "  Created: $targetFile"
+	Add-ToChildObjects $typeName $objName
+	$script:borrowedFiles += $targetFile
+}
+
+# Подобъект без формы — как «Добавить в расширение» Конфигуратора: ТЧ пустая (свои колонки — потом,
+# meta-edit), реквизит/измерение/колонка — по одному, ссылочные типы — оболочками. Свойства объекта
+# (Hierarchical, CodeLength…) не переносятся — Конфигуратор их тут тоже не пишет.
+function Borrow-SubObject($pi, $src) {
+	$typeName = $pi.TypeName; $objName = $pi.ObjName
+	Ensure-ParentBorrowed $typeName $objName
+	$objFile = Join-Path (Join-Path $extDir $pi.DirName) "${objName}.xml"
+	if ($pi.SubKind -cne 'TabularSection') {
+		$attr = $src.Attr
+		if ((Get-OwnChildObjectNames $objFile).ContainsKey($attr.Name)) {
+			Info "  Already borrowed: $($pi.SubKind) $($attr.Name)"
+		} else {
+			Merge-AttributesIntoObject $typeName $objName @($attr)
+		}
+		Borrow-ReferenceTypeShells @($attr.TypeXml)
+		return
+	}
+	$ts = $src.TS
+	$text = [System.IO.File]::ReadAllText($objFile, (New-Object System.Text.UTF8Encoding($true)))
+	if (Find-OwnTabularSectionSpan $text $ts.Name) {
+		Info "  Already borrowed: TabularSection $($ts.Name)"
+	} else {
+		$text = Insert-OwnChildOrDie $text (Build-AdoptedTabularSectionXml $ts.Name $ts.Uuid $ts.GeneratedTypes @() "`t`t`t") "TabularSection" $typeName $objFile
+		[System.IO.File]::WriteAllText($objFile, $text, (New-Object System.Text.UTF8Encoding($true)))
+		Info "  Borrowed TabularSection $($ts.Name) (no attributes): $objFile"
+	}
+	# Свою колонку в заимствованную ТЧ этих видов платформа не примет — отказ на обновлении БД
+	if ($script:tsOwnColumnsBlocked -ccontains $typeName) {
+		Warn "  ${typeName}: own attributes cannot be added to a borrowed tabular section of this kind — the platform rejects them on database update"
+	} elseif ($script:tsOwnColumnsFromPlatform.ContainsKey($typeName)) {
+		Warn "  ${typeName}: own attributes in a borrowed tabular section are accepted only from platform $($script:tsOwnColumnsFromPlatform[$typeName])"
+	}
+	if ($src.Col) {
+		Merge-ColumnsIntoTabularSection $typeName $objName $ts.Name @($src.Col) | Out-Null
+		Borrow-ReferenceTypeShells @($src.Col.TypeXml)
+	}
 }
 
 # С -BorrowMainAttribute реквизиты берутся у объекта из типа основного реквизита формы. Если это не
@@ -3374,6 +3549,24 @@ if ($BorrowMainAttribute) {
 	}
 }
 
+# Элементы разобраны и подобъекты найдены в источнике ДО записи: ошибка в любом элементе пакета —
+# расширение не тронуто
+$script:subObjectSources = @{}
+foreach ($item in $items) {
+	$pi = Split-BorrowItem $item
+	if ($pi.Error) {
+		Write-Error $pi.Error
+		exit 1
+	}
+	if (-not $pi.SubKind) { continue }
+	$subSrc = Resolve-SubObjectSource $pi
+	if ($subSrc.Error) {
+		Write-Error "$($subSrc.Error). Extension not changed"
+		exit 1
+	}
+	$script:subObjectSources[$item] = $subSrc
+}
+
 foreach ($item in $items) {
 	$pi = Split-BorrowItem $item
 	if ($pi.Error) {
@@ -3383,31 +3576,17 @@ foreach ($item in $items) {
 	$typeName = $pi.TypeName; $objName = $pi.ObjName; $formName = $pi.FormName; $isCommonForm = $pi.IsCommonForm
 	$dirName = $childTypeDirMap[$typeName]
 
-	if ($formName) {
+	if ($pi.SubKind) {
+		Info "Borrowing ${item}..."
+		Borrow-SubObject $pi $script:subObjectSources[$item]
+		$borrowedCount++
+	} elseif ($formName) {
 		# --- Form borrowing ---
 		if ($isCommonForm) { Info "Borrowing common form ${typeName}.${objName}..." }
 		else { Info "Borrowing form ${typeName}.${objName}.Form.${formName}..." }
 
 		# Auto-borrow parent object if not yet borrowed
-		if (-not $isCommonForm -and -not (Test-ObjectBorrowed $typeName $objName)) {
-			Info "  Parent object ${typeName}.${objName} not yet borrowed — borrowing first..."
-
-			$src = Read-SourceObject $typeName $objName
-			Info "  Source UUID: $($src.Uuid)"
-			$borrowedXml = Build-BorrowedObjectXml $typeName $objName $src.Uuid $src.Properties
-
-			$targetDir = Join-Path $extDir $dirName
-			if (-not (Test-Path $targetDir)) {
-				New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-			}
-			$targetFile = Join-Path $targetDir "${objName}.xml"
-			$enc = New-Object System.Text.UTF8Encoding($true)
-			[System.IO.File]::WriteAllText($targetFile, $borrowedXml, $enc)
-			Info "  Created: $targetFile"
-
-			Add-ToChildObjects $typeName $objName
-			$script:borrowedFiles += $targetFile
-		}
+		if (-not $isCommonForm) { Ensure-ParentBorrowed $typeName $objName }
 
 		# Borrow the form
 		$hasBMA = [bool]$BorrowMainAttribute

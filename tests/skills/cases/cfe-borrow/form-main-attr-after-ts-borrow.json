@@ -1,0 +1,146 @@
+{
+  "name": "Форма с -BorrowMainAttribute после ТЧ без формы: колонки формы доливаются в уже заимствованную ТЧ, своя колонка цела",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": [
+        {
+          "type": "Catalog",
+          "name": "Номенклатура"
+        },
+        {
+          "type": "Document",
+          "name": "ЗаказКлиента",
+          "attributes": [
+            "Комментарий: String(50)"
+          ],
+          "tabularSections": {
+            "Товары": [
+              "Номенклатура: CatalogRef.Номенклатура",
+              "Количество: Number(15,3)"
+            ]
+          }
+        },
+        {
+          "type": "InformationRegister",
+          "name": "Цены",
+          "dimensions": [
+            "Номенклатура: CatalogRef.Номенклатура"
+          ],
+          "resources": [
+            "Цена: Number(15,2)"
+          ]
+        },
+        {
+          "type": "ChartOfCharacteristicTypes",
+          "name": "ВидыСубконто",
+          "valueType": "String",
+          "tabularSections": {
+            "Строки": [
+              "Значение: String(20)"
+            ]
+          }
+        }
+      ],
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/Documents/ЗаказКлиента.xml",
+        "-FormName": "ФормаДокумента"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "title": "Заказ клиента",
+        "elements": [
+          {
+            "table": "Товары",
+            "path": "Объект.Товары",
+            "columns": [
+              {
+                "input": "ТоварыНоменклатура",
+                "path": "Объект.Товары.Номенклатура"
+              },
+              {
+                "input": "ТоварыКоличество",
+                "path": "Объект.Товары.Количество"
+              }
+            ]
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DocumentObject.ЗаказКлиента",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/Documents/ЗаказКлиента/Forms/ФормаДокумента/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "Document.ЗаказКлиента.TabularSection.Товары"
+      }
+    },
+    {
+      "script": "meta-edit/scripts/meta-edit",
+      "input": {
+        "modify": {
+          "tabularSections": {
+            "Товары": {
+              "add": [
+                "Тест_Скидка: Number(15,2)"
+              ]
+            }
+          }
+        }
+      },
+      "args": {
+        "-DefinitionFile": "{inputFile}",
+        "-ObjectPath": "{workDir}/cfe/Documents/ЗаказКлиента.xml"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe",
+    "object": "Document.ЗаказКлиента.Form.ФормаДокумента"
+  },
+  "args_extra": [
+    "-BorrowMainAttribute",
+    "Form"
+  ],
+  "expect": {
+    "stdoutContains": [
+      "Merged 2 attribute(s) into tabular section Товары"
+    ],
+    "fileContains": {
+      "file": "cfe/Documents/ЗаказКлиента.xml",
+      "text": [
+        "<Name>Тест_Скидка</Name>",
+        "<Name>Номенклатура</Name>",
+        "<Name>Количество</Name>"
+      ]
+    }
+  }
+}
