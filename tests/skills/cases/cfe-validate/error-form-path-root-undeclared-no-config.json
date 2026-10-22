@@ -108,7 +108,7 @@
     "stdoutContains": [
       "path 'Объект.Номер'",
       "form attribute 'Объект' is not declared",
-      "-BorrowMainAttribute Form"
+      "if 'Объект' is the source form's main attribute, re-borrow the form with -BorrowMainAttribute Form"
     ]
   }
 }

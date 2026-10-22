@@ -1327,12 +1327,12 @@ def main():
                 # НастройкаПравилОбработкиЗаявокСотрудников в БП и ERP).
                 items_hops = 0
                 items_broken = False
-                while root_attr == 'Items':
+                while root_attr.upper() == 'ITEMS':
                     items_hops += 1
                     if items_hops > 10:          # страховка от кольца ссылок
                         items_broken = True
                         break
-                    if len(segments) < 3 or segments[2] != 'CurrentData':
+                    if len(segments) < 3 or segments[2].upper() != 'CURRENTDATA':
                         report_warn(f"[{tag}] '{el_name}': {b_tag}='{data_path}' — unknown Items.* shape, expected Items.<Table>.CurrentData.*")
                         items_broken = True
                         break
@@ -1381,6 +1381,8 @@ def main():
             if dp not in entry[1]:
                 entry[1].append(dp)
         for root_attr, shown in undeclared.values():
+            if stopped:
+                break
             sample = ", ".join(shown[:3])
             suffix = f" (and {len(shown) - 3} more)" if len(shown) > 3 else ""
             report_error(f"Path(s) rooted at '{root_attr}' — attribute '{root_attr}' not found{no_main_hint(root_attr)}: {sample}{suffix}")

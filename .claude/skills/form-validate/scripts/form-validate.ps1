@@ -577,6 +577,7 @@ if (-not $stopped) {
 		if (-not $undeclared[$rootAttr].Contains($dp)) { $undeclared[$rootAttr].Add($dp) }
 	}
 	foreach ($rootAttr in @($undeclared.Keys)) {
+		if ($stopped) { break }
 		$shown = $undeclared[$rootAttr]
 		$sample = ($shown | Select-Object -First 3) -join ", "
 		$suffix = if ($shown.Count -gt 3) { " (and $($shown.Count - 3) more)" } else { "" }

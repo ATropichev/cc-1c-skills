@@ -915,7 +915,7 @@ if ($childObjNode) {
 		$script:extObjListed["${typeName}.${childName}"] = $true
 		$objFile = Join-Path (Join-Path $configDir $dirName) "$childName.xml"
 		# Общая форма — сама себе объект: её Form.xml проверяют те же 11–14, что и формы объектов
-		if ($typeName -eq "CommonForm") {
+		if ($typeName -eq "CommonForm" -and (Test-Path -LiteralPath (Join-Path $configDir "$dirName/$childName/Ext/Form.xml"))) {
 			$script:formList += @{ TypeName = $typeName; ObjName = $childName; FormName = $childName; DirName = $dirName; IsCommon = $true }
 		}
 
@@ -1257,6 +1257,8 @@ if ($formCount -eq 0) {
 if ($script:stopped) { & $finalize; exit 1 }
 
 # --- Check 12: Form dependency references ---
+# Основной реквизит формы: <Attribute name="X"> с <MainAttribute>true</MainAttribute> внутри (проверки 12, 14)
+$script:mainAttrPattern = '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>'
 $platformStyleItems = @{
 	"TableHeaderBackColor"=$true; "AccentColor"=$true; "NormalTextFont"=$true
 	"FormBackColor"=$true; "ToolTipBackColor"=$true; "BorderColor"=$true
@@ -1322,7 +1324,7 @@ foreach ($bf in $script:borrowedFormsWithTree) {
 	# списка «Список», у формы записи регистра «Запись». С зашитым «Объект» обе проверки ниже на
 	# таких формах молча не срабатывали. Ищем сначала в <Attributes> самой формы, потом в <BaseForm>.
 	$rootName = ""
-	$rootMatch = [regex]::Match($raw, '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>')
+	$rootMatch = [regex]::Match($raw, $script:mainAttrPattern)
 	if ($rootMatch.Success) { $rootName = $rootMatch.Groups[1].Value }
 
 	# <AdditionalColumns table="Объект.X"> — доп. колонки табличной части, объявленные в самой форме.
@@ -1411,7 +1413,6 @@ function Get-SourceConfigRoot {
 # на заимствованной форме, где он был в исходной: «Неверный путь к данным». Имена — без учёта
 # регистра. Стандартные реквизиты — по типу основного реквизита ($script:mainAttrStandardFields).
 # После ссылочного реквизита или колонки путь продолжается по целевому объекту (Get-RefTailError).
-$script:mainAttrPattern = '(?s)<Attribute name="([^"]+)"[^>]*>(?:(?!</Attribute>).)*?<MainAttribute>true</MainAttribute>'
 # Обычные имена основного реквизита формы — когда настоящее имя взять неоткуда
 $script:mainAttrDefaultNames = @('Объект', 'Список', 'Запись', 'Отчет', 'НаборЗаписей', 'НаборКонстант',
 	'Object', 'List', 'Record', 'Report', 'RecordSet', 'ConstantsSet')
@@ -1441,33 +1442,37 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 		foreach ($m in [regex]::Matches($own, '<(?:\w+:)?\w*DataPath[^>]*>([^<]+)</(?:\w+:)?\w*DataPath>')) {
 			$dp = $m.Groups[1].Value.Trim()
 			if (-not $dp -or $dp -match '^\d') { continue }
-			$root = ((($dp -replace '\[\d+\]', '') -replace '^~', '') -split '\.', 2)[0]
-			if ($root -eq 'Items' -or $declared.ContainsKey($root)) { continue }
-			if (-not $undeclared.Contains($root)) { $undeclared[$root] = New-Object System.Collections.Generic.List[string] }
-			if (-not $undeclared[$root].Contains($dp)) { $undeclared[$root].Add($dp) }
+			$pathRoot = ((($dp -replace '\[\d+\]', '') -replace '^~', '') -split '\.', 2)[0]
+			if ($pathRoot -eq 'Items' -or $declared.ContainsKey($pathRoot)) { continue }
+			if (-not $undeclared.Contains($pathRoot)) { $undeclared[$pathRoot] = New-Object System.Collections.Generic.List[string] }
+			if (-not $undeclared[$pathRoot].Contains($dp)) { $undeclared[$pathRoot].Add($dp) }
 		}
 		if ($undeclared.Count -gt 0) {
 			# Подсказка — только когда корень и есть основной реквизит исходной формы: по самой исходной
 			# форме (-ConfigPath), без неё — по снимку <BaseForm>, а нет его и там — по обычным именам
 			# основного реквизита (так же решает form-validate).
 			$hintRoots = @()
+			$hintExact = $false   # имя взято из исходной формы или <BaseForm>, а не из обычных имён
 			if (-not $rootMatch14.Success -and $raw -match '<BaseForm') {
 				$srcForm = if ($ConfigPath) { Join-Path (Get-SourceConfigRoot) "$($fw.FormRel)/Ext/Form.xml" } else { "" }
 				if ($srcForm -and (Test-Path -LiteralPath $srcForm)) {
 					$srcRaw = [System.IO.File]::ReadAllText($srcForm, [System.Text.Encoding]::UTF8)
 					$srcMatch = [regex]::Match(($srcRaw -split '<BaseForm', 2)[0], $script:mainAttrPattern)
-					if ($srcMatch.Success) { $hintRoots = @($srcMatch.Groups[1].Value) }
+					if ($srcMatch.Success) { $hintRoots = @($srcMatch.Groups[1].Value); $hintExact = $true }
 				} else {
 					$baseMatch = [regex]::Match(($raw -split '<BaseForm', 2)[1], $script:mainAttrPattern)
+					$hintExact = $baseMatch.Success
 					$hintRoots = if ($baseMatch.Success) { @($baseMatch.Groups[1].Value) } else { $script:mainAttrDefaultNames }
 				}
 			}
-			foreach ($root in @($undeclared.Keys)) {
-				$paths = $undeclared[$root]
+			foreach ($pathRoot in @($undeclared.Keys)) {
+				$paths = $undeclared[$pathRoot]
 				$sample = ($paths | Select-Object -First 3) -join "', '"
 				$more = if ($paths.Count -gt 3) { " (and $($paths.Count - 3) more)" } else { "" }
-				$hint = if ($root -in $hintRoots) { " — the form was borrowed without its main attribute, re-borrow it with -BorrowMainAttribute Form" } else { "" }
-				Report-Error "14. ${ctx}: path '${sample}'${more} — form attribute '${root}' is not declared in the form${hint}"
+				$hint = if ($pathRoot -notin $hintRoots) { "" }
+					elseif ($hintExact) { " — the form was borrowed without its main attribute, re-borrow it with -BorrowMainAttribute Form" }
+					else { " — if '${pathRoot}' is the source form's main attribute, re-borrow the form with -BorrowMainAttribute Form" }
+				Report-Error "14. ${ctx}: path '${sample}'${more} — form attribute '${pathRoot}' is not declared in the form${hint}"
 			}
 			$check14Ok = $false
 		}

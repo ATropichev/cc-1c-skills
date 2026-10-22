@@ -979,7 +979,7 @@ def main():
             ext_obj_listed.add(f'{type_name}.{child_name}'.upper())
             obj_file = os.path.join(config_dir, dir_name, child_name + '.xml')
             # Общая форма — сама себе объект: её Form.xml проверяют те же 11–14, что и формы объектов
-            if type_name == 'CommonForm':
+            if type_name == 'CommonForm' and os.path.isfile(os.path.join(config_dir, dir_name, child_name, 'Ext', 'Form.xml')):
                 form_list.append({'TypeName': type_name, 'ObjName': child_name, 'FormName': child_name,
                                   'DirName': dir_name, 'IsCommon': True})
 
@@ -1470,6 +1470,7 @@ def main():
                 # форме (-ConfigPath), без неё — по снимку <BaseForm>, а нет его и там — по обычным именам
                 # основного реквизита (так же решает form-validate).
                 hint_roots = []
+                hint_exact = False   # имя взято из исходной формы или <BaseForm>, а не из обычных имён
                 if not root_match14 and '<BaseForm' in raw:
                     src_form = (os.path.join(source_config_root(), fw['FormRel'], 'Ext', 'Form.xml')
                                 if config_path_arg else '')
@@ -1478,15 +1479,21 @@ def main():
                             src_match = MAIN_ATTR_RE.search(f.read().split('<BaseForm', 1)[0])
                         if src_match:
                             hint_roots = [src_match.group(1)]
+                            hint_exact = True
                     else:
                         base_match = MAIN_ATTR_RE.search(raw.split('<BaseForm', 1)[1])
+                        hint_exact = base_match is not None
                         hint_roots = [base_match.group(1)] if base_match else MAIN_ATTR_DEFAULT_NAMES
                 hint_roots_upper = {n.upper() for n in hint_roots}
                 for root, paths in undeclared.values():   # порядок корней — как в файле
                     sample = "', '".join(paths[:3])
                     more = f' (and {len(paths) - 3} more)' if len(paths) > 3 else ''
-                    hint = (' — the form was borrowed without its main attribute, re-borrow it with -BorrowMainAttribute Form'
-                            if root.upper() in hint_roots_upper else '')
+                    if root.upper() not in hint_roots_upper:
+                        hint = ''
+                    elif hint_exact:
+                        hint = ' — the form was borrowed without its main attribute, re-borrow it with -BorrowMainAttribute Form'
+                    else:
+                        hint = f" — if '{root}' is the source form's main attribute, re-borrow the form with -BorrowMainAttribute Form"
                     r.error(f"14. {ctx}: path '{sample}'{more} — form attribute '{root}' is not declared in the form{hint}")
                 check14_ok = False
 
