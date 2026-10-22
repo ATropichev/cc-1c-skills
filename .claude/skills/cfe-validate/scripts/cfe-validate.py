@@ -1461,7 +1461,7 @@ def main():
                             src_match = MAIN_ATTR_RE.search(f.read().split('<BaseForm', 1)[0])
                         if src_match:
                             src_main = src_match.group(1)
-                for root, paths in sorted(undeclared.values()):
+                for root, paths in undeclared.values():   # порядок корней — как в файле
                     sample = "', '".join(paths[:3])
                     more = f' (and {len(paths) - 3} more)' if len(paths) > 3 else ''
                     hint = (' — the form was borrowed without its main attribute, re-borrow it with -BorrowMainAttribute Form'

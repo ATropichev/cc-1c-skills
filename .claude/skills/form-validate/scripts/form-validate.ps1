@@ -461,15 +461,20 @@ if (-not $stopped) {
 	$bindingTags = @('DataPath','TitleDataPath','FooterDataPath','HeaderDataPath',
 		'MultipleValueDataPath','MultipleValuePresentDataPath','RowPictureDataPath','MultipleValuePictureDataPath')
 
-	# Заимствованная форма без основного реквизита: путь Объект.* на ней — ровно этот случай
-	$noMainHint = ""
+	# Заимствованная форма без основного реквизита: путь Объект.* на ней — ровно этот случай. Подсказка —
+	# только к корню, который и был бы основным реквизитом: имя из <BaseForm>, а нет его там — обычные
+	# имена основного реквизита. Опечатке в корне или чужому реквизиту она не нужна.
+	$mainRootNames = @()
 	if ($hasBaseForm) {
-		$noMainHint = " (the borrowed form declares no MainAttribute)"
+		$mainRootNames = @('Объект', 'Список', 'Запись', 'Object', 'List', 'Record')
+		$mainBase = $root.SelectSingleNode("f:BaseForm/f:Attributes/f:Attribute[f:MainAttribute='true']", $nsMgr)
+		if ($mainBase -and $mainBase.GetAttribute("name")) { $mainRootNames = @($mainBase.GetAttribute("name")) }
 		foreach ($attr in $attrNodes) {
 			$maNode = $attr.SelectSingleNode("f:MainAttribute", $nsMgr)
-			if ($maNode -and $maNode.InnerText.Trim() -eq "true") { $noMainHint = ""; break }
+			if ($maNode -and $maNode.InnerText.Trim() -eq "true") { $mainRootNames = @(); break }
 		}
 	}
+	$noMainHint = { param($r) if ($r -in $mainRootNames) { " (the borrowed form declares no MainAttribute)" } else { "" } }
 
 	foreach ($el in $allElements) {
 		if ($stopped) { break }
@@ -549,7 +554,7 @@ if (-not $stopped) {
 			if ($itemsBroken) { continue }
 
 			if (-not $attrMap.ContainsKey($rootAttr)) {
-				Report-Error "[$tag] '$elName': $bTag='$dataPath' — attribute '$rootAttr' not found$noMainHint"
+				Report-Error "[$tag] '$elName': $bTag='$dataPath' — attribute '$rootAttr' not found$(& $noMainHint $rootAttr)"
 				$pathErrors++
 				$reportedPaths[$dataPath] = $true
 			}
@@ -559,21 +564,22 @@ if (-not $stopped) {
 	# Прочие привязки — <xr:DataPath> в <ChoiceParameterLinks>/<TypeLink> и любой *DataPath вне тегов
 	# выше: корень тоже должен быть реквизитом формы. Только своя часть: <BaseForm> — снимок исходной
 	# формы, его платформа разрешает по конфигурации. Items.* и номерные ссылки — как выше.
-	$ownText = ([System.IO.File]::ReadAllText($FormPath, [System.Text.Encoding]::UTF8) -split '<BaseForm', 2)[0]
-	$undeclared = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+	$ownText = ([System.IO.File]::ReadAllText((Resolve-Path $FormPath).Path, [System.Text.Encoding]::UTF8) -split '<BaseForm', 2)[0]
+	# Порядок корней — как в файле: одинаков в обоих портах
+	$undeclared = New-Object System.Collections.Specialized.OrderedDictionary ([StringComparer]::OrdinalIgnoreCase)
 	foreach ($m in [regex]::Matches($ownText, '<(?:\w+:)?\w*DataPath[^>]*>([^<]+)</(?:\w+:)?\w*DataPath>')) {
 		$dp = $m.Groups[1].Value.Trim()
 		if (-not $dp -or $dp -match '^\d' -or $reportedPaths.ContainsKey($dp)) { continue }
 		$rootAttr = ((($dp -replace '\[\d+\]', '') -replace '^~', '') -split '\.', 2)[0]
 		if ($rootAttr -eq 'Items' -or $attrMap.ContainsKey($rootAttr)) { continue }
-		if (-not $undeclared.ContainsKey($rootAttr)) { $undeclared[$rootAttr] = New-Object System.Collections.Generic.List[string] }
+		if (-not $undeclared.Contains($rootAttr)) { $undeclared[$rootAttr] = New-Object System.Collections.Generic.List[string] }
 		if (-not $undeclared[$rootAttr].Contains($dp)) { $undeclared[$rootAttr].Add($dp) }
 	}
-	foreach ($rootAttr in ($undeclared.Keys | Sort-Object)) {
+	foreach ($rootAttr in @($undeclared.Keys)) {
 		$shown = $undeclared[$rootAttr]
 		$sample = ($shown | Select-Object -First 3) -join ", "
 		$suffix = if ($shown.Count -gt 3) { " (and $($shown.Count - 3) more)" } else { "" }
-		Report-Error "Path(s) rooted at '${rootAttr}' — attribute '${rootAttr}' not found${noMainHint}: $sample$suffix"
+		Report-Error "Path(s) rooted at '${rootAttr}' — attribute '${rootAttr}' not found$(& $noMainHint $rootAttr): $sample$suffix"
 		$pathErrors++
 	}
 

@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.29 —Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.29 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1424,13 +1424,14 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 		if ($attrSection.Success) {
 			foreach ($am in [regex]::Matches($attrSection.Groups[1].Value, '<Attribute name="([^"]+)"')) { $declared[$am.Groups[1].Value] = $true }
 		}
-		$undeclared = New-Object System.Collections.Hashtable ([StringComparer]::OrdinalIgnoreCase)
+		# Порядок корней — как в файле: одинаков в обоих портах
+		$undeclared = New-Object System.Collections.Specialized.OrderedDictionary ([StringComparer]::OrdinalIgnoreCase)
 		foreach ($m in [regex]::Matches($own, '<(?:\w+:)?\w*DataPath[^>]*>([^<]+)</(?:\w+:)?\w*DataPath>')) {
 			$dp = $m.Groups[1].Value.Trim()
 			if (-not $dp -or $dp -match '^\d') { continue }
 			$root = ((($dp -replace '\[\d+\]', '') -replace '^~', '') -split '\.', 2)[0]
 			if ($root -eq 'Items' -or $declared.ContainsKey($root)) { continue }
-			if (-not $undeclared.ContainsKey($root)) { $undeclared[$root] = New-Object System.Collections.Generic.List[string] }
+			if (-not $undeclared.Contains($root)) { $undeclared[$root] = New-Object System.Collections.Generic.List[string] }
 			if (-not $undeclared[$root].Contains($dp)) { $undeclared[$root].Add($dp) }
 		}
 		if ($undeclared.Count -gt 0) {
@@ -1444,7 +1445,7 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 					if ($srcMatch.Success) { $srcMain = $srcMatch.Groups[1].Value }
 				}
 			}
-			foreach ($root in ($undeclared.Keys | Sort-Object)) {
+			foreach ($root in @($undeclared.Keys)) {
 				$paths = $undeclared[$root]
 				$sample = ($paths | Select-Object -First 3) -join "', '"
 				$more = if ($paths.Count -gt 3) { " (and $($paths.Count - 3) more)" } else { "" }

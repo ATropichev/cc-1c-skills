@@ -1,0 +1,13 @@
+{
+  "name": "Ошибка: заимствованная форма без основного реквизита — подсказка только к корню основного реквизита, не к опечатке",
+  "setup": "fixture:borrowed-no-main-hint-scope",
+  "params": { "formPath": "Documents/Заказ/Forms/ФормаДокумента" },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "attribute 'Объект' not found (the borrowed form declares no MainAttribute)",
+      "attribute 'Обьект' not found"
+    ],
+    "stdoutNotContains": "attribute 'Обьект' not found (the borrowed"
+  }
+}
