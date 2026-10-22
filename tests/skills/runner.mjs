@@ -393,8 +393,8 @@ function buildArgs(skillConfig, caseData, workDir, inputFilePath, runtime) {
 // Второй ответ — на проверку применимости расширения: навык запускает её ОТДЕЛЬНЫМ процессом
 // (в одной командной строке платформа выполнила бы только последнюю команду), поэтому фейк
 // отличает проверку по составу аргументов, а не по номеру вызова.
-const FAKE_PLATFORM_CMD = "@echo off\r\nrem SELF запоминаем ДО цикла: shift сдвигает и %0, после него %~dp0 указывает не на скрипт\r\nset SELF=%~dp0\r\nset KIND=main\r\n:loop\r\nif \"%~1\"==\"\" goto done\r\nif /i \"%~1\"==\"/Out\" set OUT=%~2\r\nif /i \"%~1\"==\"/CheckCanApplyConfigurationExtensions\" set KIND=check\r\nif /i \"%~1\"==\"/CheckConfig\" set KIND=check\r\nshift\r\ngoto loop\r\n:done\r\nif \"%KIND%\"==\"check\" if exist \"%SELF%log_check.txt\" (copy /y \"%SELF%log_check.txt\" \"%OUT%\" >nul & exit /b CHECKCODE)\r\ncopy /y \"%SELF%log.txt\" \"%OUT%\" >nul\r\nexit /b EXITCODE\r\n";
-const FAKE_PLATFORM_SH = "#!/bin/sh\n# Фейк платформы для *nix: вычитывает путь из /Out и кладёт туда готовый лог.\n# Значение /Out несёт кавычки ВНУТРИ токена (соглашение 1С, см. run_v8) — в batch их\n# снимает %~2, в sh их надо снять руками, иначе cp целится в имя с кавычками.\nSELF=$(dirname \"$0\")\nOUT=\"\"\nKIND=main\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = \"/CheckCanApplyConfigurationExtensions\" ] || [ \"$1\" = \"/CheckConfig\" ]; then\n    KIND=check\n  fi\n  if [ \"$1\" = \"/Out\" ]; then\n    OUT=\"$2\"\n    OUT=\"${OUT#\\\"}\"\n    OUT=\"${OUT%\\\"}\"\n  fi\n  shift\ndone\nif [ \"$KIND\" = check ] && [ -f \"$SELF/log_check.txt\" ]; then\n  cp \"$SELF/log_check.txt\" \"$OUT\"\n  exit CHECKCODE\nfi\ncp \"$SELF/log.txt\" \"$OUT\"\nexit EXITCODE\n";
+const FAKE_PLATFORM_CMD = "@echo off\r\nrem SELF запоминаем ДО цикла: shift сдвигает и %0, после него %~dp0 указывает не на скрипт\r\nset SELF=%~dp0\r\nset KIND=main\r\n:loop\r\nif \"%~1\"==\"\" goto done\r\nif /i \"%~1\"==\"/Out\" set OUT=%~2\r\nif /i \"%~1\"==\"/CheckCanApplyConfigurationExtensions\" set KIND=check\r\nif /i \"%~1\"==\"/CheckConfig\" set KIND=check\r\nshift\r\ngoto loop\r\n:done\r\nLINGERif \"%KIND%\"==\"check\" if exist \"%SELF%log_check.txt\" (copy /y \"%SELF%log_check.txt\" \"%OUT%\" >nul & exit /b CHECKCODE)\r\ncopy /y \"%SELF%log.txt\" \"%OUT%\" >nul\r\nexit /b EXITCODE\r\n";
+const FAKE_PLATFORM_SH = "#!/bin/sh\n# Фейк платформы для *nix: вычитывает путь из /Out и кладёт туда готовый лог.\n# Значение /Out несёт кавычки ВНУТРИ токена (соглашение 1С, см. run_v8) — в batch их\n# снимает %~2, в sh их надо снять руками, иначе cp целится в имя с кавычками.\nSELF=$(dirname \"$0\")\nOUT=\"\"\nKIND=main\nwhile [ $# -gt 0 ]; do\n  if [ \"$1\" = \"/CheckCanApplyConfigurationExtensions\" ] || [ \"$1\" = \"/CheckConfig\" ]; then\n    KIND=check\n  fi\n  if [ \"$1\" = \"/Out\" ]; then\n    OUT=\"$2\"\n    OUT=\"${OUT#\\\"}\"\n    OUT=\"${OUT%\\\"}\"\n  fi\n  shift\ndone\nLINGERif [ \"$KIND\" = check ] && [ -f \"$SELF/log_check.txt\" ]; then\n  cp \"$SELF/log_check.txt\" \"$OUT\"\n  exit CHECKCODE\nfi\ncp \"$SELF/log.txt\" \"$OUT\"\nexit EXITCODE\n";
 
 function writeFakePlatform(workDir, spec) {
   const isWin = process.platform === 'win32';
@@ -402,7 +402,15 @@ function writeFakePlatform(workDir, spec) {
   // spec.check — ответ платформы на отдельный запуск проверки
   // (/CheckCanApplyConfigurationExtensions у расширений, /CheckConfig у внешних обработок)
   const checkCode = spec.check && Number.isInteger(spec.check.exit) ? spec.check.exit : 0;
+  // spec.linger — фейк оставляет после себя живой фоновый процесс на N секунд, унаследовавший
+  // каналы вывода: так ведёт себя crashpad_handler платформы 8.5 (#128). Навык обязан ждать
+  // выхода платформы, а не закрытия канала.
+  const linger = Number.isInteger(spec.linger) ? spec.linger : 0;
+  const lingerLine = !linger ? ''
+    : isWin ? `start "" /b ping -n ${linger + 1} 127.0.0.1 >nul\r\n`
+    : `sleep ${linger} &\n`;
   const body = (isWin ? FAKE_PLATFORM_CMD : FAKE_PLATFORM_SH)
+    .replaceAll('LINGER', lingerLine)
     .replaceAll('EXITCODE', String(code))
     .replaceAll('CHECKCODE', String(checkCode));
   const exe = join(workDir, isWin ? 'fake.cmd' : 'fake.sh');
@@ -504,13 +512,21 @@ function checkFileContains(workDir, spec, expectPresent) {
 // поэтому он ошибка, а не игнор.
 const KNOWN_EXPECT_KEYS = new Set([
   'files', 'filesAbsent', 'stdoutContains', 'stdoutNotContains', 'stderrContains', 'stderrNotContains', 'preserves',
-  'fileContains', 'fileNotContains', 'filesEqual',
+  'fileContains', 'fileNotContains', 'filesEqual', 'maxDurationMs',
 ]);
 
 function checkExpectKeys(caseData) {
   if (!caseData.expect) return [];
   const unknown = Object.keys(caseData.expect).filter(k => !KNOWN_EXPECT_KEYS.has(k));
   return unknown.map(k => `expect.${k}: раннер такого ключа не знает — кейс ничего не проверяет`);
+}
+
+// expect.maxDurationMs — потолок времени работы скрипта. Нужен кейсам про зависание: без него
+// зависший навык «проходит», просто дождавшись, пока фоновый процесс фейка (linger) умрёт сам.
+function checkMaxDuration(caseData, execMs) {
+  const max = caseData.expect?.maxDurationMs;
+  if (max === undefined || execMs <= max) return [];
+  return [`script ran ${Math.round(execMs)} ms, expected at most ${max} ms`];
 }
 
 // ─── Побайтовое равенство двух файлов ───────────────────────────────────────
@@ -944,6 +960,7 @@ async function runCaseAsync(testCase, opts) {
     // Execute
     const { scriptPath, args } = buildArgs(skillConfig, caseData, workDir, inputFile, opts.runtime);
     let stdout = '', stderr = '', exitCode = 0;
+    const execT0 = performance.now();
     try {
       const execCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : undefined;
       ({ stdout, stderr } = await execSkillAsync(opts.runtime, scriptPath, args, execCwd));
@@ -952,12 +969,14 @@ async function runCaseAsync(testCase, opts) {
       stdout = e.stdout || '';
       stderr = e.stderr || '';
     }
+    const execMs = performance.now() - execT0;
 
     if (inputFile && existsSync(inputFile)) unlinkSync(inputFile);
 
     // Assertions
     const errors = [];
     errors.push(...checkExpectKeys(caseData));
+    errors.push(...checkMaxDuration(caseData, execMs));
     if (caseData.expectError) {
       if (exitCode === 0) errors.push('Expected error (non-zero exit) but got exitCode=0');
       if (typeof caseData.expectError === 'string' && !stderr.includes(caseData.expectError)) {
@@ -1183,6 +1202,7 @@ function runCase(testCase, opts) {
     const { scriptPath, args } = buildArgs(skillConfig, caseData, workDir, inputFile, opts.runtime);
     let stdout = '', stderr = '', exitCode = 0;
 
+    const execT0 = performance.now();
     try {
       const execCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : undefined;
       stdout = execSkillRaw(opts.runtime, scriptPath, args, execCwd);
@@ -1191,6 +1211,7 @@ function runCase(testCase, opts) {
       stdout = e.stdout || '';
       stderr = e.stderr || '';
     }
+    const execMs = performance.now() - execT0;
 
     // Remove temp input file from workDir before snapshot comparison
     if (inputFile && existsSync(inputFile)) unlinkSync(inputFile);
@@ -1198,6 +1219,7 @@ function runCase(testCase, opts) {
     // 4. Assertions
     const errors = [];
     errors.push(...checkExpectKeys(caseData));
+    errors.push(...checkMaxDuration(caseData, execMs));
 
     if (caseData.expectError) {
       // Negative case — expect failure

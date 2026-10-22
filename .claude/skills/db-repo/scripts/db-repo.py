@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-repo v1.18 — 1C configuration repository operations
+# db-repo v1.19 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 """Работа с хранилищем конфигурации 1С.
@@ -18,6 +18,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 
 
 # --- Additional platform arguments ---
@@ -260,6 +262,34 @@ def resolve_v8path(v8path, args):
     return v8path
 
 
+def run_platform_process(cmd):
+    """Run the platform with stdin closed (EOF) and capture its output.
+
+    Waits for the process, not for EOF on its pipes: a process the platform leaves behind
+    (crashpad_handler on 8.5) inherits them and keeps them open. By the time the platform
+    exits, what it wrote is already buffered; the reader threads get a second to drain it."""
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p.stdin.close()
+    chunks = {p.stdout: [], p.stderr: []}
+
+    def drain(stream):
+        # Chunked reads: read() returns only at EOF, and a held pipe never gives one
+        while True:
+            data = os.read(stream.fileno(), 65536)
+            if not data:
+                break
+            chunks[stream].append(data)
+
+    readers = [threading.Thread(target=drain, args=(s,), daemon=True) for s in (p.stdout, p.stderr)]
+    for t in readers:
+        t.start()
+    returncode = p.wait()
+    deadline = time.monotonic() + 1
+    for t in readers:
+        t.join(max(0, deadline - time.monotonic()))
+    return subprocess.CompletedProcess(cmd, returncode, b"".join(chunks[p.stdout]), b"".join(chunks[p.stderr]))
+
+
 def decode_platform_bytes(data):
     """ibcmd writes UTF-8 (checked on 8.3.24, 8.3.27, 8.5), a crashing 1cv8 may still emit
     OEM text. Decode strictly as UTF-8 and fall back to cp866 on invalid bytes — the locale
@@ -339,7 +369,7 @@ def run_v8(v8path, arguments):
                                                      # часть синтаксиса строки соединения,
                                                      # и с ними на POSIX всё работает
         cmd = [v8path] + [strip_framing_quotes(a) for a in arguments]
-    r = subprocess.run(cmd, input=b"", capture_output=True)
+    r = run_platform_process(cmd)
     r.stdout = decode_platform_bytes(r.stdout)
     r.stderr = decode_platform_bytes(r.stderr)
     return r

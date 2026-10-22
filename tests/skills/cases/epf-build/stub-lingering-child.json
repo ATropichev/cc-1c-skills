@@ -1,0 +1,36 @@
+{
+  "name": "Временная база: платформа оставляет живого потомка — запуск стаба его не ждёт, вывод стаба доходит",
+  "osOnly": "win32",
+  "fakePlatform": { "log": "", "linger": 15 },
+  "preRun": [
+    {
+      "script": "epf-init/scripts/init",
+      "args": {
+        "-Name": "Тест",
+        "-SrcDir": "{workDir}/src"
+      }
+    }
+  ],
+  "args_extra": [
+    "-V8Path",
+    "{fakePlatform}",
+    "-SourceFile",
+    "{workDir}\\src\\Тест.xml",
+    "-OutputFile",
+    "{workDir}\\build\\Тест.epf",
+    "-Checks",
+    "off"
+  ],
+  "expect": {
+    "stdoutContains": [
+      "Creating infobase",
+      "/LoadExternalDataProcessorOrReportFromFiles"
+    ],
+    "stdoutNotContains": [
+      "failed to create stub database"
+    ],
+    "maxDurationMs": 10000
+  },
+  "expectError": true,
+  "noSnapshot": "платформа фейковая, базу не создаёт — проверяется время и что вывод стаба дошёл"
+}

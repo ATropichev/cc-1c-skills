@@ -1,4 +1,4 @@
-﻿# db-load-cf v1.20 — Load 1C configuration from CF file
+﻿# db-load-cf v1.21 — Load 1C configuration from CF file
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -406,6 +406,41 @@ function ConvertFrom-PlatformBytes {
     }
 }
 
+function Start-PlatformProcess {
+    # Process.Start hands the child EVERY inheritable handle we hold, not only the pipes made
+    # for it, and PowerShell keeps copies of its own stdout among them. A process the platform
+    # leaves behind (crashpad_handler on 8.5) would then hold our caller's pipe open long after
+    # we exit, and the caller hangs. Inheritance is switched off for the start and restored
+    # right after: Start-Process -NoNewWindow relies on it to share our console or pipe.
+    param([System.Diagnostics.ProcessStartInfo]$StartInfo)
+    if (-not ('PlatformHandleInheritance' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+public static class PlatformHandleInheritance {
+    [DllImport("kernel32.dll")] static extern bool GetHandleInformation(IntPtr h, out uint flags);
+    [DllImport("kernel32.dll")] static extern bool SetHandleInformation(IntPtr h, uint mask, uint flags);
+    public static long[] Suspend() {
+        var held = new List<long>();
+        for (long v = 4; v < 0x100000; v += 4) {
+            uint f;
+            var h = new IntPtr(v);
+            if (GetHandleInformation(h, out f) && (f & 1) != 0 && SetHandleInformation(h, 1, 0)) held.Add(v);
+        }
+        return held.ToArray();
+    }
+    public static void Resume(long[] held) {
+        foreach (var v in held) SetHandleInformation(new IntPtr(v), 1, 1);
+    }
+}
+'@
+    }
+    $held = [PlatformHandleInheritance]::Suspend()
+    try { return [System.Diagnostics.Process]::Start($StartInfo) }
+    finally { [PlatformHandleInheritance]::Resume($held) }
+}
+
 function Invoke-PlatformProcess {
     # Run the platform non-interactively and capture its console output. A closed stdin pipe
     # (EOF) makes an auth prompt fast-fail instead of hanging; capturing keeps the child's
@@ -429,16 +464,19 @@ function Invoke-PlatformProcess {
     $psi.RedirectStandardInput = $true
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError = $true
-    $p = [System.Diagnostics.Process]::Start($psi)
+    $p = Start-PlatformProcess $psi
     $p.StandardInput.Close()
-    # stderr is drained in parallel: reading the streams one after another deadlocks
+    # Both streams are drained in parallel: reading them one after another deadlocks
     # as soon as the other one fills its pipe buffer.
     $errMs = New-Object System.IO.MemoryStream
     $errTask = $p.StandardError.BaseStream.CopyToAsync($errMs)
     $outMs = New-Object System.IO.MemoryStream
-    $p.StandardOutput.BaseStream.CopyTo($outMs)
-    $errTask.Wait()
+    $outTask = $p.StandardOutput.BaseStream.CopyToAsync($outMs)
+    # Wait for the process, not for EOF: a child it leaves behind (crashpad_handler on 8.5)
+    # inherits the pipes and keeps them open. By the time the platform exits, what it wrote
+    # is already buffered and drains at once; the timeout only covers the held pipe.
     $p.WaitForExit()
+    [void][System.Threading.Tasks.Task]::WaitAll(@($outTask, $errTask), 1000)
     $out = ConvertFrom-PlatformBytes $outMs.ToArray()
     $err = ConvertFrom-PlatformBytes $errMs.ToArray()
     if ($err) { $out += $err }

@@ -1,0 +1,10 @@
+{
+  "name": "Платформа оставляет живого потомка с нашими каналами — навык ждёт выхода платформы, а не закрытия канала",
+  "fakePlatform": { "log": "", "linger": 10 },
+  "args_extra": ["-V8Path", "{fakePlatform}", "-InfoBasePath", "{workDir}/ib"],
+  "expect": {
+    "stdoutContains": "Information base created successfully",
+    "maxDurationMs": 6000
+  },
+  "noSnapshot": "проверяется время работы и итог в stdout, файлов на выходе нет"
+}
