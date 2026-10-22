@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-validate v1.29 — Validate 1C configuration extension structure (CFE)
+# cfe-validate v1.30 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Validates extension Configuration.xml: root, InternalInfo, extension properties, ChildObjects, borrowed objects."""
 import sys, os, argparse, re
@@ -978,6 +978,10 @@ def main():
             dir_name = CHILD_TYPE_DIR_MAP[type_name]
             ext_obj_listed.add(f'{type_name}.{child_name}'.upper())
             obj_file = os.path.join(config_dir, dir_name, child_name + '.xml')
+            # Общая форма — сама себе объект: её Form.xml проверяют те же 11–14, что и формы объектов
+            if type_name == 'CommonForm':
+                form_list.append({'TypeName': type_name, 'ObjName': child_name, 'FormName': child_name,
+                                  'DirName': dir_name, 'IsCommon': True})
 
             if not os.path.exists(obj_file):
                 continue
@@ -1219,11 +1223,18 @@ def main():
 
     for fi in form_list:
         form_count += 1
-        form_base = os.path.join(config_dir, fi['DirName'], fi['ObjName'], 'Forms', fi['FormName'])
+        is_common = fi.get('IsCommon', False)
+        # Каталог формы относительно корня: CommonForms/X у общей, Catalogs/X/Forms/Y у формы объекта
+        form_rel = (os.path.join(fi['DirName'], fi['ObjName']) if is_common
+                    else os.path.join(fi['DirName'], fi['ObjName'], 'Forms', fi['FormName']))
+        form_base = os.path.join(config_dir, form_rel)
         form_meta_file = os.path.join(os.path.dirname(form_base), fi['FormName'] + '.xml')
         form_xml_file = os.path.join(form_base, 'Ext', 'Form.xml')
         module_bsl_file = os.path.join(form_base, 'Ext', 'Form', 'Module.bsl')
-        ctx = f"{fi['TypeName']}.{fi['ObjName']}.Form.{fi['FormName']}"
+        ctx = (f"{fi['TypeName']}.{fi['ObjName']}" if is_common
+               else f"{fi['TypeName']}.{fi['ObjName']}.Form.{fi['FormName']}")
+        # Владелец формы — объект, у общей формы его нет
+        owner_key11 = '' if is_common else f"{fi['TypeName']}.{fi['ObjName']}"
 
         # Validate form metadata XML
         if os.path.exists(form_meta_file):
@@ -1240,7 +1251,8 @@ def main():
                     if fm_props is not None:
                         fm_ob = fm_props.find(f'{{{MD}}}ObjectBelonging')
                         is_borrowed = fm_ob is not None and (fm_ob.text or '') == 'Adopted'
-                        if is_borrowed:
+                        # У общей формы это описание самого объекта — его уже проверила проверка 9
+                        if is_borrowed and not is_common:
                             fm_ext = fm_props.find(f'{{{MD}}}ExtendedConfigurationObject')
                             if fm_ext is None or not (fm_ext.text or '') or not GUID_PATTERN.match(fm_ext.text or ''):
                                 r.error(f'11. {ctx}: invalid/missing ExtendedConfigurationObject')
@@ -1266,15 +1278,14 @@ def main():
         with open(form_xml_file, 'r', encoding='utf-8-sig') as f:
             form_raw_text = f.read()
         forms_with_text.append({
-            'RawText': form_raw_text, 'Context': ctx, 'OwnerKey': f"{fi['TypeName']}.{fi['ObjName']}",
-            'DirName': fi['DirName'], 'ObjName': fi['ObjName'], 'FormName': fi['FormName'],
+            'RawText': form_raw_text, 'Context': ctx, 'OwnerKey': owner_key11, 'FormRel': form_rel,
         })
 
         if '<BaseForm' in form_raw_text:
             if not re.search(r'<BaseForm[^>]+version=', form_raw_text):
                 r.warn(f'11. {ctx}: <BaseForm> missing version attribute')
             borrowed_forms_with_tree.append({
-                'Path': form_xml_file, 'RawText': form_raw_text, 'Context': ctx,
+                'Path': form_xml_file, 'RawText': form_raw_text, 'Context': ctx, 'OwnerKey': owner_key11,
             })
 
     if form_count == 0:
@@ -1365,8 +1376,8 @@ def main():
         if ac_target:
             if ac_target['Key'].upper() in ext_obj_index:
                 owner_key = ac_target['Key']
-        elif '<v8:Type' not in (root_match.group(0) if root_match else ''):
-            owner_key = ctx.split('.Form.')[0]
+        elif '<v8:Type' not in (root_match.group(0) if root_match else '') and bf['OwnerKey']:
+            owner_key = bf['OwnerKey']
         if ac_tables and owner_key:
             owner_ts = ext_obj_index.get(owner_key.upper(), {}).get('TSColumns', {})
             for tbl_name in sorted(ac_tables):
@@ -1460,7 +1471,7 @@ def main():
                 # основного реквизита (так же решает form-validate).
                 hint_roots = []
                 if not root_match14 and '<BaseForm' in raw:
-                    src_form = (os.path.join(source_config_root(), fw['DirName'], fw['ObjName'], 'Forms', fw['FormName'], 'Ext', 'Form.xml')
+                    src_form = (os.path.join(source_config_root(), fw['FormRel'], 'Ext', 'Form.xml')
                                 if config_path_arg else '')
                     if src_form and os.path.isfile(src_form):
                         with open(src_form, 'r', encoding='utf-8-sig') as f:

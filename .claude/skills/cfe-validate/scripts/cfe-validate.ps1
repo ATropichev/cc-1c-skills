@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.29 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.30 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -914,6 +914,10 @@ if ($childObjNode) {
 		$dirName = $childTypeDirMap[$typeName]
 		$script:extObjListed["${typeName}.${childName}"] = $true
 		$objFile = Join-Path (Join-Path $configDir $dirName) "$childName.xml"
+		# Общая форма — сама себе объект: её Form.xml проверяют те же 11–14, что и формы объектов
+		if ($typeName -eq "CommonForm") {
+			$script:formList += @{ TypeName = $typeName; ObjName = $childName; FormName = $childName; DirName = $dirName; IsCommon = $true }
+		}
 
 		if (-not (Test-Path $objFile)) { continue }
 
@@ -1165,11 +1169,15 @@ $formCount = 0
 
 foreach ($fi in $script:formList) {
 	$formCount++
-	$formBase = Join-Path (Join-Path (Join-Path (Join-Path $configDir $fi.DirName) $fi.ObjName) "Forms") $fi.FormName
+	# Каталог формы относительно корня: CommonForms/X у общей, Catalogs/X/Forms/Y у формы объекта
+	$formRel = if ($fi.IsCommon) { "$($fi.DirName)/$($fi.ObjName)" } else { "$($fi.DirName)/$($fi.ObjName)/Forms/$($fi.FormName)" }
+	$formBase = Join-Path $configDir $formRel
 	$formMetaFile = Join-Path (Split-Path $formBase -Parent) "$($fi.FormName).xml"
 	$formXmlFile = Join-Path (Join-Path $formBase "Ext") "Form.xml"
 	$moduleBslFile = Join-Path (Join-Path (Join-Path $formBase "Ext") "Form") "Module.bsl"
-	$ctx = "$($fi.TypeName).$($fi.ObjName).Form.$($fi.FormName)"
+	$ctx = if ($fi.IsCommon) { "$($fi.TypeName).$($fi.ObjName)" } else { "$($fi.TypeName).$($fi.ObjName).Form.$($fi.FormName)" }
+	# Владелец формы — объект, у общей формы его нет
+	$ownerKey11 = if ($fi.IsCommon) { "" } else { "$($fi.TypeName).$($fi.ObjName)" }
 
 	# Validate form metadata XML
 	if (Test-Path $formMetaFile) {
@@ -1189,7 +1197,8 @@ foreach ($fi in $script:formList) {
 				if ($fmProps) {
 					$fmOb = $fmProps.SelectSingleNode("md:ObjectBelonging", $fmNs)
 					$isBorrowed = $fmOb -and $fmOb.InnerText -eq "Adopted"
-					if ($isBorrowed) {
+					# У общей формы это описание самого объекта — его уже проверила проверка 9
+					if ($isBorrowed -and -not $fi.IsCommon) {
 						$fmExt = $fmProps.SelectSingleNode("md:ExtendedConfigurationObject", $fmNs)
 						if (-not $fmExt -or $fmExt.InnerText -notmatch $guidPattern) {
 							Report-Error "11. ${ctx}: invalid/missing ExtendedConfigurationObject"
@@ -1223,8 +1232,7 @@ foreach ($fi in $script:formList) {
 	# Read Form.xml as raw text for BaseForm checks
 	$formRawText = [System.IO.File]::ReadAllText($formXmlFile, [System.Text.Encoding]::UTF8)
 	$script:formsWithText += @{
-		RawText = $formRawText; Context = $ctx; OwnerKey = "$($fi.TypeName).$($fi.ObjName)"
-		DirName = $fi.DirName; ObjName = $fi.ObjName; FormName = $fi.FormName
+		RawText = $formRawText; Context = $ctx; OwnerKey = $ownerKey11; FormRel = $formRel
 	}
 
 	if ($formRawText -match '<BaseForm') {
@@ -1234,7 +1242,7 @@ foreach ($fi in $script:formList) {
 		}
 
 		$script:borrowedFormsWithTree += @{
-			Path = $formXmlFile; RawText = $formRawText; Context = $ctx
+			Path = $formXmlFile; RawText = $formRawText; Context = $ctx; OwnerKey = $ownerKey11
 		}
 	}
 }
@@ -1338,8 +1346,8 @@ foreach ($bf in $script:borrowedFormsWithTree) {
 	$ownerKey = $null
 	if ($acTarget) {
 		if ($script:extObjIndex.ContainsKey($acTarget.Key)) { $ownerKey = $acTarget.Key }
-	} elseif ($rootMatch.Value -notmatch '<v8:Type') {
-		$ownerKey = ($ctx -split '\.Form\.')[0]
+	} elseif ($rootMatch.Value -notmatch '<v8:Type' -and $bf.OwnerKey) {
+		$ownerKey = $bf.OwnerKey
 	}
 	if ($acTables.Count -gt 0 -and $ownerKey) {
 		$ownerEntry = $script:extObjIndex[$ownerKey]
@@ -1444,7 +1452,7 @@ if (-not $script:stopped -and $script:formsWithText.Count -gt 0) {
 			# основного реквизита (так же решает form-validate).
 			$hintRoots = @()
 			if (-not $rootMatch14.Success -and $raw -match '<BaseForm') {
-				$srcForm = if ($ConfigPath) { Join-Path (Get-SourceConfigRoot) "$($fw.DirName)/$($fw.ObjName)/Forms/$($fw.FormName)/Ext/Form.xml" } else { "" }
+				$srcForm = if ($ConfigPath) { Join-Path (Get-SourceConfigRoot) "$($fw.FormRel)/Ext/Form.xml" } else { "" }
 				if ($srcForm -and (Test-Path -LiteralPath $srcForm)) {
 					$srcRaw = [System.IO.File]::ReadAllText($srcForm, [System.Text.Encoding]::UTF8)
 					$srcMatch = [regex]::Match(($srcRaw -split '<BaseForm', 2)[0], $script:mainAttrPattern)

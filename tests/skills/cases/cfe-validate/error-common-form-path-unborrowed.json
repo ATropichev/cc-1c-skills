@@ -1,0 +1,97 @@
+{
+  "name": "Ошибка: на общую форму выведен незаимствованный реквизит обработки основного реквизита",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DataProcessor",
+        "name": "Поиск",
+        "attributes": [
+          "Строка: String(100)",
+          "Лишний: String(10)"
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "CommonForm",
+        "name": "ФормаПоиска"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "elements": [
+          {
+            "input": "Строка",
+            "path": "Объект.Строка"
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DataProcessorObject.Поиск",
+            "main": true
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/CommonForms/ФормаПоиска/Ext/Form.xml"
+      }
+    },
+    {
+      "script": "cfe-init/scripts/cfe-init",
+      "args": {
+        "-Name": "Тест",
+        "-NamePrefix": "Тест_",
+        "-OutputDir": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}"
+      }
+    },
+    {
+      "script": "cfe-borrow/scripts/cfe-borrow",
+      "args": {
+        "-ExtensionPath": "{workDir}/cfe",
+        "-ConfigPath": "{workDir}",
+        "-Object": "CommonForm.ФормаПоиска",
+        "-BorrowMainAttribute": "Form"
+      }
+    },
+    {
+      "script": "form-edit/scripts/form-edit",
+      "input": {
+        "elements": [
+          {
+            "input": "Тест_Поле",
+            "path": "Объект.Лишний"
+          }
+        ]
+      },
+      "args": {
+        "-FormPath": "{workDir}/cfe/CommonForms/ФормаПоиска/Ext/Form.xml",
+        "-JsonPath": "{inputFile}"
+      }
+    }
+  ],
+  "params": {
+    "extensionPath": "cfe"
+  },
+  "args_extra": [
+    "-ConfigPath",
+    "{workDir}"
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "CommonForm.ФормаПоиска: path 'Объект.Лишний'"
+  }
+}
