@@ -28,9 +28,14 @@ const ourSkills = readdirSync(SRC_SKILLS, { withFileTypes: true })
   .filter(e => e.isDirectory() && existsSync(join(SRC_SKILLS, e.name, 'SKILL.md')))
   .map(e => e.name).sort();
 
-function run(args, script = SWITCH) {
-  const r = spawnSync(PY, [script, ...args], { encoding: 'utf8', env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
-  if (r.status !== 0) console.log(`    [${args.join(' ')}] exit ${r.status}\n${r.stdout}${r.stderr}`);
+// cwd по умолчанию — песочница, а не репозиторий: путь вида «C:» на Windows указывает на текущий
+// каталог, и сломанная защита манифеста снесла бы его
+let SANDBOX;
+function run(args, { script = SWITCH, cwd = SANDBOX, input, expectFail = false } = {}) {
+  const r = spawnSync(PY, [script, ...args], { cwd, input, encoding: 'utf8',
+    env: { ...process.env, PYTHONIOENCODING: 'utf-8' } });
+  if ((r.status !== 0) !== expectFail) console.log(`    [${args.join(' ')}] exit ${r.status}\n${r.stdout}${r.stderr}`);
+  run.last = r;
   return r.status;
 }
 
@@ -38,6 +43,8 @@ const put = (p, text = 'x\n') => { mkdirSync(dirname(p), { recursive: true }); w
 const readManifest = (dir) => JSON.parse(readFileSync(join(dir, MANIFEST), 'utf8'));
 const gitignoreLines = (dir) => readFileSync(join(dir, '.gitignore'), 'utf8').split(/\r?\n/).filter(Boolean);
 const work = mkdtempSync(join(tmpdir(), 'switch-129-'));
+SANDBOX = join(work, 'sandbox');
+put(join(SANDBOX, 'canary'));
 
 try {
   // 1. Чужое переживает повторную установку
@@ -100,6 +107,9 @@ try {
   check(run(['claude-code', '--project-dir', p5, '--link']) === 0, 'установка ссылками');
   check(run(['claude-code', '--project-dir', p5, '--link']) === 0, 'повторная установка ссылками');
   check(readManifest(t5).mode === 'link' && !('runtime' in readManifest(t5)), 'манифест: mode=link без runtime');
+  const srcInfo = readFileSync(join(SRC_SKILLS, 'cf-info', 'SKILL.md'), 'utf8');
+  check(run(['--runtime', 'python', '--project-dir', p5], { expectFail: true }) !== 0, 'смена рантайма поверх ссылок — отказ');
+  check(readFileSync(join(SRC_SKILLS, 'cf-info', 'SKILL.md'), 'utf8') === srcInfo, 'источник не переписан через ссылку');
   check(run(['--undo', 'claude-code', '--project-dir', p5]) === 0, 'undo');
   check(ourSkills.every(s => existsSync(join(SRC_SKILLS, s, 'SKILL.md'))), 'источник .claude/skills цел');
   check(existsSync(join(t5, 'my-skill', 'SKILL.md')), 'my-skill на месте');
@@ -119,19 +129,74 @@ try {
   }
   const p6 = join(work, 'p6');
   mkdirSync(p6);
-  check(run(['cursor', '--project-dir', p6], join(src6, 'scripts', 'switch.py')) === 0, 'установка проходит');
+  const script6 = join(src6, 'scripts', 'switch.py');
+  check(run(['cursor', '--project-dir', p6], { script: script6 }) === 0, 'установка проходит');
   check(!('commit' in readManifest(join(p6, '.cursor', 'skills'))), 'в манифесте нет commit чужого репозитория');
+
+  // 6a. В корне копии источника: рантайм на месте переключает .claude/skills, даже если рядом
+  // уже стоит установка с манифестом (.cursor)
+  console.log('\n6a. рантайм на месте в источнике при установленном .cursor');
+  const srcMd = join(src6, '.claude', 'skills', 'cf-info', 'SKILL.md');
+  check(readFileSync(srcMd, 'utf8').includes('powershell.exe'), 'исходник cf-info на PowerShell');
+  check(run(['cursor', '--project-dir', src6], { script: script6 }) === 0, 'установка .cursor в источник');
+  check(run(['--runtime', 'python', '--project-dir', src6], { script: script6 }) === 0, 'переключение на python');
+  check(!readFileSync(srcMd, 'utf8').includes('powershell.exe'), 'переключён .claude/skills, а не .cursor');
+
+  // 6b. Целевой каталог = исходные навыки: интерактивные «Удалить» и «Обновить» отказывают
+  console.log('\n6b. интерактивный режим нацелен на сами исходники');
+  const before6 = readdirSync(join(src6, '.claude', 'skills')).length;
+  // Claude Code → «Установить в проект» → путь по умолчанию (cwd) → «Удалить»
+  check(run([], { script: script6, cwd: src6, input: '1\n2\n\n2\n', expectFail: true }) !== 0, '«Удалить» — отказ');
+  // ... → «Обновить» → рантайм PowerShell
+  check(run([], { script: script6, cwd: src6, input: '1\n2\n\n1\n1\n', expectFail: true }) !== 0, '«Обновить» — отказ');
+  check(readdirSync(join(src6, '.claude', 'skills')).length === before6, 'исходные навыки целы');
 
   // 7. Испорченный манифест не дотягивается за пределы каталога
   console.log('\n7. испорченный манифест');
   const p7 = join(work, 'p7');
   const t7 = join(p7, '.cursor', 'skills');
   put(join(p7, '.cursor', 'victim', 'SKILL.md'));
-  put(join(t7, MANIFEST), JSON.stringify({ skills: ['../victim', '..', '.', ourSkills[0]] }));
+  put(join(t7, '.system', 'x'));
+  put(join(t7, MANIFEST), JSON.stringify({ skills: ['../victim', '..', '.', 'C:', 'c:', '.system', ourSkills[0]] }));
   check(run(['cursor', '--project-dir', p7]) === 0, 'установка');
   check(existsSync(join(p7, '.cursor', 'victim', 'SKILL.md')), 'victim цел');
+  check(existsSync(join(t7, '.system', 'x')), '.system из манифеста не удалён');
+  check(existsSync(join(SANDBOX, 'canary')), '«C:» не дотянулся до текущего каталога');
   put(join(t7, MANIFEST), '{ not json');
   check(run(['cursor', '--project-dir', p7]) === 0, 'битый JSON — установка проходит');
+
+  // 8. Рантайм на месте в проекте с манифестом
+  console.log('\n8. переключение рантайма в установленном проекте');
+  const p8 = join(work, 'p8');
+  const t8 = join(p8, '.cursor', 'skills');
+  check(run(['cursor', '--project-dir', p8]) === 0, 'установка');
+  const foreignMd = 'Run: powershell.exe -NoProfile -File scripts/x.ps1\n';
+  put(join(t8, 'my-skill', 'SKILL.md'), foreignMd);
+  writeFileSync(join(t8, MANIFEST), JSON.stringify({ ...readManifest(t8), commit: 'abc123' }));
+  check(run(['--runtime', 'python', '--project-dir', p8]) === 0, 'переключение на python');
+  check(readFileSync(join(t8, 'my-skill', 'SKILL.md'), 'utf8') === foreignMd, 'чужой SKILL.md не переписан');
+  check(!readFileSync(join(t8, 'cf-info', 'SKILL.md'), 'utf8').includes('powershell.exe'), 'наш навык переключён');
+  const m8 = readManifest(t8);
+  check(m8.runtime === 'python' && m8.commit === 'abc123', 'манифест: runtime обновлён, commit сохранён');
+
+  // 9. Интерактивное удаление в обычном проекте
+  console.log('\n9. интерактивный режим: «Удалить»');
+  // Cursor — 4-й в списке платформ → путь по умолчанию (cwd) → «Удалить»
+  check(run([], { cwd: p8, input: '4\n\n2\n' }) === 0, 'удаление');
+  check(ourSkills.every(s => !existsSync(join(t8, s))), 'навыки набора удалены');
+  check(existsSync(join(t8, 'my-skill', 'SKILL.md')), 'my-skill на месте');
+
+  // 10. .gitignore пользователя не в UTF-8 и файл на месте навыка
+  console.log('\n10. .gitignore в cp1251, файл вместо каталога навыка');
+  const p10 = join(work, 'p10');
+  const t10 = join(p10, '.cursor', 'skills');
+  const cp1251 = Buffer.concat([Buffer.from('node_modules/\n# '), Buffer.from([0xcf, 0xf0, 0xe8]), Buffer.from('\n')]);
+  put(join(t10, '.gitignore'), cp1251);
+  put(join(t10, ourSkills[0]), 'stray file\n');
+  check(run(['cursor', '--project-dir', p10]) === 0, 'установка');
+  const gi10 = readFileSync(join(t10, '.gitignore'));
+  check(gi10.subarray(0, cp1251.length).equals(cp1251) && gi10.includes('__pycache__/'), '.gitignore: байты сохранены, строка дописана');
+  check(existsSync(join(t10, ourSkills[0], 'SKILL.md')), `${ourSkills[0]} установлен на месте файла`);
 } finally {
   // Ссылки из сценария 5 снимаем сами: уборка не должна пройти по ним в исходные навыки
   const t5 = join(work, 'p5', '.claude', 'skills');
