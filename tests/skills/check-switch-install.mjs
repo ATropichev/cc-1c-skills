@@ -120,7 +120,8 @@ try {
   const outer = join(work, 'outer');
   const src6 = join(outer, 'tools', 'cc');
   cpSync(join(ROOT, 'scripts', 'switch.py'), join(src6, 'scripts', 'switch.py'));
-  cpSync(SRC_SKILLS, join(src6, '.claude', 'skills'), { recursive: true });
+  // node_modules (web-test) для сценария не нужны, а это основной объём
+  cpSync(SRC_SKILLS, join(src6, '.claude', 'skills'), { recursive: true, filter: (p) => !/[\\/]node_modules$/.test(p) });
   // autocrlf/safecrlf из глобального конфига могут сорвать add, и у «чужого» репо не будет HEAD
   const git = (...a) => spawnSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false', '-C', outer, ...a], { encoding: 'utf8' });
   if (git('init', '-q').status === 0) {
@@ -159,10 +160,12 @@ try {
   const t7 = join(p7, '.cursor', 'skills');
   put(join(p7, '.cursor', 'victim', 'SKILL.md'));
   put(join(t7, '.system', 'x'));
-  put(join(t7, MANIFEST), JSON.stringify({ skills: ['../victim', '..', '.', 'C:', 'c:', '.system', ourSkills[0]] }));
+  put(join(t7, 'my-skill', 'SKILL.md'));
+  put(join(t7, MANIFEST), JSON.stringify({ skills: ['../victim', '..', '.', 'C:', 'c:', '.system', 'my-skill.', 'nul', 'con.txt', ourSkills[0]] }));
   check(run(['cursor', '--project-dir', p7]) === 0, 'установка');
   check(existsSync(join(p7, '.cursor', 'victim', 'SKILL.md')), 'victim цел');
   check(existsSync(join(t7, '.system', 'x')), '.system из манифеста не удалён');
+  check(existsSync(join(t7, 'my-skill', 'SKILL.md')), '«my-skill.» не дотянулся до my-skill');
   check(existsSync(join(SANDBOX, 'canary')), '«C:» не дотянулся до текущего каталога');
   put(join(t7, MANIFEST), '{ not json');
   check(run(['cursor', '--project-dir', p7]) === 0, 'битый JSON — установка проходит');
@@ -193,6 +196,14 @@ try {
   check(run(['--runtime', 'python', '--project-dir', p8]) === 0, 'переключение на python');
   check(readFileSync(userMd, 'utf8') === foreignMd, '.claude/skills пользователя не тронут');
   check(!readFileSync(join(t8, 'cf-info', 'SKILL.md'), 'utf8').includes('powershell.exe'), '.cursor переключён');
+
+  // 8b. То же, но установка до v1.8 — манифеста нет ни в одном каталоге
+  console.log('\n8b. рантайм на месте: свои навыки в .claude, старая установка в .cursor');
+  unlinkSync(join(t8, MANIFEST));
+  check(run(['--runtime', 'powershell', '--project-dir', p8]) === 0, 'переключение на powershell');
+  check(readFileSync(userMd, 'utf8') === foreignMd, '.claude/skills пользователя не тронут');
+  check(readFileSync(join(t8, 'cf-info', 'SKILL.md'), 'utf8').includes('powershell.exe'), '.cursor переключён');
+  check(run(['cursor', '--project-dir', p8]) === 0, 'переустановка возвращает манифест');
   rmSync(join(p8, '.claude'), { recursive: true });
 
   // 9. Интерактивное удаление в обычном проекте

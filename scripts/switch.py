@@ -52,9 +52,12 @@ SOURCE_URL = 'https://github.com/Nikolay-Shirokov/cc-1c-skills'
 # Манифест установки в целевом каталоге навыков: по нему отличаем свои навыки
 # от сторонних, которые лежат в том же каталоге и трогать их нельзя.
 MANIFEST_NAME = '.cc-1c-skills.json'
-# Допустимое имя навыка в манифесте: без разделителей, дисков (C:) и скрытых
-# каталогов — испорченный манифест не должен дотягиваться за пределы каталога
-RX_SKILL_NAME = re.compile(r'[a-z0-9][a-z0-9._-]*')
+# Допустимое имя навыка в манифесте: без разделителей, дисков (C:), скрытых
+# каталогов и точки в конце (Windows её отбрасывает: «x.» = «x») — испорченный
+# манифест не должен дотягиваться до чужих путей
+RX_SKILL_NAME = re.compile(r'[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?')
+# Имена устройств Windows, в том числе с расширением (nul.txt)
+RX_WIN_RESERVED = re.compile(r'(?:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\..*)?')
 
 # ${CLAUDE_SKILL_DIR}/../<other>/<rest>  — cross-skill reference (more specific, match first)
 RX_SKILL_DIR_CROSS = re.compile(r'\$\{CLAUDE_SKILL_DIR\}/\.\./([a-z][a-z0-9-]+)/')
@@ -115,13 +118,14 @@ def is_junction(path):
         return True
     if hasattr(os.path, 'isjunction'):
         return os.path.isjunction(path)
-    # Python < 3.12 на Windows: islink() не видит junction, смотрим reparse point
+    # Python < 3.12 на Windows: islink() не видит junction. Смотрим именно тег
+    # mount point — reparse point бывает и у обычных каталогов (OneDrive)
     if sys.platform == 'win32':
         try:
-            attrs = getattr(os.lstat(path), 'st_file_attributes', 0)
+            tag = getattr(os.lstat(path), 'st_reparse_tag', 0)
         except OSError:
             return False
-        return bool(attrs & stat.FILE_ATTRIBUTE_REPARSE_POINT)
+        return tag == stat.IO_REPARSE_TAG_MOUNT_POINT
     return False
 
 
@@ -144,7 +148,8 @@ def create_junction(src, dst):
 
 def is_plain_name(name):
     """True for a skill-like directory name (no separators, drives, dot-dirs)."""
-    return isinstance(name, str) and RX_SKILL_NAME.fullmatch(name) is not None
+    return (isinstance(name, str) and RX_SKILL_NAME.fullmatch(name) is not None
+            and RX_WIN_RESERVED.fullmatch(name) is None)
 
 
 _manifest_warned = set()
@@ -707,28 +712,32 @@ def cmd_switch_runtime(runtime, project_dir):
     # Find skills directory: try all known platform dirs. In the source repo
     # that is .claude/skills; in other projects a dir installed by this set
     # (with manifest) goes first, ahead of the user's own skills
+    src_names = source_skill_names()
     candidates = []
     for name, prefix in PLATFORMS.items():
         candidate = os.path.join(project_dir, prefix.replace('/', os.sep))
-        if os.path.isdir(candidate) and scan_skills(candidate):
-            candidates.append((name, candidate))
+        if not os.path.isdir(candidate):
+            continue
+        # Сторонние навыки рядом с нашими не переписываем; каталог без наших
+        # навыков (только свои навыки пользователя) не кандидат
+        owned = owned_names(candidate, src_names)
+        skills = [s for s in scan_skills(candidate) if s in owned]
+        if not skills:
+            continue
+        manifest = read_manifest(candidate)
+        # Через ссылку правка ушла бы в источник и во все подключённые проекты
+        linked = bool(manifest and manifest.get('mode') == 'link') or any(
+            is_junction(os.path.join(candidate, s)) for s in skills)
+        candidates.append((name, candidate, skills, manifest, linked))
     if is_different_dir(project_dir, repo_root()):
-        candidates.sort(key=lambda c: not os.path.isfile(
-            os.path.join(c[1], MANIFEST_NAME)))
+        # Установки с манифестом первыми, из них копии раньше ссылок
+        candidates.sort(key=lambda c: (c[3] is None, c[4]))
 
     if not candidates:
         print("Ошибка: не найдена директория навыков в текущем каталоге.", file=sys.stderr)
         return 1
 
-    platform_name, skills_dir = candidates[0]
-    # Сторонние навыки рядом с нашими не переписываем
-    owned = owned_names(skills_dir, source_skill_names())
-    skills = [s for s in scan_skills(skills_dir) if s in owned]
-    manifest = read_manifest(skills_dir)
-
-    # Через ссылку правка ушла бы в источник и во все подключённые проекты
-    linked = (manifest and manifest.get('mode') == 'link') or any(
-        is_junction(os.path.join(skills_dir, s)) for s in skills)
+    platform_name, skills_dir, skills, manifest, linked = candidates[0]
     if linked:
         print(f"Ошибка: навыки в {PLATFORMS[platform_name]}/ подключены "
               f"ссылками — рантайм берётся из источника. Переключите его "
