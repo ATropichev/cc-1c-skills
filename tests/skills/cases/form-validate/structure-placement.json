@@ -1,0 +1,17 @@
+{
+  "name": "Структура: элемент не в своём контейнере — предупреждения",
+  "setup": "fixture:structure-placement",
+  "params": {
+    "formPath": "DataProcessors/Bad/Forms/Форма"
+  },
+  "expect": {
+    "stdoutContains": [
+      "21. InputField 'ПолеСтрока' cannot be placed in Pages 'Страницы'",
+      "21. Popup 'Подменю' cannot be placed in UsualGroup 'Группа'",
+      "21. ContextMenu 'ЛишнееМеню' cannot be placed in UsualGroup 'Группа'",
+      "0 errors, 3 warnings"
+    ]
+  },
+  "noSnapshot": "read-only навык на ручной фикстуре — проверяется вывод",
+  "skipPlatformVerify": "ручная фикстура — одна форма без конфигурации; проверяется вывод валидатора"
+}

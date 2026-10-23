@@ -1,0 +1,13 @@
+{
+  "name": "Структура: элемент из формата новее формы — ошибка",
+  "setup": "fixture:structure-tag-newer-format",
+  "params": {
+    "formPath": "DataProcessors/Bad/Forms/Форма"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "18. <RowActionsPanel> 'ПанельДействий': not available in format 2.17 (since 2.21)"
+    ]
+  }
+}

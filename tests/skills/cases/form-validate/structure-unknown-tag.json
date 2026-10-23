@@ -1,0 +1,14 @@
+{
+  "name": "Структура: несуществующий тег элемента и тег в другом регистре — ошибки",
+  "setup": "fixture:structure-unknown-tag",
+  "params": {
+    "formPath": "DataProcessors/Bad/Forms/Форма"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "18. <GroupBox> 'Группа' is not a form element type",
+      "18. <labelDecoration> 'Надпись': wrong case, use <LabelDecoration>"
+    ]
+  }
+}

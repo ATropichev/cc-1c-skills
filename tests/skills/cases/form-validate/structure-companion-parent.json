@@ -1,0 +1,14 @@
+{
+  "name": "Структура: контекстное меню у группы и командная панель у поля — ошибки",
+  "setup": "fixture:structure-companion-parent",
+  "params": {
+    "formPath": "DataProcessors/Bad/Forms/Форма"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "19. UsualGroup 'Группа' cannot have <ContextMenu>",
+      "19. InputField 'ПолеСтрока' cannot have <AutoCommandBar>"
+    ]
+  }
+}

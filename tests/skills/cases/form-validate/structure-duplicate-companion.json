@@ -1,0 +1,13 @@
+{
+  "name": "Структура: два контекстных меню у поля — ошибка",
+  "setup": "fixture:structure-duplicate-companion",
+  "params": {
+    "formPath": "DataProcessors/Bad/Forms/Форма"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "19. InputField 'ПолеСтрока': duplicate <ContextMenu>"
+    ]
+  }
+}

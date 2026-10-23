@@ -117,5 +117,37 @@ for (const f of ['.claude/skills/form-edit/scripts/form-edit.py', '.claude/skill
     }
   }
 }
-console.log(drift === 0 ? 'OK — нет дрейфа значений enum-allowlist (meta-* vs meta-compile, cfe-validate vs cf-validate, form-edit/form-validate vs form-compile)' : `\n${drift} DRIFT(s) — свести к эталону.`);
+// Структура элементов формы (#130): один потребитель — form-validate; сверка портов ps1 ↔ py.
+// Блок генерирует debug/form-dsl-revision/gen_structure_table.py; ручная правка одного порта — дрейф.
+function structureTables(file, isPy) {
+  const text = readFileSync(join(ROOT, file), 'utf8').replace(/\r\n/g, '\n');
+  const a = text.indexOf('# --- Структура элементов формы (генерируется) ---');
+  const b = text.indexOf('# --- /Структура элементов формы ---', a);
+  if (a < 0 || b < 0) throw new Error(`structure block not found in ${file}`);
+  const tables = {}; let cur = null;
+  for (const line of text.slice(a, b).split('\n')) {
+    const open = isPy ? line.match(/^([A-Z_]+) = \{$/) : line.match(/^\$script:(\w+) = @\{$/);
+    const scalar = isPy ? line.match(/^([A-Z_]+) = '([^']*)'$/) : line.match(/^\$script:(\w+) = '([^']*)'$/);
+    const item = isPy ? line.match(/^\s+'([^']+)': '([^']*)',$/) : line.match(/^\t'([^']+)' = '([^']*)'$/);
+    if (open) { cur = {}; tables[open[1].replace(/_/g, '').toLowerCase()] = cur; }
+    else if (scalar) tables[scalar[1].replace(/_/g, '').toLowerCase()] = scalar[2];
+    else if (item && cur) cur[item[1]] = item[2];
+    else if (line === '}') cur = null;
+    // Нераспознанная строка выпала бы из сверки молча — блок генерируется, значит его правили руками
+    else if (line.trim() && !line.startsWith('#')) throw new Error(`unparsed line in structure block of ${file}: ${line}`);
+  }
+  if (Object.keys(tables).length === 0) throw new Error(`structure block of ${file} has no tables`);
+  return tables;
+}
+{
+  const ps = structureTables('.claude/skills/form-validate/scripts/form-validate.ps1', false);
+  const py = structureTables('.claude/skills/form-validate/scripts/form-validate.py', true);
+  for (const k of new Set([...Object.keys(ps), ...Object.keys(py)])) {
+    if (JSON.stringify(ps[k]) !== JSON.stringify(py[k])) {
+      console.log(`DRIFT  form-validate: таблица структуры ${k} в ps1 и py различается`);
+      drift++;
+    }
+  }
+}
+console.log(drift === 0 ? 'OK — нет дрейфа значений enum-allowlist (meta-* vs meta-compile, cfe-validate vs cf-validate, form-edit/form-validate vs form-compile, структура элементов form-validate ps1 vs py)' : `\n${drift} DRIFT(s) — свести к эталону.`);
 process.exit(drift ? 1 : 0);

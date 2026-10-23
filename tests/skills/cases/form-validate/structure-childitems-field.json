@@ -1,0 +1,13 @@
+{
+  "name": "Структура: вложенные элементы у поля ввода — ошибка",
+  "setup": "fixture:structure-childitems-field",
+  "params": {
+    "formPath": "DataProcessors/Bad/Forms/Форма"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "20. InputField 'ПолеСтрока' cannot have <ChildItems>"
+    ]
+  }
+}

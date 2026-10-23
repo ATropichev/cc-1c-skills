@@ -1,0 +1,15 @@
+{
+  "name": "Структура: неизвестное свойство элемента — предупреждение",
+  "setup": "fixture:structure-unknown-property",
+  "params": {
+    "formPath": "DataProcessors/Bad/Forms/Форма"
+  },
+  "expect": {
+    "stdoutContains": [
+      "20. InputField 'ПолеСтрока': <Foo> is not a property of InputField",
+      "0 errors, 1 warnings"
+    ]
+  },
+  "noSnapshot": "read-only навык на ручной фикстуре — проверяется вывод",
+  "skipPlatformVerify": "ручная фикстура — одна форма без конфигурации; проверяется вывод валидатора"
+}

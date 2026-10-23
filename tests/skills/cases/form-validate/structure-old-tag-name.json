@@ -1,0 +1,15 @@
+{
+  "name": "Структура: опечатка XSD LableDecoration — предупреждение, не ошибка",
+  "setup": "fixture:structure-old-tag-name",
+  "params": {
+    "formPath": "DataProcessors/Bad/Forms/Форма"
+  },
+  "expect": {
+    "stdoutContains": [
+      "18. <LableDecoration> 'Надпись' is an old name",
+      "0 errors, 1 warnings"
+    ]
+  },
+  "noSnapshot": "read-only навык на ручной фикстуре — проверяется вывод",
+  "skipPlatformVerify": "ручная фикстура — одна форма без конфигурации; проверяется вывод валидатора"
+}

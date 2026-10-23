@@ -1,0 +1,14 @@
+{
+  "name": "Структура: элемент без id и кнопка панели таблицы без name и id — ошибки",
+  "setup": "fixture:structure-missing-id",
+  "params": {
+    "formPath": "DataProcessors/Bad/Forms/Форма"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "18. <InputField> 'ПолеСтрока': missing id attribute",
+      "18. <Button>: missing name and id attributes"
+    ]
+  }
+}
