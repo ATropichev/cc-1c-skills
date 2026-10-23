@@ -972,11 +972,13 @@ FORM_ELEMENT_TAG_ALIASES = {
     'LableField': 'LabelField',
 }
 COMPANION_PARENTS = {
-    'ContextMenu': 'CalendarField ChartField CheckBoxField DendrogramField FormattedDocumentField GanttChartField GeographicalSchemaField GraphicalSchemaField HTMLDocumentField InputField LabelDecoration LabelField PDFDocumentField PeriodField PictureDecoration PictureField PlannerField ProgressBarField RadioButtonField SearchControlAddition SearchStringAddition SpreadSheetDocumentField Table TextDocumentField TrackBarField',
+    'ContextMenu': 'CalendarField ChartField CheckBoxField DendrogramField FormattedDocumentField GanttChartField GeographicalSchemaField GraphicalSchemaField HTMLDocumentField InputField LabelDecoration LabelField PDFDocumentField PeriodField PictureDecoration PictureField PlannerField ProgressBarField RadioButtonField SearchControlAddition SearchStringAddition SpreadSheetDocumentField Table TextDocumentField TrackBarField ViewStatusAddition',
     'AutoCommandBar': 'Table',
     'SearchStringAddition': 'Table',
     'SearchControlAddition': 'Table',
     'ViewStatusAddition': 'PDFDocumentField Table',
+    'RowActionsPanel': 'AutoCommandBar Button ButtonGroup CalendarField ChartField CheckBoxField ColumnGroup CommandBar ContextMenu DendrogramField FormattedDocumentField GanttChartField GeographicalSchemaField GraphicalSchemaField HTMLDocumentField InputField LabelDecoration LabelField PDFDocumentField Page Pages PeriodField PictureDecoration PictureField PlannerField Popup ProgressBarField RadioButtonField RowActionsPanel SearchControlAddition SearchStringAddition SelectedItemsActionsPanel SpreadSheetDocumentField Table TextDocumentField TrackBarField UsualGroup ViewStatusAddition',
+    'SelectedItemsActionsPanel': 'AutoCommandBar Button ButtonGroup CalendarField ChartField CheckBoxField ColumnGroup CommandBar ContextMenu DendrogramField FormattedDocumentField GanttChartField GeographicalSchemaField GraphicalSchemaField HTMLDocumentField InputField LabelDecoration LabelField PDFDocumentField Page Pages PeriodField PictureDecoration PictureField PlannerField Popup ProgressBarField RadioButtonField RowActionsPanel SearchControlAddition SearchStringAddition SelectedItemsActionsPanel SpreadSheetDocumentField Table TextDocumentField TrackBarField UsualGroup ViewStatusAddition',
 }
 CONTAINER_TYPES = 'AutoCommandBar ButtonGroup ColumnGroup CommandBar ContextMenu Page Pages Popup RowActionsPanel SearchControlAddition SelectedItemsActionsPanel Table UsualGroup'
 # Контейнер → допустимые члены его ChildItems
@@ -1994,6 +1996,10 @@ def main():
         return next((k for k in table if k.lower() == tag.lower()), None)
 
     companion_tags = list(COMPANION_PARENTS)
+    # Списки таблиц — множества, разобранные один раз
+    companion_parent_sets = {k: set(v.split(' ')) for k, v in COMPANION_PARENTS.items()}
+    property_sets = {k: set(v.split(' ')) for k, v in ELEMENT_PROPERTY_TAGS.items()}
+    placement_sets = {k: set(v.split(' ')) for k, v in CHILD_ITEMS_PLACEMENT.items()}
 
     def is_form_child(c):
         return isinstance(c.tag, str) and etree.QName(c.tag).namespace == F_NS
@@ -2033,6 +2039,9 @@ def main():
                 member_types[m] = FORM_ELEMENT_TAG_ALIASES[tag]
             else:
                 hint = ci_key(FORM_ELEMENT_TAGS, tag)
+                if not hint:
+                    alias_key = ci_key(FORM_ELEMENT_TAG_ALIASES, tag)
+                    hint = FORM_ELEMENT_TAG_ALIASES[alias_key] if alias_key else None
                 if hint:
                     report_error(f"18. {label}: wrong case, use <{hint}>")
                 else:
@@ -2065,7 +2074,7 @@ def main():
                 seen.add(ct)
                 if ct == 'ExtendedTooltip':
                     continue
-                if typ not in COMPANION_PARENTS[ct].split(' '):
+                if typ not in companion_parent_sets[ct]:
                     report_error(f"19. {typ} '{m.get('name', '')}' cannot have <{ct}>")
                     check19_ok = False
         if check19_ok:
@@ -2082,8 +2091,7 @@ def main():
             if m not in member_types:
                 continue
             typ = member_types[m]
-            prop_list = ELEMENT_PROPERTY_TAGS.get(typ)
-            allowed = prop_list.split(' ') if prop_list else None
+            allowed = property_sets.get(typ)
             for c in m:
                 if not is_form_child(c):
                     continue
@@ -2097,7 +2105,7 @@ def main():
                     continue
                 if allowed is None or pt in allowed:
                     continue
-                hint = [a for a in allowed if a.lower() == pt.lower()]
+                hint = sorted(a for a in allowed if a.lower() == pt.lower())
                 if hint:
                     report_warn(f"20. {typ} '{m.get('name', '')}': <{pt}> — wrong case, use <{hint[0]}>")
                 else:
@@ -2118,9 +2126,10 @@ def main():
             if m not in member_types:
                 continue
             owner = m.getparent().getparent()
+            # Владелец — элемент (каноничный тег) или компаньон (ContextMenu, AutoCommandBar) — тег как есть
             owner_type = 'Form' if owner is root else member_types.get(owner, localname(owner))
-            allowed = CHILD_ITEMS_PLACEMENT.get(owner_type)
-            if not allowed or member_types[m] in allowed.split(' '):
+            allowed = placement_sets.get(owner_type)
+            if not allowed or member_types[m] in allowed:
                 continue
             where = 'the form' if owner_type == 'Form' else f"{owner_type} '{owner.get('name', '')}'"
             report_warn(f"21. {member_types[m]} '{m.get('name', '')}' cannot be placed in {where}")

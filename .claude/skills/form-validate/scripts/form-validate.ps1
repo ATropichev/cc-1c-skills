@@ -1981,11 +1981,13 @@ $script:formElementTagAliases = @{
 	'LableField' = 'LabelField'
 }
 $script:companionParents = @{
-	'ContextMenu' = 'CalendarField ChartField CheckBoxField DendrogramField FormattedDocumentField GanttChartField GeographicalSchemaField GraphicalSchemaField HTMLDocumentField InputField LabelDecoration LabelField PDFDocumentField PeriodField PictureDecoration PictureField PlannerField ProgressBarField RadioButtonField SearchControlAddition SearchStringAddition SpreadSheetDocumentField Table TextDocumentField TrackBarField'
+	'ContextMenu' = 'CalendarField ChartField CheckBoxField DendrogramField FormattedDocumentField GanttChartField GeographicalSchemaField GraphicalSchemaField HTMLDocumentField InputField LabelDecoration LabelField PDFDocumentField PeriodField PictureDecoration PictureField PlannerField ProgressBarField RadioButtonField SearchControlAddition SearchStringAddition SpreadSheetDocumentField Table TextDocumentField TrackBarField ViewStatusAddition'
 	'AutoCommandBar' = 'Table'
 	'SearchStringAddition' = 'Table'
 	'SearchControlAddition' = 'Table'
 	'ViewStatusAddition' = 'PDFDocumentField Table'
+	'RowActionsPanel' = 'AutoCommandBar Button ButtonGroup CalendarField ChartField CheckBoxField ColumnGroup CommandBar ContextMenu DendrogramField FormattedDocumentField GanttChartField GeographicalSchemaField GraphicalSchemaField HTMLDocumentField InputField LabelDecoration LabelField PDFDocumentField Page Pages PeriodField PictureDecoration PictureField PlannerField Popup ProgressBarField RadioButtonField RowActionsPanel SearchControlAddition SearchStringAddition SelectedItemsActionsPanel SpreadSheetDocumentField Table TextDocumentField TrackBarField UsualGroup ViewStatusAddition'
+	'SelectedItemsActionsPanel' = 'AutoCommandBar Button ButtonGroup CalendarField ChartField CheckBoxField ColumnGroup CommandBar ContextMenu DendrogramField FormattedDocumentField GanttChartField GeographicalSchemaField GraphicalSchemaField HTMLDocumentField InputField LabelDecoration LabelField PDFDocumentField Page Pages PeriodField PictureDecoration PictureField PlannerField Popup ProgressBarField RadioButtonField RowActionsPanel SearchControlAddition SearchStringAddition SelectedItemsActionsPanel SpreadSheetDocumentField Table TextDocumentField TrackBarField UsualGroup ViewStatusAddition'
 }
 $script:containerTypes = 'AutoCommandBar ButtonGroup ColumnGroup CommandBar ContextMenu Page Pages Popup RowActionsPanel SearchControlAddition SelectedItemsActionsPanel Table UsualGroup'
 # Контейнер → допустимые члены его ChildItems
@@ -2050,6 +2052,15 @@ function Get-ChildItemsMembers {
 	return @($root.SelectNodes("//f:ChildItems/*[not(ancestor::*[local-name()='BaseForm'])]", $nsMgr))
 }
 $script:companionTags = @($script:companionParents.Keys)
+# Списки таблиц — множества с точным регистром, разобранные один раз (ключ ищется только каноничный)
+function ConvertTo-SetTable([hashtable]$table) {
+	$out = @{}
+	foreach ($k in $table.Keys) { $out[$k] = [System.Collections.Generic.HashSet[string]]::new([string[]]($table[$k] -split ' '), [StringComparer]::Ordinal) }
+	return $out
+}
+$companionParentSets = ConvertTo-SetTable $script:companionParents
+$propertySets = ConvertTo-SetTable $script:elementPropertyTags
+$placementSets = ConvertTo-SetTable $script:childItemsPlacement
 
 # --- Check 18: тег элемента формы ---
 # Тег члена ChildItems — из словаря формата (XSD logform) и не новее версии формата формы.
@@ -2083,6 +2094,7 @@ if (-not $stopped) {
 			$memberTypes[$m] = $script:formElementTagAliases[$alias]
 		} else {
 			$hint = @($script:formElementTags.Keys | Where-Object { $_ -ieq $tag })[0]
+			if (-not $hint) { $hint = @($script:formElementTagAliases.Keys | Where-Object { $_ -ieq $tag } | ForEach-Object { $script:formElementTagAliases[$_] })[0] }
 			if ($hint) {
 				Report-Error "18. $label`: wrong case, use <$hint>"
 			} else {
@@ -2114,7 +2126,7 @@ if (-not $stopped) {
 			}
 			$seen[$ct] = $true
 			if ($ct -ceq 'ExtendedTooltip') { continue }
-			if (($script:companionParents[$ct] -split ' ') -cnotcontains $type) {
+			if (-not $companionParentSets[$ct].Contains($type)) {
 				Report-Error "19. $type '$($m.GetAttribute('name'))' cannot have <$ct>"
 				$check19Ok = $false
 			}
@@ -2132,8 +2144,7 @@ if (-not $stopped) {
 		if ($stopped) { break }
 		if (-not $memberTypes.ContainsKey($m)) { continue }
 		$type = $memberTypes[$m]
-		$propList = $script:elementPropertyTags[$type]
-		$allowed = if ($propList) { $propList -split ' ' } else { $null }
+		$allowed = $propertySets[$type]
 		foreach ($c in $m.ChildNodes) {
 			if ($c.NodeType -ne 'Element' -or $c.NamespaceURI -ne 'http://v8.1c.ru/8.3/xcf/logform') { continue }
 			$pt = $c.LocalName
@@ -2145,8 +2156,8 @@ if (-not $stopped) {
 				}
 				continue
 			}
-			if ($null -eq $allowed -or $allowed -ccontains $pt) { continue }
-			$hint = @($allowed | Where-Object { $_ -ieq $pt })
+			if ($null -eq $allowed -or $allowed.Contains($pt)) { continue }
+			$hint = @($allowed | Where-Object { $_ -ieq $pt } | Sort-Object)
 			if ($hint.Count -gt 0) {
 				Report-Warn "20. $type '$($m.GetAttribute('name'))': <$pt> — wrong case, use <$($hint[0])>"
 			} else {
@@ -2168,9 +2179,12 @@ if (-not $stopped) {
 		if ($stopped) { break }
 		if (-not $memberTypes.ContainsKey($m)) { continue }
 		$owner = $m.ParentNode.ParentNode
-		$ownerType = if ($owner -eq $root) { 'Form' } elseif ($memberTypes.ContainsKey($owner)) { $memberTypes[$owner] } else { $owner.LocalName }
-		$allowed = $script:childItemsPlacement[$ownerType]
-		if (-not $allowed -or ($allowed -split ' ') -ccontains $memberTypes[$m]) { continue }
+		# Владелец — элемент (каноничный тег) или компаньон (ContextMenu, AutoCommandBar) — тег как есть,
+		# но только точного регистра: @{} PS регистронезависим, а владелец с неверным тегом уже ошибка 18
+		$ownerType = if ($owner -eq $root) { 'Form' } elseif ($memberTypes.ContainsKey($owner)) { $memberTypes[$owner] }
+			elseif ($script:childItemsPlacement.Keys -ccontains $owner.LocalName) { $owner.LocalName } else { $null }
+		if (-not $ownerType -or -not $placementSets.ContainsKey($ownerType)) { continue }
+		if ($placementSets[$ownerType].Contains($memberTypes[$m])) { continue }
 		$where = if ($ownerType -eq 'Form') { 'the form' } else { "$ownerType '$($owner.GetAttribute('name'))'" }
 		Report-Warn "21. $($memberTypes[$m]) '$($m.GetAttribute('name'))' cannot be placed in $where"
 		$check21Ok = $false

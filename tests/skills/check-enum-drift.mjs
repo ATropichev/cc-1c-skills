@@ -148,6 +148,21 @@ function structureTables(file, isPy) {
       drift++;
     }
   }
+  // Обязательный компаньон (ручная $companionRules проверки 4) обязан быть допустимым (companionParents
+  // проверки 19) — иначе одна форма получит «missing companion» и «cannot have» сразу
+  const text = readFileSync(join(ROOT, '.claude/skills/form-validate/scripts/form-validate.ps1'), 'utf8');
+  const at = text.indexOf('$companionRules = @{');
+  const rules = text.slice(at, text.indexOf('\n}', at));
+  for (const m of rules.matchAll(/"(\w+)"\s*=\s*@\(([^)]*)\)/g)) {
+    for (const comp of m[2].match(/\w+/g) || []) {
+      if (comp === 'ExtendedTooltip') continue;
+      const allowed = (ps.companionparents[comp] || '').split(' ');
+      if (!allowed.includes(m[1])) {
+        console.log(`DRIFT  form-validate: ${m[1]} обязан иметь <${comp}> (проверка 4), но companionParents его не допускает (проверка 19)`);
+        drift++;
+      }
+    }
+  }
 }
 console.log(drift === 0 ? 'OK — нет дрейфа значений enum-allowlist (meta-* vs meta-compile, cfe-validate vs cf-validate, form-edit/form-validate vs form-compile, структура элементов form-validate ps1 vs py)' : `\n${drift} DRIFT(s) — свести к эталону.`);
 process.exit(drift ? 1 : 0);
