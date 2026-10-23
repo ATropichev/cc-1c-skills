@@ -121,11 +121,13 @@ try {
   const src6 = join(outer, 'tools', 'cc');
   cpSync(join(ROOT, 'scripts', 'switch.py'), join(src6, 'scripts', 'switch.py'));
   cpSync(SRC_SKILLS, join(src6, '.claude', 'skills'), { recursive: true });
-  const git = (...a) => spawnSync('git', ['-C', outer, ...a], { encoding: 'utf8' });
+  // autocrlf/safecrlf из глобального конфига могут сорвать add, и у «чужого» репо не будет HEAD
+  const git = (...a) => spawnSync('git', ['-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false', '-C', outer, ...a], { encoding: 'utf8' });
   if (git('init', '-q').status === 0) {
     put(join(outer, 'readme.txt'));
     git('add', 'readme.txt');
     git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', 'init');
+    check(git('rev-parse', 'HEAD').status === 0, 'у чужого репозитория есть HEAD');
   }
   const p6 = join(work, 'p6');
   mkdirSync(p6);
@@ -178,6 +180,20 @@ try {
   check(!readFileSync(join(t8, 'cf-info', 'SKILL.md'), 'utf8').includes('powershell.exe'), 'наш навык переключён');
   const m8 = readManifest(t8);
   check(m8.runtime === 'python' && m8.commit === 'abc123', 'манифест: runtime обновлён, commit сохранён');
+  writeFileSync(join(t8, MANIFEST), '{ broken');
+  check(run(['--runtime', 'powershell', '--project-dir', p8]) === 0, 'битый манифест — переключение проходит');
+  check(readFileSync(join(t8, 'my-skill', 'SKILL.md'), 'utf8') === foreignMd, 'чужой SKILL.md не переписан и при битом манифесте');
+  check((run.last.stderr.match(/не прочитан/g) || []).length === 1, 'предупреждение о манифесте — один раз');
+  check(run(['cursor', '--project-dir', p8]) === 0, 'переустановка чинит манифест');
+
+  // 8a. Свои навыки пользователя в .claude/skills, набор — в .cursor/skills
+  console.log('\n8a. рантайм на месте: свои навыки в .claude, набор в .cursor');
+  const userMd = join(p8, '.claude', 'skills', 'own', 'SKILL.md');
+  put(userMd, foreignMd);
+  check(run(['--runtime', 'python', '--project-dir', p8]) === 0, 'переключение на python');
+  check(readFileSync(userMd, 'utf8') === foreignMd, '.claude/skills пользователя не тронут');
+  check(!readFileSync(join(t8, 'cf-info', 'SKILL.md'), 'utf8').includes('powershell.exe'), '.cursor переключён');
+  rmSync(join(p8, '.claude'), { recursive: true });
 
   // 9. Интерактивное удаление в обычном проекте
   console.log('\n9. интерактивный режим: «Удалить»');
@@ -197,6 +213,22 @@ try {
   const gi10 = readFileSync(join(t10, '.gitignore'));
   check(gi10.subarray(0, cp1251.length).equals(cp1251) && gi10.includes('__pycache__/'), '.gitignore: байты сохранены, строка дописана');
   check(existsSync(join(t10, ourSkills[0], 'SKILL.md')), `${ourSkills[0]} установлен на месте файла`);
+
+  // 11. Каталог с именем нашего навыка, которого прошлая установка не ставила, — предупреждение
+  console.log('\n11. перезапись чужого каталога с именем навыка');
+  const m10 = readManifest(t10);
+  writeFileSync(join(t10, MANIFEST), JSON.stringify({ ...m10, skills: m10.skills.filter(s => s !== ourSkills[1]) }));
+  check(run(['cursor', '--project-dir', p10]) === 0, 'обновление');
+  check(run.last.stderr.includes(`${ourSkills[1]} не из прошлой установки`), 'предупреждение с именем каталога');
+
+  // 12. --undo из копии без .claude/skills: хватает манифеста
+  console.log('\n12. --undo без исходных навыков');
+  const nosrc = join(work, 'nosrc', 'scripts', 'switch.py');
+  cpSync(SWITCH, nosrc);
+  put(join(t10, 'my-skill', 'SKILL.md'));
+  check(run(['--undo', 'cursor', '--project-dir', p10], { script: nosrc }) === 0, 'undo');
+  check(ourSkills.every(s => !existsSync(join(t10, s))), 'навыки из манифеста удалены');
+  check(existsSync(join(t10, 'my-skill', 'SKILL.md')), 'my-skill на месте');
 } finally {
   // Ссылки из сценария 5 снимаем сами: уборка не должна пройти по ним в исходные навыки
   const t5 = join(work, 'p5', '.claude', 'skills');
