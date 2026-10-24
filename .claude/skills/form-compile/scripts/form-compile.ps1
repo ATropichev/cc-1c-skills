@@ -1,4 +1,4 @@
-﻿# form-compile v1.210 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.211 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2760,37 +2760,209 @@ function Emit-SingleType {
 
 # --- 6. Event handler name generator ---
 
-$script:eventSuffixMap = @{
-	"OnChange"             = "ПриИзменении"
-	"StartChoice"          = "НачалоВыбора"
-	"ChoiceProcessing"     = "ОбработкаВыбора"
-	"AutoComplete"         = "АвтоПодбор"
-	"Clearing"             = "Очистка"
-	"Opening"              = "Открытие"
-	"Click"                = "Нажатие"
-	"OnActivateRow"        = "ПриАктивизацииСтроки"
-	"BeforeAddRow"         = "ПередНачаломДобавления"
-	"BeforeDeleteRow"      = "ПередУдалением"
-	"BeforeRowChange"      = "ПередНачаломИзменения"
-	"OnStartEdit"          = "ПриНачалеРедактирования"
-	"OnEditEnd"            = "ПриОкончанииРедактирования"
-	"Selection"            = "ВыборСтроки"
-	"OnCurrentPageChange"  = "ПриСменеСтраницы"
-	"TextEditEnd"          = "ОкончаниеВводаТекста"
-	"URLProcessing"        = "ОбработкаНавигационнойСсылки"
-	"DragStart"            = "НачалоПеретаскивания"
-	"Drag"                 = "Перетаскивание"
-	"DragCheck"            = "ПроверкаПеретаскивания"
-	"Drop"                 = "Помещение"
-	"AfterDeleteRow"       = "ПослеУдаления"
+# --- Каталог событий формы (генерируется) ---
+# Тег элемента («Form» — сама форма) → событие → @(суффикс имени обработчика, директива компиляции,
+# параметры, с какой платформы событие есть ("" — с 8.3.24), только для таблицы с таким источником).
+# Источник — типовые конфигурации (БП, ERP, УНФ, УТ: 28.5 тыс. форм) и замер загрузкой в 8.3.24/8.3.27/8.5.
+# Перегенерировать: python debug/form-handlers/gen_event_catalog.py
+function Get-FormEventCatalog {
+	return @{
+		"CalendarField" = @{
+			"OnActivateDate" = @("ПриАктивизацииДаты", "НаКлиенте", "Элемент", "", "")
+			"OnChange" = @("ПриИзменении", "НаКлиенте", "Элемент", "", "")
+			"OnPeriodOutput" = @("ПриВыводеПериода", "НаКлиенте", "Элемент, ОформлениеПериода", "", "")
+			"Selection" = @("Выбор", "НаКлиенте", "Элемент, ВыбраннаяДата", "", "")
+		}
+		"ChartField" = @{
+			"DetailProcessing" = @("ОбработкаРасшифровки", "НаКлиенте", "Элемент, Расшифровка, СтандартнаяОбработка", "", "")
+			"Selection" = @("Выбор", "НаКлиенте", "Элемент, ЗначениеДиаграммы, СтандартнаяОбработка", "", "")
+		}
+		"CheckBoxField" = @{
+			"OnChange" = @("ПриИзменении", "НаКлиенте", "Элемент", "", "")
+		}
+		"ExtendedTooltip" = @{
+			"Click" = @("Нажатие", "НаКлиенте", "Элемент", "", "")
+			"URLProcessing" = @("ОбработкаНавигационнойСсылки", "НаКлиенте", "Элемент, НавигационнаяСсылкаФорматированнойСтроки, СтандартнаяОбработка", "", "")
+		}
+		"Form" = @{
+			"AfterWrite" = @("ПослеЗаписи", "НаКлиенте", "ПараметрыЗаписи", "", "")
+			"AfterWriteAtServer" = @("ПослеЗаписиНаСервере", "НаСервере", "ТекущийОбъект, ПараметрыЗаписи", "", "")
+			"BeforeClose" = @("ПередЗакрытием", "НаКлиенте", "Отказ, ЗавершениеРаботы, ТекстПредупреждения, СтандартнаяОбработка", "", "")
+			"BeforeLoadDataFromSettingsAtServer" = @("ПередЗагрузкойДанныхИзНастроекНаСервере", "НаСервере", "Настройки", "", "")
+			"BeforeLoadUserSettingsAtServer" = @("ПередЗагрузкойПользовательскихНастроекНаСервере", "НаСервере", "НовыеПользовательскиеНастройкиКД", "", "")
+			"BeforeLoadVariantAtServer" = @("ПередЗагрузкойВариантаНаСервере", "НаСервере", "НовыеНастройкиКД", "", "")
+			"BeforeWrite" = @("ПередЗаписью", "НаКлиенте", "Отказ, ПараметрыЗаписи", "", "")
+			"BeforeWriteAtServer" = @("ПередЗаписьюНаСервере", "НаСервере", "Отказ, ТекущийОбъект, ПараметрыЗаписи", "", "")
+			"ChoiceProcessing" = @("ОбработкаВыбора", "НаКлиенте", "ВыбранноеЗначение, ИсточникВыбора", "", "")
+			"ExternalEvent" = @("ВнешнееСобытие", "НаКлиенте", "Источник, Событие, Данные", "", "")
+			"FillCheckProcessingAtServer" = @("ОбработкаПроверкиЗаполненияНаСервере", "НаСервере", "Отказ, ПроверяемыеРеквизиты", "", "")
+			"NavigationProcessing" = @("ОбработкаПерехода", "НаКлиенте", "ОбъектПерехода, СтандартнаяОбработка", "", "")
+			"NewWriteProcessing" = @("ОбработкаЗаписиНового", "НаКлиенте", "НовыйОбъект, Источник, СтандартнаяОбработка", "", "")
+			"NotificationProcessing" = @("ОбработкаОповещения", "НаКлиенте", "ИмяСобытия, Параметр, Источник", "", "")
+			"OnChangeDisplaySettings" = @("ПриИзмененииПараметровЭкрана", "НаКлиенте", "", "", "")
+			"OnClose" = @("ПриЗакрытии", "НаКлиенте", "ЗавершениеРаботы", "", "")
+			"OnCreateAtServer" = @("ПриСозданииНаСервере", "НаСервере", "Отказ, СтандартнаяОбработка", "", "")
+			"OnLoadDataFromSettingsAtServer" = @("ПриЗагрузкеДанныхИзНастроекНаСервере", "НаСервере", "Настройки", "", "")
+			"OnLoadUserSettingsAtServer" = @("ПриЗагрузкеПользовательскихНастроекНаСервере", "НаСервере", "Настройки, ИспользуютсяСтандартныеНастройки", "", "")
+			"OnLoadVariantAtServer" = @("ПриЗагрузкеВариантаНаСервере", "НаСервере", "Настройки", "", "")
+			"OnMainServerAvailabilityChange" = @("ПриИзмененииДоступностиОсновногоСервера", "НаКлиенте", "СтандартнаяОбработка", "", "")
+			"OnOpen" = @("ПриОткрытии", "НаКлиенте", "Отказ", "", "")
+			"OnReadAtServer" = @("ПриЧтенииНаСервере", "НаСервере", "ТекущийОбъект", "", "")
+			"OnReopen" = @("ПриПовторномОткрытии", "НаКлиенте", "", "", "")
+			"OnSaveDataInSettingsAtServer" = @("ПриСохраненииДанныхВНастройкахНаСервере", "НаСервере", "Настройки", "", "")
+			"OnSaveUserSettingsAtServer" = @("ПриСохраненииПользовательскихНастроекНаСервере", "НаСервере", "Настройки", "", "")
+			"OnSaveVariantAtServer" = @("ПриСохраненииВариантаНаСервере", "НаСервере", "НастройкиКД", "", "")
+			"OnUpdateUserSettingSetAtServer" = @("ПриОбновленииСоставаПользовательскихНастроекНаСервере", "НаСервере", "СтандартнаяОбработка", "", "")
+			"OnWriteAtServer" = @("ПриЗаписиНаСервере", "НаСервере", "Отказ, ТекущийОбъект, ПараметрыЗаписи", "", "")
+			"URLGetProcessing" = @("ОбработкаПолученияНавигационнойСсылки", "НаКлиенте", "Ключ, Представление, НавигационнаяСсылка, СтандартнаяОбработка", "", "")
+			"URLListGetProcessing" = @("ОбработкаПолученияСпискаНавигационныхСсылок", "НаКлиенте", "СписокНавигационыхСсылок, КлючПоУмолчанию", "", "")
+			"URLProcessing" = @("ОбработкаНавигационнойСсылки", "НаКлиенте", "НавигационнаяСсылкаФорматированнойСтроки, СтандартнаяОбработка", "", "")
+		}
+		"FormattedDocumentField" = @{
+			"OnChange" = @("ПриИзменении", "НаКлиенте", "Элемент", "", "")
+		}
+		"GanttChartField" = @{
+			"DetailProcessing" = @("ОбработкаРасшифровки", "НаКлиенте", "Элемент, Расшифровки, СтандартнаяОбработка, Дата", "", "")
+			"OnChange" = @("ПриИзменении", "НаКлиенте", "Элемент", "", "")
+		}
+		"GraphicalSchemaField" = @{
+			"OnActivate" = @("ПриАктивизации", "НаКлиенте", "Элемент", "", "")
+			"Selection" = @("Выбор", "НаКлиенте", "Элемент", "", "")
+		}
+		"HTMLDocumentField" = @{
+			"DocumentComplete" = @("ДокументСформирован", "НаКлиенте", "Элемент", "", "")
+			"OnClick" = @("ПриНажатии", "НаКлиенте", "Элемент, ДанныеСобытия, СтандартнаяОбработка", "", "")
+		}
+		"InputField" = @{
+			"AutoComplete" = @("АвтоПодбор", "НаКлиенте", "Элемент, Текст, ДанныеВыбора, ПараметрыПолученияДанных, Ожидание, СтандартнаяОбработка", "", "")
+			"ChoiceProcessing" = @("ОбработкаВыбора", "НаКлиенте", "Элемент, ВыбранноеЗначение, СтандартнаяОбработка", "", "")
+			"Clearing" = @("Очистка", "НаКлиенте", "Элемент, СтандартнаяОбработка", "", "")
+			"Creating" = @("Создание", "НаКлиенте", "Элемент, СтандартнаяОбработка", "", "")
+			"EditTextChange" = @("ИзменениеТекстаРедактирования", "НаКлиенте", "Элемент, Текст, СтандартнаяОбработка", "", "")
+			"MultipleValueOpening" = @("ОткрытиеМножественногоЗначения", "НаКлиенте", "Элемент, Идентификатор, СтандартнаяОбработка", "", "")
+			"MultipleValueURLProcessing" = @("ОбработкаНавигационнойСсылкиМножественногоЗначения", "НаКлиенте", "Элемент, Идентификатор, НавигационнаяСсылкаФорматированнойСтроки, СтандартнаяОбработка", "", "")
+			"MultipleValuesAdd" = @("", "НаКлиенте", "Элемент, Значения, СтандартнаяОбработка", "", "")
+			"MultipleValuesDelete" = @("УдалениеМножественныхЗначений", "НаКлиенте", "Элемент, Идентификаторы, СтандартнаяОбработка", "", "")
+			"OnChange" = @("ПриИзменении", "НаКлиенте", "Элемент", "", "")
+			"Opening" = @("Открытие", "НаКлиенте", "Элемент, СтандартнаяОбработка", "", "")
+			"StartChoice" = @("НачалоВыбора", "НаКлиенте", "Элемент, ДанныеВыбора, СтандартнаяОбработка", "", "")
+			"StartListChoice" = @("НачалоВыбораИзСписка", "НаКлиенте", "Элемент, СтандартнаяОбработка", "", "")
+			"TextEditEnd" = @("ОкончаниеВводаТекста", "НаКлиенте", "Элемент, Текст, ДанныеВыбора, ПараметрыПолученияДанных, СтандартнаяОбработка", "", "")
+			"Tuning" = @("Регулирование", "НаКлиенте", "Элемент, Направление, СтандартнаяОбработка", "", "")
+		}
+		"LabelDecoration" = @{
+			"Click" = @("Нажатие", "НаКлиенте", "Элемент", "", "")
+			"URLProcessing" = @("ОбработкаНавигационнойСсылки", "НаКлиенте", "Элемент, НавигационнаяСсылкаФорматированнойСтроки, СтандартнаяОбработка", "", "")
+		}
+		"LabelField" = @{
+			"Click" = @("Нажатие", "НаКлиенте", "Элемент, СтандартнаяОбработка", "", "")
+			"OnChange" = @("ПриИзменении", "НаКлиенте", "Элемент", "", "")
+			"URLProcessing" = @("ОбработкаНавигационнойСсылки", "НаКлиенте", "Элемент, НавигационнаяСсылкаФорматированнойСтроки, СтандартнаяОбработка", "", "")
+		}
+		"Pages" = @{
+			"OnCurrentPageChange" = @("ПриСменеСтраницы", "НаКлиенте", "Элемент, ТекущаяСтраница", "", "")
+		}
+		"PictureDecoration" = @{
+			"Click" = @("Нажатие", "НаКлиенте", "Элемент", "", "")
+			"Drag" = @("Перетаскивание", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, СтандартнаяОбработка", "", "")
+			"DragCheck" = @("ПроверкаПеретаскивания", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, СтандартнаяОбработка", "", "")
+		}
+		"PictureField" = @{
+			"Click" = @("Нажатие", "НаКлиенте", "Элемент, СтандартнаяОбработка", "", "")
+			"Drag" = @("Перетаскивание", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, СтандартнаяОбработка", "", "")
+			"DragCheck" = @("ПроверкаПеретаскивания", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, СтандартнаяОбработка", "", "")
+			"OnChange" = @("", "НаКлиенте", "Элемент", "", "")
+		}
+		"PlannerField" = @{
+			"BeforeCreate" = @("ПередСозданием", "НаКлиенте", "Элемент, Начало, Конец, ЗначенияИзмерений, Текст, СтандартнаяОбработка", "", "")
+			"BeforeDelete" = @("ПередУдалением", "НаКлиенте", "Элемент, Отказ", "", "")
+			"BeforeStartEdit" = @("ПередНачаломРедактирования", "НаКлиенте", "Элемент, НовыйЭлемент, СтандартнаяОбработка", "", "")
+			"BeforeStartQuickEdit" = @("ПередНачаломБыстрогоРедактирования", "НаКлиенте", "Элемент, СтандартнаяОбработка", "", "")
+			"CommandGenerateProcessing" = @("ОбработкаФормированияКоманд", "НаКлиенте", "Элемент, ПараметрыКоманд, Команды, КомандаПоУмолчанию", "", "")
+			"Drag" = @("Перетаскивание", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, СтандартнаяОбработка, Дата, Значения", "", "")
+			"DragCheck" = @("ПроверкаПеретаскивания", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, СтандартнаяОбработка, Дата, Значения", "", "")
+			"OnActivate" = @("ПриАктивизации", "НаКлиенте", "Элемент", "", "")
+			"OnCurrentRepresentationPeriodChange" = @("ПриСменеТекущегоПериодаОтображения", "НаКлиенте", "Элемент, ТекущиеПериодыОтображения, СтандартнаяОбработка", "", "")
+			"OnEditEnd" = @("ПриОкончанииРедактирования", "НаКлиенте", "Элемент, НовыйЭлемент, ОтменаРедактирования", "", "")
+			"Selection" = @("Выбор", "НаКлиенте", "Элемент, СтандартнаяОбработка", "", "")
+		}
+		"RadioButtonField" = @{
+			"OnChange" = @("ПриИзменении", "НаКлиенте", "Элемент", "", "")
+		}
+		"SpreadSheetDocumentField" = @{
+			"AdditionalDetailProcessing" = @("ОбработкаДополнительнойРасшифровки", "НаКлиенте", "Элемент, Расшифровка, СтандартнаяОбработка", "", "")
+			"BeforePrint" = @("", "НаКлиенте", "Элемент, ДиалогПечати, Отказ", "", "")
+			"BeforeWrite" = @("ПередЗаписью", "НаКлиенте", "Элемент, Копирование, Отказ", "", "")
+			"DetailProcessing" = @("ОбработкаРасшифровки", "НаКлиенте", "Элемент, Расшифровка, СтандартнаяОбработка", "", "")
+			"Drag" = @("Перетаскивание", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, СтандартнаяОбработка, Область", "", "")
+			"DragCheck" = @("ПроверкаПеретаскивания", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, СтандартнаяОбработка, Область", "", "")
+			"OnActivate" = @("ПриАктивизации", "НаКлиенте", "Элемент", "", "")
+			"OnChange" = @("ПриИзменении", "НаКлиенте", "Элемент", "", "")
+			"OnChangeAreaContent" = @("ПриИзмененииСодержимогоОбласти", "НаКлиенте", "Элемент, Область", "", "")
+			"Selection" = @("Выбор", "НаКлиенте", "Элемент, Область, СтандартнаяОбработка", "", "")
+			"URLProcessing" = @("ОбработкаНавигационнойСсылки", "НаКлиенте", "Элемент, НавигационнаяСсылкаФорматированнойСтроки, СтандартнаяОбработка", "", "")
+		}
+		"Table" = @{
+			"AfterDeleteRow" = @("ПослеУдаления", "НаКлиенте", "Элемент", "", "")
+			"BeforeAddRow" = @("ПередНачаломДобавления", "НаКлиенте", "Элемент, Отказ, Копирование, Родитель, Группа, Параметр", "", "")
+			"BeforeCollapse" = @("ПередСворачиванием", "НаКлиенте", "Элемент, Строка, Отказ", "", "")
+			"BeforeDeleteRow" = @("ПередУдалением", "НаКлиенте", "Элемент, Отказ", "", "")
+			"BeforeEditEnd" = @("ПередОкончаниемРедактирования", "НаКлиенте", "Элемент, НоваяСтрока, ОтменаРедактирования, Отказ", "", "")
+			"BeforeExpand" = @("ПередРазворачиванием", "НаКлиенте", "Элемент, Строка, Отказ", "", "")
+			"BeforeLoadUserSettingsAtServer" = @("ПередЗагрузкойПользовательскихНастроекНаСервере", "НаСервере", "Элемент, Настройки", "", "DynamicList")
+			"BeforeRowChange" = @("ПередНачаломИзменения", "НаКлиенте", "Элемент, Отказ", "", "")
+			"ChoiceProcessing" = @("ОбработкаВыбора", "НаКлиенте", "Элемент, ВыбранноеЗначение, СтандартнаяОбработка", "", "")
+			"Drag" = @("Перетаскивание", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, СтандартнаяОбработка, Строка, Поле", "", "")
+			"DragCheck" = @("ПроверкаПеретаскивания", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, СтандартнаяОбработка, Строка, Поле", "", "")
+			"DragEnd" = @("ОкончаниеПеретаскивания", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, СтандартнаяОбработка", "", "")
+			"DragStart" = @("НачалоПеретаскивания", "НаКлиенте", "Элемент, ПараметрыПеретаскивания, Выполнение", "", "")
+			"NewWriteProcessing" = @("ОбработкаЗаписиНового", "НаКлиенте", "НовыйОбъект, Источник, СтандартнаяОбработка", "", "")
+			"OnActivateCell" = @("ПриАктивизацииЯчейки", "НаКлиенте", "Элемент", "", "")
+			"OnActivateField" = @("ПриАктивизацииПоля", "НаКлиенте", "Элемент", "", "")
+			"OnActivateRow" = @("ПриАктивизацииСтроки", "НаКлиенте", "Элемент", "", "")
+			"OnChange" = @("ПриИзменении", "НаКлиенте", "Элемент", "", "")
+			"OnCurrentParentChange" = @("ПриСменеТекущегоРодителя", "НаКлиенте", "Элемент", "", "")
+			"OnEditEnd" = @("ПриОкончанииРедактирования", "НаКлиенте", "Элемент, НоваяСтрока, ОтменаРедактирования", "", "")
+			"OnGetDataAtServer" = @("ПриПолученииДанныхНаСервере", "НаСервереБезКонтекста", "ИмяЭлемента, Настройки, Строки", "", "DynamicList")
+			"OnHover" = @("ПриНаведении", "НаКлиенте", "Элемент, Строка, Поле", "8.5", "")
+			"OnLoadUserSettingsAtServer" = @("ПриЗагрузкеПользовательскихНастроекНаСервере", "НаСервере", "Элемент, Настройки", "", "DynamicList")
+			"OnSaveUserSettingsAtServer" = @("ПриСохраненииПользовательскихНастроекНаСервере", "НаСервере", "Элемент, Настройки", "", "DynamicList")
+			"OnSelectedRowsSetChange" = @("ПриИзмененииСоставаВыделенныхСтрок", "НаКлиенте", "Элемент", "8.5", "")
+			"OnStartEdit" = @("ПриНачалеРедактирования", "НаКлиенте", "Элемент, НоваяСтрока, Копирование", "", "")
+			"OnUpdateUserSettingSetAtServer" = @("ПриОбновленииСоставаПользовательскихНастроекНаСервере", "НаСервере", "СтандартнаяОбработка", "", "DynamicList")
+			"RefreshRequestProcessing" = @("ОбработкаЗапросаОбновления", "НаКлиенте", "", "", "")
+			"Selection" = @("Выбор", "НаКлиенте", "Элемент, ВыбраннаяСтрока, Поле, СтандартнаяОбработка", "", "")
+			"URLGetProcessing" = @("ОбработкаПолученияНавигационнойСсылки", "НаКлиенте", "Элемент, Ключ, Представление, НавигационнаяСсылка, СтандартнаяОбработка", "", "DynamicList")
+			"ValueChoice" = @("ВыборЗначения", "НаКлиенте", "Элемент, Значение, СтандартнаяОбработка", "", "")
+		}
+		"TextDocumentField" = @{
+			"OnChange" = @("ПриИзменении", "НаКлиенте", "Элемент", "", "")
+		}
+		"TrackBarField" = @{
+			"OnChange" = @("ПриИзменении", "НаКлиенте", "Элемент", "", "")
+		}
+		"UsualGroup" = @{
+			"Click" = @("Нажатие", "НаКлиенте", "Элемент", "8.5", "")
+		}
+	}
+}
+# --- конец каталога событий формы ---
+$script:eventCatalog = Get-FormEventCatalog
+
+# Запись каталога для события тега (имя события — с учётом регистра: платформа иного не примет).
+function Get-EventEntry([string]$xmlTag, [string]$eventName) {
+	if (-not $xmlTag -or -not $script:eventCatalog.ContainsKey($xmlTag)) { return $null }
+	$evs = $script:eventCatalog[$xmlTag]
+	foreach ($k in $evs.Keys) { if ($k -ceq $eventName) { return ,$evs[$k] } }
+	return $null
 }
 
+# Имя обработчика по конвенции типовых: <Элемент><Суффикс>, у события формы — сам суффикс.
+# Событие не из каталога — <Элемент><Событие>.
 function Get-HandlerName {
-	param([string]$elementName, [string]$eventName)
-	$suffix = $script:eventSuffixMap[$eventName]
-	if ($suffix) {
-		return "$elementName$suffix"
-	}
+	param([string]$elementName, [string]$eventName, [string]$xmlTag)
+	$entry = Get-EventEntry $xmlTag $eventName
+	if ($entry -and $entry[0]) { return "$elementName$($entry[0])" }
 	return "$elementName$eventName"
 }
 
@@ -2802,30 +2974,11 @@ function Get-ElementName {
 	return "$($el.$typeKey)"
 }
 
-$script:knownEvents = @{
-	"input"     = @("OnChange","StartChoice","ChoiceProcessing","AutoComplete","TextEditEnd","Clearing","Creating","EditTextChange")
-	"check"     = @("OnChange")
-	"radio"     = @("OnChange")
-	"label"     = @("Click","URLProcessing")
-	"labelField"= @("OnChange","StartChoice","ChoiceProcessing","Click","URLProcessing","Clearing")
-	"table"     = @("Selection","BeforeAddRow","AfterDeleteRow","BeforeDeleteRow","OnActivateRow","OnEditEnd","OnStartEdit","BeforeRowChange","BeforeEditEnd","ValueChoice","OnActivateCell","OnActivateField","Drag","DragStart","DragCheck","DragEnd","OnGetDataAtServer","BeforeLoadUserSettingsAtServer","OnUpdateUserSettingSetAtServer","OnChange")
-	"pages"     = @("OnCurrentPageChange")
-	"page"      = @("OnCurrentPageChange")
-	"button"    = @("Click")
-	"picField"  = @("OnChange","StartChoice","ChoiceProcessing","Click","Clearing")
-	"calendar"  = @("OnChange","OnActivate")
-	"picture"   = @("Click")
-	"cmdBar"    = @()
-	"popup"     = @()
-	"group"     = @()
-}
-$script:knownFormEvents = @("OnCreateAtServer","OnOpen","BeforeClose","OnClose","NotificationProcessing","ChoiceProcessing","OnReadAtServer","AfterWriteAtServer","BeforeWriteAtServer","AfterWrite","BeforeWrite","OnWriteAtServer","FillCheckProcessingAtServer","OnLoadDataFromSettingsAtServer","BeforeLoadDataFromSettingsAtServer","OnSaveDataInSettingsAtServer","ExternalEvent","OnReopen","Opening")
-
 # Собрать упорядоченный список событий элемента (имя, обработчик) из DSL.
 # Основной формат: $el.events = { Событие: ИмяОбработчика } (null/"" → авто-имя по конвенции).
 # Legacy (принимается ради совместимости): $el.on (массив) + $el.handlers (переопределение имён).
 function Get-EventPairs {
-	param($el, [string]$elementName)
+	param($el, [string]$elementName, [string]$xmlTag)
 	$pairs = New-Object System.Collections.ArrayList
 	if ($el.events) {
 		foreach ($p in $el.events.PSObject.Properties) {
@@ -2835,7 +2988,7 @@ function Get-EventPairs {
 			foreach ($v in $vals) {
 				$h = ""; $ct = ""
 				if ($v -is [System.Management.Automation.PSCustomObject]) { $h = "$($v.handler)"; $ct = Normalize-CallType "$($v.callType)" $elementName $p.Name } else { $h = "$v" }
-				if ([string]::IsNullOrEmpty($h)) { $h = Get-HandlerName -elementName $elementName -eventName $p.Name }
+				if ([string]::IsNullOrEmpty($h)) { $h = Get-HandlerName -elementName $elementName -eventName $p.Name -xmlTag $xmlTag }
 				[void]$pairs.Add([pscustomobject]@{ name = $p.Name; handler = $h; callType = $ct })
 			}
 		}
@@ -2846,7 +2999,7 @@ function Get-EventPairs {
 			} else {
 				$evtName = "$evt"; $h = ""; $ct = ""
 			}
-			if (-not $h) { $h = if ($el.handlers -and $el.handlers.$evtName) { "$($el.handlers.$evtName)" } else { Get-HandlerName -elementName $elementName -eventName $evtName } }
+			if (-not $h) { $h = if ($el.handlers -and $el.handlers.$evtName) { "$($el.handlers.$evtName)" } else { Get-HandlerName -elementName $elementName -eventName $evtName -xmlTag $xmlTag } }
 			[void]$pairs.Add([pscustomobject]@{ name = $evtName; handler = $h; callType = $ct })
 		}
 	}
@@ -2861,34 +3014,64 @@ function Normalize-CallType([string]$raw, [string]$elementName, [string]$eventNa
 	exit 1
 }
 
-# Проверить, подключено ли событие к элементу (в любом из форматов).
-function Test-ElementEvent {
-	param($el, [string]$eventName)
-	if ($el.events) {
-		foreach ($p in $el.events.PSObject.Properties) { if ($p.Name -eq $eventName) { return $true } }
-	}
-	foreach ($evt in @($el.on)) {
-		$n = if ($evt -is [System.Management.Automation.PSCustomObject]) { "$($evt.event)" } else { "$evt" }
-		if ($n -eq $eventName) { return $true }
-	}
-	return $false
-}
-
-function Emit-Events {
-	param($el, [string]$elementName, [string]$indent, [string]$typeKey)
-
-	$pairs = Get-EventPairs -el $el -elementName $elementName
-	if ($pairs.Count -eq 0) { return }
-
-	# Validate event names
-	if ($typeKey -and $script:knownEvents.ContainsKey($typeKey)) {
-		$allowed = $script:knownEvents[$typeKey]
-		foreach ($pr in $pairs) {
-			if ($allowed.Count -gt 0 -and $allowed -notcontains "$($pr.name)") {
-				Write-Host "[WARN] Unknown event '$($pr.name)' for $typeKey '$elementName'. Known: $($allowed -join ', ')"
-			}
+# Сверка событий с каталогом. Событие, которого у элемента нет, платформа при загрузке отбрасывает
+# (с записью в лог) — предупреждаем, но пишем: каталог собран по типовым и редкое событие может в нём отсутствовать.
+# $source — тип реквизита, к которому привязана таблица ("" — неизвестен, источник не сверяется).
+function Test-EventPairs {
+	param($pairs, [string]$xmlTag, [string]$elementName, [string]$source = '')
+	$what = if ($xmlTag -eq 'Form') { 'the form' } else { "$xmlTag '$elementName'" }
+	$evs = $script:eventCatalog[$xmlTag]
+	foreach ($pr in $pairs) {
+		$ev = "$($pr.name)"
+		if (-not $evs) {
+			Write-Host "[WARN] $what has no events in standard configurations — the platform may drop '$ev' on load"
+			continue
+		}
+		$entry = Get-EventEntry $xmlTag $ev
+		if (-not $entry) {
+			$known = [string[]]@($evs.Keys); [Array]::Sort($known, [StringComparer]::Ordinal)
+			Write-Host "[WARN] Unknown event '$ev' for $what — the platform may drop it on load. Known: $($known -join ', ')"
+			continue
+		}
+		$since = "$($entry[3])"
+		if ($since -and (Get-FormatRank $script:formatVersion) -lt $script:platformFormatRank[$since]) {
+			Write-Host "[WARN] Event '$ev' of $what exists since platform $since — earlier platforms drop it on load"
+		}
+		$only = "$($entry[4])"
+		if ($only -and $source -and $source -ne $only) {
+			Write-Host "[WARN] Event '$ev' of $what exists only for a table bound to $only (bound to $source) — the platform drops it on load"
 		}
 	}
+}
+
+# Тип реквизита, к которому привязана таблица ("" — не определить: пути нет или реквизит не из DSL).
+function Get-TableSource($el) {
+	if ($el.PSObject.Properties["_dynList"] -and $el._dynList) { return 'DynamicList' }
+	$root = ("$($el.path)" -split '\.')[0]
+	if (-not $root) { return '' }
+	foreach ($a in @($def.attributes)) { if ("$($a.name)" -eq $root) { return "$($a.type)" } }
+	return ''
+}
+
+# У элемента этого вида событий нет: заданные events/on не пишутся — предупредить, а не потерять молча.
+function Warn-EventsIgnored($el, [string]$xmlTag, [string]$elementName) {
+	$names = @()
+	if ($el.events) { $names += @($el.events.PSObject.Properties | ForEach-Object { $_.Name }) }
+	foreach ($evt in @($el.on)) { if ($null -ne $evt) { $names += if ($evt -is [System.Management.Automation.PSCustomObject]) { "$($evt.event)" } else { "$evt" } } }
+	if ($names.Count -gt 0) {
+		Write-Host "[WARN] $xmlTag '$elementName' has no events — ignored: $($names -join ', ')"
+	}
+}
+
+# Первая версия формата выгрузки платформы, на которой появилось событие каталога.
+$script:platformFormatRank = @{ "8.3.25" = 218; "8.3.26" = 219; "8.3.27" = 220; "8.5" = 221 }
+
+function Emit-Events {
+	param($el, [string]$elementName, [string]$indent, [string]$xmlTag, [string]$source = '')
+
+	$pairs = Get-EventPairs -el $el -elementName $elementName -xmlTag $xmlTag
+	if ($pairs.Count -eq 0) { return }
+	Test-EventPairs -pairs $pairs -xmlTag $xmlTag -elementName $elementName -source $source
 
 	X "$indent<Events>"
 	foreach ($pr in $pairs) {
@@ -2958,7 +3141,7 @@ function Emit-Companion {
 		# ToolTip компаньона (подсказка самой расширенной подсказки) — после Title (порядок схемы LabelDecoration)
 		if ($content.tooltip) { Emit-MLText -tag "ToolTip" -text $content.tooltip -indent $inner }
 		# События компаньона (ExtendedTooltip = LabelDecoration: напр. URLProcessing у hyperlink-подсказки)
-		Emit-Events -el $content -elementName $name -indent $inner -typeKey 'label'
+		Emit-Events -el $content -elementName $name -indent $inner -xmlTag 'ExtendedTooltip'
 	} else {
 		Emit-CompanionTitle -content $content -indent $inner
 	}
@@ -4009,7 +4192,7 @@ $script:childTagOrder = @{
 	'Table' = 'Representation Visible UserVisible TitleLocation CommandBarLocation Autofill Enabled TitleHeight ReadOnly SkipOnInput DefaultItem ChangeRowSet ChangeRowOrder Width AutoMaxWidth MaxWidth Height AutoMaxHeight MaxHeight HeightInTableRows HeightControlVariant AutoMaxRowsCount MaxRowsCount ChoiceMode MultipleChoice RowInputMode SelectionMode RowSelectionMode Header FooterHeight HeaderHeight Footer HorizontalScrollBar VerticalScrollBar HorizontalLines VerticalLines UseAlternationRowColor AutoInsertNewRow AutoAddIncomplete AutoMarkIncomplete SearchOnInput InitialListView InitialTreeView HorizontalStretch Output VerticalStretch EnableStartDrag EnableDrag FileDragMode DataPath Font RowPictureDataPath RowsPicture BackColor BorderColor TextColor Title BehaviorOnHorizontalCompression GroupVerticalAlign Shortcut TitleTextColor TitleFont CommandSet ToolTip ToolTipRepresentation SearchStringLocation ViewStatusLocation SearchControlLocation GroupHorizontalAlign CurrentRowUse RefreshRequest AutoRefresh AutoRefreshPeriod Period ChoiceFoldersAndItems RestoreCurrentRow RowFilter TopLevelParent ShowRoot AllowRootChoice UpdateOnDataChange UserSettingsGroup AllowGettingCurrentRowURL ViewMode SettingsNamedItemDetailedRepresentation ContextMenu AutoCommandBar ExtendedTooltip SearchStringAddition ViewStatusAddition SearchControlAddition Events ChildItems'
 	'TextDocumentField' = 'DataPath DefaultItem ReadOnly Title TitleFont TitleLocation EditMode ToolTip Width AutoMaxWidth Font MaxWidth Height AutoMaxHeight ContextMenu ExtendedTooltip Events'
 	'TrackBarField' = 'DataPath Title TitleLocation HorizontalAlign ToolTip ToolTipRepresentation Width AutoMaxWidth HorizontalStretch MaxWidth Height AutoMaxHeight MinValue MarkingAppearance MaxValue LargeStep Step MarkingStep ContextMenu ExtendedTooltip Events'
-	'UsualGroup' = 'UserVisible Visible Enabled ReadOnly EnableContentChange Title TitleTextColor TitleFont ToolTip ToolTipRepresentation Shortcut Width Height HorizontalStretch VerticalStretch GroupHorizontalAlign GroupVerticalAlign Group ChildrenAlign HorizontalSpacing VerticalSpacing HorizontalAlign VerticalAlign Behavior CollapsedRepresentationTitle Collapsed ControlRepresentation Representation CurrentRowUse Format ShowLeftMargin United ChildItemsWidth ShowTitle BackColor ThroughAlign TitleDataPath ExtendedTooltip ChildItems'
+	'UsualGroup' = 'UserVisible Visible Enabled ReadOnly EnableContentChange Title TitleTextColor TitleFont ToolTip ToolTipRepresentation Shortcut Width Height HorizontalStretch VerticalStretch GroupHorizontalAlign GroupVerticalAlign Group ChildrenAlign HorizontalSpacing VerticalSpacing HorizontalAlign VerticalAlign Behavior CollapsedRepresentationTitle Collapsed ControlRepresentation Representation CurrentRowUse Format ShowLeftMargin United ChildItemsWidth ShowTitle BackColor ThroughAlign TitleDataPath ExtendedTooltip Events ChildItems'
 }
 $script:childRank = $null
 
@@ -5067,6 +5250,7 @@ function Emit-Group {
 
 	# Companion: ExtendedTooltip
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "UsualGroup"
 
 	# Children
 	if ($el.children -and $el.children.Count -gt 0) {
@@ -5085,6 +5269,7 @@ function Emit-ColumnGroup {
 
 	X "$indent<ColumnGroup name=`"$name`" id=`"$id`"$(DI-Attr $el)>"
 	$inner = "$indent`t"
+	Warn-EventsIgnored $el "ColumnGroup" $name
 
 	Emit-Title -el $el -name $name -indent $inner
 
@@ -5208,7 +5393,7 @@ function Emit-Input {
 	Emit-CompanionPanel -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner -panel $el.contextMenu
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "input"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "InputField"
 
 	X "$indent</InputField>"
 }
@@ -5254,7 +5439,7 @@ function Emit-Check {
 	Emit-CompanionPanel -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner -panel $el.contextMenu
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "check"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "CheckBoxField"
 
 	X "$indent</CheckBoxField>"
 }
@@ -5684,7 +5869,7 @@ function Emit-Radio {
 	Emit-CompanionPanel -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner -panel $el.contextMenu
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "radio"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "RadioButtonField"
 
 	X "$indent</RadioButtonField>"
 }
@@ -5726,7 +5911,7 @@ function Emit-Label {
 	Emit-CompanionPanel -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner -panel $el.contextMenu
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "label"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "LabelDecoration"
 
 	X "$indent</LabelDecoration>"
 }
@@ -5767,7 +5952,7 @@ function Emit-LabelField {
 	Emit-CompanionPanel -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner -panel $el.contextMenu
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "labelField"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "LabelField"
 
 	X "$indent</LabelField>"
 }
@@ -5905,7 +6090,7 @@ function Emit-Table {
 		X "$inner</ChildItems>"
 	}
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "table"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "Table" -source (Get-TableSource $el)
 
 	X "$indent</Table>"
 }
@@ -5933,7 +6118,7 @@ function Emit-Pages {
 	# Companion
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "pages"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "Pages"
 
 	# Children (pages)
 	if ($el.children -and $el.children.Count -gt 0) {
@@ -5952,6 +6137,7 @@ function Emit-Page {
 
 	X "$indent<Page name=`"$name`" id=`"$id`"$(DI-Attr $el)>"
 	$inner = "$indent`t"
+	Warn-EventsIgnored $el "Page" $name
 
 	Emit-Title -el $el -name $name -indent $inner -auto
 	Emit-CommonFlags -el $el -indent $inner
@@ -6102,7 +6288,7 @@ function Emit-Button {
 	# Companion
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "button"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "Button"
 
 	X "$indent</Button>"
 }
@@ -6143,7 +6329,7 @@ function Emit-PictureDecoration {
 	Emit-CompanionPanel -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner -panel $el.contextMenu
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "picture"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "PictureDecoration"
 
 	X "$indent</PictureDecoration>"
 }
@@ -6185,7 +6371,7 @@ function Emit-PictureField {
 	Emit-CompanionPanel -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner -panel $el.contextMenu
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "picField"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "PictureField"
 
 	X "$indent</PictureField>"
 }
@@ -6222,7 +6408,7 @@ function Emit-Calendar {
 	Emit-CompanionPanel -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner -panel $el.contextMenu
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "calendar"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "CalendarField"
 
 	X "$indent</CalendarField>"
 }
@@ -6261,7 +6447,7 @@ function Emit-SimpleField {
 	Emit-CompanionPanel -tag "ContextMenu" -name "${name}КонтекстноеМеню" -indent $inner -panel $el.contextMenu
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey $typeKey
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag $xmlTag
 
 	X "$indent</$xmlTag>"
 }
@@ -6282,7 +6468,7 @@ function Emit-GanttChart {
 	Emit-Companion -tag "ExtendedTooltip" -name "${name}РасширеннаяПодсказка" -indent $inner -content $el.extendedTooltip
 	# Вложенная таблица диаграммы Ганта (стандартный Table — переиспользуем Emit-Element)
 	if ($el.ganttTable) { Emit-Element -el $el.ganttTable -indent $inner }
-	Emit-Events -el $el -elementName $name -indent $inner -typeKey "ganttChart"
+	Emit-Events -el $el -elementName $name -indent $inner -xmlTag "GanttChartField"
 	X "$indent</GanttChartField>"
 }
 
@@ -6291,6 +6477,7 @@ function Emit-CommandBar {
 
 	X "$indent<CommandBar name=`"$name`" id=`"$id`"$(DI-Attr $el)>"
 	$inner = "$indent`t"
+	Warn-EventsIgnored $el "CommandBar" $name
 
 	Emit-Title -el $el -name $name -indent $inner
 
@@ -6325,6 +6512,7 @@ function Emit-ButtonGroup {
 
 	X "$indent<ButtonGroup name=`"$name`" id=`"$id`"$(DI-Attr $el)>"
 	$inner = "$indent`t"
+	Warn-EventsIgnored $el "ButtonGroup" $name
 
 	Emit-Title -el $el -name $name -indent $inner
 
@@ -6357,6 +6545,7 @@ function Emit-Popup {
 
 	X "$indent<Popup name=`"$name`" id=`"$id`"$(DI-Attr $el)>"
 	$inner = "$indent`t"
+	Warn-EventsIgnored $el "Popup" $name
 
 	Emit-Title -el $el -name $name -indent $inner -auto
 	Emit-CommonFlags -el $el -indent $inner
@@ -7354,13 +7543,6 @@ function Get-FormRootRank([string]$tag) {
 	return $i
 }
 
-# Незнакомое событие формы — предупреждение (опечатка в имени события не даёт ошибки платформы).
-function Warn-UnknownFormEvent([string]$name) {
-	if ($script:knownFormEvents -notcontains $name) {
-		Write-Host "[WARN] Unknown form event '$name'. Known: $($script:knownFormEvents -join ', ')"
-	}
-}
-
 function Emit-Properties {
 	param($props, [string]$indent)
 
@@ -7746,12 +7928,21 @@ if ($acbHasInner) {
 	X "`t<AutoCommandBar name=`"$acbName`" id=`"-1`"$acbDIAttr/>"
 }
 
-# 12e. Events
+# 12e. Events — значения как у элементов; null — имя по конвенции (ПриСозданииНаСервере)
 if ($def.events) {
-	foreach ($p in $def.events.PSObject.Properties) { Warn-UnknownFormEvent $p.Name }
-	X "`t<Events>"
 	foreach ($p in $def.events.PSObject.Properties) {
-		X "`t`t<Event name=`"$($p.Name)`">$($p.Value)</Event>"
+		if (Get-EventEntry 'Form' $p.Name) { continue }
+		foreach ($v in @($p.Value)) {
+			$h = if ($v -is [System.Management.Automation.PSCustomObject]) { "$($v.handler)" } else { "$v" }
+			if (-not $h) { Write-Error "Form event '$($p.Name)': specify the handler name — there is no naming convention for this event"; exit 1 }
+		}
+	}
+	$pairs = Get-EventPairs -el $def -elementName '' -xmlTag 'Form'
+	Test-EventPairs -pairs $pairs -xmlTag 'Form' -elementName ''
+	X "`t<Events>"
+	foreach ($pr in $pairs) {
+		$ctAttr = if ($pr.callType) { " callType=`"$($pr.callType)`"" } else { "" }
+		X "`t`t<Event name=`"$($pr.name)`"$ctAttr>$($pr.handler)</Event>"
 	}
 	X "`t</Events>"
 }

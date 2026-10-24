@@ -91,23 +91,27 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/form-compile.ps1" -
 | `width` / `height` | Размер |
 | `horizontalStretch` / `verticalStretch` | Растягивать |
 | `autoMaxWidth: false` | Снять предел ширины (поле тянется на всю доступную ширину) |
-| `events` | Обработчики: `{ "OnChange": "ИмяОбработчика" }`; `null` вместо имени — имя по шаблону `<Элемент><Событие>` |
+| `events` | Обработчики: `{ "OnChange": "ИмяОбработчика" }` |
 
 ### События
 
 Имена регистрозависимы.
 
-**Форма:** `OnCreateAtServer`, `OnOpen`, `BeforeClose`, `OnClose`, `NotificationProcessing`, `ChoiceProcessing`, `OnReadAtServer`, `BeforeWriteAtServer`, `OnWriteAtServer`, `AfterWriteAtServer`, `BeforeWrite`, `AfterWrite`, `FillCheckProcessingAtServer`, `BeforeLoadDataFromSettingsAtServer`, `OnLoadDataFromSettingsAtServer`, `ExternalEvent`, `Opening`
+**Форма:** `OnCreateAtServer`, `OnOpen`, `BeforeClose`, `OnClose`, `NotificationProcessing`, `ChoiceProcessing`, `OnReadAtServer`, `BeforeWriteAtServer`, `OnWriteAtServer`, `AfterWriteAtServer`, `BeforeWrite`, `AfterWrite`, `FillCheckProcessingAtServer`, `BeforeLoadDataFromSettingsAtServer`, `OnLoadDataFromSettingsAtServer`, `OnSaveDataInSettingsAtServer`, `URLProcessing`, `ExternalEvent`, `OnReopen`
 
-**input:** `OnChange`, `StartChoice`, `ChoiceProcessing`, `AutoComplete`, `TextEditEnd`, `Clearing`, `Creating`, `EditTextChange`
-**picField:** `OnChange`, `StartChoice`, `ChoiceProcessing`, `Click`, `Clearing`
+**input:** `OnChange`, `StartChoice`, `ChoiceProcessing`, `AutoComplete`, `TextEditEnd`, `Clearing`, `Opening`, `Creating`, `EditTextChange`, `Tuning`, `StartListChoice`
 **check / radio:** `OnChange`
-**table:** `OnStartEdit`, `OnEditEnd`, `OnChange`, `Selection`, `ValueChoice`, `BeforeAddRow`, `BeforeDeleteRow`, `AfterDeleteRow`, `BeforeRowChange`, `BeforeEditEnd`, `OnActivateRow`, `OnActivateCell`, `Drag`, `DragStart`, `DragCheck`, `DragEnd`
+**table:** `Selection`, `OnActivateRow`, `OnActivateCell`, `OnActivateField`, `BeforeAddRow`, `BeforeDeleteRow`, `AfterDeleteRow`, `BeforeRowChange`, `OnStartEdit`, `OnEditEnd`, `BeforeEditEnd`, `OnChange`, `ChoiceProcessing`, `ValueChoice`, `BeforeExpand`, `BeforeCollapse`, `Drag`, `DragStart`, `DragCheck`, `DragEnd`; только у таблицы динамического списка — `OnGetDataAtServer`, `BeforeLoadUserSettingsAtServer`, `OnUpdateUserSettingSetAtServer`
 **label:** `Click`, `URLProcessing`
-**picture:** `Click`
-**labelField:** `OnChange`, `StartChoice`, `ChoiceProcessing`, `Click`, `URLProcessing`, `Clearing`
-**button:** `Click`
+**labelField:** `Click`, `URLProcessing`, `OnChange`
+**picture:** `Click`, `Drag`, `DragCheck`
+**picField:** `Click`, `OnChange`, `Drag`, `DragCheck`
+**calendar:** `OnChange`, `Selection`, `OnActivateDate`, `OnPeriodOutput`
 **pages:** `OnCurrentPageChange`
+**spreadsheet:** `Selection`, `OnActivate`, `OnChangeAreaContent`, `DetailProcessing`, `AdditionalDetailProcessing`
+**html:** `OnClick`, `DocumentComplete`
+
+У кнопки, страницы, группы колонок, командной панели и подменю событий нет. `Click` обычной группы и `OnHover`, `OnSelectedRowsSetChange` таблицы — только с платформы 8.5.
 
 ### Поле ввода (input)
 

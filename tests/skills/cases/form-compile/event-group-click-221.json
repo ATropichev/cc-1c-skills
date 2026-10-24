@@ -1,0 +1,66 @@
+{
+  "name": "Нажатие на обычную группу (событие 8.5) пишется в форму формата 2.21 без предупреждения",
+  "setup": "empty-config-221",
+  "params": {
+    "outputPath": "DataProcessors/Тест/Forms/Форма/Ext/Form.xml",
+    "validatePath": "DataProcessors/Тест/Forms/Форма/Ext/Form.xml"
+  },
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DataProcessor",
+        "name": "Тест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/DataProcessors/Тест.xml",
+        "-FormName": "Форма"
+      }
+    }
+  ],
+  "input": {
+    "elements": [
+      {
+        "group": "vertical",
+        "name": "Группа",
+        "behavior": "collapsible",
+        "events": {
+          "Click": null
+        },
+        "children": [
+          {
+            "input": "Поле",
+            "path": "Поле"
+          }
+        ]
+      }
+    ],
+    "attributes": [
+      {
+        "name": "Объект",
+        "type": "DataProcessorObject.Тест",
+        "main": true
+      },
+      {
+        "name": "Поле",
+        "type": "string"
+      }
+    ]
+  },
+  "expect": {
+    "fileContains": {
+      "file": "DataProcessors/Тест/Forms/Форма/Ext/Form.xml",
+      "text": [
+        "<Event name=\"Click\">ГруппаНажатие</Event>"
+      ]
+    },
+    "stdoutNotContains": "[WARN]"
+  }
+}

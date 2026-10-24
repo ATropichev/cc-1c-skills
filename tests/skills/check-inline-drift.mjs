@@ -150,7 +150,7 @@ const FAMILIES = [
     variants: [
       { id: 'base', authority: 'meta-compile',
         consumers: ['cf-init', 'cf-validate', 'cfe-borrow', 'cfe-init', 'cfe-patch-method', 'cfe-validate', 'epf-build',
-          'epf-init', 'epf-validate', 'erf-init', 'form-add', 'form-compile', 'form-validate',
+          'epf-init', 'epf-validate', 'erf-init', 'form-add', 'form-compile', 'form-edit', 'form-validate',
           'meta-validate', 'mxl-compile', 'role-compile', 'role-edit', 'skd-validate', 'subsystem-compile', 'subsystem-edit',
           'template-add', 'xdto-compile'] },
     ],
@@ -884,7 +884,20 @@ const FAMILIES = [
   { name: 'sort_element_tag_order', py: 'sort_element_tag_order', ps1: 'Sort-ElementTagOrder', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
   { name: 'Get-TagBlockEnd', py: null, ps1: 'Get-TagBlockEnd', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
   { name: '_sort_tag_blocks', py: '_sort_tag_blocks', ps1: 'Sort-TagBlocks', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
-  { name: 'warn_unknown_form_event', py: 'warn_unknown_form_event', ps1: 'Warn-UnknownFormEvent', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  // ── Каталог событий формы: генерируется из корпуса (debug/form-handlers/gen_event_catalog.py) в оба навыка ──
+  { name: 'формы: каталог событий', py: 'get_form_event_catalog', ps1: 'Get-FormEventCatalog', variants: [{ id: 'full', authority: 'form-compile', consumers: ['form-edit'] }] },
+  { name: 'get_event_entry', py: 'get_event_entry', ps1: 'Get-EventEntry', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  { name: 'test_event_pairs', py: 'test_event_pairs', ps1: 'Test-EventPairs', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  { name: 'warn_events_ignored', py: 'warn_events_ignored', ps1: 'Warn-EventsIgnored', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  {
+    name: 'get_table_source', py: 'get_table_source', ps1: 'Get-TableSource',
+    variants: [
+      { id: 'dsl', authority: 'form-compile', consumers: [],
+        why: 'тип реквизита берётся из attributes DSL: форма собирается целиком' },
+      { id: 'xml', authority: 'form-edit', consumers: [],
+        why: 'тип реквизита берётся из Attributes правимой формы: в DSL правки реквизита таблицы может не быть' },
+    ],
+  },
   { name: '_tag_block_end', py: '_tag_block_end', ps1: null, variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
   // ── Эмиттеры секций формы (реквизиты, команды, параметры, оформление, интерфейс, свойства) — общие с form-compile ──
   { name: 'normalize_enum_tags', py: 'normalize_enum_tags', ps1: 'Normalize-EnumTags', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },

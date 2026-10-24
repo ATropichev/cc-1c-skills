@@ -1,0 +1,97 @@
+{
+  "name": "Автоимена обработчиков по конвенции типовых: события таблицы, поля ввода и формы",
+  "params": {
+    "outputPath": "DataProcessors/Тест/Forms/Форма/Ext/Form.xml",
+    "validatePath": "DataProcessors/Тест/Forms/Форма/Ext/Form.xml"
+  },
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DataProcessor",
+        "name": "Тест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/DataProcessors/Тест.xml",
+        "-FormName": "Форма"
+      }
+    }
+  ],
+  "input": {
+    "events": {
+      "OnCreateAtServer": null,
+      "OnOpen": null,
+      "NotificationProcessing": "ОбработкаОповещения"
+    },
+    "elements": [
+      {
+        "input": "Поле",
+        "path": "Поле",
+        "events": {
+          "Tuning": null,
+          "Opening": null
+        }
+      },
+      {
+        "table": "Товары",
+        "path": "Товары",
+        "events": {
+          "Selection": null,
+          "DragEnd": null,
+          "OnActivateCell": null,
+          "BeforeExpand": null
+        },
+        "columns": [
+          {
+            "input": "ТоварыКоличество",
+            "path": "Товары.Количество"
+          }
+        ]
+      }
+    ],
+    "attributes": [
+      {
+        "name": "Объект",
+        "type": "DataProcessorObject.Тест",
+        "main": true
+      },
+      {
+        "name": "Поле",
+        "type": "decimal(10,0)"
+      },
+      {
+        "name": "Товары",
+        "type": "ValueTable",
+        "columns": [
+          {
+            "name": "Количество",
+            "type": "decimal(10,3)"
+          }
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "fileContains": {
+      "file": "DataProcessors/Тест/Forms/Форма/Ext/Form.xml",
+      "text": [
+        "<Event name=\"OnCreateAtServer\">ПриСозданииНаСервере</Event>",
+        "<Event name=\"OnOpen\">ПриОткрытии</Event>",
+        "<Event name=\"Tuning\">ПолеРегулирование</Event>",
+        "<Event name=\"Opening\">ПолеОткрытие</Event>",
+        "<Event name=\"Selection\">ТоварыВыбор</Event>",
+        "<Event name=\"DragEnd\">ТоварыОкончаниеПеретаскивания</Event>",
+        "<Event name=\"OnActivateCell\">ТоварыПриАктивизацииЯчейки</Event>",
+        "<Event name=\"BeforeExpand\">ТоварыПередРазворачиванием</Event>"
+      ]
+    },
+    "stdoutNotContains": "[WARN]"
+  }
+}

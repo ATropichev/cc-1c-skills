@@ -1,0 +1,35 @@
+{
+  "name": "Событие формы вне каталога без имени обработчика — ошибка, а не английское имя",
+  "params": {
+    "outputPath": "DataProcessors/Тест/Forms/Форма/Ext/Form.xml"
+  },
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DataProcessor",
+        "name": "Тест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/DataProcessors/Тест.xml",
+        "-FormName": "Форма"
+      }
+    }
+  ],
+  "input": {
+    "events": {
+      "Opening": null
+    }
+  },
+  "expect": {
+    "stderrContains": "Form event 'Opening'"
+  },
+  "expectError": true
+}

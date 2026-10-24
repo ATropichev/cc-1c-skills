@@ -1,0 +1,16 @@
+{
+  "name": "Событие формы вне каталога без имени обработчика — ошибка",
+  "setup": "fixture:move-form",
+  "params": {
+    "formPath": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form.xml"
+  },
+  "input": {
+    "events": {
+      "Opening": null
+    }
+  },
+  "expect": {
+    "stdoutContains": "у события формы Opening укажите имя обработчика"
+  },
+  "expectError": true
+}

@@ -105,7 +105,7 @@
 								<ExtendedTooltip name="ТоварыУправлениеПоискомРасширеннаяПодсказка" id="41"/>
 							</SearchControlAddition>
 							<Events>
-								<Event name="Selection">ТоварыВыборСтроки</Event>
+								<Event name="Selection">ТоварыВыбор</Event>
 							</Events>
 							<ChildItems>
 								<InputField name="ТоварыНоменклатура" id="42">

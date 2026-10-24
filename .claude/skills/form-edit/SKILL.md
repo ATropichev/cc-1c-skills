@@ -71,7 +71,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/form-edit.ps1" -For
     { "check": "Срочно", "path": "Срочно", "into": "ГруппаОтгрузка" },
     { "move": "ТоварыСумма", "before": "ТоварыЦена" },
     { "set": "Ответственный", "visible": false },
-    { "set": "Контрагент", "title": "Покупатель", "events": { "OnChange": null } },
+    { "set": "Контрагент", "title": "Покупатель", "events": { "OnChange": "КонтрагентПриИзменении" } },
     { "remove": "Комментарий" }
   ]
 }
@@ -121,7 +121,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/form-edit.ps1" -For
 | `path` | Путь к данным: `"Объект.Склад"`, `"ИмяРеквизита"`; колонка таблицы — `"Объект.Товары.Сумма"` |
 | `title` / `tooltip` | Заголовок / подсказка (строка или `{ru, en}`) |
 | `visible: false` / `enabled: false` / `readOnly: true` | Скрыть / сделать недоступным / только чтение |
-| `events` | Обработчики: `{ "OnChange": "ИмяПроцедуры" }`; `null` вместо имени — имя по шаблону `<Элемент><Событие>` |
+| `events` | Обработчики: `{ "OnChange": "ИмяПроцедуры" }` |
 | `children` / `columns` | Вложенные элементы группы или страницы / колонки таблицы |
 
 Поле на новом реквизите формы — реквизит и элемент в одной правке:
@@ -154,14 +154,21 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/form-edit.ps1" -For
 
 Имена регистрозависимы.
 
-**Форма:** `OnCreateAtServer`, `OnOpen`, `BeforeClose`, `OnClose`, `NotificationProcessing`, `ChoiceProcessing`, `OnReadAtServer`, `BeforeWriteAtServer`, `OnWriteAtServer`, `AfterWriteAtServer`, `BeforeWrite`, `AfterWrite`, `FillCheckProcessingAtServer`, `BeforeLoadDataFromSettingsAtServer`, `OnLoadDataFromSettingsAtServer`, `ExternalEvent`, `Opening`
+**Форма:** `OnCreateAtServer`, `OnOpen`, `BeforeClose`, `OnClose`, `NotificationProcessing`, `ChoiceProcessing`, `OnReadAtServer`, `BeforeWriteAtServer`, `OnWriteAtServer`, `AfterWriteAtServer`, `BeforeWrite`, `AfterWrite`, `FillCheckProcessingAtServer`, `BeforeLoadDataFromSettingsAtServer`, `OnLoadDataFromSettingsAtServer`, `OnSaveDataInSettingsAtServer`, `URLProcessing`, `ExternalEvent`, `OnReopen`
 
-**input:** `OnChange`, `StartChoice`, `ChoiceProcessing`, `AutoComplete`, `TextEditEnd`, `Clearing`, `Creating`, `EditTextChange`
+**input:** `OnChange`, `StartChoice`, `ChoiceProcessing`, `AutoComplete`, `TextEditEnd`, `Clearing`, `Opening`, `Creating`, `EditTextChange`, `Tuning`, `StartListChoice`
 **check / radio:** `OnChange`
-**table:** `OnStartEdit`, `OnEditEnd`, `OnChange`, `Selection`, `ValueChoice`, `BeforeAddRow`, `BeforeDeleteRow`, `AfterDeleteRow`, `BeforeRowChange`, `BeforeEditEnd`, `OnActivateRow`, `OnActivateCell`
-**label / labelField:** `Click`, `URLProcessing`; у `labelField` также `OnChange`, `StartChoice`, `ChoiceProcessing`, `Clearing`
-**picture / button:** `Click`
+**table:** `Selection`, `OnActivateRow`, `OnActivateCell`, `OnActivateField`, `BeforeAddRow`, `BeforeDeleteRow`, `AfterDeleteRow`, `BeforeRowChange`, `OnStartEdit`, `OnEditEnd`, `BeforeEditEnd`, `OnChange`, `ChoiceProcessing`, `ValueChoice`, `BeforeExpand`, `BeforeCollapse`, `Drag`, `DragStart`, `DragCheck`, `DragEnd`; только у таблицы динамического списка — `OnGetDataAtServer`, `BeforeLoadUserSettingsAtServer`, `OnUpdateUserSettingSetAtServer`
+**label:** `Click`, `URLProcessing`
+**labelField:** `Click`, `URLProcessing`, `OnChange`
+**picture:** `Click`, `Drag`, `DragCheck`
+**picField:** `Click`, `OnChange`, `Drag`, `DragCheck`
+**calendar:** `OnChange`, `Selection`, `OnActivateDate`, `OnPeriodOutput`
 **pages:** `OnCurrentPageChange`
+**spreadsheet:** `Selection`, `OnActivate`, `OnChangeAreaContent`, `DetailProcessing`, `AdditionalDetailProcessing`
+**html:** `OnClick`, `DocumentComplete`
+
+У кнопки, страницы, группы колонок, командной панели и подменю событий нет. `Click` обычной группы и `OnHover`, `OnSelectedRowsSetChange` таблицы — только с платформы 8.5.
 
 ### Реквизиты, команды, параметры
 

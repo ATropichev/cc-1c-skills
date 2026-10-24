@@ -1,0 +1,48 @@
+{
+  "name": "События по каталогу: автоимена по конвенции, событие формы null, предупреждения о платформе и источнике",
+  "setup": "fixture:move-form",
+  "params": {
+    "formPath": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form.xml"
+  },
+  "input": {
+    "events": {
+      "OnCreateAtServer": null
+    },
+    "elements": [
+      {
+        "set": "Контрагент",
+        "on": [
+          "Tuning"
+        ]
+      },
+      {
+        "set": "Товары",
+        "events": {
+          "DragEnd": null,
+          "OnGetDataAtServer": "ТоварыПриПолученииДанныхНаСервере"
+        }
+      },
+      {
+        "set": "ГруппаШапка",
+        "events": {
+          "Click": null
+        }
+      }
+    ]
+  },
+  "expect": {
+    "fileContains": {
+      "file": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form.xml",
+      "text": [
+        "<Event name=\"OnCreateAtServer\">ПриСозданииНаСервере</Event>",
+        "<Event name=\"Tuning\">КонтрагентРегулирование</Event>",
+        "<Event name=\"DragEnd\">ТоварыОкончаниеПеретаскивания</Event>",
+        "<Event name=\"Click\">ГруппаШапкаНажатие</Event>"
+      ]
+    },
+    "stdoutContains": [
+      "[WARN] Event 'OnGetDataAtServer' of Table 'Товары' exists only for a table bound to DynamicList (bound to DocumentObject.ЗаказТест)",
+      "[WARN] Event 'Click' of UsualGroup 'ГруппаШапка' exists since platform 8.5"
+    ]
+  }
+}

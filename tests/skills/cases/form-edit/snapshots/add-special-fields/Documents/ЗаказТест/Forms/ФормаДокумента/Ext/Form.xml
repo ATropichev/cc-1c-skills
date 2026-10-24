@@ -162,7 +162,7 @@
 							<ContextMenu name="ХтмлКонтекстноеМеню" id="74"/>
 							<ExtendedTooltip name="ХтмлРасширеннаяПодсказка" id="75"/>
 							<Events>
-								<Event name="DocumentComplete">ХтмлDocumentComplete</Event>
+								<Event name="DocumentComplete">ХтмлДокументСформирован</Event>
 							</Events>
 						</HTMLDocumentField>
 					</ChildItems>
