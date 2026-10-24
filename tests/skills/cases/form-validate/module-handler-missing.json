@@ -1,0 +1,18 @@
+{
+  "name": "Модуль формы: привязка без процедуры — ошибка; событие с GUID-именем и имя в другом регистре — не ошибка",
+  "setup": "fixture:module-handler-missing",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] 22. Event 'OnChange' of InputField 'Поле': handler 'ПолеПриИзменении' not found in the form module",
+      "[ERROR] 22. Command 'ЛокализованнаяКоманда': action 'Заполнить' not found in the form module"
+    ],
+    "stdoutNotContains": [
+      "ПриЧтенииНаСервере",
+      "handler 'ПриОткрытии'"
+    ]
+  }
+}

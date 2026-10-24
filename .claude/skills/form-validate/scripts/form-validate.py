@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.30 — Validate 1C managed form
+# form-validate v1.31 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1037,6 +1037,93 @@ ELEMENT_PROPERTY_TAGS = {
     'ViewStatusAddition': 'AdditionSource AutoMaxWidth BackColor Border BorderColor ButtonColor Enabled Events Font GroupHorizontalAlign GroupVerticalAlign HorizontalLocation HorizontalStretch MaxWidth MinWidth PlacementArea Source TextColor Title TitleFont TitleTextColor ToolTip ToolTipRepresentation UserVisible Visible Width',
 }
 # --- /Структура элементов формы ---
+
+
+# Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
+# от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
+# заменён на ""; Literals — {Line, Text, Prefix — код этой строки слева от литерала}.
+def get_bsl_scan(text):
+    lines = text.replace("\r", "").split("\n")
+    code = []
+    lits = []
+    in_str = False
+    cur = None
+    cur_line = 0
+    cur_prefix = ""
+    for i, line in enumerate(lines):
+        # строка без кавычек вне литерала — только отрезать комментарий
+        if not in_str and '"' not in line:
+            k = line.find('//')
+            code.append(line[:k] if k >= 0 else line)
+            continue
+        sb = []
+        j = 0
+        if in_str:
+            # продолжение многострочного литерала: пробелы, затем «|»
+            while j < len(line) and line[j] in (' ', '\t'):
+                j += 1
+            if j < len(line) and line[j] == '|':
+                j += 1
+            cur += "\n"
+        while j < len(line):
+            c = line[j]
+            if in_str:
+                if c == '"':
+                    if j + 1 < len(line) and line[j + 1] == '"':
+                        cur += '"'
+                        j += 2
+                        continue
+                    in_str = False
+                    lits.append({"Line": cur_line, "Text": cur, "Prefix": cur_prefix})
+                    sb.append('""')
+                    j += 1
+                    continue
+                cur += c
+                j += 1
+                continue
+            if c == '/' and j + 1 < len(line) and line[j + 1] == '/':
+                break
+            if c == '"':
+                in_str = True
+                cur = ""
+                cur_line = i + 1
+                cur_prefix = "".join(sb)
+                j += 1
+                continue
+            sb.append(c)
+            j += 1
+        code.append("".join(sb))
+    return {"Lines": lines, "Code": code, "Literals": lits}
+
+# Процедуры и функции модуля (имя, первая и последняя строка; первая — с аннотациями над заголовком)
+# и области (имя, строки #Область и #КонецОбласти, вложенность). Строки нумеруются с 1.
+# Заголовок — только в начале строки: продолжение литерала («|…») и комментарий заголовком не станут.
+def get_module_outline(lines):
+    procs, regions, opened = [], [], []
+    cur = None
+    for i, l in enumerate(lines):
+        if cur is not None:
+            if re.match(r'^\s*(\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b|\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438|EndProcedure|EndFunction)(?!\w)', l, re.I):
+                cur['end'] = i + 1
+                procs.append(cur)
+                cur = None
+            continue
+        m = re.match(r'^\s*(?:(?:\u0410\u0441\u0438\u043d\u0445|Async)\s+)?(?:\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u0430|\u0424\u0443\u043d\u043a\u0446\u0438\u044f|Procedure|Function)\s+(\w+)\s*\(', l, re.I)
+        if m:
+            s = i
+            while s > 0 and re.match(r'^\s*&', lines[s - 1]):
+                s -= 1
+            cur = {'name': m.group(1), 'start': s + 1, 'end': i + 1}
+            continue
+        m = re.match(r'^\s*#(?:\u041e\u0431\u043b\u0430\u0441\u0442\u044c|Region)\s+(\S+)', l, re.I)
+        if m:
+            opened.append({'name': m.group(1), 'start': i + 1, 'end': 0, 'depth': len(opened)})
+            continue
+        if re.match(r'^\s*#(\u041a\u043e\u043d\u0435\u0446\u041e\u0431\u043b\u0430\u0441\u0442\u0438|EndRegion)(?!\w)', l, re.I) and opened:
+            r = opened.pop()
+            r['end'] = i + 1
+            regions.append(r)
+    return {'procs': procs, 'regions': regions}
 
 
 def main():
@@ -2136,6 +2223,116 @@ def main():
             check21_ok = False
         if check21_ok:
             report_ok("21. Element placement: match containers")
+
+    # --- Check 22: обработчики — модуль формы ---
+    # Привязки Form.xml (события, действия команд) сверяются с процедурами модуля <каталог Form.xml>/Form/Module.bsl.
+    # Читается только модуль формы: общие модули, которые подключают процедуры формы по имени, не смотрим —
+    # поэтому процедура без привязки только предупреждение.
+    if not stopped:
+        module_path = os.path.join(os.path.dirname(os.path.abspath(form_path)), 'Form', 'Module.bsl')
+        if not os.path.isfile(module_path):
+            report_ok("22. Form module handlers: no module \u2014 skipped")
+        else:
+            with open(module_path, encoding='utf-8-sig', newline='') as fh:
+                bsl = get_bsl_scan(fh.read())
+            outline = get_module_outline(bsl['Code'])
+            procs = {}
+            for p in outline['procs']:
+                procs.setdefault(p['name'].lower(), p)
+            bound = set()
+            check22_ok = True
+            guid_rx = re.compile(r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$')
+
+            # Привязка без процедуры. Событие с GUID вместо имени — событие объекта, которого у основного реквизита
+            # формы нет: платформа его хранит, но не вызывает. В форме расширения привязка без callType — исходной
+            # формы, её процедура в модуле конфигурации.
+            for evt in root.xpath('.//f:Events/f:Event[not(ancestor::f:BaseForm)]', namespaces={'f': F_NS}):
+                if stopped:
+                    break
+                h = ''.join(evt.itertext()).strip()
+                if not h:
+                    continue
+                bound.add(h.lower())
+                evt_name = evt.get('name', '')
+                if guid_rx.match(evt_name):
+                    continue
+                if has_base_form and not evt.get('callType'):
+                    continue
+                if h.lower() in procs:
+                    continue
+                owner = evt.getparent().getparent()
+                what = f"Form event '{evt_name}'" if owner is root else f"Event '{evt_name}' of {localname(owner)} '{owner.get('name', '')}'"
+                report_error(f"22. {what}: handler '{h}' not found in the form module")
+                check22_ok = False
+            for cmd in cmd_nodes:
+                if stopped:
+                    break
+                for act in cmd.findall(f"{{{F_NS}}}Action"):
+                    h = ''.join(act.itertext()).strip()
+                    if not h:
+                        continue
+                    bound.add(h.lower())
+                    if has_base_form and not act.get('callType'):
+                        continue
+                    if h.lower() in procs:
+                        continue
+                    report_error(f"22. Command '{cmd.get('name', '')}': action '{h}' not found in the form module")
+                    check22_ok = False
+
+            # Процедура без привязки. Не висячая: экспортная, с аннотацией расширения, Подключаемый_* (их подключает
+            # БСП), имя в коде модуля или равно литералу, имя оканчивается куском склейки в позиции обработчика.
+            # Позиция обработчика — по коду строки слева от литерала: ПодключитьОбработчикОжидания(X, …),
+            # Новый ОписаниеОповещения(X, …), УстановитьДействие(Событие, X), .Действие = X.
+            handler_arg_prefix = re.compile(
+                r'(?:(?:\u041f\u043e\u0434\u043a\u043b\u044e\u0447\u0438\u0442\u044c\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u041e\u0436\u0438\u0434\u0430\u043d\u0438\u044f|AttachIdleHandler|\u041e\u043f\u0438\u0441\u0430\u043d\u0438\u0435\u041e\u043f\u043e\u0432\u0435\u0449\u0435\u043d\u0438\u044f|NotifyDescription)\s*\((?P<a>[^,]*)'
+                r'|(?:\u0423\u0441\u0442\u0430\u043d\u043e\u0432\u0438\u0442\u044c\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u0435|SetAction)\s*\([^,]*,(?P<b>[^,]*)|\.(?:\u0414\u0435\u0439\u0441\u0442\u0432\u0438\u0435|Action)\s*=(?P<c>[^;]*))$', re.I)
+            lits = set()
+            tails = []
+            for lit in bsl['Literals']:
+                t = str(lit['Text']).strip()
+                if not t:
+                    continue
+                lits.add(t.lower())
+                m = handler_arg_prefix.search(lit['Prefix'])
+                if m and '+' in (m.group('a') or m.group('b') or m.group('c') or ''):
+                    tails.append(t.lower())
+            # слова кода — один проход: поиск имени по всему модулю для каждой процедуры на больших модулях долог
+            word_count = {}
+            for w in re.split(r'\W+', '\n'.join(bsl['Code'])):
+                if w:
+                    w = w.lower()
+                    word_count[w] = word_count.get(w, 0) + 1
+            ann_rx = re.compile(r'^\s*&\s*(\u041f\u0435\u0440\u0435\u0434|\u041f\u043e\u0441\u043b\u0435|\u0412\u043c\u0435\u0441\u0442\u043e|\u0418\u0437\u043c\u0435\u043d\u0435\u043d\u0438\u0435\u0418\u041a\u043e\u043d\u0442\u0440\u043e\u043b\u044c|Before|After|Around|ChangeAndValidate)\s*\(', re.I)
+            for p in outline['procs']:
+                if stopped:
+                    break
+                n = p['name']
+                nl = n.lower()
+                if nl in bound or nl in lits or nl.startswith('\u043f\u043e\u0434\u043a\u043b\u044e\u0447\u0430\u0435\u043c\u044b\u0439_'):
+                    continue
+                k = p['start'] - 1
+                ann = []
+                while k < p['end'] - 1 and re.match(r'^\s*&', bsl['Code'][k]):
+                    ann.append(bsl['Code'][k])
+                    k += 1
+                hdr = bsl['Code'][k]
+                e = k
+                while ')' not in hdr and e + 1 < p['end']:
+                    e += 1
+                    hdr += ' ' + bsl['Code'][e]
+                if re.search(r'\)\s*(\u042d\u043a\u0441\u043f\u043e\u0440\u0442|Export)(?!\w)', hdr, re.I):
+                    continue
+                if any(ann_rx.match(a) for a in ann):
+                    continue
+                # имя в коде, кроме самого заголовка
+                if word_count.get(nl, 0) > 1:
+                    continue
+                if any(nl.endswith(t) for t in tails):
+                    continue
+                report_warn(f"22. Procedure '{n}' (Module.bsl:{k + 1}) is not bound in Form.xml and not referenced in the form module \u2014 dead code, unless a common module attaches it by name")
+                check22_ok = False
+            if check22_ok:
+                report_ok("22. Form module handlers: bindings match procedures")
 
     # --- Finalize ---
     checks = ok_count + errors + warnings

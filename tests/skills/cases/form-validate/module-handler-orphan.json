@@ -1,0 +1,16 @@
+{
+  "name": "Модуль формы: процедура без привязки — предупреждение; подключённые по имени, вызываемые, экспортные и Подключаемый_ — нет",
+  "setup": "fixture:module-handler-orphan",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "expect": {
+    "stdoutContains": [
+      "[WARN]  22. Procedure 'Мертвая' (Module.bsl:60) is not bound in Form.xml and not referenced in the form module",
+      "=== Result: 0 errors, 1 warnings"
+    ],
+    "stdoutNotContains": [
+      "[ERROR]"
+    ]
+  }
+}

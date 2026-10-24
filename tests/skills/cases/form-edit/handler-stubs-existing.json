@@ -45,5 +45,6 @@
       "  + Подбор — added, lines 19-22",
       "  ? КонтрагентФу — not added: no signature known for event 'Foo' of InputField"
     ]
-  }
+  },
+  "skipValidation": "событие вне каталога (Foo) заготовки не получает — проверка 22 валидатора ожидаемо сообщает о процедуре без привязки"
 }

@@ -1,4 +1,4 @@
-﻿# form-validate v1.30 — Validate 1C managed form
+﻿# form-validate v1.31 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2190,6 +2190,178 @@ if (-not $stopped) {
 		$check21Ok = $false
 	}
 	if ($check21Ok) { Report-OK "21. Element placement: match containers" }
+}
+
+# --- Check 22: обработчики — модуль формы ---
+# Привязки Form.xml (события, действия команд) сверяются с процедурами модуля <каталог Form.xml>/Form/Module.bsl.
+# Читается только модуль формы: общие модули, которые подключают процедуры формы по имени, не смотрим —
+# поэтому процедура без привязки только предупреждение.
+# Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
+# от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
+# заменён на ""; Literals — @{ Line; Text; Prefix — код этой строки слева от литерала }.
+function Get-BslScan([string]$text) {
+	$lines = $text -replace "`r", "" -split "`n"
+	$code = New-Object System.Collections.ArrayList
+	$lits = New-Object System.Collections.ArrayList
+	$inStr = $false; $cur = $null; $curLine = 0; $curPrefix = ""
+	for ($i = 0; $i -lt $lines.Count; $i++) {
+		$line = $lines[$i]
+		# строка без кавычек вне литерала — только отрезать комментарий (посимвольный разбор в PS медленный)
+		if (-not $inStr -and $line.IndexOf('"') -lt 0) {
+			$k = $line.IndexOf('//')
+			[void]$code.Add($(if ($k -ge 0) { $line.Substring(0, $k) } else { $line }))
+			continue
+		}
+		$sb = New-Object System.Text.StringBuilder
+		$j = 0
+		if ($inStr) {
+			# продолжение многострочного литерала: пробелы, затем «|»
+			while ($j -lt $line.Length -and ($line[$j] -eq ' ' -or $line[$j] -eq "`t")) { $j++ }
+			if ($j -lt $line.Length -and $line[$j] -eq '|') { $j++ }
+			$cur += "`n"
+		}
+		while ($j -lt $line.Length) {
+			$c = $line[$j]
+			if ($inStr) {
+				if ($c -eq '"') {
+					if ($j + 1 -lt $line.Length -and $line[$j + 1] -eq '"') { $cur += '"'; $j += 2; continue }
+					$inStr = $false
+					[void]$lits.Add(@{ Line = $curLine; Text = $cur; Prefix = $curPrefix })
+					[void]$sb.Append('""')
+					$j++
+					continue
+				}
+				$cur += $c; $j++; continue
+			}
+			if ($c -eq '/' -and $j + 1 -lt $line.Length -and $line[$j + 1] -eq '/') { break }
+			if ($c -eq '"') { $inStr = $true; $cur = ""; $curLine = $i + 1; $curPrefix = $sb.ToString(); $j++; continue }
+			[void]$sb.Append($c); $j++
+		}
+		[void]$code.Add($sb.ToString())
+	}
+	return @{ Lines = $lines; Code = $code.ToArray(); Literals = $lits.ToArray() }
+}
+
+# Процедуры и функции модуля (имя, первая и последняя строка; первая — с аннотациями над заголовком)
+# и области (имя, строки #Область и #КонецОбласти, вложенность). Строки нумеруются с 1.
+# Заголовок — только в начале строки: продолжение литерала («|…») и комментарий заголовком не станут.
+function Get-ModuleOutline([string[]]$lines) {
+	$procs = New-Object System.Collections.ArrayList
+	$regions = New-Object System.Collections.ArrayList
+	$open = New-Object System.Collections.ArrayList
+	$cur = $null
+	for ($i = 0; $i -lt $lines.Count; $i++) {
+		$l = $lines[$i]
+		if ($null -ne $cur) {
+			if ($l -match '^\s*(КонецПроцедуры|КонецФункции|EndProcedure|EndFunction)(?![\w])') { $cur.end = $i + 1; [void]$procs.Add($cur); $cur = $null }
+			continue
+		}
+		$m = [regex]::Match($l, '^\s*(?:(?:Асинх|Async)\s+)?(?:Процедура|Функция|Procedure|Function)\s+(\w+)\s*\(', 'IgnoreCase')
+		if ($m.Success) {
+			$s = $i
+			while ($s -gt 0 -and $lines[$s - 1] -match '^\s*&') { $s-- }
+			$cur = [pscustomobject]@{ name = $m.Groups[1].Value; start = $s + 1; end = $i + 1 }
+			continue
+		}
+		$m = [regex]::Match($l, '^\s*#(?:Область|Region)\s+(\S+)', 'IgnoreCase')
+		if ($m.Success) { [void]$open.Add([pscustomobject]@{ name = $m.Groups[1].Value; start = $i + 1; end = 0; depth = $open.Count }); continue }
+		if ($l -match '^\s*#(КонецОбласти|EndRegion)(?![\w])' -and $open.Count -gt 0) {
+			$r = $open[$open.Count - 1]; $open.RemoveAt($open.Count - 1)
+			$r.end = $i + 1; [void]$regions.Add($r)
+		}
+	}
+	return @{ procs = $procs; regions = $regions }
+}
+
+# Литерал в позиции имени обработчика, собранного склейкой: ПодключитьОбработчикОжидания(X, …),
+# Новый ОписаниеОповещения(X, …), УстановитьДействие(Событие, X), .Действие = X — по коду строки слева от литерала.
+$script:handlerArgPrefix = '(?:(?:ПодключитьОбработчикОжидания|AttachIdleHandler|ОписаниеОповещения|NotifyDescription)\s*\((?<a>[^,]*)|(?:УстановитьДействие|SetAction)\s*\([^,]*,(?<a>[^,]*)|\.(?:Действие|Action)\s*=(?<a>[^;]*))$'
+
+if (-not $stopped) {
+	$modulePath = Join-Path (Split-Path (Resolve-Path $FormPath) -Parent) "Form/Module.bsl"
+	if (-not (Test-Path -LiteralPath $modulePath)) {
+		Report-OK "22. Form module handlers: no module — skipped"
+	} else {
+		$bsl = Get-BslScan ([System.IO.File]::ReadAllText($modulePath))
+		$outline = Get-ModuleOutline $bsl.Code
+		# @{} регистронезависим — как имена в BSL
+		$procs = @{}
+		foreach ($p in $outline.procs) { if (-not $procs.ContainsKey($p.name)) { $procs[$p.name] = $p } }
+		$bound = @{}
+		$check22Ok = $true
+		$guidRx = '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+
+		# Привязка без процедуры. Событие с GUID вместо имени — событие объекта, которого у основного реквизита
+		# формы нет: платформа его хранит, но не вызывает. В форме расширения привязка без callType — исходной
+		# формы, её процедура в модуле конфигурации.
+		foreach ($evt in $root.SelectNodes(".//f:Events/f:Event[not(ancestor::f:BaseForm)]", $nsMgr)) {
+			if ($stopped) { break }
+			$h = $evt.InnerText.Trim()
+			if (-not $h) { continue }
+			$bound[$h] = $true
+			$evtName = $evt.GetAttribute('name')
+			if ($evtName -match $guidRx) { continue }
+			if ($hasBaseForm -and -not $evt.GetAttribute('callType')) { continue }
+			if ($procs.ContainsKey($h)) { continue }
+			$owner = $evt.ParentNode.ParentNode
+			$what = if ($owner -eq $root) { "Form event '$evtName'" } else { "Event '$evtName' of $($owner.LocalName) '$($owner.GetAttribute('name'))'" }
+			Report-Error "22. ${what}: handler '$h' not found in the form module"
+			$check22Ok = $false
+		}
+		foreach ($cmd in $cmdNodes) {
+			if ($stopped) { break }
+			foreach ($act in $cmd.SelectNodes("f:Action", $nsMgr)) {
+				$h = $act.InnerText.Trim()
+				if (-not $h) { continue }
+				$bound[$h] = $true
+				if ($hasBaseForm -and -not $act.GetAttribute('callType')) { continue }
+				if ($procs.ContainsKey($h)) { continue }
+				Report-Error "22. Command '$($cmd.GetAttribute('name'))': action '$h' not found in the form module"
+				$check22Ok = $false
+			}
+		}
+
+		# Процедура без привязки. Не висячая: экспортная, с аннотацией расширения, Подключаемый_* (их подключает
+		# БСП), имя в коде модуля или равно литералу, имя оканчивается куском склейки в позиции обработчика.
+		$lits = @{}
+		$tails = New-Object System.Collections.ArrayList
+		foreach ($l in $bsl.Literals) {
+			$t = "$($l.Text)".Trim()
+			if (-not $t) { continue }
+			$lits[$t] = $true
+			$m = [regex]::Match($l.Prefix, $script:handlerArgPrefix, 'IgnoreCase')
+			if ($m.Success -and $m.Groups['a'].Value.Contains('+')) { [void]$tails.Add($t) }
+		}
+		# слова кода — один проход: поиск имени по всему модулю для каждой процедуры на больших модулях долог
+		$wordCount = New-Object 'System.Collections.Generic.Dictionary[string,int]' ([StringComparer]::OrdinalIgnoreCase)
+		foreach ($w in [regex]::Split(($bsl.Code -join "`n"), '\W+')) {
+			if (-not $w) { continue }
+			$c = 0; [void]$wordCount.TryGetValue($w, [ref]$c); $wordCount[$w] = $c + 1
+		}
+		foreach ($p in $outline.procs) {
+			if ($stopped) { break }
+			$n = $p.name
+			if ($bound.ContainsKey($n) -or $lits.ContainsKey($n)) { continue }
+			if ($n.StartsWith('Подключаемый_', [System.StringComparison]::OrdinalIgnoreCase)) { continue }
+			$k = $p.start - 1
+			$ann = @()
+			while ($k -lt $p.end - 1 -and $bsl.Code[$k] -match '^\s*&') { $ann += $bsl.Code[$k]; $k++ }
+			$hdr = $bsl.Code[$k]
+			$e = $k
+			while ($hdr -notmatch '\)' -and $e + 1 -lt $p.end) { $e++; $hdr += ' ' + $bsl.Code[$e] }
+			if ($hdr -match '\)\s*(Экспорт|Export)(?!\w)') { continue }
+			if (@($ann | Where-Object { $_ -match '^\s*&\s*(Перед|После|Вместо|ИзменениеИКонтроль|Before|After|Around|ChangeAndValidate)\s*\(' }).Count -gt 0) { continue }
+			# имя в коде, кроме самого заголовка
+			$c = 0; [void]$wordCount.TryGetValue($n, [ref]$c)
+			if ($c -gt 1) { continue }
+			$tail = $false
+			foreach ($t in $tails) { if ($n.EndsWith($t, [System.StringComparison]::OrdinalIgnoreCase)) { $tail = $true; break } }
+			if ($tail) { continue }
+			Report-Warn "22. Procedure '$n' (Module.bsl:$($k + 1)) is not bound in Form.xml and not referenced in the form module — dead code, unless a common module attaches it by name"
+			$check22Ok = $false
+		}
+		if ($check22Ok) { Report-OK "22. Form module handlers: bindings match procedures" }
+	}
 }
 
 # --- Summary ---

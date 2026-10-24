@@ -1,4 +1,4 @@
-# form-edit v1.33 — Edit 1C managed form elements (Python port)
+# form-edit v1.34 — Edit 1C managed form elements (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import contextlib
@@ -7956,8 +7956,64 @@ left_handlers = []
 _module_scan = None
 
 
-# Модуль формы — рядом с Form.xml: <...>/Ext/Form/Module.bsl. Сканер BSL: строковые литералы (с "" и
-# многострочными продолжениями «|») и комментарии // отделяются от кода, номера строк сохраняются.
+# Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
+# от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
+# заменён на ""; Literals — {Line, Text, Prefix — код этой строки слева от литерала}.
+def get_bsl_scan(text):
+    lines = text.replace("\r", "").split("\n")
+    code = []
+    lits = []
+    in_str = False
+    cur = None
+    cur_line = 0
+    cur_prefix = ""
+    for i, line in enumerate(lines):
+        # строка без кавычек вне литерала — только отрезать комментарий
+        if not in_str and '"' not in line:
+            k = line.find('//')
+            code.append(line[:k] if k >= 0 else line)
+            continue
+        sb = []
+        j = 0
+        if in_str:
+            # продолжение многострочного литерала: пробелы, затем «|»
+            while j < len(line) and line[j] in (' ', '\t'):
+                j += 1
+            if j < len(line) and line[j] == '|':
+                j += 1
+            cur += "\n"
+        while j < len(line):
+            c = line[j]
+            if in_str:
+                if c == '"':
+                    if j + 1 < len(line) and line[j + 1] == '"':
+                        cur += '"'
+                        j += 2
+                        continue
+                    in_str = False
+                    lits.append({"Line": cur_line, "Text": cur, "Prefix": cur_prefix})
+                    sb.append('""')
+                    j += 1
+                    continue
+                cur += c
+                j += 1
+                continue
+            if c == '/' and j + 1 < len(line) and line[j + 1] == '/':
+                break
+            if c == '"':
+                in_str = True
+                cur = ""
+                cur_line = i + 1
+                cur_prefix = "".join(sb)
+                j += 1
+                continue
+            sb.append(c)
+            j += 1
+        code.append("".join(sb))
+    return {"Lines": lines, "Code": code, "Literals": lits}
+
+
+# Модуль формы — рядом с Form.xml: <...>/Ext/Form/Module.bsl.
 def get_module_scan():
     global _module_scan
     if _module_scan is not None:
@@ -7968,54 +8024,10 @@ def get_module_scan():
         scan["Exists"] = True
         with open(path, encoding="utf-8-sig", newline="") as fh:
             scan["Raw"] = fh.read()
-        lines = scan["Raw"].replace("\r", "").split("\n")
-        code = []
-        lits = []
-        in_str = False
-        cur = None
-        cur_line = 0
-        cur_prefix = ""
-        for i, line in enumerate(lines):
-            sb = []
-            j = 0
-            if in_str:
-                # продолжение многострочного литерала: пробелы, затем «|»
-                while j < len(line) and line[j] in (' ', '\t'):
-                    j += 1
-                if j < len(line) and line[j] == '|':
-                    j += 1
-                cur += "\n"
-            while j < len(line):
-                c = line[j]
-                if in_str:
-                    if c == '"':
-                        if j + 1 < len(line) and line[j + 1] == '"':
-                            cur += '"'
-                            j += 2
-                            continue
-                        in_str = False
-                        lits.append({"Line": cur_line, "Text": cur, "Prefix": cur_prefix})
-                        sb.append('""')
-                        j += 1
-                        continue
-                    cur += c
-                    j += 1
-                    continue
-                if c == '/' and j + 1 < len(line) and line[j + 1] == '/':
-                    break
-                if c == '"':
-                    in_str = True
-                    cur = ""
-                    cur_line = i + 1
-                    cur_prefix = "".join(sb)
-                    j += 1
-                    continue
-                sb.append(c)
-                j += 1
-            code.append("".join(sb))
-        scan["Lines"] = lines
-        scan["Code"] = code
-        scan["Literals"] = lits
+        bsl = get_bsl_scan(scan["Raw"])
+        scan["Lines"] = bsl["Lines"]
+        scan["Code"] = bsl["Code"]
+        scan["Literals"] = bsl["Literals"]
     _module_scan = scan
     return scan
 

@@ -1,0 +1,18 @@
+{
+  "name": "Модуль формы расширения: проверяются только привязки с callType; процедура с &После — не висячая",
+  "setup": "fixture:module-handler-extension",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] 22. Event 'StartChoice' of InputField 'Поле': handler 'Расш_ПолеНачалоВыбораПосле' not found in the form module",
+      "[WARN]  22. Procedure 'Расш_ПолеПриИзмененииВместо'"
+    ],
+    "stdoutNotContains": [
+      "handler 'ПолеПриИзменении'",
+      "Расш_ВнутренняяПроцедураПосле"
+    ]
+  }
+}

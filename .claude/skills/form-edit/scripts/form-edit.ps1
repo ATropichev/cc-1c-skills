@@ -1,4 +1,4 @@
-﻿# form-edit v1.33 — Edit 1C managed form elements
+﻿# form-edit v1.34 — Edit 1C managed form elements
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -7379,8 +7379,53 @@ $script:removedCount = 0
 $script:leftHandlers = @()
 $script:moduleScan = $null
 
-# Модуль формы — рядом с Form.xml: <...>/Ext/Form/Module.bsl. Сканер BSL: строковые литералы (с "" и
-# многострочными продолжениями «|») и комментарии // отделяются от кода, номера строк сохраняются.
+# Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
+# от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
+# заменён на ""; Literals — @{ Line; Text; Prefix — код этой строки слева от литерала }.
+function Get-BslScan([string]$text) {
+	$lines = $text -replace "`r", "" -split "`n"
+	$code = New-Object System.Collections.ArrayList
+	$lits = New-Object System.Collections.ArrayList
+	$inStr = $false; $cur = $null; $curLine = 0; $curPrefix = ""
+	for ($i = 0; $i -lt $lines.Count; $i++) {
+		$line = $lines[$i]
+		# строка без кавычек вне литерала — только отрезать комментарий (посимвольный разбор в PS медленный)
+		if (-not $inStr -and $line.IndexOf('"') -lt 0) {
+			$k = $line.IndexOf('//')
+			[void]$code.Add($(if ($k -ge 0) { $line.Substring(0, $k) } else { $line }))
+			continue
+		}
+		$sb = New-Object System.Text.StringBuilder
+		$j = 0
+		if ($inStr) {
+			# продолжение многострочного литерала: пробелы, затем «|»
+			while ($j -lt $line.Length -and ($line[$j] -eq ' ' -or $line[$j] -eq "`t")) { $j++ }
+			if ($j -lt $line.Length -and $line[$j] -eq '|') { $j++ }
+			$cur += "`n"
+		}
+		while ($j -lt $line.Length) {
+			$c = $line[$j]
+			if ($inStr) {
+				if ($c -eq '"') {
+					if ($j + 1 -lt $line.Length -and $line[$j + 1] -eq '"') { $cur += '"'; $j += 2; continue }
+					$inStr = $false
+					[void]$lits.Add(@{ Line = $curLine; Text = $cur; Prefix = $curPrefix })
+					[void]$sb.Append('""')
+					$j++
+					continue
+				}
+				$cur += $c; $j++; continue
+			}
+			if ($c -eq '/' -and $j + 1 -lt $line.Length -and $line[$j + 1] -eq '/') { break }
+			if ($c -eq '"') { $inStr = $true; $cur = ""; $curLine = $i + 1; $curPrefix = $sb.ToString(); $j++; continue }
+			[void]$sb.Append($c); $j++
+		}
+		[void]$code.Add($sb.ToString())
+	}
+	return @{ Lines = $lines; Code = $code.ToArray(); Literals = $lits.ToArray() }
+}
+
+# Модуль формы — рядом с Form.xml: <...>/Ext/Form/Module.bsl.
 function Get-ModuleScan {
 	if ($null -ne $script:moduleScan) { return $script:moduleScan }
 	$scan = @{ Exists = $false; Raw = ""; Lines = @(); Code = @(); Literals = @() }
@@ -7388,42 +7433,10 @@ function Get-ModuleScan {
 	if (Test-Path -LiteralPath $path) {
 		$scan.Exists = $true
 		$scan.Raw = [System.IO.File]::ReadAllText($path)
-		$lines = $scan.Raw -replace "`r", "" -split "`n"
-		$code = New-Object System.Collections.ArrayList
-		$lits = New-Object System.Collections.ArrayList
-		$inStr = $false; $cur = $null; $curLine = 0; $curPrefix = ""
-		for ($i = 0; $i -lt $lines.Count; $i++) {
-			$line = $lines[$i]
-			$sb = New-Object System.Text.StringBuilder
-			$j = 0
-			if ($inStr) {
-				# продолжение многострочного литерала: пробелы, затем «|»
-				while ($j -lt $line.Length -and ($line[$j] -eq ' ' -or $line[$j] -eq "`t")) { $j++ }
-				if ($j -lt $line.Length -and $line[$j] -eq '|') { $j++ }
-				$cur += "`n"
-			}
-			while ($j -lt $line.Length) {
-				$c = $line[$j]
-				if ($inStr) {
-					if ($c -eq '"') {
-						if ($j + 1 -lt $line.Length -and $line[$j + 1] -eq '"') { $cur += '"'; $j += 2; continue }
-						$inStr = $false
-						[void]$lits.Add(@{ Line = $curLine; Text = $cur; Prefix = $curPrefix })
-						[void]$sb.Append('""')
-						$j++
-						continue
-					}
-					$cur += $c; $j++; continue
-				}
-				if ($c -eq '/' -and $j + 1 -lt $line.Length -and $line[$j + 1] -eq '/') { break }
-				if ($c -eq '"') { $inStr = $true; $cur = ""; $curLine = $i + 1; $curPrefix = $sb.ToString(); $j++; continue }
-				[void]$sb.Append($c); $j++
-			}
-			[void]$code.Add($sb.ToString())
-		}
-		$scan.Lines = $lines
-		$scan.Code = $code.ToArray()
-		$scan.Literals = $lits.ToArray()
+		$bsl = Get-BslScan $scan.Raw
+		$scan.Lines = $bsl.Lines
+		$scan.Code = $bsl.Code
+		$scan.Literals = $bsl.Literals
 	}
 	$script:moduleScan = $scan
 	return $scan

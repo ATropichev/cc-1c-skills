@@ -892,7 +892,8 @@ const FAMILIES = [
   // ── Заготовки обработчиков в модуле формы ──
   { name: 'get_form_module_template', py: 'get_form_module_template', ps1: 'Get-FormModuleTemplate', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit', 'form-add'] }] },
   { name: 'register_handler', py: 'register_handler', ps1: 'Register-Handler', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
-  { name: 'get_module_outline', py: 'get_module_outline', ps1: 'Get-ModuleOutline', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  { name: 'get_module_outline', py: 'get_module_outline', ps1: 'Get-ModuleOutline', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit', 'form-validate'] }] },
+  { name: 'get_bsl_scan', py: 'get_bsl_scan', ps1: 'Get-BslScan', variants: [{ id: 'base', authority: 'form-edit', consumers: ['form-validate'] }] },
   { name: 'get_handler_stub', py: 'get_handler_stub', ps1: 'Get-HandlerStub', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
   { name: 'get_region_rank', py: 'get_region_rank', ps1: 'Get-RegionRank', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
   { name: 'get_handler_region_name', py: 'get_handler_region_name', ps1: 'Get-HandlerRegionName', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
