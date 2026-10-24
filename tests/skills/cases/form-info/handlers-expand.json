@@ -1,0 +1,111 @@
+{
+  "name": "-Handlers -Expand *: обработчики таблицы и колонки на развёрнутой странице",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DataProcessor",
+        "name": "Тест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/DataProcessors/Тест.xml",
+        "-FormName": "Форма"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "events": {
+          "OnCreateAtServer": "ПриСозданииНаСервере"
+        },
+        "elements": [
+          {
+            "input": "Поле",
+            "path": "Поле",
+            "events": {
+              "OnChange": "ПолеПриИзменении"
+            }
+          },
+          {
+            "pages": "Страницы",
+            "children": [
+              {
+                "page": "СтраницаТовары",
+                "children": [
+                  {
+                    "table": "Товары",
+                    "path": "Товары",
+                    "events": {
+                      "Selection": "ТоварыВыбор"
+                    },
+                    "columns": [
+                      {
+                        "input": "ТоварыКоличество",
+                        "path": "Товары.Количество",
+                        "events": {
+                          "OnChange": "ТоварыКоличествоПриИзменении"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DataProcessorObject.Тест",
+            "main": true
+          },
+          {
+            "name": "Поле",
+            "type": "string"
+          },
+          {
+            "name": "Товары",
+            "type": "ValueTable",
+            "columns": [
+              {
+                "name": "Количество",
+                "type": "decimal(10,3)"
+              }
+            ]
+          }
+        ],
+        "commands": [
+          {
+            "name": "Заполнить",
+            "action": "ЗаполнитьКоманда"
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/DataProcessors/Тест/Forms/Форма/Ext/Form.xml"
+      }
+    }
+  ],
+  "params": {
+    "formPath": "DataProcessors/Тест/Forms/Форма/Ext/Form.xml"
+  },
+  "args_extra": [
+    "-Handlers",
+    "-Expand",
+    "*"
+  ],
+  "expect": {
+    "stdoutContains": [
+      "[Table] Товары -> Товары {Selection: ТоварыВыбор (lines ",
+      "[Input] ТоварыКоличество -> Товары.Количество {OnChange: ТоварыКоличествоПриИзменении (lines "
+    ]
+  }
+}

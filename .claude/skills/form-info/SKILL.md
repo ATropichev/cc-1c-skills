@@ -26,6 +26,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/form-info.ps1" -For
 | Expand   | нет | Раскрыть свёрнутую секцию по имени или title, `*` — все |
 | Limit    | нет | Макс. строк (по умолчанию 150) |
 | Offset   | нет | Пропустить N строк (пагинация) |
+| Handlers | нет | Имена обработчиков событий и команд с диапазонами строк в модуле формы |
 
 Вывод самодокументирован. `[Group:AH]`/`[Group:AV]` = AlwaysHorizontal/AlwaysVertical.
 

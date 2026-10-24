@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-info v1.10 — Analyze 1C managed form structure
+# form-info v1.11 — Analyze 1C managed form structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -176,6 +176,119 @@ def test_title_differs(node, name):
     return title_text
 
 
+# --- Обработчики: процедуры модуля формы (только с -Handlers) ---
+
+# Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
+# от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
+# заменён на ""; Literals — {Line, Text, Prefix — код этой строки слева от литерала}.
+def get_bsl_scan(text):
+    lines = text.replace("\r", "").split("\n")
+    code = []
+    lits = []
+    in_str = False
+    cur = None
+    cur_line = 0
+    cur_prefix = ""
+    for i, line in enumerate(lines):
+        # строка без кавычек вне литерала — только отрезать комментарий
+        if not in_str and '"' not in line:
+            k = line.find('//')
+            code.append(line[:k] if k >= 0 else line)
+            continue
+        sb = []
+        j = 0
+        if in_str:
+            # продолжение многострочного литерала: пробелы, затем «|»
+            while j < len(line) and line[j] in (' ', '\t'):
+                j += 1
+            if j < len(line) and line[j] == '|':
+                j += 1
+            cur += "\n"
+        while j < len(line):
+            c = line[j]
+            if in_str:
+                if c == '"':
+                    if j + 1 < len(line) and line[j + 1] == '"':
+                        cur += '"'
+                        j += 2
+                        continue
+                    in_str = False
+                    lits.append({"Line": cur_line, "Text": cur, "Prefix": cur_prefix})
+                    sb.append('""')
+                    j += 1
+                    continue
+                cur += c
+                j += 1
+                continue
+            if c == '/' and j + 1 < len(line) and line[j + 1] == '/':
+                break
+            if c == '"':
+                in_str = True
+                cur = ""
+                cur_line = i + 1
+                cur_prefix = "".join(sb)
+                j += 1
+                continue
+            sb.append(c)
+            j += 1
+        code.append("".join(sb))
+    return {"Lines": lines, "Code": code, "Literals": lits}
+
+
+# Процедуры и функции модуля (имя, первая и последняя строка; первая — с аннотациями над заголовком)
+# и области (имя, строки #Область и #КонецОбласти, вложенность). Строки нумеруются с 1.
+# Заголовок — только в начале строки: продолжение литерала («|…») и комментарий заголовком не станут.
+def get_module_outline(lines):
+    procs, regions, opened = [], [], []
+    cur = None
+    for i, l in enumerate(lines):
+        if cur is not None:
+            if re.match(r'^\s*(\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b|\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438|EndProcedure|EndFunction)(?!\w)', l, re.I):
+                cur['end'] = i + 1
+                procs.append(cur)
+                cur = None
+            continue
+        m = re.match(r'^\s*(?:(?:\u0410\u0441\u0438\u043d\u0445|Async)\s+)?(?:\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u0430|\u0424\u0443\u043d\u043a\u0446\u0438\u044f|Procedure|Function)\s+(\w+)\s*\(', l, re.I)
+        if m:
+            s = i
+            while s > 0 and re.match(r'^\s*&', lines[s - 1]):
+                s -= 1
+            cur = {'name': m.group(1), 'start': s + 1, 'end': i + 1}
+            continue
+        m = re.match(r'^\s*#(?:\u041e\u0431\u043b\u0430\u0441\u0442\u044c|Region)\s+(\S+)', l, re.I)
+        if m:
+            opened.append({'name': m.group(1), 'start': i + 1, 'end': 0, 'depth': len(opened)})
+            continue
+        if re.match(r'^\s*#(\u041a\u043e\u043d\u0435\u0446\u041e\u0431\u043b\u0430\u0441\u0442\u0438|EndRegion)(?!\w)', l, re.I) and opened:
+            r = opened.pop()
+            r['end'] = i + 1
+            regions.append(r)
+    return {'procs': procs, 'regions': regions}
+
+
+# Состояние -Handlers: включён ли ключ, процедуры модуля (имя в нижнем регистре -> процедура; None — модуля нет),
+# форма расширения. Заполняет main.
+_handlers = {'on': False, 'procs': None, 'ext': False}
+GUID_RE = re.compile(r'^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$')
+
+
+# Где процедура обработчика: " (lines a-b)", " (not in module)" или "" — без -Handlers, без модуля,
+# у привязки формы расширения без callType (процедура исходной формы — в модуле конфигурации)
+# и у события с GUID-именем без процедуры (платформа такой обработчик не вызывает).
+def get_handler_suffix(handler, call_type, event_name):
+    procs = _handlers['procs']
+    if procs is None or not handler:
+        return ""
+    if _handlers['ext'] and not call_type:
+        return ""
+    p = procs.get(handler.strip().lower())
+    if p:
+        return f" (lines {p['start']}-{p['end']})"
+    if GUID_RE.match(event_name or ''):
+        return ""
+    return " (not in module)"
+
+
 # --- Helper: get events as compact string ---
 
 def get_events_str(node):
@@ -186,10 +299,10 @@ def get_events_str(node):
     for e in events_node.findall("d:Event", NSMAP):
         e_name = e.get("name", "")
         ct = e.get("callType", "")
-        if ct:
-            evts.append(f"{e_name}[{ct}]")
-        else:
-            evts.append(e_name)
+        label = f"{e_name}[{ct}]" if ct else e_name
+        if _handlers['on']:
+            label += f": {(e.text or '').strip()}{get_handler_suffix(e.text or '', ct, e_name)}"
+        evts.append(label)
     if len(evts) == 0:
         return ""
     return " {" + ", ".join(evts) + "}"
@@ -393,7 +506,10 @@ def build_tree_nodes(children, prefix, tree_lines, expand="", state=None):
                 build_tree(ci, prefix + continuation, tree_lines, expand, state)
             else:
                 cnt = count_significant_children(ci)
-                tree_lines[-1] = tree_lines[-1] + f" ({cnt} items)"
+                # с -Handlers — сколько привязок внутри свёрнутой страницы: без счётчика их не заметить
+                hc = len(ci.findall(".//d:Event", NSMAP)) if (_handlers['on'] and ci is not None) else 0
+                hc_str = f", {hc} handlers" if hc > 0 else ""
+                tree_lines[-1] = tree_lines[-1] + f" ({cnt} items{hc_str})"
                 if state is not None:
                     state["has_collapsed"] = True
         else:
@@ -501,6 +617,7 @@ def main():
     parser.add_argument("-Limit", type=int, default=150, help="Max lines to show")
     parser.add_argument("-Offset", type=int, default=0, help="Line offset for pagination")
     parser.add_argument("-Expand", default="", help="Expand collapsed section by name, or * for all")
+    parser.add_argument("-Handlers", action="store_true", help="Show handler names with their line ranges in Form/Module.bsl")
     args = ci_parse_args(parser)
 
     form_path = args.FormPath
@@ -541,6 +658,17 @@ def main():
     # --- Detect extension (BaseForm) ---
     base_form_node = root.find("d:BaseForm", NSMAP)
     is_extension = base_form_node is not None
+
+    module_path = os.path.join(os.path.dirname(os.path.abspath(form_path)), "Form", "Module.bsl")
+    _handlers['on'] = bool(args.Handlers)
+    _handlers['ext'] = is_extension
+    if args.Handlers and os.path.isfile(module_path):
+        with open(module_path, encoding="utf-8-sig", newline="") as fh:
+            bsl = get_bsl_scan(fh.read())
+        procs = {}
+        for p in get_module_outline(bsl["Code"])["procs"]:
+            procs.setdefault(p["name"].lower(), p)
+        _handlers['procs'] = procs
 
     # --- Determine form name and object from path ---
     resolved_path = os.path.abspath(form_path)
@@ -599,6 +727,8 @@ def main():
     _support = get_support_status_for_path(form_path)
     if _support is not None:
         lines.append(f"Поддержка: {_support}")
+    if args.Handlers:
+        lines.append(f"Module: {module_path if os.path.isfile(module_path) else 'none'}")
 
     # --- Form properties (Title excluded -- shown in header) ---
     prop_names = [
@@ -640,7 +770,7 @@ def main():
             e_handler = e.text or ""
             ct = e.get("callType", "")
             ct_str = f"[{ct}]" if ct else ""
-            lines.append(f"  {e_name}{ct_str} -> {e_handler}")
+            lines.append(f"  {e_name}{ct_str} -> {e_handler}{get_handler_suffix(e_handler, ct, e_name)}")
 
     # --- Main AutoCommandBar (form's id=-1 panel) ---
     def format_main_acb(acb_node):
@@ -790,12 +920,12 @@ def main():
                 for a in actions:
                     ct = a.get("callType", "")
                     ct_str = f"[{ct}]" if ct else ""
-                    act_parts.append(f"{a.text or ''}{ct_str}")
+                    act_parts.append(f"{a.text or ''}{ct_str}{get_handler_suffix(a.text or '', ct, 'Action')}")
                 action_str = " -> " + ", ".join(act_parts)
             elif len(actions) == 1:
                 ct = actions[0].get("callType", "")
                 ct_str = f"[{ct}]" if ct else ""
-                action_str = f" -> {actions[0].text or ''}{ct_str}"
+                action_str = f" -> {actions[0].text or ''}{ct_str}{get_handler_suffix(actions[0].text or '', ct, 'Action')}"
             else:
                 action_str = ""
 
@@ -813,10 +943,15 @@ def main():
         lines.append("")
         lines.append(f"BaseForm: {bf_str}")
 
-    # --- Expand hint ---
+    # --- Hints ---
+    hints = []
     if tree_state["has_collapsed"]:
+        hints.append("Hint: use -Expand <name> to expand a collapsed section, -Expand * for all")
+    if not args.Handlers and root.xpath(".//d:Events/d:Event | d:Commands/d:Command/d:Action", namespaces=NSMAP):
+        hints.append("Hint: use -Handlers to show handler names with their line ranges in Form/Module.bsl")
+    if hints:
         lines.append("")
-        lines.append("Hint: use -Expand <name> to expand a collapsed section, -Expand * for all")
+        lines.extend(hints)
 
     # --- Truncation protection ---
     total_lines = len(lines)
@@ -834,9 +969,9 @@ def main():
         remaining = total_lines - offset - limit
         print("")
         print(f"[TRUNCATED] Shown {limit} of {total_lines} lines. Use -Offset {offset + limit} to continue.")
-        # Подсказка про свёрнутые секции стоит в конце вывода — при обрезке повторяем её здесь
-        if tree_state["has_collapsed"]:
-            print("Hint: use -Expand <name> to expand a collapsed section, -Expand * for all")
+        # Подсказки стоят в конце вывода — при обрезке повторяем их здесь
+        for h in hints:
+            print(h)
     else:
         for l in lines:
             print(l)
