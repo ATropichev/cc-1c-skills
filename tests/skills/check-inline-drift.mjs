@@ -889,6 +889,15 @@ const FAMILIES = [
   { name: 'get_event_entry', py: 'get_event_entry', ps1: 'Get-EventEntry', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
   { name: 'test_event_pairs', py: 'test_event_pairs', ps1: 'Test-EventPairs', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
   { name: 'warn_events_ignored', py: 'warn_events_ignored', ps1: 'Warn-EventsIgnored', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  // ── Заготовки обработчиков в модуле формы ──
+  { name: 'get_form_module_template', py: 'get_form_module_template', ps1: 'Get-FormModuleTemplate', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit', 'form-add'] }] },
+  { name: 'register_handler', py: 'register_handler', ps1: 'Register-Handler', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  { name: 'get_module_outline', py: 'get_module_outline', ps1: 'Get-ModuleOutline', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  { name: 'get_handler_stub', py: 'get_handler_stub', ps1: 'Get-HandlerStub', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  { name: 'get_region_rank', py: 'get_region_rank', ps1: 'Get-RegionRank', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  { name: 'get_handler_region_name', py: 'get_handler_region_name', ps1: 'Get-HandlerRegionName', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  { name: 'add_stub_to_module', py: 'add_stub_to_module', ps1: 'Add-StubToModule', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
+  { name: 'update_form_module', py: 'update_form_module', ps1: 'Update-FormModule', variants: [{ id: 'base', authority: 'form-compile', consumers: ['form-edit'] }] },
   {
     name: 'get_table_source', py: 'get_table_source', ps1: 'Get-TableSource',
     variants: [

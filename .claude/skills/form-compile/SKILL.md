@@ -367,7 +367,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/form-compile.ps1" -
 ## Workflow
 
 1. **Каркас**: `/form-add` создаёт метаданные формы, `Module.bsl` и регистрирует форму у объекта.
-2. **Компиляция**: `/form-compile` наполняет `Form.xml`.
+2. **Компиляция**: `/form-compile` наполняет `Form.xml`; для обработчиков событий и команд, которых ещё нет в модуле, добавляет в `Module.bsl` пустые процедуры с нужной сигнатурой — остаётся написать тело.
 3. **Проверка**: `/form-validate`, `/form-info`.
 
 ## Внешние обработки (EPF)

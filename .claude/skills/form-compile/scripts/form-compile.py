@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.211 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.212 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -3098,12 +3098,244 @@ def warn_events_ignored(el, xml_tag, element_name):
 # First XML format version of the platform where a catalog event appeared.
 PLATFORM_FORMAT_RANK = {"8.3.25": 218, "8.3.26": 219, "8.3.27": 220, "8.5": 221}
 
+# --- Заготовки обработчиков в модуле формы ---
+# Привязки, которые затронул запуск, собираются в _handler_bindings; после записи Form.xml
+# update_form_module дописывает в модуль процедуры, которых там ещё нет, — в области по стандарту БСП.
+_handler_bindings = []
+# таблица, колонки которой сейчас эмитятся
+_handler_table = {'name': ''}
+
+
+# kind: form | element | command; table — таблица, внутри которой элемент (область «…ТаблицыФормы<Имя>»).
+# Одно имя на несколько событий — одна процедура: сигнатуру даёт первая привязка.
+def register_handler(handler, kind, xml_tag='', event_name='', table=''):
+    if not handler:
+        return
+    for b in _handler_bindings:
+        if b['handler'].lower() == handler.lower():
+            return
+    _handler_bindings.append({'handler': handler, 'kind': kind, 'xmlTag': xml_tag, 'eventName': event_name, 'table': table or ''})
+
+
+# Пустой модуль формы. Табличных областей нет: имя таблицы при создании формы неизвестно.
+def get_form_module_template():
+    out = []
+    for r in ('\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u0424\u043e\u0440\u043c\u044b',
+              '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u042d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0428\u0430\u043f\u043a\u0438\u0424\u043e\u0440\u043c\u044b',
+              '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u041a\u043e\u043c\u0430\u043d\u0434\u0424\u043e\u0440\u043c\u044b',
+              '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u041e\u043f\u043e\u0432\u0435\u0449\u0435\u043d\u0438\u0439',
+              '\u0421\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0435\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b\u0418\u0424\u0443\u043d\u043a\u0446\u0438\u0438'):
+        if out:
+            out.append('')
+        out += [f'#\u041e\u0431\u043b\u0430\u0441\u0442\u044c {r}', '', '#\u041a\u043e\u043d\u0435\u0446\u041e\u0431\u043b\u0430\u0441\u0442\u0438']
+    return out
+
+
+# Процедуры и функции модуля (имя, первая и последняя строка; первая — с аннотациями над заголовком)
+# и области (имя, строки #Область и #КонецОбласти, вложенность). Строки нумеруются с 1.
+# Заголовок — только в начале строки: продолжение литерала («|…») и комментарий заголовком не станут.
+def get_module_outline(lines):
+    procs, regions, opened = [], [], []
+    cur = None
+    for i, l in enumerate(lines):
+        if cur is not None:
+            if re.match(r'^\s*(\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b|\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438|EndProcedure|EndFunction)(?!\w)', l, re.I):
+                cur['end'] = i + 1
+                procs.append(cur)
+                cur = None
+            continue
+        m = re.match(r'^\s*(?:(?:\u0410\u0441\u0438\u043d\u0445|Async)\s+)?(?:\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u0430|\u0424\u0443\u043d\u043a\u0446\u0438\u044f|Procedure|Function)\s+(\w+)\s*\(', l, re.I)
+        if m:
+            s = i
+            while s > 0 and re.match(r'^\s*&', lines[s - 1]):
+                s -= 1
+            cur = {'name': m.group(1), 'start': s + 1, 'end': i + 1}
+            continue
+        m = re.match(r'^\s*#(?:\u041e\u0431\u043b\u0430\u0441\u0442\u044c|Region)\s+(\S+)', l, re.I)
+        if m:
+            opened.append({'name': m.group(1), 'start': i + 1, 'end': 0, 'depth': len(opened)})
+            continue
+        if re.match(r'^\s*#(\u041a\u043e\u043d\u0435\u0446\u041e\u0431\u043b\u0430\u0441\u0442\u0438|EndRegion)(?!\w)', l, re.I) and opened:
+            r = opened.pop()
+            r['end'] = i + 1
+            regions.append(r)
+    return {'procs': procs, 'regions': regions}
+
+
+# Текст заготовки: директива и параметры — из каталога событий, у команды — (Команда) на клиенте.
+# None — событие вне каталога, сигнатура неизвестна.
+def get_handler_stub(b):
+    if b['kind'] == 'command':
+        directive, params = '\u041d\u0430\u041a\u043b\u0438\u0435\u043d\u0442\u0435', '\u041a\u043e\u043c\u0430\u043d\u0434\u0430'
+    else:
+        entry = get_event_entry(b['xmlTag'], b['eventName'])
+        if not entry:
+            return None
+        directive, params = entry[1], entry[2]
+    return [f'&{directive}', f"\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u0430 {b['handler']}({params})", '\t// \u0412\u0441\u0442\u0430\u0432\u0438\u0442\u044c \u0441\u043e\u0434\u0435\u0440\u0436\u0438\u043c\u043e\u0435 \u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0430.', '\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b']
+
+
+# Порядок областей модуля формы по стандарту (типовые): куда встаёт новая область.
+def get_region_rank(name):
+    n = name.lower()
+    if n == '\u043e\u043f\u0438\u0441\u0430\u043d\u0438\u0435\u043f\u0435\u0440\u0435\u043c\u0435\u043d\u043d\u044b\u0445':
+        return 0
+    if n == '\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0441\u043e\u0431\u044b\u0442\u0438\u0439\u0444\u043e\u0440\u043c\u044b':
+        return 1
+    if n in ('\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0441\u043e\u0431\u044b\u0442\u0438\u0439\u044d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0448\u0430\u043f\u043a\u0438\u0444\u043e\u0440\u043c\u044b', '\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0441\u043e\u0431\u044b\u0442\u0438\u0439\u044d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0444\u043e\u0440\u043c\u044b'):
+        return 2
+    if n.startswith('\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0441\u043e\u0431\u044b\u0442\u0438\u0439\u044d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0442\u0430\u0431\u043b\u0438\u0446\u044b\u0444\u043e\u0440\u043c\u044b'):
+        return 3
+    if n == '\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u043a\u043e\u043c\u0430\u043d\u0434\u0444\u043e\u0440\u043c\u044b':
+        return 4
+    if n == '\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u043e\u043f\u043e\u0432\u0435\u0449\u0435\u043d\u0438\u0439':
+        return 5
+    if n == '\u0441\u043b\u0443\u0436\u0435\u0431\u043d\u044b\u0435\u043f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b\u0438\u0444\u0443\u043d\u043a\u0446\u0438\u0438':
+        return 6
+    return -1
+
+
+# Область для привязки. Общая область элементов (без «шапки») — для всех элементов, и табличных тоже:
+# модуль уже так устроен.
+def get_handler_region_name(b, regions):
+    if b['kind'] == 'form':
+        return '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u0424\u043e\u0440\u043c\u044b'
+    if b['kind'] == 'command':
+        return '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u041a\u043e\u043c\u0430\u043d\u0434\u0424\u043e\u0440\u043c\u044b'
+    has = {r['name'].lower() for r in regions}
+    if '\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0441\u043e\u0431\u044b\u0442\u0438\u0439\u044d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0444\u043e\u0440\u043c\u044b' in has and '\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0441\u043e\u0431\u044b\u0442\u0438\u0439\u044d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0448\u0430\u043f\u043a\u0438\u0444\u043e\u0440\u043c\u044b' not in has:
+        return '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u042d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0424\u043e\u0440\u043c\u044b'
+    if b['table']:
+        return f"\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u042d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0422\u0430\u0431\u043b\u0438\u0446\u044b\u0424\u043e\u0440\u043c\u044b{b['table']}"
+    return '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u042d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0428\u0430\u043f\u043a\u0438\u0424\u043e\u0440\u043c\u044b'
+
+
+# Вставить заготовку в модуль (список строк): в конец своей области, нет области — создать её на месте
+# по порядку областей, нет областей вообще — в конец модуля. Отделяется одной пустой строкой.
+def add_stub_to_module(lines, stub, b):
+    outline = get_module_outline(lines)
+    if not outline['regions']:
+        while lines and not lines[-1].strip():
+            lines.pop()
+        if lines:
+            lines.append('')
+        lines.extend(stub)
+        return
+    name = get_handler_region_name(b, outline['regions'])
+    target = None
+    for r in outline['regions']:
+        if r['name'].lower() == name.lower() and (target is None or r['start'] < target['start']):
+            target = r
+    if target is not None:
+        # перед #КонецОбласти, сняв пустые строки над ним
+        k = target['end'] - 1
+        while k - 1 > target['start'] - 1 and not lines[k - 1].strip():
+            k -= 1
+            del lines[k]
+        lines[k:k] = [''] + stub + ['']
+        return
+    block = [f'#\u041e\u0431\u043b\u0430\u0441\u0442\u044c {name}', ''] + stub + ['', '#\u041a\u043e\u043d\u0435\u0446\u041e\u0431\u043b\u0430\u0441\u0442\u0438']
+    rank = get_region_rank(name)
+    top = sorted([r for r in outline['regions'] if r['depth'] == 0], key=lambda r: r['start'])
+    after = before = None
+    for r in top:
+        rr = get_region_rank(r['name'])
+        if rr < 0:
+            continue
+        if rr <= rank:
+            after = r
+        elif before is None:
+            before = r
+    if after is not None:
+        lines[after['end']:after['end']] = [''] + block
+        return
+    if before is not None:
+        lines[before['start'] - 1:before['start'] - 1] = block + ['']
+        return
+    while lines and not lines[-1].strip():
+        lines.pop()
+    lines.extend([''] + block)
+
+
+# Дописать в модуль формы процедуры для привязок, которых в нём нет. Модуль — <каталог Form.xml>/Form/Module.bsl;
+# нет модуля — создаётся из шаблона, но только в раскладке выгрузки (Form.xml в каталоге Ext).
+# Кодировка и переводы строк существующего модуля сохраняются; новый — UTF-8 с BOM, CRLF, как у form-add.
+# Возвращает строки отчёта: что добавлено, что уже было, с диапазонами строк по итоговому тексту.
+def update_form_module(form_xml_path, shown_form_path):
+    if not _handler_bindings:
+        return []
+    xml_dir = os.path.dirname(form_xml_path)
+    path = os.path.join(xml_dir, 'Form', 'Module.bsl')
+    # путь для вывода — в том же виде, что путь к Form.xml в выводе навыка
+    sep = '\\' if ('\\' in shown_form_path and '/' not in shown_form_path) else '/'
+    shown = re.sub(r'[^\\/]+$', '', shown_form_path) + f'Form{sep}Module.bsl'
+    created = False
+    if os.path.exists(path):
+        with open(path, 'rb') as f:
+            raw = f.read()
+        bom = raw.startswith(b'\xef\xbb\xbf')
+        text = raw.decode('utf-8')
+        if bom:
+            text = text[1:]
+        eol = '\r\n' if ('\r\n' in text or '\n' not in text) else '\n'
+        tail = text.endswith('\n')
+        src = text.replace('\r\n', '\n').rstrip('\n').split('\n')
+        if not text.strip():
+            src = get_form_module_template()
+    elif os.path.basename(xml_dir).lower() == 'ext':
+        created, bom, eol, tail = True, True, '\r\n', False
+        src = get_form_module_template()
+    else:
+        return [f'[WARN] Form module not found: {shown} \u2014 handler stubs not created']
+    lines = list(src)
+    status = {}
+    changed = False
+    for b in _handler_bindings:
+        key = b['handler'].lower()
+        outline = get_module_outline(lines)
+        if any(p['name'].lower() == key for p in outline['procs']):
+            status[key] = 'exists'
+            continue
+        stub = get_handler_stub(b)
+        if stub is None:
+            status[key] = f"not added: no signature known for event '{b['eventName']}' of {b['xmlTag']}"
+            continue
+        add_stub_to_module(lines, stub, b)
+        status[key] = 'added'
+        changed = True
+    if changed or created:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        out = eol.join(lines)
+        if tail:
+            out += eol
+        with open(path, 'wb') as f:
+            f.write((('\ufeff' if bom else '') + out).encode('utf-8'))
+    outline = get_module_outline(lines)
+    # \u0432 \u043f\u043e\u0440\u044f\u0434\u043a\u0435 \u0441\u0442\u0440\u043e\u043a \u043c\u043e\u0434\u0443\u043b\u044f; \u043d\u0435 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043d\u044b\u0435 \u2014 \u0432 \u043a\u043e\u043d\u0446\u0435
+    rows = []
+    for b in _handler_bindings:
+        key = b['handler'].lower()
+        st = status[key]
+        p = next((x for x in outline['procs'] if x['name'].lower() == key), None)
+        if st == 'added':
+            rows.append((p['start'], len(rows), f"  + {b['handler']} \u2014 added, lines {p['start']}-{p['end']}"))
+        elif st == 'exists':
+            rows.append((p['start'], len(rows), f"  = {b['handler']} \u2014 exists, lines {p['start']}-{p['end']}"))
+        else:
+            rows.append((sys.maxsize, len(rows), f"  ? {b['handler']} \u2014 {st}"))
+    report = [f'Handlers ({shown}, module created):' if created else f'Handlers ({shown}):']
+    report += [r[2] for r in sorted(rows)]
+    return report
+
 
 def emit_events(lines, el, element_name, indent, xml_tag, source=''):
     pairs = get_event_pairs(el, element_name, xml_tag)
     if not pairs:
         return
     test_event_pairs(pairs, xml_tag, element_name, source)
+    table = element_name if xml_tag == 'Table' else _handler_table['name']
+    for ev_name, handler, _ in pairs:
+        register_handler(handler, 'element', xml_tag, ev_name, table)
 
     lines.append(f"{indent}<Events>")
     for ev_name, handler, call_type in pairs:
@@ -5870,8 +6102,11 @@ def emit_table(lines, el, name, eid, indent):
     # Columns
     if el.get('columns') and len(el['columns']) > 0:
         lines.append(f'{inner}<ChildItems>')
+        prev_table = _handler_table['name']
+        _handler_table['name'] = name
         for col in el['columns']:
             emit_element(lines, col, f'{inner}\t')
+        _handler_table['name'] = prev_table
         lines.append(f'{inner}</ChildItems>')
 
     emit_events(lines, el, name, inner, 'Table', get_table_source(el))
@@ -7235,10 +7470,12 @@ def emit_commands(lines, cmds, indent):
                 ct = normalize_call_type(act.get('callType'), str(cmd.get('name', '')), 'Action')
                 ct_attr = f' callType="{ct}"' if ct else ''
                 lines.append(f'{inner}<Action{ct_attr}>{act.get("handler") if act.get("handler") is not None else ""}</Action>')
+                register_handler(str(act.get('handler')) if act.get('handler') is not None else '', 'command')
         elif cmd.get('action'):
             ct = normalize_call_type(cmd.get('callType'), str(cmd.get('name', '')), 'Action')
             ct_attr = f' callType="{ct}"' if ct else ''
             lines.append(f'{inner}<Action{ct_attr}>{cmd["action"]}</Action>')
+            register_handler(str(cmd['action']), 'command')
 
         emit_functional_options(lines, cmd.get('functionalOptions'), inner)
 
@@ -8101,6 +8338,8 @@ def main():
                     sys.exit(1)
         pairs = get_event_pairs(defn, '', 'Form')
         test_event_pairs(pairs, 'Form', '')
+        for evt_name, evt_handler, _ in pairs:
+            register_handler(evt_handler, 'form', 'Form', evt_name)
         lines.append('\t<Events>')
         for evt_name, evt_handler, call_type in pairs:
             ct_attr = f' callType="{call_type}"' if call_type else ''
@@ -8197,6 +8436,8 @@ def main():
         print(f"     Commands: {len(defn['commands'])}")
     if defn.get('parameters'):
         print(f"     Parameters: {len(defn['parameters'])}")
+    for line in update_form_module(out_path, args.OutputPath):
+        print(line)
 
 
 if __name__ == '__main__':

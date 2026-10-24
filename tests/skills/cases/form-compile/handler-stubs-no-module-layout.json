@@ -1,0 +1,20 @@
+{
+  "name": "Заготовки обработчиков: Form.xml вне раскладки выгрузки и без модуля — предупреждение, модуль не создаётся",
+  "params": {
+    "outputPath": "Черновик/Form.xml"
+  },
+  "input": {
+    "events": {
+      "OnOpen": "ПриОткрытии"
+    },
+    "elements": [],
+    "attributes": []
+  },
+  "expect": {
+    "stdoutContains": [
+      "[WARN] Form module not found:",
+      "Module.bsl — handler stubs not created"
+    ]
+  },
+  "skipPlatformVerify": "не выгрузка конфигурации — проверяется только предупреждение"
+}

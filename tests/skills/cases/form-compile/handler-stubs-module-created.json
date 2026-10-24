@@ -1,0 +1,57 @@
+{
+  "name": "Заготовки обработчиков: модуля нет (форма без form-add) — создаётся из шаблона",
+  "params": {
+    "outputPath": "DataProcessors/Тест/Forms/Форма/Ext/Form.xml"
+  },
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DataProcessor",
+        "name": "Тест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    }
+  ],
+  "input": {
+    "events": {
+      "OnOpen": "ПриОткрытии"
+    },
+    "elements": [
+      {
+        "button": "Заполнить",
+        "command": "Заполнить"
+      }
+    ],
+    "attributes": [
+      {
+        "name": "Объект",
+        "type": "DataProcessorObject.Тест",
+        "main": true
+      }
+    ],
+    "commands": [
+      {
+        "name": "Заполнить",
+        "action": "Заполнить"
+      }
+    ]
+  },
+  "expect": {
+    "fileContains": {
+      "file": "DataProcessors/Тест/Forms/Форма/Ext/Form/Module.bsl",
+      "text": [
+        "#Область ОбработчикиСобытийЭлементовШапкиФормы",
+        "Процедура ПриОткрытии(Отказ)"
+      ]
+    },
+    "stdoutContains": [
+      "Module.bsl, module created):",
+      "  + ПриОткрытии — added, lines 3-6"
+    ]
+  },
+  "skipPlatformVerify": "форма без метаданных (form-add не вызывается) — проверяется создание модуля; такую конфигурацию платформа не загрузит"
+}

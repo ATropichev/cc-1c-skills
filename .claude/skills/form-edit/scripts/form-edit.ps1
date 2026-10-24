@@ -1,4 +1,4 @@
-﻿# form-edit v1.32 — Edit 1C managed form elements
+﻿# form-edit v1.33 — Edit 1C managed form elements
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -679,6 +679,195 @@ function Get-FormatRank([string]$ver) {
 
 # Первая версия формата выгрузки платформы, на которой появилось событие каталога.
 $script:platformFormatRank = @{ "8.3.25" = 218; "8.3.26" = 219; "8.3.27" = 220; "8.5" = 221 }
+
+# --- Заготовки обработчиков в модуле формы ---
+# Привязки, которые затронул запуск, собираются в $script:handlerBindings; после записи Form.xml
+# Update-FormModule дописывает в модуль процедуры, которых там ещё нет, — в области по стандарту БСП.
+$script:handlerBindings = New-Object System.Collections.ArrayList
+$script:handlerTable = ''   # таблица, колонки которой сейчас эмитятся
+
+# kind: form | element | command; table — таблица, внутри которой элемент (область «…ТаблицыФормы<Имя>»).
+# Одно имя на несколько событий — одна процедура: сигнатуру даёт первая привязка.
+function Register-Handler([string]$handler, [string]$kind, [string]$xmlTag = '', [string]$eventName = '', [string]$table = '') {
+	if (-not $handler) { return }
+	foreach ($b in $script:handlerBindings) { if ($b.handler -eq $handler) { return } }
+	[void]$script:handlerBindings.Add([pscustomobject]@{ handler = $handler; kind = $kind; xmlTag = $xmlTag; eventName = $eventName; table = $table })
+}
+
+# Пустой модуль формы. Табличных областей нет: имя таблицы при создании формы неизвестно.
+function Get-FormModuleTemplate {
+	$out = @()
+	foreach ($r in @('ОбработчикиСобытийФормы', 'ОбработчикиСобытийЭлементовШапкиФормы', 'ОбработчикиКомандФормы', 'ОбработчикиОповещений', 'СлужебныеПроцедурыИФункции')) {
+		if ($out.Count -gt 0) { $out += '' }
+		$out += @("#Область $r", '', '#КонецОбласти')
+	}
+	return $out
+}
+
+# Процедуры и функции модуля (имя, первая и последняя строка; первая — с аннотациями над заголовком)
+# и области (имя, строки #Область и #КонецОбласти, вложенность). Строки нумеруются с 1.
+# Заголовок — только в начале строки: продолжение литерала («|…») и комментарий заголовком не станут.
+function Get-ModuleOutline([string[]]$lines) {
+	$procs = New-Object System.Collections.ArrayList
+	$regions = New-Object System.Collections.ArrayList
+	$open = New-Object System.Collections.ArrayList
+	$cur = $null
+	for ($i = 0; $i -lt $lines.Count; $i++) {
+		$l = $lines[$i]
+		if ($null -ne $cur) {
+			if ($l -match '^\s*(КонецПроцедуры|КонецФункции|EndProcedure|EndFunction)(?![\w])') { $cur.end = $i + 1; [void]$procs.Add($cur); $cur = $null }
+			continue
+		}
+		$m = [regex]::Match($l, '^\s*(?:(?:Асинх|Async)\s+)?(?:Процедура|Функция|Procedure|Function)\s+(\w+)\s*\(', 'IgnoreCase')
+		if ($m.Success) {
+			$s = $i
+			while ($s -gt 0 -and $lines[$s - 1] -match '^\s*&') { $s-- }
+			$cur = [pscustomobject]@{ name = $m.Groups[1].Value; start = $s + 1; end = $i + 1 }
+			continue
+		}
+		$m = [regex]::Match($l, '^\s*#(?:Область|Region)\s+(\S+)', 'IgnoreCase')
+		if ($m.Success) { [void]$open.Add([pscustomobject]@{ name = $m.Groups[1].Value; start = $i + 1; end = 0; depth = $open.Count }); continue }
+		if ($l -match '^\s*#(КонецОбласти|EndRegion)(?![\w])' -and $open.Count -gt 0) {
+			$r = $open[$open.Count - 1]; $open.RemoveAt($open.Count - 1)
+			$r.end = $i + 1; [void]$regions.Add($r)
+		}
+	}
+	return @{ procs = $procs; regions = $regions }
+}
+
+# Текст заготовки: директива и параметры — из каталога событий, у команды — (Команда) на клиенте.
+# $null — событие вне каталога, сигнатура неизвестна.
+function Get-HandlerStub($b) {
+	if ($b.kind -eq 'command') { $dir = 'НаКлиенте'; $params = 'Команда' }
+	else {
+		$entry = Get-EventEntry $b.xmlTag $b.eventName
+		if (-not $entry) { return $null }
+		$dir = "$($entry[1])"; $params = "$($entry[2])"
+	}
+	return @("&$dir", "Процедура $($b.handler)($params)", "`t// Вставить содержимое обработчика.", 'КонецПроцедуры')
+}
+
+# Порядок областей модуля формы по стандарту (типовые): куда встаёт новая область.
+function Get-RegionRank([string]$name) {
+	$n = $name.ToLower()
+	if ($n -eq 'описаниепеременных') { return 0 }
+	if ($n -eq 'обработчикисобытийформы') { return 1 }
+	if ($n -eq 'обработчикисобытийэлементовшапкиформы' -or $n -eq 'обработчикисобытийэлементовформы') { return 2 }
+	if ($n.StartsWith('обработчикисобытийэлементовтаблицыформы')) { return 3 }
+	if ($n -eq 'обработчикикомандформы') { return 4 }
+	if ($n -eq 'обработчикиоповещений') { return 5 }
+	if ($n -eq 'служебныепроцедурыифункции') { return 6 }
+	return -1
+}
+
+# Область для привязки. Общая область элементов (без «шапки») — для всех элементов, и табличных тоже:
+# модуль уже так устроен.
+function Get-HandlerRegionName($b, $regions) {
+	if ($b.kind -eq 'form') { return 'ОбработчикиСобытийФормы' }
+	if ($b.kind -eq 'command') { return 'ОбработчикиКомандФормы' }
+	$has = @{}
+	foreach ($r in $regions) { $has[$r.name.ToLower()] = $true }
+	if ($has['обработчикисобытийэлементовформы'] -and -not $has['обработчикисобытийэлементовшапкиформы']) { return 'ОбработчикиСобытийЭлементовФормы' }
+	if ($b.table) { return "ОбработчикиСобытийЭлементовТаблицыФормы$($b.table)" }
+	return 'ОбработчикиСобытийЭлементовШапкиФормы'
+}
+
+# Вставить заготовку в модуль (список строк): в конец своей области, нет области — создать её на месте
+# по порядку областей, нет областей вообще — в конец модуля. Отделяется одной пустой строкой.
+function Add-StubToModule([System.Collections.ArrayList]$lines, [string[]]$stub, $b) {
+	$outline = Get-ModuleOutline $lines.ToArray()
+	if ($outline.regions.Count -eq 0) {
+		while ($lines.Count -gt 0 -and -not $lines[$lines.Count - 1].Trim()) { $lines.RemoveAt($lines.Count - 1) }
+		if ($lines.Count -gt 0) { [void]$lines.Add('') }
+		$lines.AddRange($stub)
+		return
+	}
+	$name = Get-HandlerRegionName $b $outline.regions
+	$target = $null
+	foreach ($r in $outline.regions) { if ($r.name -eq $name -and ($null -eq $target -or $r.start -lt $target.start)) { $target = $r } }
+	if ($null -ne $target) {
+		# перед #КонецОбласти, сняв пустые строки над ним
+		$k = $target.end - 1
+		while ($k - 1 -gt $target.start - 1 -and -not $lines[$k - 1].Trim()) { $k--; $lines.RemoveAt($k) }
+		$lines.InsertRange($k, [string[]](@('') + $stub + @('')))
+		return
+	}
+	$block = [string[]](@("#Область $name", '') + $stub + @('', '#КонецОбласти'))
+	$rank = Get-RegionRank $name
+	$top = @($outline.regions | Where-Object { $_.depth -eq 0 } | Sort-Object start)
+	$after = $null; $before = $null
+	foreach ($r in $top) {
+		$rr = Get-RegionRank $r.name
+		if ($rr -lt 0) { continue }
+		if ($rr -le $rank) { $after = $r } elseif ($null -eq $before) { $before = $r }
+	}
+	if ($null -ne $after) { $lines.InsertRange($after.end, [string[]](@('') + $block)); return }
+	if ($null -ne $before) { $lines.InsertRange($before.start - 1, [string[]]($block + @(''))); return }
+	while ($lines.Count -gt 0 -and -not $lines[$lines.Count - 1].Trim()) { $lines.RemoveAt($lines.Count - 1) }
+	$lines.InsertRange($lines.Count, [string[]](@('') + $block))
+}
+
+# Дописать в модуль формы процедуры для привязок, которых в нём нет. Модуль — <каталог Form.xml>/Form/Module.bsl;
+# нет модуля — создаётся из шаблона, но только в раскладке выгрузки (Form.xml в каталоге Ext).
+# Кодировка и переводы строк существующего модуля сохраняются; новый — UTF-8 с BOM, CRLF, как у form-add.
+# Возвращает строки отчёта: что добавлено, что уже было, с диапазонами строк по итоговому тексту.
+function Update-FormModule([string]$formXmlPath, [string]$shownFormPath) {
+	if ($script:handlerBindings.Count -eq 0) { return @() }
+	$xmlDir = [System.IO.Path]::GetDirectoryName($formXmlPath)
+	$path = [System.IO.Path]::Combine($xmlDir, 'Form', 'Module.bsl')
+	# путь для вывода — в том же виде, что путь к Form.xml в выводе навыка
+	$sep = if ($shownFormPath.Contains('\') -and -not $shownFormPath.Contains('/')) { '\' } else { '/' }
+	$shown = ($shownFormPath -replace '[^\\/]+$', '') + "Form${sep}Module.bsl"
+	$created = $false
+	if (Test-Path -LiteralPath $path) {
+		$bytes = [System.IO.File]::ReadAllBytes($path)
+		$bom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
+		$text = (New-Object System.Text.UTF8Encoding($false)).GetString($bytes)
+		if ($bom) { $text = $text.Substring(1) }
+		$eol = if ($text.Contains("`r`n") -or -not $text.Contains("`n")) { "`r`n" } else { "`n" }
+		$tail = $text.EndsWith("`n")
+		$src = @(($text -replace "`r`n", "`n").TrimEnd("`n") -split "`n")
+		if (-not $text.Trim()) { $src = Get-FormModuleTemplate }
+	} elseif ([System.IO.Path]::GetFileName($xmlDir) -eq 'Ext') {
+		$created = $true; $bom = $true; $eol = "`r`n"; $tail = $false
+		$src = Get-FormModuleTemplate
+	} else {
+		return @("[WARN] Form module not found: $shown — handler stubs not created")
+	}
+	$lines = New-Object System.Collections.ArrayList
+	$lines.AddRange([string[]]$src)
+	$status = @{}
+	$changed = $false
+	foreach ($b in $script:handlerBindings) {
+		$outline = Get-ModuleOutline $lines.ToArray()
+		if (@($outline.procs | Where-Object { $_.name -eq $b.handler }).Count -gt 0) { $status[$b.handler] = 'exists'; continue }
+		$stub = Get-HandlerStub $b
+		if ($null -eq $stub) { $status[$b.handler] = "not added: no signature known for event '$($b.eventName)' of $($b.xmlTag)"; continue }
+		Add-StubToModule $lines $stub $b
+		$status[$b.handler] = 'added'
+		$changed = $true
+	}
+	if ($changed -or $created) {
+		$dir = [System.IO.Path]::GetDirectoryName($path)
+		if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+		$out = ($lines.ToArray() -join $eol)
+		if ($tail) { $out += $eol }
+		[System.IO.File]::WriteAllText($path, $out, (New-Object System.Text.UTF8Encoding($bom)))
+	}
+	$outline = Get-ModuleOutline $lines.ToArray()
+	# в порядке строк модуля; не добавленные — в конце
+	$rows = @()
+	foreach ($b in $script:handlerBindings) {
+		$st = $status[$b.handler]
+		$p = @($outline.procs | Where-Object { $_.name -eq $b.handler })[0]
+		if ($st -eq 'added') { $rows += [pscustomobject]@{ line = $p.start; n = $rows.Count; text = "  + $($b.handler) — added, lines $($p.start)-$($p.end)" } }
+		elseif ($st -eq 'exists') { $rows += [pscustomobject]@{ line = $p.start; n = $rows.Count; text = "  = $($b.handler) — exists, lines $($p.start)-$($p.end)" } }
+		else { $rows += [pscustomobject]@{ line = [int]::MaxValue; n = $rows.Count; text = "  ? $($b.handler) — $st" } }
+	}
+	$report = @(if ($created) { "Handlers ($shown, module created):" } else { "Handlers ($shown):" })
+	foreach ($r in @($rows | Sort-Object line, n)) { $report += $r.text }
+	return $report
+}
 
 # Тип реквизита формы, к которому привязана таблица ("" — не определить: пути нет или реквизита нет в форме).
 function Get-TableSource($el) {
@@ -2643,6 +2832,8 @@ function Emit-Events {
 	$pairs = Get-EventPairs -el $el -elementName $elementName -xmlTag $xmlTag
 	if ($pairs.Count -eq 0) { return }
 	Test-EventPairs -pairs $pairs -xmlTag $xmlTag -elementName $elementName -source $source
+	$table = if ($xmlTag -eq 'Table') { $elementName } else { $script:handlerTable }
+	foreach ($pr in $pairs) { Register-Handler $pr.handler 'element' $xmlTag $pr.name $table }
 
 	X "$indent<Events>"
 	foreach ($pr in $pairs) {
@@ -4535,9 +4726,11 @@ function Emit-Table {
 	# Columns
 	if ($el.columns -and $el.columns.Count -gt 0) {
 		X "$inner<ChildItems>"
+		$prevTable = $script:handlerTable; $script:handlerTable = $name
 		foreach ($col in $el.columns) {
 			Emit-Element -el $col -indent "$inner`t"
 		}
+		$script:handlerTable = $prevTable
 		X "$inner</ChildItems>"
 	}
 
@@ -5826,11 +6019,13 @@ function Emit-Commands {
 				$ct = Normalize-CallType "$($act.callType)" "$($cmd.name)" 'Action'
 				$ctAttr = if ($ct) { " callType=`"$ct`"" } else { "" }
 				X "$inner<Action$ctAttr>$($act.handler)</Action>"
+				Register-Handler "$($act.handler)" 'command'
 			}
 		} elseif ($cmd.action) {
 			$ct = Normalize-CallType "$($cmd.callType)" "$($cmd.name)" 'Action'
 			$ctAttr = if ($ct) { " callType=`"$ct`"" } else { "" }
 			X "$inner<Action$ctAttr>$($cmd.action)</Action>"
+			Register-Handler "$($cmd.action)" 'command'
 		}
 
 		Emit-FunctionalOptions -fo $cmd.functionalOptions -indent $inner
@@ -6525,9 +6720,13 @@ function Invoke-Add($op, [string]$typeKey, [int]$idx) {
 		if ($script:barTags -contains $cur.LocalName) { $inBar = $true; break }
 		$cur = $cur.ParentNode
 	}
+	# Обработчики элементов внутри таблицы — в область этой таблицы
+	$tbl = if (Same $pos.Container $root) { $null } else { Get-NearestTable $pos.Container $true }
+	$script:handlerTable = if ($null -ne $tbl) { $tbl.GetAttribute('name') } else { '' }
 	X "<_F $allNsDecl>"
 	Emit-Element -el $el -indent $indent -inCmdBar $inBar
 	X "</_F>"
+	$script:handlerTable = ''
 	$node = @(Import-ElementNodes (Parse-Fragment (Sort-ElementTagOrder (Normalize-EnumTags $script:xml.ToString()))))[0]
 	Insert-NodeAt $ci $node $pos.Ref $indent
 	if ($chained) { $script:chainNode = $node }
@@ -6807,6 +7006,8 @@ function Add-ElementEvents($node, $on, $handlers, [string]$ctx) {
 		# В форме расширения обработчик без callType платформа читает как Before и так и пишет
 		if (-not $callType -and $script:isExtension) { $callType = 'Before' }
 		Test-EventPairs -pairs @([pscustomobject]@{ name = $evtName }) -xmlTag $nt -elementName $name -source $source
+		$tbl = Get-NearestTable $node $true
+		Register-Handler $handler 'element' $nt $evtName $(if ($null -ne $tbl) { $tbl.GetAttribute('name') } else { '' })
 		$ctStr = if ($callType) { "[$callType]" } else { "" }
 		if ($null -ne $events) {
 			$dup = $null
@@ -6814,7 +7015,7 @@ function Add-ElementEvents($node, $on, $handlers, [string]$ctx) {
 				if ($e.GetAttribute('name') -eq $evtName -and $e.GetAttribute('callType') -eq $callType) { $dup = $e; break }
 			}
 			if ($null -ne $dup) {
-				if ($dup.InnerText -eq $handler) { $script:opLog += "  = ${name}: событие $evtName$ctStr -> $handler уже есть"; continue }
+				if ($dup.InnerText -eq $handler) { $script:opLog += "  = ${name}: event $evtName$ctStr -> $handler already bound"; continue }
 				Fail "${ctx}: у '$name' событие $evtName$ctStr уже обрабатывает '$($dup.InnerText)' — второй обработчик не повесить"
 			}
 		}
@@ -6827,7 +7028,7 @@ function Add-ElementEvents($node, $on, $handlers, [string]$ctx) {
 		if ($callType) { $ev.SetAttribute('callType', $callType) }
 		$ev.InnerText = $handler
 		Insert-NodeAt $events $ev $null (Get-ChildIndent $events)
-		$script:opLog += "  * ${name}: событие $evtName$ctStr -> $handler"
+		$script:opLog += "  * ${name}: event $evtName$ctStr -> $handler"
 		$script:changedCount++
 	}
 }
@@ -7674,6 +7875,7 @@ function Add-FormEventsDsl($events) {
 				$h = Get-HandlerName -elementName '' -eventName $p.Name -xmlTag 'Form'
 			}
 			$ctStr = if ($ct) { "[$ct]" } else { "" }
+			Register-Handler $h 'form' 'Form' $p.Name
 			if ($null -eq $sec) { $sec = $root.SelectSingleNode("f:Events", $nsMgr) }
 			if ($null -ne $sec) {
 				$dup = $null
@@ -7681,7 +7883,7 @@ function Add-FormEventsDsl($events) {
 					if ($e.GetAttribute('name') -eq $p.Name -and $e.GetAttribute('callType') -eq $ct) { $dup = $e; break }
 				}
 				if ($null -ne $dup) {
-					if ($dup.InnerText -eq $h) { $script:formLog += "  = событие $($p.Name)$ctStr -> $h уже есть"; continue }
+					if ($dup.InnerText -eq $h) { $script:formLog += "  = event $($p.Name)$ctStr -> $h already bound"; continue }
 					Fail "events: событие формы $($p.Name)$ctStr уже обрабатывает '$($dup.InnerText)' — второй обработчик не повесить"
 				}
 			}
@@ -7691,7 +7893,7 @@ function Add-FormEventsDsl($events) {
 			if ($ct) { $ev.SetAttribute('callType', $ct) }
 			$ev.InnerText = $h
 			Insert-NodeAt $sec $ev $null (Get-ChildIndent $sec)
-			$script:formLog += "  + событие $($p.Name)$ctStr -> $h"
+			$script:formLog += "  + event $($p.Name)$ctStr -> $h"
 			$script:formChanged++
 		}
 	}
@@ -8120,6 +8322,8 @@ if ($def.elementEvents -and $def.elementEvents.Count -gt 0) {
 
 		$ctStr = if ($ee.callType) { "[$($ee.callType)]" } else { "" }
 		$addedElemEvents += "  + $targetName.$eeName${ctStr} -> $eeHandler"
+		$tbl = Get-NearestTable $targetEl $true
+		Register-Handler $eeHandler 'element' $targetEl.LocalName $eeName $(if ($null -ne $tbl) { $tbl.GetAttribute('name') } else { '' })
 	}
 }
 
@@ -8229,6 +8433,8 @@ $enc = New-Object System.Text.UTF8Encoding($targetBom)
 $targetEol = if ((Test-Path -LiteralPath $resolvedFormPath) -and ([System.IO.File]::ReadAllText($resolvedFormPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
 $content = ($content -replace "`r`n", "`n") -replace "`n", $targetEol
 [System.IO.File]::WriteAllText($resolvedFormPath, $content, $enc)
+$handlerReport = @(Update-FormModule $resolvedFormPath $FormPath)
+$script:moduleScan = $null
 
 # === 14. Summary ===
 
@@ -8282,6 +8488,11 @@ if ($addedAttrs.Count -gt 0) {
 if ($addedCmds.Count -gt 0) {
 	Write-Host "Added commands:"
 	foreach ($line in $addedCmds) { Write-Host $line }
+	Write-Host ""
+}
+
+if ($handlerReport.Count -gt 0) {
+	foreach ($line in $handlerReport) { Write-Host $line }
 	Write-Host ""
 }
 

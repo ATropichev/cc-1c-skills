@@ -1,0 +1,49 @@
+{
+  "name": "Заготовки обработчиков: есть процедура — диапазон её строк; нет — дописывается в модуль без областей; событие вне каталога — без заготовки",
+  "setup": "fixture:move-form",
+  "params": {
+    "formPath": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form.xml"
+  },
+  "input": {
+    "elements": [
+      {
+        "set": "Склад",
+        "events": {
+          "OnChange": "СкладПриИзменении"
+        }
+      },
+      {
+        "set": "Товары",
+        "events": {
+          "Selection": "ТоварыВыбор"
+        }
+      },
+      {
+        "set": "Контрагент",
+        "events": {
+          "Foo": "КонтрагентФу"
+        }
+      }
+    ],
+    "commands": [
+      {
+        "name": "Подбор",
+        "action": "Подбор"
+      }
+    ]
+  },
+  "expect": {
+    "fileContains": {
+      "file": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form/Module.bsl",
+      "text": [
+        "Процедура ТоварыВыбор(Элемент, ВыбраннаяСтрока, Поле, СтандартнаяОбработка)"
+      ]
+    },
+    "stdoutContains": [
+      "  = СкладПриИзменении — exists, lines 1-4",
+      "  + ТоварыВыбор — added, lines 14-17",
+      "  + Подбор — added, lines 19-22",
+      "  ? КонтрагентФу — not added: no signature known for event 'Foo' of InputField"
+    ]
+  }
+}

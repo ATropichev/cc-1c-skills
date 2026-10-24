@@ -1,4 +1,4 @@
-﻿# form-add v1.31 — Add managed form to 1C config object
+﻿# form-add v1.32 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -702,37 +702,26 @@ if (Test-Path $formXmlPath) {
 
 # --- 3c. Module.bsl ---
 
+# Пустой модуль формы. Табличных областей нет: имя таблицы при создании формы неизвестно.
+function Get-FormModuleTemplate {
+	$out = @()
+	foreach ($r in @('ОбработчикиСобытийФормы', 'ОбработчикиСобытийЭлементовШапкиФормы', 'ОбработчикиКомандФормы', 'ОбработчикиОповещений', 'СлужебныеПроцедурыИФункции')) {
+		if ($out.Count -gt 0) { $out += '' }
+		$out += @("#Область $r", '', '#КонецОбласти')
+	}
+	return $out
+}
+
 $modulePath = Join-Path $formModuleDir "Module.bsl"
 
-$moduleBsl = @"
-#Область ОбработчикиСобытийФормы
-
-#КонецОбласти
-
-#Область ОбработчикиСобытийЭлементовФормы
-
-#КонецОбласти
-
-#Область ОбработчикиКомандФормы
-
-#КонецОбласти
-
-#Область ОбработчикиОповещений
-
-#КонецОбласти
-
-#Область СлужебныеПроцедурыИФункции
-
-#КонецОбласти
-"@
+$moduleBsl = (Get-FormModuleTemplate) -join "`n"
 
 if (Test-Path $modulePath) {
 	Write-Host "[SKIP] Module.bsl already exists: $modulePath — not overwriting"
 } else {
 	# Модуль пишем в каноне платформы: CRLF в разделителях строк (корпус: 2643 CRLF,
 	# чисто-LF 0 из 3001). Хвостовой перевод НЕ навязываем — у платформы он
-	# неканоничен (1235 модулей с ним, 766 без). Шаблон берёт переводы строк из
-	# самого скрипта, а он в репозитории хранится с LF.
+	# неканоничен (1235 модулей с ним, 766 без).
 	$moduleBsl = ($moduleBsl -replace "`r`n", "`n") -replace "`n", "`r`n"
 	[System.IO.File]::WriteAllText($modulePath, $moduleBsl, $encBom)
 }
