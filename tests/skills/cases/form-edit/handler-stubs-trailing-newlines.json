@@ -1,0 +1,33 @@
+{
+  "name": "Заготовки обработчиков: завершающие пустые строки модуля сохраняются",
+  "setup": "fixture:move-form",
+  "params": {
+    "formPath": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form.xml"
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form/Module.bsl",
+        "content": "&НаКлиенте\nПроцедура СкладПриИзменении(Элемент)\nКонецПроцедуры\n\n\n"
+      }
+    }
+  ],
+  "input": {
+    "elements": [
+      {
+        "set": "Контрагент",
+        "events": {
+          "OnChange": "КонтрагентПриИзменении"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "fileContains": {
+      "file": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form/Module.bsl",
+      "text": [
+        "Процедура КонтрагентПриИзменении(Элемент)\n\t// Вставить содержимое обработчика.\nКонецПроцедуры\n\n\n"
+      ]
+    }
+  }
+}

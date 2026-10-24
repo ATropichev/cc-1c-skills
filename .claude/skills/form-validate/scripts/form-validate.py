@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.31 — Validate 1C managed form
+# form-validate v1.32 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -1062,6 +1062,10 @@ def get_bsl_scan(text):
             # продолжение многострочного литерала: пробелы, затем «|»
             while j < len(line) and line[j] in (' ', '\t'):
                 j += 1
+            # строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
+            if line.startswith('//', j):
+                code.append("")
+                continue
             if j < len(line) and line[j] == '|':
                 j += 1
             cur += "\n"
@@ -1103,7 +1107,8 @@ def get_module_outline(lines):
     cur = None
     for i, l in enumerate(lines):
         if cur is not None:
-            if re.match(r'^\s*(\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b|\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438|EndProcedure|EndFunction)(?!\w)', l, re.I):
+            # \u043a\u043e\u043d\u0435\u0446 \u043f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b \u2014 \u0432 \u043d\u0430\u0447\u0430\u043b\u0435 \u0441\u0442\u0440\u043e\u043a\u0438 \u0438\u043b\u0438 \u043f\u043e\u0441\u043b\u0435 \u00ab;\u00bb (`\u0412\u043e\u0437\u0432\u0440\u0430\u0442 \u0425;\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438`)
+            if re.search(r'(^|;)\s*(\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b|\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438|EndProcedure|EndFunction)(?!\w)', l, re.I):
                 cur['end'] = i + 1
                 procs.append(cur)
                 cur = None
@@ -1124,6 +1129,15 @@ def get_module_outline(lines):
             r['end'] = i + 1
             regions.append(r)
     return {'procs': procs, 'regions': regions}
+
+
+# Текст модуля формы; None — модуль не в UTF-8 (с заменой символов имена процедур не найти — лучше сказать прямо)
+def read_module_text(path):
+    try:
+        with open(path, encoding='utf-8-sig', newline='') as fh:
+            return fh.read()
+    except UnicodeDecodeError:
+        return None
 
 
 def main():
@@ -2230,11 +2244,13 @@ def main():
     # поэтому процедура без привязки только предупреждение.
     if not stopped:
         module_path = os.path.join(os.path.dirname(os.path.abspath(form_path)), 'Form', 'Module.bsl')
+        module_text = read_module_text(module_path) if os.path.isfile(module_path) else None
         if not os.path.isfile(module_path):
             report_ok("22. Form module handlers: no module \u2014 skipped")
+        elif module_text is None:
+            report_warn("22. Form module is not UTF-8 \u2014 handlers are not checked")
         else:
-            with open(module_path, encoding='utf-8-sig', newline='') as fh:
-                bsl = get_bsl_scan(fh.read())
+            bsl = get_bsl_scan(module_text)
             outline = get_module_outline(bsl['Code'])
             procs = {}
             for p in outline['procs']:

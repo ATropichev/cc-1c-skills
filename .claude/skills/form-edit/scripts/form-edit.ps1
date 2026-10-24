@@ -1,4 +1,4 @@
-﻿# form-edit v1.34 — Edit 1C managed form elements
+﻿# form-edit v1.35 — Edit 1C managed form elements
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -313,11 +313,30 @@ $script:nextElemId++
 $script:nextAttrId++
 $script:nextCmdId++
 
+# Префикс имён расширения — <NamePrefix> ближайшего вверх Configuration.xml; "" — не расширение или не задан.
+function Get-ExtensionNamePrefix([string]$dir) {
+	$d = $dir
+	while ($d) {
+		$cfg = Join-Path $d 'Configuration.xml'
+		if (Test-Path -LiteralPath $cfg) {
+			$m = [regex]::Match([System.IO.File]::ReadAllText($cfg), '<NamePrefix>([^<]*)</NamePrefix>')
+			if ($m.Success) { return $m.Groups[1].Value }
+			return ''
+		}
+		$parent = Split-Path $d -Parent
+		if (-not $parent -or $parent -eq $d) { break }
+		$d = $parent
+	}
+	return ''
+}
+
 # --- 4b. Auto-detect extension mode (BaseForm present) ---
 $script:isExtension = $false
+$script:extNamePrefix = ''
 $baseForm = $root.SelectSingleNode("f:BaseForm", $nsMgr)
 if ($baseForm) {
 	$script:isExtension = $true
+	$script:extNamePrefix = Get-ExtensionNamePrefix ([System.IO.Path]::GetDirectoryName($resolvedFormPath))
 	if ($script:nextAttrId -lt 1000000) { $script:nextAttrId = 1000000 }
 	if ($script:nextCmdId -lt 1000000) { $script:nextCmdId = 1000000 }
 	if ($script:nextElemId -lt 1000000) { $script:nextElemId = 1000000 }
@@ -715,7 +734,8 @@ function Get-ModuleOutline([string[]]$lines) {
 	for ($i = 0; $i -lt $lines.Count; $i++) {
 		$l = $lines[$i]
 		if ($null -ne $cur) {
-			if ($l -match '^\s*(КонецПроцедуры|КонецФункции|EndProcedure|EndFunction)(?![\w])') { $cur.end = $i + 1; [void]$procs.Add($cur); $cur = $null }
+			# конец процедуры — в начале строки или после «;» (`Возврат Х;КонецФункции`)
+			if ($l -match '(^|;)\s*(КонецПроцедуры|КонецФункции|EndProcedure|EndFunction)(?![\w])') { $cur.end = $i + 1; [void]$procs.Add($cur); $cur = $null }
 			continue
 		}
 		$m = [regex]::Match($l, '^\s*(?:(?:Асинх|Async)\s+)?(?:Процедура|Функция|Procedure|Function)\s+(\w+)\s*\(', 'IgnoreCase')
@@ -767,6 +787,8 @@ function Get-HandlerRegionName($b, $regions) {
 	if ($b.kind -eq 'command') { return 'ОбработчикиКомандФормы' }
 	$has = @{}
 	foreach ($r in $regions) { $has[$r.name.ToLower()] = $true }
+	# своя область таблицы, если она уже есть, — важнее общей
+	if ($b.table -and $has["обработчикисобытийэлементовтаблицыформы$($b.table)".ToLower()]) { return "ОбработчикиСобытийЭлементовТаблицыФормы$($b.table)" }
 	if ($has['обработчикисобытийэлементовформы'] -and -not $has['обработчикисобытийэлементовшапкиформы']) { return 'ОбработчикиСобытийЭлементовФормы' }
 	if ($b.table) { return "ОбработчикиСобытийЭлементовТаблицыФормы$($b.table)" }
 	return 'ОбработчикиСобытийЭлементовШапкиФормы'
@@ -822,14 +844,18 @@ function Update-FormModule([string]$formXmlPath, [string]$shownFormPath) {
 	if (Test-Path -LiteralPath $path) {
 		$bytes = [System.IO.File]::ReadAllBytes($path)
 		$bom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
-		$text = (New-Object System.Text.UTF8Encoding($false)).GetString($bytes)
+		# строго: модуль не в UTF-8 перезапись испортила бы — такой не трогаем
+		try { $text = (New-Object System.Text.UTF8Encoding($false, $true)).GetString($bytes) }
+		catch { return @("[WARN] Form module is not UTF-8: $shown — handler stubs not created") }
 		if ($bom) { $text = $text.Substring(1) }
 		$eol = if ($text.Contains("`r`n") -or -not $text.Contains("`n")) { "`r`n" } else { "`n" }
-		$tail = $text.EndsWith("`n")
-		$src = @(($text -replace "`r`n", "`n").TrimEnd("`n") -split "`n")
+		$norm = $text -replace "`r`n", "`n"
+		# сколько переводов строк в конце — столько и запишем: модуль не должен меняться вне вставок
+		$tail = $norm.Length - $norm.TrimEnd("`n").Length
+		$src = @($norm.TrimEnd("`n") -split "`n")
 		if (-not $text.Trim()) { $src = Get-FormModuleTemplate }
 	} elseif ([System.IO.Path]::GetFileName($xmlDir) -eq 'Ext') {
-		$created = $true; $bom = $true; $eol = "`r`n"; $tail = $false
+		$created = $true; $bom = $true; $eol = "`r`n"; $tail = 0
 		$src = Get-FormModuleTemplate
 	} else {
 		return @("[WARN] Form module not found: $shown — handler stubs not created")
@@ -850,8 +876,7 @@ function Update-FormModule([string]$formXmlPath, [string]$shownFormPath) {
 	if ($changed -or $created) {
 		$dir = [System.IO.Path]::GetDirectoryName($path)
 		if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-		$out = ($lines.ToArray() -join $eol)
-		if ($tail) { $out += $eol }
+		$out = ($lines.ToArray() -join $eol) + ($eol * $tail)
 		[System.IO.File]::WriteAllText($path, $out, (New-Object System.Text.UTF8Encoding($bom)))
 	}
 	$outline = Get-ModuleOutline $lines.ToArray()
@@ -2778,10 +2803,13 @@ function Emit-SingleType {
 }
 
 function Get-HandlerName {
-	param([string]$elementName, [string]$eventName, [string]$xmlTag)
+	param([string]$elementName, [string]$eventName, [string]$xmlTag, [string]$callType = '')
 	$entry = Get-EventEntry $xmlTag $eventName
-	if ($entry -and $entry[0]) { return "$elementName$($entry[0])" }
-	return "$elementName$eventName"
+	$name = if ($entry -and $entry[0]) { "$elementName$($entry[0])" } else { "$elementName$eventName" }
+	# Обработчик с видом вызова (расширение) — как называет Конфигуратор: префикс расширения + имя + вид вызова.
+	# Без этого имя совпало бы с процедурой исходной формы.
+	if ($callType) { $name = "$($script:extNamePrefix)$name$(@{ Before = 'Перед'; After = 'После'; Override = 'Вместо' }[$callType])" }
+	return $name
 }
 
 function Get-ElementName {
@@ -2801,7 +2829,7 @@ function Get-EventPairs {
 			foreach ($v in $vals) {
 				$h = ""; $ct = ""
 				if ($v -is [System.Management.Automation.PSCustomObject]) { $h = "$($v.handler)"; $ct = Normalize-CallType "$($v.callType)" $elementName $p.Name } else { $h = "$v" }
-				if ([string]::IsNullOrEmpty($h)) { $h = Get-HandlerName -elementName $elementName -eventName $p.Name -xmlTag $xmlTag }
+				if ([string]::IsNullOrEmpty($h)) { $h = Get-HandlerName -elementName $elementName -eventName $p.Name -xmlTag $xmlTag -callType $ct }
 				[void]$pairs.Add([pscustomobject]@{ name = $p.Name; handler = $h; callType = $ct })
 			}
 		}
@@ -2812,7 +2840,7 @@ function Get-EventPairs {
 			} else {
 				$evtName = "$evt"; $h = ""; $ct = ""
 			}
-			if (-not $h) { $h = if ($el.handlers -and $el.handlers.$evtName) { "$($el.handlers.$evtName)" } else { Get-HandlerName -elementName $elementName -eventName $evtName -xmlTag $xmlTag } }
+			if (-not $h) { $h = if ($el.handlers -and $el.handlers.$evtName) { "$($el.handlers.$evtName)" } else { Get-HandlerName -elementName $elementName -eventName $evtName -xmlTag $xmlTag -callType $ct } }
 			[void]$pairs.Add([pscustomobject]@{ name = $evtName; handler = $h; callType = $ct })
 		}
 	}
@@ -6997,14 +7025,14 @@ function Add-ElementEvents($node, $on, $handlers, [string]$ctx) {
 	$events = $node.SelectSingleNode("f:Events", $nsMgr)
 	foreach ($evt in @($on)) {
 		if ($evt -is [string] -or -not $evt.event) {
-			$evtName = "$evt"; $callType = ""
-			$handler = if ($handlers -and $handlers.$evtName) { "$($handlers.$evtName)" } else { Get-HandlerName -elementName $name -eventName $evtName -xmlTag $nt }
+			$evtName = "$evt"; $callType = ""; $handler = ""
 		} else {
 			$evtName = "$($evt.event)"; $callType = Normalize-CallType "$($evt.callType)" $name $evtName
-			$handler = if ($evt.handler) { "$($evt.handler)" } elseif ($handlers -and $handlers.$evtName) { "$($handlers.$evtName)" } else { Get-HandlerName -elementName $name -eventName $evtName -xmlTag $nt }
+			$handler = if ($evt.handler) { "$($evt.handler)" } else { "" }
 		}
 		# В форме расширения обработчик без callType платформа читает как Before и так и пишет
 		if (-not $callType -and $script:isExtension) { $callType = 'Before' }
+		if (-not $handler) { $handler = if ($handlers -and $handlers.$evtName) { "$($handlers.$evtName)" } else { Get-HandlerName -elementName $name -eventName $evtName -xmlTag $nt -callType $callType } }
 		Test-EventPairs -pairs @([pscustomobject]@{ name = $evtName }) -xmlTag $nt -elementName $name -source $source
 		$tbl = Get-NearestTable $node $true
 		Register-Handler $handler 'element' $nt $evtName $(if ($null -ne $tbl) { $tbl.GetAttribute('name') } else { '' })
@@ -7052,7 +7080,21 @@ function Invoke-Set($op, [int]$idx) {
 			if ($key -eq 'on') { Add-ElementEvents $node $p.Value $op.handlers $c; continue }
 			if ($key -eq 'events') {
 				if (-not ($p.Value -is [System.Management.Automation.PSCustomObject])) { Fail "${c}: events — объект { Событие: обработчик }" }
-				$on = @(Get-EventPairs -el $op -elementName $n -xmlTag $nt | ForEach-Object { [pscustomobject]@{ event = $_.name; handler = $_.handler; callType = $_.callType } })
+				# В форме расширения событие без callType — Before (так его читает платформа); вид вызова
+				# нужен уже имени по null: <Префикс><Имя>Перед
+				$src = $op
+				if ($script:isExtension) {
+					$ev = [pscustomobject]@{}
+					foreach ($e in $p.Value.PSObject.Properties) {
+						$vals = @(foreach ($v in @($e.Value)) {
+							if ($v -is [System.Management.Automation.PSCustomObject]) { if ($v.callType) { $v } else { [pscustomobject]@{ handler = $v.handler; callType = 'Before' } } }
+							else { [pscustomobject]@{ handler = $v; callType = 'Before' } }
+						})
+						$ev | Add-Member -NotePropertyName $e.Name -NotePropertyValue $(if ($vals.Count -eq 1) { $vals[0] } else { $vals })
+					}
+					$src = [pscustomobject]@{ events = $ev }
+				}
+				$on = @(Get-EventPairs -el $src -elementName $n -xmlTag $nt | ForEach-Object { [pscustomobject]@{ event = $_.name; handler = $_.handler; callType = $_.callType } })
 				Add-ElementEvents $node $on $null $c
 				continue
 			}
@@ -7400,6 +7442,8 @@ function Get-BslScan([string]$text) {
 		if ($inStr) {
 			# продолжение многострочного литерала: пробелы, затем «|»
 			while ($j -lt $line.Length -and ($line[$j] -eq ' ' -or $line[$j] -eq "`t")) { $j++ }
+			# строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
+			if ($j + 1 -lt $line.Length -and $line[$j] -eq '/' -and $line[$j + 1] -eq '/') { [void]$code.Add(""); continue }
 			if ($j -lt $line.Length -and $line[$j] -eq '|') { $j++ }
 			$cur += "`n"
 		}
@@ -7885,7 +7929,7 @@ function Add-FormEventsDsl($events) {
 			# null — имя по конвенции типовых (ПриСозданииНаСервере); у события вне каталога его нет
 			if (-not $h) {
 				if (-not (Get-EventEntry 'Form' $p.Name)) { Fail "events: у события формы $($p.Name) укажите имя обработчика — имени по конвенции для него нет" }
-				$h = Get-HandlerName -elementName '' -eventName $p.Name -xmlTag 'Form'
+				$h = Get-HandlerName -elementName '' -eventName $p.Name -xmlTag 'Form' -callType $ct
 			}
 			$ctStr = if ($ct) { "[$ct]" } else { "" }
 			Register-Handler $h 'form' 'Form' $p.Name
@@ -8259,6 +8303,7 @@ if ($def.formEvents -and $def.formEvents.Count -gt 0) {
 		X "$evtChildIndent<Event name=`"$feName`"$callTypeAttr>$feHandler</Event>"
 		$ctStr = if ($fe.callType) { "[$($fe.callType)]" } else { "" }
 		$addedFormEvents += "  + $feName${ctStr} -> $feHandler"
+		Register-Handler $feHandler 'form' 'Form' $feName
 	}
 	X "</_F>"
 

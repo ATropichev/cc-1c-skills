@@ -1,0 +1,21 @@
+{
+  "name": "Модуль формы: КонецФункции на одной строке с оператором — следующие процедуры находятся",
+  "setup": "fixture:module-handler-orphan",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "DataProcessors/БезДействия/Forms/Форма/Ext/Form/Module.bsl",
+        "content": "&НаСервере\nФункция Параметры()\n\tВозврат 1;КонецФункции\n\n&НаКлиенте\nПроцедура ПолеПриИзменении(Элемент)\n\tПараметры();\nКонецПроцедуры\n\n&НаКлиенте\nПроцедура Выполнить(Команда)\nКонецПроцедуры\n"
+      }
+    }
+  ],
+  "expect": {
+    "stdoutContains": "=== Validation OK",
+    "stdoutNotContains": [
+      "22."
+    ]
+  }
+}

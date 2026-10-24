@@ -101,7 +101,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/form-compile.ps1" -
 
 **input:** `OnChange`, `StartChoice`, `ChoiceProcessing`, `AutoComplete`, `TextEditEnd`, `Clearing`, `Opening`, `Creating`, `EditTextChange`, `Tuning`, `StartListChoice`
 **check / radio:** `OnChange`
-**table:** `Selection`, `OnActivateRow`, `OnActivateCell`, `OnActivateField`, `BeforeAddRow`, `BeforeDeleteRow`, `AfterDeleteRow`, `BeforeRowChange`, `OnStartEdit`, `OnEditEnd`, `BeforeEditEnd`, `OnChange`, `ChoiceProcessing`, `ValueChoice`, `BeforeExpand`, `BeforeCollapse`, `Drag`, `DragStart`, `DragCheck`, `DragEnd`; только у таблицы динамического списка — `OnGetDataAtServer`, `BeforeLoadUserSettingsAtServer`, `OnUpdateUserSettingSetAtServer`
+**table:** `Selection`, `OnActivateRow`, `OnActivateCell`, `OnActivateField`, `BeforeAddRow`, `BeforeDeleteRow`, `AfterDeleteRow`, `BeforeRowChange`, `OnStartEdit`, `OnEditEnd`, `BeforeEditEnd`, `OnChange`, `ChoiceProcessing`, `ValueChoice`, `BeforeExpand`, `BeforeCollapse`, `Drag`, `DragStart`, `DragCheck`, `DragEnd`; только у таблицы динамического списка — `OnGetDataAtServer`, `URLGetProcessing`, `BeforeLoadUserSettingsAtServer`, `OnLoadUserSettingsAtServer`, `OnSaveUserSettingsAtServer`, `OnUpdateUserSettingSetAtServer`
 **label:** `Click`, `URLProcessing`
 **labelField:** `Click`, `URLProcessing`, `OnChange`
 **picture:** `Click`, `Drag`, `DragCheck`

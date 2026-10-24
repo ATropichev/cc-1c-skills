@@ -1,4 +1,4 @@
-﻿# form-compile v1.212 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.213 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1423,6 +1423,23 @@ function Detect-FormatVersion([string]$dir) {
 	return "2.17"
 }
 
+# Префикс имён расширения — <NamePrefix> ближайшего вверх Configuration.xml; "" — не расширение или не задан.
+function Get-ExtensionNamePrefix([string]$dir) {
+	$d = $dir
+	while ($d) {
+		$cfg = Join-Path $d 'Configuration.xml'
+		if (Test-Path -LiteralPath $cfg) {
+			$m = [regex]::Match([System.IO.File]::ReadAllText($cfg), '<NamePrefix>([^<]*)</NamePrefix>')
+			if ($m.Success) { return $m.Groups[1].Value }
+			return ''
+		}
+		$parent = Split-Path $d -Parent
+		if (-not $parent -or $parent -eq $d) { break }
+		$d = $parent
+	}
+	return ''
+}
+
 # Версия формата как число для сравнений: "2.20" → 220, "2.9" → 209.
 # Строковое сравнение здесь неверно ("2.9" > "2.17" лексикографически) — известная ловушка.
 function Get-FormatRank([string]$ver) {
@@ -1603,6 +1620,7 @@ function Assert-EditAllowed([string]$targetPath, [string]$require) {
 $script:outPathResolved = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path (Get-Location) $OutputPath }
 Assert-EditAllowed $script:outPathResolved 'editable'
 $script:formatVersion = Detect-FormatVersion ([System.IO.Path]::GetDirectoryName($script:outPathResolved))
+$script:extNamePrefix = Get-ExtensionNamePrefix ([System.IO.Path]::GetDirectoryName($script:outPathResolved))
 $script:compatMode = Detect-CompatibilityMode ([System.IO.Path]::GetDirectoryName($script:outPathResolved))
 # Режим ниже 8.3.19: dcssch в шапке — только при использовании, поля/параметры списка не выгружаются.
 # Нераспознанный режим (DontUse и т.п. — ранг 0) — как текущая платформа, то есть не старый.
@@ -2960,10 +2978,13 @@ function Get-EventEntry([string]$xmlTag, [string]$eventName) {
 # Имя обработчика по конвенции типовых: <Элемент><Суффикс>, у события формы — сам суффикс.
 # Событие не из каталога — <Элемент><Событие>.
 function Get-HandlerName {
-	param([string]$elementName, [string]$eventName, [string]$xmlTag)
+	param([string]$elementName, [string]$eventName, [string]$xmlTag, [string]$callType = '')
 	$entry = Get-EventEntry $xmlTag $eventName
-	if ($entry -and $entry[0]) { return "$elementName$($entry[0])" }
-	return "$elementName$eventName"
+	$name = if ($entry -and $entry[0]) { "$elementName$($entry[0])" } else { "$elementName$eventName" }
+	# Обработчик с видом вызова (расширение) — как называет Конфигуратор: префикс расширения + имя + вид вызова.
+	# Без этого имя совпало бы с процедурой исходной формы.
+	if ($callType) { $name = "$($script:extNamePrefix)$name$(@{ Before = 'Перед'; After = 'После'; Override = 'Вместо' }[$callType])" }
+	return $name
 }
 
 # --- 7. Element emitters ---
@@ -2988,7 +3009,7 @@ function Get-EventPairs {
 			foreach ($v in $vals) {
 				$h = ""; $ct = ""
 				if ($v -is [System.Management.Automation.PSCustomObject]) { $h = "$($v.handler)"; $ct = Normalize-CallType "$($v.callType)" $elementName $p.Name } else { $h = "$v" }
-				if ([string]::IsNullOrEmpty($h)) { $h = Get-HandlerName -elementName $elementName -eventName $p.Name -xmlTag $xmlTag }
+				if ([string]::IsNullOrEmpty($h)) { $h = Get-HandlerName -elementName $elementName -eventName $p.Name -xmlTag $xmlTag -callType $ct }
 				[void]$pairs.Add([pscustomobject]@{ name = $p.Name; handler = $h; callType = $ct })
 			}
 		}
@@ -2999,7 +3020,7 @@ function Get-EventPairs {
 			} else {
 				$evtName = "$evt"; $h = ""; $ct = ""
 			}
-			if (-not $h) { $h = if ($el.handlers -and $el.handlers.$evtName) { "$($el.handlers.$evtName)" } else { Get-HandlerName -elementName $elementName -eventName $evtName -xmlTag $xmlTag } }
+			if (-not $h) { $h = if ($el.handlers -and $el.handlers.$evtName) { "$($el.handlers.$evtName)" } else { Get-HandlerName -elementName $elementName -eventName $evtName -xmlTag $xmlTag -callType $ct } }
 			[void]$pairs.Add([pscustomobject]@{ name = $evtName; handler = $h; callType = $ct })
 		}
 	}
@@ -3101,7 +3122,8 @@ function Get-ModuleOutline([string[]]$lines) {
 	for ($i = 0; $i -lt $lines.Count; $i++) {
 		$l = $lines[$i]
 		if ($null -ne $cur) {
-			if ($l -match '^\s*(КонецПроцедуры|КонецФункции|EndProcedure|EndFunction)(?![\w])') { $cur.end = $i + 1; [void]$procs.Add($cur); $cur = $null }
+			# конец процедуры — в начале строки или после «;» (`Возврат Х;КонецФункции`)
+			if ($l -match '(^|;)\s*(КонецПроцедуры|КонецФункции|EndProcedure|EndFunction)(?![\w])') { $cur.end = $i + 1; [void]$procs.Add($cur); $cur = $null }
 			continue
 		}
 		$m = [regex]::Match($l, '^\s*(?:(?:Асинх|Async)\s+)?(?:Процедура|Функция|Procedure|Function)\s+(\w+)\s*\(', 'IgnoreCase')
@@ -3153,6 +3175,8 @@ function Get-HandlerRegionName($b, $regions) {
 	if ($b.kind -eq 'command') { return 'ОбработчикиКомандФормы' }
 	$has = @{}
 	foreach ($r in $regions) { $has[$r.name.ToLower()] = $true }
+	# своя область таблицы, если она уже есть, — важнее общей
+	if ($b.table -and $has["обработчикисобытийэлементовтаблицыформы$($b.table)".ToLower()]) { return "ОбработчикиСобытийЭлементовТаблицыФормы$($b.table)" }
 	if ($has['обработчикисобытийэлементовформы'] -and -not $has['обработчикисобытийэлементовшапкиформы']) { return 'ОбработчикиСобытийЭлементовФормы' }
 	if ($b.table) { return "ОбработчикиСобытийЭлементовТаблицыФормы$($b.table)" }
 	return 'ОбработчикиСобытийЭлементовШапкиФормы'
@@ -3208,14 +3232,18 @@ function Update-FormModule([string]$formXmlPath, [string]$shownFormPath) {
 	if (Test-Path -LiteralPath $path) {
 		$bytes = [System.IO.File]::ReadAllBytes($path)
 		$bom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
-		$text = (New-Object System.Text.UTF8Encoding($false)).GetString($bytes)
+		# строго: модуль не в UTF-8 перезапись испортила бы — такой не трогаем
+		try { $text = (New-Object System.Text.UTF8Encoding($false, $true)).GetString($bytes) }
+		catch { return @("[WARN] Form module is not UTF-8: $shown — handler stubs not created") }
 		if ($bom) { $text = $text.Substring(1) }
 		$eol = if ($text.Contains("`r`n") -or -not $text.Contains("`n")) { "`r`n" } else { "`n" }
-		$tail = $text.EndsWith("`n")
-		$src = @(($text -replace "`r`n", "`n").TrimEnd("`n") -split "`n")
+		$norm = $text -replace "`r`n", "`n"
+		# сколько переводов строк в конце — столько и запишем: модуль не должен меняться вне вставок
+		$tail = $norm.Length - $norm.TrimEnd("`n").Length
+		$src = @($norm.TrimEnd("`n") -split "`n")
 		if (-not $text.Trim()) { $src = Get-FormModuleTemplate }
 	} elseif ([System.IO.Path]::GetFileName($xmlDir) -eq 'Ext') {
-		$created = $true; $bom = $true; $eol = "`r`n"; $tail = $false
+		$created = $true; $bom = $true; $eol = "`r`n"; $tail = 0
 		$src = Get-FormModuleTemplate
 	} else {
 		return @("[WARN] Form module not found: $shown — handler stubs not created")
@@ -3236,8 +3264,7 @@ function Update-FormModule([string]$formXmlPath, [string]$shownFormPath) {
 	if ($changed -or $created) {
 		$dir = [System.IO.Path]::GetDirectoryName($path)
 		if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-		$out = ($lines.ToArray() -join $eol)
-		if ($tail) { $out += $eol }
+		$out = ($lines.ToArray() -join $eol) + ($eol * $tail)
 		[System.IO.File]::WriteAllText($path, $out, (New-Object System.Text.UTF8Encoding($bom)))
 	}
 	$outline = Get-ModuleOutline $lines.ToArray()

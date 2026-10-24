@@ -1,4 +1,4 @@
-# form-edit v1.34 — Edit 1C managed form elements (Python port)
+# form-edit v1.35 — Edit 1C managed form elements (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import contextlib
@@ -448,11 +448,28 @@ next_elem_id += 1
 next_attr_id += 1
 next_cmd_id += 1
 
+# Префикс имён расширения — <NamePrefix> ближайшего вверх Configuration.xml; "" — не расширение или не задан.
+def get_extension_name_prefix(d):
+    while d:
+        cfg = os.path.join(d, 'Configuration.xml')
+        if os.path.isfile(cfg):
+            with open(cfg, encoding='utf-8-sig', errors='replace') as f:
+                m = re.search(r'<NamePrefix>([^<]*)</NamePrefix>', f.read())
+            return m.group(1) if m else ''
+        parent = os.path.dirname(d)
+        if not parent or parent == d:
+            break
+        d = parent
+    return ''
+
+
 # --- 4b. Auto-detect extension mode (BaseForm present) ---
 is_extension = False
+_ext_name_prefix = ''
 base_form = root.find("f:BaseForm", NS)
 if base_form is not None:
     is_extension = True
+    _ext_name_prefix = get_extension_name_prefix(os.path.dirname(resolved_form_path))
     if next_attr_id < 1000000:
         next_attr_id = 1000000
     if next_cmd_id < 1000000:
@@ -838,7 +855,8 @@ def get_module_outline(lines):
     cur = None
     for i, l in enumerate(lines):
         if cur is not None:
-            if re.match(r'^\s*(\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b|\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438|EndProcedure|EndFunction)(?!\w)', l, re.I):
+            # \u043a\u043e\u043d\u0435\u0446 \u043f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b \u2014 \u0432 \u043d\u0430\u0447\u0430\u043b\u0435 \u0441\u0442\u0440\u043e\u043a\u0438 \u0438\u043b\u0438 \u043f\u043e\u0441\u043b\u0435 \u00ab;\u00bb (`\u0412\u043e\u0437\u0432\u0440\u0430\u0442 \u0425;\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438`)
+            if re.search(r'(^|;)\s*(\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b|\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438|EndProcedure|EndFunction)(?!\w)', l, re.I):
                 cur['end'] = i + 1
                 procs.append(cur)
                 cur = None
@@ -902,6 +920,9 @@ def get_handler_region_name(b, regions):
     if b['kind'] == 'command':
         return '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u041a\u043e\u043c\u0430\u043d\u0434\u0424\u043e\u0440\u043c\u044b'
     has = {r['name'].lower() for r in regions}
+    # своя область таблицы, если она уже есть, — важнее общей
+    if b['table'] and f"\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u042d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0422\u0430\u0431\u043b\u0438\u0446\u044b\u0424\u043e\u0440\u043c\u044b{b['table']}".lower() in has:
+        return f"\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u042d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0422\u0430\u0431\u043b\u0438\u0446\u044b\u0424\u043e\u0440\u043c\u044b{b['table']}"
     if '\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0441\u043e\u0431\u044b\u0442\u0438\u0439\u044d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0444\u043e\u0440\u043c\u044b' in has and '\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0441\u043e\u0431\u044b\u0442\u0438\u0439\u044d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0448\u0430\u043f\u043a\u0438\u0444\u043e\u0440\u043c\u044b' not in has:
         return '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u042d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0424\u043e\u0440\u043c\u044b'
     if b['table']:
@@ -973,16 +994,22 @@ def update_form_module(form_xml_path, shown_form_path):
         with open(path, 'rb') as f:
             raw = f.read()
         bom = raw.startswith(b'\xef\xbb\xbf')
-        text = raw.decode('utf-8')
+        # строго: модуль не в UTF-8 перезапись испортила бы — такой не трогаем
+        try:
+            text = raw.decode('utf-8')
+        except UnicodeDecodeError:
+            return [f'[WARN] Form module is not UTF-8: {shown} — handler stubs not created']
         if bom:
             text = text[1:]
         eol = '\r\n' if ('\r\n' in text or '\n' not in text) else '\n'
-        tail = text.endswith('\n')
-        src = text.replace('\r\n', '\n').rstrip('\n').split('\n')
+        norm = text.replace('\r\n', '\n')
+        # сколько переводов строк в конце — столько и запишем: модуль не должен меняться вне вставок
+        tail = len(norm) - len(norm.rstrip('\n'))
+        src = norm.rstrip('\n').split('\n')
         if not text.strip():
             src = get_form_module_template()
     elif os.path.basename(xml_dir).lower() == 'ext':
-        created, bom, eol, tail = True, True, '\r\n', False
+        created, bom, eol, tail = True, True, '\r\n', 0
         src = get_form_module_template()
     else:
         return [f'[WARN] Form module not found: {shown} \u2014 handler stubs not created']
@@ -1004,9 +1031,7 @@ def update_form_module(form_xml_path, shown_form_path):
         changed = True
     if changed or created:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        out = eol.join(lines)
-        if tail:
-            out += eol
+        out = eol.join(lines) + eol * tail
         with open(path, 'wb') as f:
             f.write((('\ufeff' if bom else '') + out).encode('utf-8'))
     outline = get_module_outline(lines)
@@ -3278,11 +3303,14 @@ def normalize_radio_button_type(raw):
     return str(raw).strip()
 
 
-def get_handler_name(element_name, event_name, xml_tag=''):
+def get_handler_name(element_name, event_name, xml_tag='', call_type=''):
     entry = get_event_entry(xml_tag, event_name)
-    if entry and entry[0]:
-        return f"{element_name}{entry[0]}"
-    return f"{element_name}{event_name}"
+    name = f"{element_name}{entry[0]}" if entry and entry[0] else f"{element_name}{event_name}"
+    # Обработчик с видом вызова (расширение) — как называет Конфигуратор: префикс расширения + имя + вид вызова.
+    # Без этого имя совпало бы с процедурой исходной формы.
+    if call_type:
+        name = f"{_ext_name_prefix}{name}" + {'Before': '\u041f\u0435\u0440\u0435\u0434', 'After': '\u041f\u043e\u0441\u043b\u0435', 'Override': '\u0412\u043c\u0435\u0441\u0442\u043e'}.get(call_type, '')
+    return name
 
 
 def get_element_name(el, type_key):
@@ -3311,7 +3339,7 @@ def get_event_pairs(el, element_name, xml_tag=''):
                     handler = '' if v is None else str(v)
                     call_type = ''
                 if not handler:
-                    handler = get_handler_name(element_name, ev_name, xml_tag)
+                    handler = get_handler_name(element_name, ev_name, xml_tag, call_type)
                 pairs.append((ev_name, handler, call_type))
     elif el.get('on'):
         handlers = el.get('handlers') or {}
@@ -3323,7 +3351,7 @@ def get_event_pairs(el, element_name, xml_tag=''):
             else:
                 evt_name, handler, call_type = str(evt), '', ''
             if not handler:
-                handler = str(handlers[evt_name]) if handlers.get(evt_name) else get_handler_name(element_name, evt_name, xml_tag)
+                handler = str(handlers[evt_name]) if handlers.get(evt_name) else get_handler_name(element_name, evt_name, xml_tag, call_type)
             pairs.append((evt_name, handler, call_type))
     return pairs
 
@@ -7526,19 +7554,16 @@ def add_element_events(node, on, handlers, ctx):
         if isinstance(evt, str) or not (isinstance(evt, dict) and evt.get("event")):
             evt_name = str(evt)
             call_type = ""
-            handler = str(handlers.get(evt_name)) if handlers and handlers.get(evt_name) else get_handler_name(name, evt_name, nt)
+            handler = ""
         else:
             evt_name = str(evt.get("event"))
             call_type = normalize_call_type(evt.get("callType"), name, evt_name)
-            if evt.get("handler"):
-                handler = str(evt.get("handler"))
-            elif handlers and handlers.get(evt_name):
-                handler = str(handlers.get(evt_name))
-            else:
-                handler = get_handler_name(name, evt_name, nt)
+            handler = str(evt.get("handler")) if evt.get("handler") else ""
         # В форме расширения обработчик без callType платформа читает как Before и так и пишет
         if not call_type and is_extension:
             call_type = 'Before'
+        if not handler:
+            handler = str(handlers.get(evt_name)) if handlers and handlers.get(evt_name) else get_handler_name(name, evt_name, nt, call_type)
         test_event_pairs([(evt_name, handler, call_type)], nt, name, source)
         tbl = get_nearest_table(node, True)
         register_handler(handler, 'element', nt, evt_name, tbl.get('name') if tbl is not None else '')
@@ -7600,7 +7625,21 @@ def invoke_set(op, idx):
             if kl == 'events':
                 if not isinstance(v, dict):
                     fail(f"{c}: events — объект {{ Событие: обработчик }}")
-                on = [{'event': e, 'handler': h, 'callType': ct} for e, h, ct in get_event_pairs(op, n, local_name(node))]
+                # В форме расширения событие без callType — Before (так его читает платформа); вид вызова
+                # нужен уже имени по null: <Префикс><Имя>Перед
+                src = op
+                if is_extension:
+                    ev = {}
+                    for e_name, e_val in v.items():
+                        vals = []
+                        for x in (e_val if isinstance(e_val, list) else [e_val]):
+                            if isinstance(x, dict):
+                                vals.append(x if x.get('callType') else {'handler': x.get('handler'), 'callType': 'Before'})
+                            else:
+                                vals.append({'handler': x, 'callType': 'Before'})
+                        ev[e_name] = vals[0] if len(vals) == 1 else vals
+                    src = {'events': ev}
+                on = [{'event': e, 'handler': h, 'callType': ct} for e, h, ct in get_event_pairs(src, n, local_name(node))]
                 add_element_events(node, on, None, c)
                 continue
             if kl in forbidden or (kl == (XML_TAG_TO_DSL.get(nt) or '').lower() and kl != 'group'):
@@ -7979,6 +8018,10 @@ def get_bsl_scan(text):
             # продолжение многострочного литерала: пробелы, затем «|»
             while j < len(line) and line[j] in (' ', '\t'):
                 j += 1
+            # строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
+            if line.startswith('//', j):
+                code.append("")
+                continue
             if j < len(line) and line[j] == '|':
                 j += 1
             cur += "\n"
@@ -8022,7 +8065,7 @@ def get_module_scan():
     path = os.path.join(os.path.dirname(resolved_form_path), "Form", "Module.bsl")
     if os.path.exists(path):
         scan["Exists"] = True
-        with open(path, encoding="utf-8-sig", newline="") as fh:
+        with open(path, encoding="utf-8-sig", errors="replace", newline="") as fh:  # как ReadAllText в PS-порту
             scan["Raw"] = fh.read()
         bsl = get_bsl_scan(scan["Raw"])
         scan["Lines"] = bsl["Lines"]
@@ -8532,7 +8575,7 @@ def add_form_events_dsl(events):
             if not h:
                 if not get_event_entry('Form', ev_name):
                     fail(f"events: у события формы {ev_name} укажите имя обработчика — имени по конвенции для него нет")
-                h = get_handler_name('', ev_name, 'Form')
+                h = get_handler_name('', ev_name, 'Form', ct)
             ct_str = f"[{ct}]" if ct else ""
             register_handler(h, 'form', 'Form', ev_name)
             if sec is None:
@@ -8909,6 +8952,7 @@ if form_events_list:
         X(f'{evt_child_indent}<Event name="{fe_name}"{call_type_attr}>{fe_handler}</Event>')
         ct_str = f"[{fe['callType']}]" if fe.get("callType") else ""
         added_form_events.append(f"  + {fe_name}{ct_str} -> {fe_handler}")
+        register_handler(fe_handler, 'form', 'Form', fe_name)
     X("</_F>")
 
     frag_text = "\n".join(xml_lines)

@@ -1,4 +1,4 @@
-﻿# form-info v1.11 — Analyze 1C managed form structure
+﻿# form-info v1.12 — Analyze 1C managed form structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -67,6 +67,12 @@ $isExtension = ($baseFormNode -ne $null)
 
 # --- Обработчики: процедуры модуля формы (только с -Handlers) ---
 
+# Текст модуля формы; $null — модуль не в UTF-8 (с заменой символов имена процедур не найти — лучше сказать прямо)
+function Read-ModuleText([string]$path) {
+	try { return (New-Object System.Text.UTF8Encoding($false, $true)).GetString([System.IO.File]::ReadAllBytes($path)).TrimStart([char]0xFEFF) }
+	catch { return $null }
+}
+
 # Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
 # от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
 # заменён на ""; Literals — @{ Line; Text; Prefix — код этой строки слева от литерала }.
@@ -88,6 +94,8 @@ function Get-BslScan([string]$text) {
 		if ($inStr) {
 			# продолжение многострочного литерала: пробелы, затем «|»
 			while ($j -lt $line.Length -and ($line[$j] -eq ' ' -or $line[$j] -eq "`t")) { $j++ }
+			# строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
+			if ($j + 1 -lt $line.Length -and $line[$j] -eq '/' -and $line[$j + 1] -eq '/') { [void]$code.Add(""); continue }
 			if ($j -lt $line.Length -and $line[$j] -eq '|') { $j++ }
 			$cur += "`n"
 		}
@@ -124,7 +132,8 @@ function Get-ModuleOutline([string[]]$lines) {
 	for ($i = 0; $i -lt $lines.Count; $i++) {
 		$l = $lines[$i]
 		if ($null -ne $cur) {
-			if ($l -match '^\s*(КонецПроцедуры|КонецФункции|EndProcedure|EndFunction)(?![\w])') { $cur.end = $i + 1; [void]$procs.Add($cur); $cur = $null }
+			# конец процедуры — в начале строки или после «;» (`Возврат Х;КонецФункции`)
+			if ($l -match '(^|;)\s*(КонецПроцедуры|КонецФункции|EndProcedure|EndFunction)(?![\w])') { $cur.end = $i + 1; [void]$procs.Add($cur); $cur = $null }
 			continue
 		}
 		$m = [regex]::Match($l, '^\s*(?:(?:Асинх|Async)\s+)?(?:Процедура|Функция|Procedure|Function)\s+(\w+)\s*\(', 'IgnoreCase')
@@ -146,8 +155,13 @@ function Get-ModuleOutline([string[]]$lines) {
 
 $script:modulePath = Join-Path (Split-Path (Resolve-Path $FormPath).Path -Parent) "Form\Module.bsl"
 $script:moduleProcs = $null
+$script:moduleNotUtf8 = $false
 if ($Handlers -and (Test-Path -LiteralPath $script:modulePath)) {
-	$bsl = Get-BslScan ([System.IO.File]::ReadAllText($script:modulePath))
+	$moduleText = Read-ModuleText $script:modulePath
+	$script:moduleNotUtf8 = ($null -eq $moduleText)
+}
+if ($Handlers -and (Test-Path -LiteralPath $script:modulePath) -and -not $script:moduleNotUtf8) {
+	$bsl = Get-BslScan $moduleText
 	# @{} регистронезависим — как имена в BSL
 	$script:moduleProcs = @{}
 	foreach ($p in (Get-ModuleOutline $bsl.Code).procs) { if (-not $script:moduleProcs.ContainsKey($p.name)) { $script:moduleProcs[$p.name] = $p } }
@@ -607,7 +621,7 @@ $header += " ==="
 $lines += $header
 $support = Get-SupportStatusForPath $FormPath
 if ($null -ne $support) { $lines += "Поддержка: $support" }
-if ($Handlers) { $lines += "Module: $(if (Test-Path -LiteralPath $script:modulePath) { $script:modulePath } else { 'none' })" }
+if ($Handlers) { $lines += "Module: $(if (Test-Path -LiteralPath $script:modulePath) { $script:modulePath } else { 'none' })$(if ($script:moduleNotUtf8) { ' (not UTF-8 — line ranges unavailable)' })" }
 
 # --- Form properties (Title excluded — shown in header) ---
 

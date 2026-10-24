@@ -903,7 +903,8 @@ async function runCaseAsync(testCase, opts) {
             ? substPlaceholders(step.writeFile.content, workDir)
             : JSON.stringify(substDeep(step.writeFile.content, workDir), null, 2);
           mkdirSync(dirname(wfPath), { recursive: true });
-          writeFileSync(wfPath, wfContent, 'utf8');
+          // encoding — для кейсов про файлы не в UTF-8 (те же кодировки, что у inputEncoding)
+          writeFileSync(wfPath, step.writeFile.encoding ? encodeInput(wfContent, step.writeFile.encoding) : wfContent, step.writeFile.encoding ? undefined : 'utf8');
           // Бит исполнения: на *nix навык запускает платформу через exec, и фейк без +x
           // не стартует вовсе. На Windows chmod — no-op.
           if (step.writeFile.executable) chmodSync(wfPath, 0o755);

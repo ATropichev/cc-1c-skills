@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.212 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.213 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -2466,6 +2466,8 @@ EVENT_CATALOG = get_form_event_catalog()
 
 # Format version of the form being compiled and its DSL (set in main): the event check needs both.
 _format_version = ''
+# Префикс имён расширения (set in main): обработчик с видом вызова получает его в имени по null.
+_ext_name_prefix = ''
 _defn = {}
 
 
@@ -2989,11 +2991,29 @@ def normalize_radio_button_type(raw):
 
 # Handler name by the standard configurations' convention: <Element><Suffix>, a form event gets the suffix alone.
 # An event outside the catalog gets <Element><Event>.
-def get_handler_name(element_name, event_name, xml_tag=''):
+def get_handler_name(element_name, event_name, xml_tag='', call_type=''):
     entry = get_event_entry(xml_tag, event_name)
-    if entry and entry[0]:
-        return f"{element_name}{entry[0]}"
-    return f"{element_name}{event_name}"
+    name = f"{element_name}{entry[0]}" if entry and entry[0] else f"{element_name}{event_name}"
+    # Обработчик с видом вызова (расширение) — как называет Конфигуратор: префикс расширения + имя + вид вызова.
+    # Без этого имя совпало бы с процедурой исходной формы.
+    if call_type:
+        name = f"{_ext_name_prefix}{name}" + {'Before': '\u041f\u0435\u0440\u0435\u0434', 'After': '\u041f\u043e\u0441\u043b\u0435', 'Override': '\u0412\u043c\u0435\u0441\u0442\u043e'}.get(call_type, '')
+    return name
+
+
+# Префикс имён расширения — <NamePrefix> ближайшего вверх Configuration.xml; "" — не расширение или не задан.
+def get_extension_name_prefix(d):
+    while d:
+        cfg = os.path.join(d, 'Configuration.xml')
+        if os.path.isfile(cfg):
+            with open(cfg, encoding='utf-8-sig', errors='replace') as f:
+                m = re.search(r'<NamePrefix>([^<]*)</NamePrefix>', f.read())
+            return m.group(1) if m else ''
+        parent = os.path.dirname(d)
+        if not parent or parent == d:
+            break
+        d = parent
+    return ''
 
 
 def get_element_name(el, type_key):
@@ -3020,7 +3040,7 @@ def get_event_pairs(el, element_name, xml_tag=''):
                     handler = '' if v is None else str(v)
                     call_type = ''
                 if not handler:
-                    handler = get_handler_name(element_name, ev_name, xml_tag)
+                    handler = get_handler_name(element_name, ev_name, xml_tag, call_type)
                 pairs.append((ev_name, handler, call_type))
     elif el.get('on'):
         handlers = el.get('handlers') or {}
@@ -3032,7 +3052,7 @@ def get_event_pairs(el, element_name, xml_tag=''):
             else:
                 evt_name, handler, call_type = str(evt), '', ''
             if not handler:
-                handler = str(handlers[evt_name]) if handlers.get(evt_name) else get_handler_name(element_name, evt_name, xml_tag)
+                handler = str(handlers[evt_name]) if handlers.get(evt_name) else get_handler_name(element_name, evt_name, xml_tag, call_type)
             pairs.append((evt_name, handler, call_type))
     return pairs
 
@@ -3139,7 +3159,8 @@ def get_module_outline(lines):
     cur = None
     for i, l in enumerate(lines):
         if cur is not None:
-            if re.match(r'^\s*(\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b|\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438|EndProcedure|EndFunction)(?!\w)', l, re.I):
+            # \u043a\u043e\u043d\u0435\u0446 \u043f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b \u2014 \u0432 \u043d\u0430\u0447\u0430\u043b\u0435 \u0441\u0442\u0440\u043e\u043a\u0438 \u0438\u043b\u0438 \u043f\u043e\u0441\u043b\u0435 \u00ab;\u00bb (`\u0412\u043e\u0437\u0432\u0440\u0430\u0442 \u0425;\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438`)
+            if re.search(r'(^|;)\s*(\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b|\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438|EndProcedure|EndFunction)(?!\w)', l, re.I):
                 cur['end'] = i + 1
                 procs.append(cur)
                 cur = None
@@ -3203,6 +3224,9 @@ def get_handler_region_name(b, regions):
     if b['kind'] == 'command':
         return '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u041a\u043e\u043c\u0430\u043d\u0434\u0424\u043e\u0440\u043c\u044b'
     has = {r['name'].lower() for r in regions}
+    # своя область таблицы, если она уже есть, — важнее общей
+    if b['table'] and f"\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u042d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0422\u0430\u0431\u043b\u0438\u0446\u044b\u0424\u043e\u0440\u043c\u044b{b['table']}".lower() in has:
+        return f"\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u042d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0422\u0430\u0431\u043b\u0438\u0446\u044b\u0424\u043e\u0440\u043c\u044b{b['table']}"
     if '\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0441\u043e\u0431\u044b\u0442\u0438\u0439\u044d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0444\u043e\u0440\u043c\u044b' in has and '\u043e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0441\u043e\u0431\u044b\u0442\u0438\u0439\u044d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0448\u0430\u043f\u043a\u0438\u0444\u043e\u0440\u043c\u044b' not in has:
         return '\u041e\u0431\u0440\u0430\u0431\u043e\u0442\u0447\u0438\u043a\u0438\u0421\u043e\u0431\u044b\u0442\u0438\u0439\u042d\u043b\u0435\u043c\u0435\u043d\u0442\u043e\u0432\u0424\u043e\u0440\u043c\u044b'
     if b['table']:
@@ -3274,16 +3298,22 @@ def update_form_module(form_xml_path, shown_form_path):
         with open(path, 'rb') as f:
             raw = f.read()
         bom = raw.startswith(b'\xef\xbb\xbf')
-        text = raw.decode('utf-8')
+        # строго: модуль не в UTF-8 перезапись испортила бы — такой не трогаем
+        try:
+            text = raw.decode('utf-8')
+        except UnicodeDecodeError:
+            return [f'[WARN] Form module is not UTF-8: {shown} — handler stubs not created']
         if bom:
             text = text[1:]
         eol = '\r\n' if ('\r\n' in text or '\n' not in text) else '\n'
-        tail = text.endswith('\n')
-        src = text.replace('\r\n', '\n').rstrip('\n').split('\n')
+        norm = text.replace('\r\n', '\n')
+        # сколько переводов строк в конце — столько и запишем: модуль не должен меняться вне вставок
+        tail = len(norm) - len(norm.rstrip('\n'))
+        src = norm.rstrip('\n').split('\n')
         if not text.strip():
             src = get_form_module_template()
     elif os.path.basename(xml_dir).lower() == 'ext':
-        created, bom, eol, tail = True, True, '\r\n', False
+        created, bom, eol, tail = True, True, '\r\n', 0
         src = get_form_module_template()
     else:
         return [f'[WARN] Form module not found: {shown} \u2014 handler stubs not created']
@@ -3305,9 +3335,7 @@ def update_form_module(form_xml_path, shown_form_path):
         changed = True
     if changed or created:
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        out = eol.join(lines)
-        if tail:
-            out += eol
+        out = eol.join(lines) + eol * tail
         with open(path, 'wb') as f:
             f.write((('\ufeff' if bom else '') + out).encode('utf-8'))
     outline = get_module_outline(lines)
@@ -7937,8 +7965,9 @@ def main():
     out_path_resolved = args.OutputPath if os.path.isabs(args.OutputPath) else os.path.join(os.getcwd(), args.OutputPath)
     assert_edit_allowed(out_path_resolved, "editable")
     format_version = detect_format_version(os.path.dirname(out_path_resolved))
-    global _format_version
+    global _format_version, _ext_name_prefix
     _format_version = format_version
+    _ext_name_prefix = get_extension_name_prefix(os.path.dirname(out_path_resolved))
     compat_mode = detect_compatibility_mode(os.path.dirname(out_path_resolved))
     # Режим ниже 8.3.19: dcssch в шапке — только при использовании, поля/параметры списка не выгружаются.
     # Нераспознанный режим (DontUse и т.п. — ранг 0) — как текущая платформа, то есть не старый.

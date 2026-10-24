@@ -1,0 +1,34 @@
+{
+  "name": "Расширение: имя обработчика по null — префикс расширения + имя по конвенции + вид вызова",
+  "setup": "fixture:move-cfe",
+  "params": {
+    "formPath": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form.xml"
+  },
+  "input": {
+    "events": {
+      "OnCreateAtServer": null
+    },
+    "elements": [
+      {
+        "set": "Контрагент",
+        "events": {
+          "OnChange": null,
+          "StartChoice": {
+            "handler": null,
+            "callType": "After"
+          }
+        }
+      }
+    ]
+  },
+  "expect": {
+    "fileContains": {
+      "file": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form.xml",
+      "text": [
+        "<Event name=\"OnCreateAtServer\" callType=\"Before\">Перенос_ПриСозданииНаСервереПеред</Event>",
+        "<Event name=\"OnChange\" callType=\"Before\">Перенос_КонтрагентПриИзмененииПеред</Event>",
+        "<Event name=\"StartChoice\" callType=\"After\">Перенос_КонтрагентНачалоВыбораПосле</Event>"
+      ]
+    }
+  }
+}

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-info v1.11 — Analyze 1C managed form structure
+# form-info v1.12 — Analyze 1C managed form structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -178,6 +178,15 @@ def test_title_differs(node, name):
 
 # --- Обработчики: процедуры модуля формы (только с -Handlers) ---
 
+# Текст модуля формы; None — модуль не в UTF-8 (с заменой символов имена процедур не найти — лучше сказать прямо)
+def read_module_text(path):
+    try:
+        with open(path, encoding='utf-8-sig', newline='') as fh:
+            return fh.read()
+    except UnicodeDecodeError:
+        return None
+
+
 # Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
 # от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
 # заменён на ""; Literals — {Line, Text, Prefix — код этой строки слева от литерала}.
@@ -201,6 +210,10 @@ def get_bsl_scan(text):
             # продолжение многострочного литерала: пробелы, затем «|»
             while j < len(line) and line[j] in (' ', '\t'):
                 j += 1
+            # строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
+            if line.startswith('//', j):
+                code.append("")
+                continue
             if j < len(line) and line[j] == '|':
                 j += 1
             cur += "\n"
@@ -243,7 +256,8 @@ def get_module_outline(lines):
     cur = None
     for i, l in enumerate(lines):
         if cur is not None:
-            if re.match(r'^\s*(\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b|\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438|EndProcedure|EndFunction)(?!\w)', l, re.I):
+            # \u043a\u043e\u043d\u0435\u0446 \u043f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b \u2014 \u0432 \u043d\u0430\u0447\u0430\u043b\u0435 \u0441\u0442\u0440\u043e\u043a\u0438 \u0438\u043b\u0438 \u043f\u043e\u0441\u043b\u0435 \u00ab;\u00bb (`\u0412\u043e\u0437\u0432\u0440\u0430\u0442 \u0425;\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438`)
+            if re.search(r'(^|;)\s*(\u041a\u043e\u043d\u0435\u0446\u041f\u0440\u043e\u0446\u0435\u0434\u0443\u0440\u044b|\u041a\u043e\u043d\u0435\u0446\u0424\u0443\u043d\u043a\u0446\u0438\u0438|EndProcedure|EndFunction)(?!\w)', l, re.I):
                 cur['end'] = i + 1
                 procs.append(cur)
                 cur = None
@@ -662,9 +676,10 @@ def main():
     module_path = os.path.join(os.path.dirname(os.path.abspath(form_path)), "Form", "Module.bsl")
     _handlers['on'] = bool(args.Handlers)
     _handlers['ext'] = is_extension
-    if args.Handlers and os.path.isfile(module_path):
-        with open(module_path, encoding="utf-8-sig", newline="") as fh:
-            bsl = get_bsl_scan(fh.read())
+    module_text = read_module_text(module_path) if (args.Handlers and os.path.isfile(module_path)) else None
+    module_not_utf8 = bool(args.Handlers and os.path.isfile(module_path) and module_text is None)
+    if module_text is not None:
+        bsl = get_bsl_scan(module_text)
         procs = {}
         for p in get_module_outline(bsl["Code"])["procs"]:
             procs.setdefault(p["name"].lower(), p)
@@ -728,7 +743,8 @@ def main():
     if _support is not None:
         lines.append(f"Поддержка: {_support}")
     if args.Handlers:
-        lines.append(f"Module: {module_path if os.path.isfile(module_path) else 'none'}")
+        lines.append(f"Module: {module_path if os.path.isfile(module_path) else 'none'}"
+                     + (" (not UTF-8 \u2014 line ranges unavailable)" if module_not_utf8 else ""))
 
     # --- Form properties (Title excluded -- shown in header) ---
     prop_names = [

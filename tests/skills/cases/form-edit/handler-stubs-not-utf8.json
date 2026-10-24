@@ -1,0 +1,32 @@
+{
+  "name": "Заготовки обработчиков: модуль не в UTF-8 — предупреждение, модуль не меняется",
+  "setup": "fixture:move-form",
+  "params": {
+    "formPath": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form.xml"
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form/Module.bsl",
+        "encoding": "cp1251",
+        "content": "&НаКлиенте\nПроцедура СкладПриИзменении(Элемент)\n\tСообщить(\"Склад\");\nКонецПроцедуры\n"
+      }
+    }
+  ],
+  "input": {
+    "elements": [
+      {
+        "set": "Контрагент",
+        "events": {
+          "OnChange": "КонтрагентПриИзменении"
+        }
+      }
+    ]
+  },
+  "expect": {
+    "stdoutContains": [
+      "[WARN] Form module is not UTF-8:",
+      "Module.bsl — handler stubs not created"
+    ]
+  }
+}

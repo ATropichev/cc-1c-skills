@@ -1,0 +1,24 @@
+{
+  "name": "Модуль формы не в UTF-8 — предупреждение, обработчики не проверяются (без ложных ошибок)",
+  "setup": "fixture:module-handler-orphan",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "DataProcessors/БезДействия/Forms/Форма/Ext/Form/Module.bsl",
+        "encoding": "cp1251",
+        "content": "&НаКлиенте\nПроцедура ПолеПриИзменении(Элемент)\nКонецПроцедуры\n"
+      }
+    }
+  ],
+  "expect": {
+    "stdoutContains": [
+      "[WARN]  22. Form module is not UTF-8 — handlers are not checked"
+    ],
+    "stdoutNotContains": [
+      "[ERROR]"
+    ]
+  }
+}

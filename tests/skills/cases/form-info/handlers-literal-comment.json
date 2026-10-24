@@ -1,0 +1,79 @@
+{
+  "name": "-Handlers: закомментированная строка с кавычкой внутри многострочного литерала не ломает поиск процедур",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DataProcessor",
+        "name": "Тест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/DataProcessors/Тест.xml",
+        "-FormName": "Форма"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "elements": [
+          {
+            "input": "Поле",
+            "path": "Поле",
+            "events": {
+              "OnChange": "ПолеПриИзменении"
+            }
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DataProcessorObject.Тест",
+            "main": true
+          },
+          {
+            "name": "Поле",
+            "type": "string"
+          }
+        ],
+        "commands": [
+          {
+            "name": "Заполнить",
+            "action": "Выполнить"
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/DataProcessors/Тест/Forms/Форма/Ext/Form.xml"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "DataProcessors/Тест/Forms/Форма/Ext/Form/Module.bsl",
+        "content": "&НаСервере\nФункция ТекстЗапроса()\n\tТекст = \"ВЫБРАТЬ\n\t|\t1 КАК Поле\n\t//|\tИЗ Таблица ГДЕ Имя = \"Старое\";\n\t|ГДЕ\n\t|\tИСТИНА\";\n\tВозврат Текст;\nКонецФункции\n\n&НаКлиенте\nПроцедура ПолеПриИзменении(Элемент)\n\tТекстЗапроса();\nКонецПроцедуры\n\n&НаКлиенте\nПроцедура Выполнить(Команда)\nКонецПроцедуры\n"
+      }
+    }
+  ],
+  "params": {
+    "formPath": "DataProcessors/Тест/Forms/Форма/Ext/Form.xml"
+  },
+  "args_extra": [
+    "-Handlers"
+  ],
+  "expect": {
+    "stdoutContains": [
+      "{OnChange: ПолеПриИзменении (lines 11-14)}",
+      "Заполнить -> Выполнить (lines 16-18)"
+    ],
+    "stdoutNotContains": [
+      "not in module"
+    ]
+  }
+}

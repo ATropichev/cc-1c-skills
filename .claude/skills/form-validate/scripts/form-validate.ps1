@@ -1,4 +1,4 @@
-﻿# form-validate v1.31 — Validate 1C managed form
+﻿# form-validate v1.32 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2196,6 +2196,12 @@ if (-not $stopped) {
 # Привязки Form.xml (события, действия команд) сверяются с процедурами модуля <каталог Form.xml>/Form/Module.bsl.
 # Читается только модуль формы: общие модули, которые подключают процедуры формы по имени, не смотрим —
 # поэтому процедура без привязки только предупреждение.
+# Текст модуля формы; $null — модуль не в UTF-8 (с заменой символов имена процедур не найти — лучше сказать прямо)
+function Read-ModuleText([string]$path) {
+	try { return (New-Object System.Text.UTF8Encoding($false, $true)).GetString([System.IO.File]::ReadAllBytes($path)).TrimStart([char]0xFEFF) }
+	catch { return $null }
+}
+
 # Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
 # от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
 # заменён на ""; Literals — @{ Line; Text; Prefix — код этой строки слева от литерала }.
@@ -2217,6 +2223,8 @@ function Get-BslScan([string]$text) {
 		if ($inStr) {
 			# продолжение многострочного литерала: пробелы, затем «|»
 			while ($j -lt $line.Length -and ($line[$j] -eq ' ' -or $line[$j] -eq "`t")) { $j++ }
+			# строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
+			if ($j + 1 -lt $line.Length -and $line[$j] -eq '/' -and $line[$j + 1] -eq '/') { [void]$code.Add(""); continue }
 			if ($j -lt $line.Length -and $line[$j] -eq '|') { $j++ }
 			$cur += "`n"
 		}
@@ -2253,7 +2261,8 @@ function Get-ModuleOutline([string[]]$lines) {
 	for ($i = 0; $i -lt $lines.Count; $i++) {
 		$l = $lines[$i]
 		if ($null -ne $cur) {
-			if ($l -match '^\s*(КонецПроцедуры|КонецФункции|EndProcedure|EndFunction)(?![\w])') { $cur.end = $i + 1; [void]$procs.Add($cur); $cur = $null }
+			# конец процедуры — в начале строки или после «;» (`Возврат Х;КонецФункции`)
+			if ($l -match '(^|;)\s*(КонецПроцедуры|КонецФункции|EndProcedure|EndFunction)(?![\w])') { $cur.end = $i + 1; [void]$procs.Add($cur); $cur = $null }
 			continue
 		}
 		$m = [regex]::Match($l, '^\s*(?:(?:Асинх|Async)\s+)?(?:Процедура|Функция|Procedure|Function)\s+(\w+)\s*\(', 'IgnoreCase')
@@ -2279,10 +2288,13 @@ $script:handlerArgPrefix = '(?:(?:ПодключитьОбработчикОжи
 
 if (-not $stopped) {
 	$modulePath = Join-Path (Split-Path (Resolve-Path $FormPath) -Parent) "Form/Module.bsl"
+	$moduleText = if (Test-Path -LiteralPath $modulePath) { Read-ModuleText $modulePath } else { $null }
 	if (-not (Test-Path -LiteralPath $modulePath)) {
 		Report-OK "22. Form module handlers: no module — skipped"
+	} elseif ($null -eq $moduleText) {
+		Report-Warn "22. Form module is not UTF-8 — handlers are not checked"
 	} else {
-		$bsl = Get-BslScan ([System.IO.File]::ReadAllText($modulePath))
+		$bsl = Get-BslScan $moduleText
 		$outline = Get-ModuleOutline $bsl.Code
 		# @{} регистронезависим — как имена в BSL
 		$procs = @{}

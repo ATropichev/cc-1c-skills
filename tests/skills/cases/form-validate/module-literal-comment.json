@@ -1,0 +1,13 @@
+{
+  "name": "Модуль формы: закомментированная строка с кавычкой внутри многострочного литерала не ломает разбор",
+  "setup": "fixture:module-literal-comment",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "expect": {
+    "stdoutContains": "=== Validation OK",
+    "stdoutNotContains": [
+      "22."
+    ]
+  }
+}

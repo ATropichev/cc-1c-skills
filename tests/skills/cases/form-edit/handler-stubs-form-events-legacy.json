@@ -1,0 +1,26 @@
+{
+  "name": "Заготовки обработчиков: устаревший formEvents тоже получает заготовку",
+  "setup": "fixture:move-form",
+  "params": {
+    "formPath": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form.xml"
+  },
+  "input": {
+    "formEvents": [
+      {
+        "name": "OnOpen",
+        "handler": "ПриОткрытии"
+      }
+    ]
+  },
+  "expect": {
+    "stdoutContains": [
+      "  + ПриОткрытии — added, lines 14-17"
+    ],
+    "fileContains": {
+      "file": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form/Module.bsl",
+      "text": [
+        "Процедура ПриОткрытии(Отказ)"
+      ]
+    }
+  }
+}

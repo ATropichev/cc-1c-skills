@@ -1,0 +1,81 @@
+{
+  "name": "-Handlers: модуль не в UTF-8 — сказано в строке Module:, диапазонов и not in module нет",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DataProcessor",
+        "name": "Тест"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/DataProcessors/Тест.xml",
+        "-FormName": "Форма"
+      }
+    },
+    {
+      "script": "form-compile/scripts/form-compile",
+      "input": {
+        "elements": [
+          {
+            "input": "Поле",
+            "path": "Поле",
+            "events": {
+              "OnChange": "ПолеПриИзменении"
+            }
+          }
+        ],
+        "attributes": [
+          {
+            "name": "Объект",
+            "type": "DataProcessorObject.Тест",
+            "main": true
+          },
+          {
+            "name": "Поле",
+            "type": "string"
+          }
+        ],
+        "commands": [
+          {
+            "name": "Заполнить",
+            "action": "Выполнить"
+          }
+        ]
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputPath": "{workDir}/DataProcessors/Тест/Forms/Форма/Ext/Form.xml"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "DataProcessors/Тест/Forms/Форма/Ext/Form/Module.bsl",
+        "encoding": "cp1251",
+        "content": "&НаКлиенте\nПроцедура ПолеПриИзменении(Элемент)\nКонецПроцедуры\n"
+      }
+    }
+  ],
+  "params": {
+    "formPath": "DataProcessors/Тест/Forms/Форма/Ext/Form.xml"
+  },
+  "args_extra": [
+    "-Handlers"
+  ],
+  "expect": {
+    "stdoutContains": [
+      "(not UTF-8 — line ranges unavailable)",
+      "{OnChange: ПолеПриИзменении}"
+    ],
+    "stdoutNotContains": [
+      "not in module",
+      "(lines "
+    ]
+  }
+}
