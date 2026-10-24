@@ -1,4 +1,4 @@
-﻿# form-edit v1.35 — Edit 1C managed form elements
+﻿# form-edit v1.36 — Edit 1C managed form elements
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -755,6 +755,11 @@ function Get-ModuleOutline([string[]]$lines) {
 	return @{ procs = $procs; regions = $regions }
 }
 
+# Разметка модуля по коду без литералов и комментариев: «;КонецПроцедуры» в строке не закроет процедуру.
+function Get-ModuleCodeOutline([string[]]$lines) {
+	return Get-ModuleOutline (Get-BslScan ($lines -join "`n")).Code
+}
+
 # Текст заготовки: директива и параметры — из каталога событий, у команды — (Команда) на клиенте.
 # $null — событие вне каталога, сигнатура неизвестна.
 function Get-HandlerStub($b) {
@@ -797,7 +802,7 @@ function Get-HandlerRegionName($b, $regions) {
 # Вставить заготовку в модуль (список строк): в конец своей области, нет области — создать её на месте
 # по порядку областей, нет областей вообще — в конец модуля. Отделяется одной пустой строкой.
 function Add-StubToModule([System.Collections.ArrayList]$lines, [string[]]$stub, $b) {
-	$outline = Get-ModuleOutline $lines.ToArray()
+	$outline = Get-ModuleCodeOutline $lines.ToArray()
 	if ($outline.regions.Count -eq 0) {
 		while ($lines.Count -gt 0 -and -not $lines[$lines.Count - 1].Trim()) { $lines.RemoveAt($lines.Count - 1) }
 		if ($lines.Count -gt 0) { [void]$lines.Add('') }
@@ -865,7 +870,7 @@ function Update-FormModule([string]$formXmlPath, [string]$shownFormPath) {
 	$status = @{}
 	$changed = $false
 	foreach ($b in $script:handlerBindings) {
-		$outline = Get-ModuleOutline $lines.ToArray()
+		$outline = Get-ModuleCodeOutline $lines.ToArray()
 		if (@($outline.procs | Where-Object { $_.name -eq $b.handler }).Count -gt 0) { $status[$b.handler] = 'exists'; continue }
 		$stub = Get-HandlerStub $b
 		if ($null -eq $stub) { $status[$b.handler] = "not added: no signature known for event '$($b.eventName)' of $($b.xmlTag)"; continue }
@@ -879,7 +884,7 @@ function Update-FormModule([string]$formXmlPath, [string]$shownFormPath) {
 		$out = ($lines.ToArray() -join $eol) + ($eol * $tail)
 		[System.IO.File]::WriteAllText($path, $out, (New-Object System.Text.UTF8Encoding($bom)))
 	}
-	$outline = Get-ModuleOutline $lines.ToArray()
+	$outline = Get-ModuleCodeOutline $lines.ToArray()
 	# в порядке строк модуля; не добавленные — в конце
 	$rows = @()
 	foreach ($b in $script:handlerBindings) {

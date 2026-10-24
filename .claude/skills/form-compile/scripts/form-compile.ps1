@@ -1,4 +1,4 @@
-﻿# form-compile v1.213 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.214 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -3111,6 +3111,54 @@ function Get-FormModuleTemplate {
 	return $out
 }
 
+# Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
+# от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
+# заменён на ""; Literals — @{ Line; Text; Prefix — код этой строки слева от литерала }.
+function Get-BslScan([string]$text) {
+	$lines = $text -replace "`r", "" -split "`n"
+	$code = New-Object System.Collections.ArrayList
+	$lits = New-Object System.Collections.ArrayList
+	$inStr = $false; $cur = $null; $curLine = 0; $curPrefix = ""
+	for ($i = 0; $i -lt $lines.Count; $i++) {
+		$line = $lines[$i]
+		# строка без кавычек вне литерала — только отрезать комментарий (посимвольный разбор в PS медленный)
+		if (-not $inStr -and $line.IndexOf('"') -lt 0) {
+			$k = $line.IndexOf('//')
+			[void]$code.Add($(if ($k -ge 0) { $line.Substring(0, $k) } else { $line }))
+			continue
+		}
+		$sb = New-Object System.Text.StringBuilder
+		$j = 0
+		if ($inStr) {
+			# продолжение многострочного литерала: пробелы, затем «|»
+			while ($j -lt $line.Length -and ($line[$j] -eq ' ' -or $line[$j] -eq "`t")) { $j++ }
+			# строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
+			if ($j + 1 -lt $line.Length -and $line[$j] -eq '/' -and $line[$j + 1] -eq '/') { [void]$code.Add(""); continue }
+			if ($j -lt $line.Length -and $line[$j] -eq '|') { $j++ }
+			$cur += "`n"
+		}
+		while ($j -lt $line.Length) {
+			$c = $line[$j]
+			if ($inStr) {
+				if ($c -eq '"') {
+					if ($j + 1 -lt $line.Length -and $line[$j + 1] -eq '"') { $cur += '"'; $j += 2; continue }
+					$inStr = $false
+					[void]$lits.Add(@{ Line = $curLine; Text = $cur; Prefix = $curPrefix })
+					[void]$sb.Append('""')
+					$j++
+					continue
+				}
+				$cur += $c; $j++; continue
+			}
+			if ($c -eq '/' -and $j + 1 -lt $line.Length -and $line[$j + 1] -eq '/') { break }
+			if ($c -eq '"') { $inStr = $true; $cur = ""; $curLine = $i + 1; $curPrefix = $sb.ToString(); $j++; continue }
+			[void]$sb.Append($c); $j++
+		}
+		[void]$code.Add($sb.ToString())
+	}
+	return @{ Lines = $lines; Code = $code.ToArray(); Literals = $lits.ToArray() }
+}
+
 # Процедуры и функции модуля (имя, первая и последняя строка; первая — с аннотациями над заголовком)
 # и области (имя, строки #Область и #КонецОбласти, вложенность). Строки нумеруются с 1.
 # Заголовок — только в начале строки: продолжение литерала («|…») и комментарий заголовком не станут.
@@ -3141,6 +3189,11 @@ function Get-ModuleOutline([string[]]$lines) {
 		}
 	}
 	return @{ procs = $procs; regions = $regions }
+}
+
+# Разметка модуля по коду без литералов и комментариев: «;КонецПроцедуры» в строке не закроет процедуру.
+function Get-ModuleCodeOutline([string[]]$lines) {
+	return Get-ModuleOutline (Get-BslScan ($lines -join "`n")).Code
 }
 
 # Текст заготовки: директива и параметры — из каталога событий, у команды — (Команда) на клиенте.
@@ -3185,7 +3238,7 @@ function Get-HandlerRegionName($b, $regions) {
 # Вставить заготовку в модуль (список строк): в конец своей области, нет области — создать её на месте
 # по порядку областей, нет областей вообще — в конец модуля. Отделяется одной пустой строкой.
 function Add-StubToModule([System.Collections.ArrayList]$lines, [string[]]$stub, $b) {
-	$outline = Get-ModuleOutline $lines.ToArray()
+	$outline = Get-ModuleCodeOutline $lines.ToArray()
 	if ($outline.regions.Count -eq 0) {
 		while ($lines.Count -gt 0 -and -not $lines[$lines.Count - 1].Trim()) { $lines.RemoveAt($lines.Count - 1) }
 		if ($lines.Count -gt 0) { [void]$lines.Add('') }
@@ -3253,7 +3306,7 @@ function Update-FormModule([string]$formXmlPath, [string]$shownFormPath) {
 	$status = @{}
 	$changed = $false
 	foreach ($b in $script:handlerBindings) {
-		$outline = Get-ModuleOutline $lines.ToArray()
+		$outline = Get-ModuleCodeOutline $lines.ToArray()
 		if (@($outline.procs | Where-Object { $_.name -eq $b.handler }).Count -gt 0) { $status[$b.handler] = 'exists'; continue }
 		$stub = Get-HandlerStub $b
 		if ($null -eq $stub) { $status[$b.handler] = "not added: no signature known for event '$($b.eventName)' of $($b.xmlTag)"; continue }
@@ -3267,7 +3320,7 @@ function Update-FormModule([string]$formXmlPath, [string]$shownFormPath) {
 		$out = ($lines.ToArray() -join $eol) + ($eol * $tail)
 		[System.IO.File]::WriteAllText($path, $out, (New-Object System.Text.UTF8Encoding($bom)))
 	}
-	$outline = Get-ModuleOutline $lines.ToArray()
+	$outline = Get-ModuleCodeOutline $lines.ToArray()
 	# в порядке строк модуля; не добавленные — в конце
 	$rows = @()
 	foreach ($b in $script:handlerBindings) {

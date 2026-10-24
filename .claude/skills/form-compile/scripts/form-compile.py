@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.213 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.214 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -3151,6 +3151,67 @@ def get_form_module_template():
     return out
 
 
+# Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
+# от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
+# заменён на ""; Literals — {Line, Text, Prefix — код этой строки слева от литерала}.
+def get_bsl_scan(text):
+    lines = text.replace("\r", "").split("\n")
+    code = []
+    lits = []
+    in_str = False
+    cur = None
+    cur_line = 0
+    cur_prefix = ""
+    for i, line in enumerate(lines):
+        # строка без кавычек вне литерала — только отрезать комментарий
+        if not in_str and '"' not in line:
+            k = line.find('//')
+            code.append(line[:k] if k >= 0 else line)
+            continue
+        sb = []
+        j = 0
+        if in_str:
+            # продолжение многострочного литерала: пробелы, затем «|»
+            while j < len(line) and line[j] in (' ', '\t'):
+                j += 1
+            # строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
+            if line.startswith('//', j):
+                code.append("")
+                continue
+            if j < len(line) and line[j] == '|':
+                j += 1
+            cur += "\n"
+        while j < len(line):
+            c = line[j]
+            if in_str:
+                if c == '"':
+                    if j + 1 < len(line) and line[j + 1] == '"':
+                        cur += '"'
+                        j += 2
+                        continue
+                    in_str = False
+                    lits.append({"Line": cur_line, "Text": cur, "Prefix": cur_prefix})
+                    sb.append('""')
+                    j += 1
+                    continue
+                cur += c
+                j += 1
+                continue
+            if c == '/' and j + 1 < len(line) and line[j + 1] == '/':
+                break
+            if c == '"':
+                in_str = True
+                cur = ""
+                cur_line = i + 1
+                cur_prefix = "".join(sb)
+                j += 1
+                continue
+            sb.append(c)
+            j += 1
+        code.append("".join(sb))
+    return {"Lines": lines, "Code": code, "Literals": lits}
+
+
 # Процедуры и функции модуля (имя, первая и последняя строка; первая — с аннотациями над заголовком)
 # и области (имя, строки #Область и #КонецОбласти, вложенность). Строки нумеруются с 1.
 # Заголовок — только в начале строки: продолжение литерала («|…») и комментарий заголовком не станут.
@@ -3181,6 +3242,11 @@ def get_module_outline(lines):
             r['end'] = i + 1
             regions.append(r)
     return {'procs': procs, 'regions': regions}
+
+
+# Разметка модуля по коду без литералов и комментариев: «;КонецПроцедуры» в строке не закроет процедуру.
+def get_module_code_outline(lines):
+    return get_module_outline(get_bsl_scan('\n'.join(lines))['Code'])
 
 
 # Текст заготовки: директива и параметры — из каталога событий, у команды — (Команда) на клиенте.
@@ -3237,7 +3303,7 @@ def get_handler_region_name(b, regions):
 # Вставить заготовку в модуль (список строк): в конец своей области, нет области — создать её на месте
 # по порядку областей, нет областей вообще — в конец модуля. Отделяется одной пустой строкой.
 def add_stub_to_module(lines, stub, b):
-    outline = get_module_outline(lines)
+    outline = get_module_code_outline(lines)
     if not outline['regions']:
         while lines and not lines[-1].strip():
             lines.pop()
@@ -3322,7 +3388,7 @@ def update_form_module(form_xml_path, shown_form_path):
     changed = False
     for b in _handler_bindings:
         key = b['handler'].lower()
-        outline = get_module_outline(lines)
+        outline = get_module_code_outline(lines)
         if any(p['name'].lower() == key for p in outline['procs']):
             status[key] = 'exists'
             continue
@@ -3338,7 +3404,7 @@ def update_form_module(form_xml_path, shown_form_path):
         out = eol.join(lines) + eol * tail
         with open(path, 'wb') as f:
             f.write((('\ufeff' if bom else '') + out).encode('utf-8'))
-    outline = get_module_outline(lines)
+    outline = get_module_code_outline(lines)
     # \u0432 \u043f\u043e\u0440\u044f\u0434\u043a\u0435 \u0441\u0442\u0440\u043e\u043a \u043c\u043e\u0434\u0443\u043b\u044f; \u043d\u0435 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043d\u044b\u0435 \u2014 \u0432 \u043a\u043e\u043d\u0446\u0435
     rows = []
     for b in _handler_bindings:

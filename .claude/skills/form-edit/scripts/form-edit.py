@@ -1,4 +1,4 @@
-# form-edit v1.35 — Edit 1C managed form elements (Python port)
+# form-edit v1.36 — Edit 1C managed form elements (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import contextlib
@@ -879,6 +879,11 @@ def get_module_outline(lines):
     return {'procs': procs, 'regions': regions}
 
 
+# Разметка модуля по коду без литералов и комментариев: «;КонецПроцедуры» в строке не закроет процедуру.
+def get_module_code_outline(lines):
+    return get_module_outline(get_bsl_scan('\n'.join(lines))['Code'])
+
+
 # Текст заготовки: директива и параметры — из каталога событий, у команды — (Команда) на клиенте.
 # None — событие вне каталога, сигнатура неизвестна.
 def get_handler_stub(b):
@@ -933,7 +938,7 @@ def get_handler_region_name(b, regions):
 # Вставить заготовку в модуль (список строк): в конец своей области, нет области — создать её на месте
 # по порядку областей, нет областей вообще — в конец модуля. Отделяется одной пустой строкой.
 def add_stub_to_module(lines, stub, b):
-    outline = get_module_outline(lines)
+    outline = get_module_code_outline(lines)
     if not outline['regions']:
         while lines and not lines[-1].strip():
             lines.pop()
@@ -1018,7 +1023,7 @@ def update_form_module(form_xml_path, shown_form_path):
     changed = False
     for b in _handler_bindings:
         key = b['handler'].lower()
-        outline = get_module_outline(lines)
+        outline = get_module_code_outline(lines)
         if any(p['name'].lower() == key for p in outline['procs']):
             status[key] = 'exists'
             continue
@@ -1034,7 +1039,7 @@ def update_form_module(form_xml_path, shown_form_path):
         out = eol.join(lines) + eol * tail
         with open(path, 'wb') as f:
             f.write((('\ufeff' if bom else '') + out).encode('utf-8'))
-    outline = get_module_outline(lines)
+    outline = get_module_code_outline(lines)
     # \u0432 \u043f\u043e\u0440\u044f\u0434\u043a\u0435 \u0441\u0442\u0440\u043e\u043a \u043c\u043e\u0434\u0443\u043b\u044f; \u043d\u0435 \u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u043d\u044b\u0435 \u2014 \u0432 \u043a\u043e\u043d\u0446\u0435
     rows = []
     for b in _handler_bindings:
