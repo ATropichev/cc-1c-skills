@@ -1,0 +1,16 @@
+{
+  "name": "Путь к базе в кавычках (остались после разбора оболочки) — кавычки снимаются, путь разрешается",
+  "fakePlatform": { "log": "" },
+  "preRun": [
+    { "writeFile": { "path": "src/Configuration.xml", "content": "<MetaDataObject/>\n" } },
+    { "git": ["-C", "src", "init", "-q"] },
+    { "git": ["-C", "src", "add", "-A"] },
+    { "git": ["-C", "src", "commit", "-qm", "base"] }
+  ],
+  "args_extra": ["-V8Path", "{fakePlatform}", "-InfoBasePath", "\"{workDir}/ib\"", "-ConfigDir", "{workDir}/src", "-Source", "All", "-DryRun"],
+  "expect": {
+    "stdoutContains": "No changes found",
+    "stdoutNotContains": ["Error", "Ошибка"]
+  },
+  "noSnapshot": "сухой прогон ничего не пишет — проверяется разбор пути"
+}

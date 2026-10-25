@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-dt v1.20 — Load 1C information base from DT file
+# db-load-dt v1.21 — Load 1C information base from DT file
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -70,30 +70,43 @@ def resolve_infobase_path(path):
     """Относительный путь к базе — от корня проекта (каталог .v8-project.json, вверх от рабочего
     каталога), как configSrc; без файла проекта — от рабочего каталога. Платформе уходит только
     абсолютный: ibcmd считает относительный --db-path от каталога --data, а он у навыков временный."""
-    if not path or os.path.isabs(path):
+    if not path:
         return path
-    cwd = os.getcwd()
-    base = cwd
-    d = cwd
-    for _ in range(20):
-        if not d:
-            break
-        if os.path.isfile(os.path.join(d, ".v8-project.json")):
-            base = d
-            break
-        parent = os.path.dirname(d)
-        if parent == d:
-            break
-        d = parent
-    return os.path.abspath(os.path.join(base, path))
+    # Абсолютный на Windows — только с диском и разделителем или UNC, как в PS-порте; «\\x» берёт
+    # диск базового каталога (os.path.join). На POSIX — os.path.isabs.
+    absolute = re.match(r"^([A-Za-z]:[\\/]|[\\/]{2})", path) if os.name == "nt" else os.path.isabs(path)
+    if not absolute:
+        cwd = os.getcwd()
+        base = cwd
+        d = cwd
+        for _ in range(20):
+            if not d:
+                break
+            if os.path.isfile(os.path.join(d, ".v8-project.json")):
+                base = d
+                break
+            parent = os.path.dirname(d)
+            if parent == d:
+                break
+            d = parent
+        path = os.path.abspath(os.path.join(base, path))
+    if len(path) > 3:
+        path = path.rstrip("\\/" if os.name == "nt" else "/")
+    return path
 
 
 def resolve_work_path(path):
     """Путь файла или каталога — от рабочего каталога. Платформе уходит только абсолютный: ibcmd
     отбрасывает ведущие «..» относительного пути и читает или пишет не там."""
-    if not path or os.path.isabs(path):
+    if not path:
         return path
-    return os.path.abspath(path)
+    # Абсолютный — как в resolve_infobase_path.
+    absolute = re.match(r"^([A-Za-z]:[\\/]|[\\/]{2})", path) if os.name == "nt" else os.path.isabs(path)
+    if not absolute:
+        path = os.path.abspath(os.path.join(os.getcwd(), path))
+    if len(path) > 3:
+        path = path.rstrip("\\/" if os.name == "nt" else "/")
+    return path
 
 
 def find_project_database(args):

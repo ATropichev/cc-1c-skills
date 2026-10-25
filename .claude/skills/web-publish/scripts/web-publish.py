@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# web-publish v1.13 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
+# web-publish v1.14 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 """
@@ -74,26 +74,51 @@ def same_path(a, b):
         return False
 
 
+def clean_path(value, param=""):
+    """Forgive what is unambiguous in a path the caller passed: surrounding whitespace,
+    surrounding quotes that survived shell parsing, a trailing separator. A quote left
+    inside afterwards cannot be part of a real path — reject it by name instead of letting
+    1C answer with its opaque "Неверные или отсутствующие параметры соединения"."""
+    if not value:
+        return value
+    v = value.strip()
+    if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+        v = v[1:-1].strip()
+    if len(v) > 3 and v[-1] in "\\/":
+        v = v[:-1]
+    if '"' in v:
+        print(f"Error: {param or 'path'} contains a quote character: {value}")
+        sys.exit(1)
+    return v
+
+
 def resolve_infobase_path(path):
     """Относительный путь к базе — от корня проекта (каталог .v8-project.json, вверх от рабочего
     каталога), как configSrc; без файла проекта — от рабочего каталога. Платформе уходит только
     абсолютный: ibcmd считает относительный --db-path от каталога --data, а он у навыков временный."""
-    if not path or os.path.isabs(path):
+    if not path:
         return path
-    cwd = os.getcwd()
-    base = cwd
-    d = cwd
-    for _ in range(20):
-        if not d:
-            break
-        if os.path.isfile(os.path.join(d, ".v8-project.json")):
-            base = d
-            break
-        parent = os.path.dirname(d)
-        if parent == d:
-            break
-        d = parent
-    return os.path.abspath(os.path.join(base, path))
+    # Абсолютный на Windows — только с диском и разделителем или UNC, как в PS-порте; «\\x» берёт
+    # диск базового каталога (os.path.join). На POSIX — os.path.isabs.
+    absolute = re.match(r"^([A-Za-z]:[\\/]|[\\/]{2})", path) if os.name == "nt" else os.path.isabs(path)
+    if not absolute:
+        cwd = os.getcwd()
+        base = cwd
+        d = cwd
+        for _ in range(20):
+            if not d:
+                break
+            if os.path.isfile(os.path.join(d, ".v8-project.json")):
+                base = d
+                break
+            parent = os.path.dirname(d)
+            if parent == d:
+                break
+            d = parent
+        path = os.path.abspath(os.path.join(base, path))
+    if len(path) > 3:
+        path = path.rstrip("\\/" if os.name == "nt" else "/")
+    return path
 
 
 def find_project_database(args):
@@ -207,6 +232,7 @@ def main():
     parser.add_argument('-Port', type=int, default=8081, help='Port (default: 8081)')
     parser.add_argument('-Manual', action='store_true', help='Do not download Apache — only check and give instructions')
     args = ci_parse_args(parser)
+    args.InfoBasePath = clean_path(args.InfoBasePath, "-InfoBasePath")
     args.InfoBasePath = resolve_infobase_path(args.InfoBasePath)
 
     # --- Resolve V8Path ---

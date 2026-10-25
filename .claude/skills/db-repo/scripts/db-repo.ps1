@@ -1,4 +1,4 @@
-﻿# db-repo v1.20 — 1C configuration repository operations
+﻿# db-repo v1.21 — 1C configuration repository operations
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: движок только 1cv8 — ibcmd работу с хранилищем не поддерживает (нет такого режима).
 <#
@@ -315,18 +315,26 @@ function Resolve-InfoBasePath {
     # Относительный путь к базе — от корня проекта (каталог .v8-project.json, вверх от рабочего
     # каталога), как configSrc; без файла проекта — от рабочего каталога. Платформе уходит только
     # абсолютный: ibcmd считает относительный --db-path от каталога --data, а он у навыков временный.
+    # Абсолютный — только с диском и разделителем или UNC: «\x» и «C:x» .NET считает корневыми,
+    # а платформа разрешила бы их от своего каталога. «\x» берёт диск базового каталога.
     param([string]$Path)
-    if (-not $Path -or [System.IO.Path]::IsPathRooted($Path)) { return $Path }
-    $cwd = (Get-Location).Path
-    $base = $cwd
-    $d = $cwd
-    for ($i = 0; $i -lt 20 -and $d; $i++) {
-        if (Test-Path -LiteralPath (Join-Path $d ".v8-project.json")) { $base = $d; break }
-        $parent = [System.IO.Path]::GetDirectoryName($d)
-        if ($parent -eq $d) { break }
-        $d = $parent
+    if (-not $Path) { return $Path }
+    if ($Path -notmatch '^([A-Za-z]:[\\/]|[\\/]{2})') {
+        $cwd = (Get-Location).Path
+        $base = $cwd
+        $d = $cwd
+        for ($i = 0; $i -lt 20 -and $d; $i++) {
+            if (Test-Path -LiteralPath (Join-Path $d ".v8-project.json")) { $base = $d; break }
+            $parent = [System.IO.Path]::GetDirectoryName($d)
+            if ($parent -eq $d) { break }
+            $d = $parent
+        }
+        $joined = if ($Path -match '^[\\/]') { [System.IO.Path]::GetPathRoot($base).TrimEnd('\', '/') + $Path }
+            else { [System.IO.Path]::Combine($base, $Path) }
+        $Path = [System.IO.Path]::GetFullPath($joined)
     }
-    return [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($base, $Path))
+    if ($Path.Length -gt 3) { $Path = $Path.TrimEnd('\', '/') }
+    return $Path
 }
 $InfoBasePath = Resolve-InfoBasePath $InfoBasePath
 
@@ -374,7 +382,10 @@ function Find-ProjectDatabase {
     try { $proj = Get-Content $pf -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $null }
     if (-not $proj.databases) { return $null }
     foreach ($db in $proj.databases) {
-        if ($InfoBasePath -and $db.path -and (Test-SamePath ([System.IO.Path]::Combine((Split-Path $pf -Parent), $db.path)) $InfoBasePath)) { return $db }
+        if ($InfoBasePath -and $db.path) {
+            try { $dbPath = [System.IO.Path]::Combine((Split-Path $pf -Parent), $db.path) } catch { $dbPath = $null }
+            if ($dbPath -and (Test-SamePath $dbPath $InfoBasePath)) { return $db }
+        }
         if ($InfoBaseServer -and $InfoBaseRef -and $db.server -and $db.ref) {
             if ($db.server.Equals($InfoBaseServer, [System.StringComparison]::OrdinalIgnoreCase) -and
                 $db.ref.Equals($InfoBaseRef, [System.StringComparison]::OrdinalIgnoreCase)) { return $db }
