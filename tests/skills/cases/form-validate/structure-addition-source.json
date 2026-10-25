@@ -1,0 +1,22 @@
+{
+  "name": "Структура: источник дополнения — несуществующий элемент (ошибка), тип, вид источника и владелец (предупреждения)",
+  "setup": "fixture:structure-addition-source",
+  "params": {
+    "formPath": "DataProcessors/Стенд/Forms/Форма"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] 23. SearchStringAddition 'СвояБезИсточника': source item 'НетТакого' not found in the form",
+      "[ERROR] 23. SearchStringAddition 'СписокСтрокаПоиска': source item 'НетТакого' not found in the form",
+      "[WARN]  23. ViewStatusAddition 'СписокСостояниеПросмотра': source type 'SearchControl' does not match the addition, expected ViewStatusRepresentation",
+      "[WARN]  23. SearchStringAddition 'ДЗСтрокаПоиска': source item 'ТЗ' is not its owner 'ДЗ'",
+      "[WARN]  23. ViewStatusAddition 'ДЗСостояниеПросмотра': source item 'Поле' is InputField, expected Table or PDFDocumentField",
+      "2 errors, 3 warnings"
+    ],
+    "stdoutNotContains": [
+      "'СвояКТЗ'",
+      "'СвояБезСвязи'"
+    ]
+  }
+}

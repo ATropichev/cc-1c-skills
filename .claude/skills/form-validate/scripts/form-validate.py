@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.32 — Validate 1C managed form
+# form-validate v1.33 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -2237,6 +2237,59 @@ def main():
             check21_ok = False
         if check21_ok:
             report_ok("21. Element placement: match containers")
+
+    # --- Check 23: источник дополнения ---
+    # Источник строки поиска, состояния просмотра и управления поиском — таблица (у состояния просмотра
+    # ещё поле PDF). Несуществующий Item платформа молча выбрасывает вместе со связью; остальное загружает
+    # как есть, но в выгрузках такого не бывает. Отсутствие AdditionSource законно (у компаньона платформа
+    # восстанавливает его сама).
+    if not stopped:
+        check23_ok = True
+        addition_types = {'SearchStringAddition': 'SearchStringRepresentation', 'ViewStatusAddition': 'ViewStatusRepresentation',
+                          'SearchControlAddition': 'SearchControl'}
+        type_by_name = {}
+        for m in members:
+            if m in member_types:
+                type_by_name.setdefault(m.get('name', '').lower(), member_types[m])
+        additions = []
+        for m in members:
+            if m not in member_types:
+                continue
+            if member_types[m] in addition_types:
+                additions.append((m, member_types[m], None))
+            for c in m:
+                if isinstance(c.tag, str) and c.tag.startswith(f"{{{F_NS}}}") and localname(c) in addition_types:
+                    additions.append((c, localname(c), m.get('name', '')))
+        for node, tag, owner in additions:
+            if stopped:
+                break
+            src = node.find(f"{{{F_NS}}}AdditionSource")
+            if src is None:
+                continue
+            label = f"{tag} '{node.get('name', '')}'"
+            item = (src.findtext(f"{{{F_NS}}}Item") or '').strip()
+            if not item:
+                report_error(f"23. {label}: source item is empty")
+                check23_ok = False
+                continue
+            if item.lower() not in type_by_name:
+                report_error(f"23. {label}: source item '{item}' not found in the form — the platform drops the link on load")
+                check23_ok = False
+                continue
+            item_type = type_by_name[item.lower()]
+            sources = ['Table', 'PDFDocumentField'] if tag == 'ViewStatusAddition' else ['Table']
+            if item_type not in sources:
+                report_warn(f"23. {label}: source item '{item}' is {item_type}, expected {' or '.join(sources)}")
+                check23_ok = False
+            elif owner and item.lower() != owner.lower():
+                report_warn(f"23. {label}: source item '{item}' is not its owner '{owner}'")
+                check23_ok = False
+            src_type = (src.findtext(f"{{{F_NS}}}Type") or '').strip()
+            if src_type != addition_types[tag]:
+                report_warn(f"23. {label}: source type '{src_type}' does not match the addition, expected {addition_types[tag]}")
+                check23_ok = False
+        if check23_ok:
+            report_ok("23. Addition sources: match items")
 
     # --- Check 22: обработчики — модуль формы ---
     # Привязки Form.xml (события, действия команд) сверяются с процедурами модуля <каталог Form.xml>/Form/Module.bsl.

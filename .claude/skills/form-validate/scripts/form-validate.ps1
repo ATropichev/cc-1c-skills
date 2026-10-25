@@ -1,4 +1,4 @@
-﻿# form-validate v1.32 — Validate 1C managed form
+﻿# form-validate v1.33 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2190,6 +2190,62 @@ if (-not $stopped) {
 		$check21Ok = $false
 	}
 	if ($check21Ok) { Report-OK "21. Element placement: match containers" }
+}
+
+# --- Check 23: источник дополнения ---
+# Источник строки поиска, состояния просмотра и управления поиском — таблица (у состояния просмотра
+# ещё поле PDF). Несуществующий Item платформа молча выбрасывает вместе со связью; остальное загружает
+# как есть, но в выгрузках такого не бывает. Отсутствие AdditionSource законно (у компаньона платформа
+# восстанавливает его сама).
+if (-not $stopped) {
+	$check23Ok = $true
+	$additionTypes = @{ 'SearchStringAddition' = 'SearchStringRepresentation'; 'ViewStatusAddition' = 'ViewStatusRepresentation'; 'SearchControlAddition' = 'SearchControl' }
+	$typeByName = @{}
+	foreach ($m in $members) {
+		if ($memberTypes.ContainsKey($m) -and -not $typeByName.ContainsKey($m.GetAttribute('name'))) { $typeByName[$m.GetAttribute('name')] = $memberTypes[$m] }
+	}
+	$additions = @(foreach ($m in $members) {
+		if (-not $memberTypes.ContainsKey($m)) { continue }
+		if ($additionTypes.ContainsKey($memberTypes[$m])) { @{ Node = $m; Tag = $memberTypes[$m]; Owner = $null } }
+		foreach ($c in $m.ChildNodes) {
+			if ($c.NodeType -ne 'Element' -or $c.NamespaceURI -ne 'http://v8.1c.ru/8.3/xcf/logform') { continue }
+			if ($additionTypes.Keys -ccontains $c.LocalName) { @{ Node = $c; Tag = $c.LocalName; Owner = $m.GetAttribute('name') } }
+		}
+	})
+	foreach ($a in $additions) {
+		if ($stopped) { break }
+		$src = $a.Node.SelectSingleNode("f:AdditionSource", $nsMgr)
+		if (-not $src) { continue }
+		$label = "$($a.Tag) '$($a.Node.GetAttribute('name'))'"
+		$itemNode = $src.SelectSingleNode("f:Item", $nsMgr)
+		$item = if ($itemNode) { $itemNode.InnerText.Trim() } else { '' }
+		if (-not $item) {
+			Report-Error "23. ${label}: source item is empty"
+			$check23Ok = $false
+			continue
+		}
+		if (-not $typeByName.ContainsKey($item)) {
+			Report-Error "23. ${label}: source item '$item' not found in the form — the platform drops the link on load"
+			$check23Ok = $false
+			continue
+		}
+		$itemType = $typeByName[$item]
+		$sources = if ($a.Tag -eq 'ViewStatusAddition') { @('Table', 'PDFDocumentField') } else { @('Table') }
+		if ($sources -cnotcontains $itemType) {
+			Report-Warn "23. ${label}: source item '$item' is $itemType, expected $($sources -join ' or ')"
+			$check23Ok = $false
+		} elseif ($a.Owner -and $item -ne $a.Owner) {
+			Report-Warn "23. ${label}: source item '$item' is not its owner '$($a.Owner)'"
+			$check23Ok = $false
+		}
+		$typeNode = $src.SelectSingleNode("f:Type", $nsMgr)
+		$srcType = if ($typeNode) { $typeNode.InnerText.Trim() } else { '' }
+		if ($srcType -cne $additionTypes[$a.Tag]) {
+			Report-Warn "23. ${label}: source type '$srcType' does not match the addition, expected $($additionTypes[$a.Tag])"
+			$check23Ok = $false
+		}
+	}
+	if ($check23Ok) { Report-OK "23. Addition sources: match items" }
 }
 
 # --- Check 22: обработчики — модуль формы ---
