@@ -1,0 +1,18 @@
+{
+  "name": "Структура: остановка по -MaxErrors сообщается в выводе",
+  "setup": "fixture:structure-addition-source",
+  "params": {
+    "formPath": "DataProcessors/Стенд/Forms/Форма"
+  },
+  "args_extra": [
+    "-MaxErrors",
+    "1"
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "Stopped after 1 errors. Fix and re-run.",
+      "1 errors, 0 warnings"
+    ]
+  }
+}

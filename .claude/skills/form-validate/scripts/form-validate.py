@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.33 — Validate 1C managed form
+# form-validate v1.34 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -2248,9 +2248,10 @@ def main():
         addition_types = {'SearchStringAddition': 'SearchStringRepresentation', 'ViewStatusAddition': 'ViewStatusRepresentation',
                           'SearchControlAddition': 'SearchControl'}
         type_by_name = {}
+        # Все именованные члены: элемент с неверным тегом (ошибка 18) всё же есть в форме, его тип — None
         for m in members:
-            if m in member_types:
-                type_by_name.setdefault(m.get('name', '').lower(), member_types[m])
+            if m.get('name'):
+                type_by_name.setdefault(m.get('name').lower(), member_types.get(m))
         additions = []
         for m in members:
             if m not in member_types:
@@ -2267,7 +2268,8 @@ def main():
             if src is None:
                 continue
             label = f"{tag} '{node.get('name', '')}'"
-            item = (src.findtext(f"{{{F_NS}}}Item") or '').strip()
+            item_node = src.find(f"{{{F_NS}}}Item")
+            item = ''.join(item_node.itertext()).strip() if item_node is not None else ''
             if not item:
                 report_error(f"23. {label}: source item is empty")
                 check23_ok = False
@@ -2278,13 +2280,14 @@ def main():
                 continue
             item_type = type_by_name[item.lower()]
             sources = ['Table', 'PDFDocumentField'] if tag == 'ViewStatusAddition' else ['Table']
-            if item_type not in sources:
+            if item_type is not None and item_type not in sources:
                 report_warn(f"23. {label}: source item '{item}' is {item_type}, expected {' or '.join(sources)}")
                 check23_ok = False
             elif owner and item.lower() != owner.lower():
                 report_warn(f"23. {label}: source item '{item}' is not its owner '{owner}'")
                 check23_ok = False
-            src_type = (src.findtext(f"{{{F_NS}}}Type") or '').strip()
+            type_node = src.find(f"{{{F_NS}}}Type")
+            src_type = ''.join(type_node.itertext()).strip() if type_node is not None else ''
             if src_type != addition_types[tag]:
                 report_warn(f"23. {label}: source type '{src_type}' does not match the addition, expected {addition_types[tag]}")
                 check23_ok = False
@@ -2409,6 +2412,8 @@ def main():
         result = f"=== Validation OK: Form.{form_name} ({checks} checks) ==="
     else:
         output_lines.append("")
+        if stopped:
+            output_lines.append(f"Stopped after {max_errors} errors. Fix and re-run.")
         output_lines.append(f"=== Result: {errors} errors, {warnings} warnings ({checks} checks) ===")
         result = "\n".join(output_lines)
 

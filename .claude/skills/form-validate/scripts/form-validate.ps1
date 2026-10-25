@@ -1,4 +1,4 @@
-﻿# form-validate v1.33 — Validate 1C managed form
+﻿# form-validate v1.34 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2201,8 +2201,10 @@ if (-not $stopped) {
 	$check23Ok = $true
 	$additionTypes = @{ 'SearchStringAddition' = 'SearchStringRepresentation'; 'ViewStatusAddition' = 'ViewStatusRepresentation'; 'SearchControlAddition' = 'SearchControl' }
 	$typeByName = @{}
+	# Все именованные члены: элемент с неверным тегом (ошибка 18) всё же есть в форме, его тип — $null
 	foreach ($m in $members) {
-		if ($memberTypes.ContainsKey($m) -and -not $typeByName.ContainsKey($m.GetAttribute('name'))) { $typeByName[$m.GetAttribute('name')] = $memberTypes[$m] }
+		$n = $m.GetAttribute('name')
+		if ($n -and -not $typeByName.ContainsKey($n)) { $typeByName[$n] = if ($memberTypes.ContainsKey($m)) { $memberTypes[$m] } else { $null } }
 	}
 	$additions = @(foreach ($m in $members) {
 		if (-not $memberTypes.ContainsKey($m)) { continue }
@@ -2231,7 +2233,7 @@ if (-not $stopped) {
 		}
 		$itemType = $typeByName[$item]
 		$sources = if ($a.Tag -eq 'ViewStatusAddition') { @('Table', 'PDFDocumentField') } else { @('Table') }
-		if ($sources -cnotcontains $itemType) {
+		if ($null -ne $itemType -and $sources -cnotcontains $itemType) {
 			Report-Warn "23. ${label}: source item '$item' is $itemType, expected $($sources -join ' or ')"
 			$check23Ok = $false
 		} elseif ($a.Owner -and $item -ne $a.Owner) {

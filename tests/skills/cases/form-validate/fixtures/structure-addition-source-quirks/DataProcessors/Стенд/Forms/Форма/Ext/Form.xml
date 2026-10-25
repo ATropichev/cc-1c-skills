@@ -1,0 +1,563 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<Form xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:app="http://v8.1c.ru/8.2/managed-application/core" xmlns:cfg="http://v8.1c.ru/8.1/data/enterprise/current-config" xmlns:dcscor="http://v8.1c.ru/8.1/data-composition-system/core" xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:dcsset="http://v8.1c.ru/8.1/data-composition-system/settings" xmlns:ent="http://v8.1c.ru/8.1/data/enterprise" xmlns:lf="http://v8.1c.ru/8.2/managed-application/logform" xmlns:style="http://v8.1c.ru/8.1/data/ui/style" xmlns:sys="http://v8.1c.ru/8.1/data/ui/fonts/system" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:v8ui="http://v8.1c.ru/8.1/data/ui" xmlns:web="http://v8.1c.ru/8.1/data/ui/colors/web" xmlns:win="http://v8.1c.ru/8.1/data/ui/colors/windows" xmlns:xr="http://v8.1c.ru/8.3/xcf/readable" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17">
+	<Title>
+		<v8:item>
+			<v8:lang>ru</v8:lang>
+			<v8:content>Стенд событий</v8:content>
+		</v8:item>
+	</Title>
+	<AutoTitle>false</AutoTitle>
+	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1">
+		<ChildItems>
+			<SearchStringAddition name="СвояКТЗ" id="904">
+				<AdditionSource>
+					<Item>ТЗ</Item>
+					<Type>SearchStringRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="СвояКТЗКонтекстноеМеню" id="905"/>
+				<ExtendedTooltip name="СвояКТЗРасширеннаяПодсказка" id="906"/>
+			</SearchStringAddition>
+		</ChildItems>
+	</AutoCommandBar>
+	<Events>
+		<Event name="URLGetProcessing">Форма_URLGetProcessing</Event>
+		<Event name="URLListGetProcessing">Форма_URLListGetProcessing</Event>
+		<Event name="Opening">Форма_Opening</Event>
+	</Events>
+	<ChildItems>
+		<InputField name="Поле" id="1">
+			<DataPath>Поле</DataPath>
+			<ContextMenu name="ПолеКонтекстноеМеню" id="2"/>
+			<ExtendedTooltip name="ПолеРасширеннаяПодсказка" id="3"/>
+			<Events>
+				<Event name="MultipleValueOpening">Поле_MultipleValueOpening</Event>
+				<Event name="MultipleValueURLProcessing">Поле_MultipleValueURLProcessing</Event>
+				<Event name="MultipleValuesAdd">Поле_MultipleValuesAdd</Event>
+				<Event name="MultipleValuesDelete">Поле_MultipleValuesDelete</Event>
+			</Events>
+		</InputField>
+		<UsualGroup name="Группа" id="4">
+			<Group>Vertical</Group>
+			<ExtendedTooltip name="ГруппаРасширеннаяПодсказка" id="5"/>
+			<ChildItems>
+				<Button name="Кнопка" id="6">
+					<CommandName>Form.Command.Команда</CommandName>
+					<ExtendedTooltip name="КнопкаРасширеннаяПодсказка" id="7"/>
+					<Events>
+						<Event name="Click">Кнопка_Click</Event>
+					</Events>
+				</Button>
+			</ChildItems>
+		</UsualGroup>
+		<Pages name="Страницы" id="8">
+			<ExtendedTooltip name="СтраницыРасширеннаяПодсказка" id="9"/>
+			<ChildItems>
+				<Page name="Страница1" id="10">
+					<Title>
+						<v8:item>
+							<v8:lang>ru</v8:lang>
+							<v8:content>Страница1</v8:content>
+						</v8:item>
+					</Title>
+					<ExtendedTooltip name="Страница1РасширеннаяПодсказка" id="11"/>
+					<ChildItems>
+						<CalendarField name="Календарь" id="12">
+							<DataPath>Дата</DataPath>
+							<ContextMenu name="КалендарьКонтекстноеМеню" id="13"/>
+							<ExtendedTooltip name="КалендарьРасширеннаяПодсказка" id="14"/>
+							<Events>
+								<Event name="OnActivateDate">Календарь_OnActivateDate</Event>
+								<Event name="OnActivate">Календарь_OnActivate</Event>
+							</Events>
+						</CalendarField>
+					</ChildItems>
+				</Page>
+			</ChildItems>
+		</Pages>
+		<PictureField name="Картинка" id="15">
+			<DataPath>Картинка</DataPath>
+			<ContextMenu name="КартинкаКонтекстноеМеню" id="16"/>
+			<ExtendedTooltip name="КартинкаРасширеннаяПодсказка" id="17"/>
+			<Events>
+				<Event name="OnChange">Картинка_OnChange</Event>
+			</Events>
+		</PictureField>
+		<SpreadSheetDocumentField name="ТабДок" id="18">
+			<DataPath>ТабДок</DataPath>
+			<ContextMenu name="ТабДокКонтекстноеМеню" id="19"/>
+			<ExtendedTooltip name="ТабДокРасширеннаяПодсказка" id="20"/>
+			<Events>
+				<Event name="URLProcessing">ТабДок_URLProcessing</Event>
+			</Events>
+		</SpreadSheetDocumentField>
+		<PlannerField name="Планировщик" id="21">
+			<DataPath>Планировщик</DataPath>
+			<ContextMenu name="ПланировщикКонтекстноеМеню" id="22"/>
+			<ExtendedTooltip name="ПланировщикРасширеннаяПодсказка" id="23"/>
+			<Events>
+				<Event name="BeforeCreate">Планировщик_BeforeCreate</Event>
+				<Event name="BeforeDelete">Планировщик_BeforeDelete</Event>
+				<Event name="BeforeStartEdit">Планировщик_BeforeStartEdit</Event>
+				<Event name="BeforeStartQuickEdit">Планировщик_BeforeStartQuickEdit</Event>
+				<Event name="CommandGenerateProcessing">Планировщик_CommandGenerateProcessing</Event>
+				<Event name="Drag">Планировщик_Drag</Event>
+				<Event name="DragCheck">Планировщик_DragCheck</Event>
+				<Event name="OnActivate">Планировщик_OnActivate</Event>
+				<Event name="OnCurrentRepresentationPeriodChange">Планировщик_OnCurrentRepresentationPeriodChange</Event>
+				<Event name="OnEditEnd">Планировщик_OnEditEnd</Event>
+				<Event name="Selection">Планировщик_Selection</Event>
+			</Events>
+		</PlannerField>
+		<Table name="Список" id="24">
+			<DataPath>Список</DataPath>
+			<ContextMenu name="СписокКонтекстноеМеню" id="25"/>
+			<AutoCommandBar name="СписокКоманднаяПанель" id="26"/>
+			<ExtendedTooltip name="СписокРасширеннаяПодсказка" id="27"/>
+			<SearchStringAddition name="СписокСтрокаПоиска" id="28">
+				<AdditionSource>
+					<Item>Спи<!--x-->сок</Item>
+					<Type>SearchStringRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="СписокСтрокаПоискаКонтекстноеМеню" id="29"/>
+				<ExtendedTooltip name="СписокСтрокаПоискаРасширеннаяПодсказка" id="30"/>
+			</SearchStringAddition>
+			<ViewStatusAddition name="СписокСостояниеПросмотра" id="31">
+				<AdditionSource>
+					<Item>Список</Item>
+					<Type>ViewStatusRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="СписокСостояниеПросмотраКонтекстноеМеню" id="32"/>
+				<ExtendedTooltip name="СписокСостояниеПросмотраРасширеннаяПодсказка" id="33"/>
+			</ViewStatusAddition>
+			<SearchControlAddition name="СписокУправлениеПоиском" id="34">
+				<AdditionSource>
+					<Item>Список</Item>
+					<Type>SearchControl</Type>
+				</AdditionSource>
+				<ContextMenu name="СписокУправлениеПоискомКонтекстноеМеню" id="35"/>
+				<ExtendedTooltip name="СписокУправлениеПоискомРасширеннаяПодсказка" id="36"/>
+			</SearchControlAddition>
+			<Events>
+				<Event name="Drop">Список_Drop</Event>
+			</Events>
+			<ChildItems>
+				<InputField name="СписокКолонка" id="37">
+					<DataPath>Список.Колонка</DataPath>
+					<ContextMenu name="СписокКолонкаКонтекстноеМеню" id="38"/>
+					<ExtendedTooltip name="СписокКолонкаРасширеннаяПодсказка" id="39"/>
+				</InputField>
+			</ChildItems>
+		</Table>
+		<table name="ТЗ" id="40">
+			<DataPath>ТЗ</DataPath>
+			<ContextMenu name="ТЗКонтекстноеМеню" id="41"/>
+			<AutoCommandBar name="ТЗКоманднаяПанель" id="42"/>
+			<ExtendedTooltip name="ТЗРасширеннаяПодсказка" id="43"/>
+			<SearchStringAddition name="ТЗСтрокаПоиска" id="44">
+				<AdditionSource>
+					<Item>ТЗ</Item>
+					<Type>SearchStringRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="ТЗСтрокаПоискаКонтекстноеМеню" id="45"/>
+				<ExtendedTooltip name="ТЗСтрокаПоискаРасширеннаяПодсказка" id="46"/>
+			</SearchStringAddition>
+			<ViewStatusAddition name="ТЗСостояниеПросмотра" id="47">
+				<AdditionSource>
+					<Item>ТЗ</Item>
+					<Type>ViewStatusRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="ТЗСостояниеПросмотраКонтекстноеМеню" id="48"/>
+				<ExtendedTooltip name="ТЗСостояниеПросмотраРасширеннаяПодсказка" id="49"/>
+			</ViewStatusAddition>
+			<SearchControlAddition name="ТЗУправлениеПоиском" id="50">
+				<AdditionSource>
+					<Item>ТЗ</Item>
+					<Type>SearchControl</Type>
+				</AdditionSource>
+				<ContextMenu name="ТЗУправлениеПоискомКонтекстноеМеню" id="51"/>
+				<ExtendedTooltip name="ТЗУправлениеПоискомРасширеннаяПодсказка" id="52"/>
+			</SearchControlAddition>
+			<Events>
+				<Event name="AfterDeleteRow">ТЗ_AfterDeleteRow</Event>
+				<Event name="BeforeAddRow">ТЗ_BeforeAddRow</Event>
+				<Event name="BeforeCollapse">ТЗ_BeforeCollapse</Event>
+				<Event name="BeforeDeleteRow">ТЗ_BeforeDeleteRow</Event>
+				<Event name="BeforeEditEnd">ТЗ_BeforeEditEnd</Event>
+				<Event name="BeforeExpand">ТЗ_BeforeExpand</Event>
+				<Event name="BeforeLoadUserSettingsAtServer">ТЗ_BeforeLoadUserSettingsAtServer</Event>
+				<Event name="BeforeRowChange">ТЗ_BeforeRowChange</Event>
+				<Event name="ChoiceProcessing">ТЗ_ChoiceProcessing</Event>
+				<Event name="Drag">ТЗ_Drag</Event>
+				<Event name="DragCheck">ТЗ_DragCheck</Event>
+				<Event name="DragEnd">ТЗ_DragEnd</Event>
+				<Event name="DragStart">ТЗ_DragStart</Event>
+				<Event name="NewWriteProcessing">ТЗ_NewWriteProcessing</Event>
+				<Event name="OnActivateCell">ТЗ_OnActivateCell</Event>
+				<Event name="OnActivateField">ТЗ_OnActivateField</Event>
+				<Event name="OnActivateRow">ТЗ_OnActivateRow</Event>
+				<Event name="OnChange">ТЗ_OnChange</Event>
+				<Event name="OnCurrentParentChange">ТЗ_OnCurrentParentChange</Event>
+				<Event name="OnEditEnd">ТЗ_OnEditEnd</Event>
+				<Event name="OnGetDataAtServer">ТЗ_OnGetDataAtServer</Event>
+				<Event name="OnHover">ТЗ_OnHover</Event>
+				<Event name="OnLoadUserSettingsAtServer">ТЗ_OnLoadUserSettingsAtServer</Event>
+				<Event name="OnSaveUserSettingsAtServer">ТЗ_OnSaveUserSettingsAtServer</Event>
+				<Event name="OnSelectedRowsSetChange">ТЗ_OnSelectedRowsSetChange</Event>
+				<Event name="OnStartEdit">ТЗ_OnStartEdit</Event>
+				<Event name="OnUpdateUserSettingSetAtServer">ТЗ_OnUpdateUserSettingSetAtServer</Event>
+				<Event name="RefreshRequestProcessing">ТЗ_RefreshRequestProcessing</Event>
+				<Event name="Selection">ТЗ_Selection</Event>
+				<Event name="URLGetProcessing">ТЗ_URLGetProcessing</Event>
+				<Event name="ValueChoice">ТЗ_ValueChoice</Event>
+			</Events>
+			<ChildItems>
+				<InputField name="ТЗКолонка" id="53">
+					<DataPath>ТЗ.Колонка</DataPath>
+					<ContextMenu name="ТЗКолонкаКонтекстноеМеню" id="54"/>
+					<ExtendedTooltip name="ТЗКолонкаРасширеннаяПодсказка" id="55"/>
+				</InputField>
+			</ChildItems>
+		</table>
+		<Table name="ДЗ" id="56">
+			<DataPath>ДЗ</DataPath>
+			<ContextMenu name="ДЗКонтекстноеМеню" id="57"/>
+			<AutoCommandBar name="ДЗКоманднаяПанель" id="58"/>
+			<ExtendedTooltip name="ДЗРасширеннаяПодсказка" id="59"/>
+			<SearchStringAddition name="ДЗСтрокаПоиска" id="60">
+				<AdditionSource>
+					<Item>ДЗ</Item>
+					<Type>SearchStringRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="ДЗСтрокаПоискаКонтекстноеМеню" id="61"/>
+				<ExtendedTooltip name="ДЗСтрокаПоискаРасширеннаяПодсказка" id="62"/>
+			</SearchStringAddition>
+			<ViewStatusAddition name="ДЗСостояниеПросмотра" id="63">
+				<AdditionSource>
+					<Item>ДЗ</Item>
+					<Type>ViewStatusRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="ДЗСостояниеПросмотраКонтекстноеМеню" id="64"/>
+				<ExtendedTooltip name="ДЗСостояниеПросмотраРасширеннаяПодсказка" id="65"/>
+			</ViewStatusAddition>
+			<SearchControlAddition name="ДЗУправлениеПоиском" id="66">
+				<AdditionSource>
+					<Item>ДЗ</Item>
+					<Type>SearchControl</Type>
+				</AdditionSource>
+				<ContextMenu name="ДЗУправлениеПоискомКонтекстноеМеню" id="67"/>
+				<ExtendedTooltip name="ДЗУправлениеПоискомРасширеннаяПодсказка" id="68"/>
+			</SearchControlAddition>
+			<Events>
+				<Event name="AfterDeleteRow">ДЗ_AfterDeleteRow</Event>
+				<Event name="BeforeAddRow">ДЗ_BeforeAddRow</Event>
+				<Event name="BeforeCollapse">ДЗ_BeforeCollapse</Event>
+				<Event name="BeforeDeleteRow">ДЗ_BeforeDeleteRow</Event>
+				<Event name="BeforeEditEnd">ДЗ_BeforeEditEnd</Event>
+				<Event name="BeforeExpand">ДЗ_BeforeExpand</Event>
+				<Event name="BeforeLoadUserSettingsAtServer">ДЗ_BeforeLoadUserSettingsAtServer</Event>
+				<Event name="BeforeRowChange">ДЗ_BeforeRowChange</Event>
+				<Event name="ChoiceProcessing">ДЗ_ChoiceProcessing</Event>
+				<Event name="Drag">ДЗ_Drag</Event>
+				<Event name="DragCheck">ДЗ_DragCheck</Event>
+				<Event name="DragEnd">ДЗ_DragEnd</Event>
+				<Event name="DragStart">ДЗ_DragStart</Event>
+				<Event name="NewWriteProcessing">ДЗ_NewWriteProcessing</Event>
+				<Event name="OnActivateCell">ДЗ_OnActivateCell</Event>
+				<Event name="OnActivateField">ДЗ_OnActivateField</Event>
+				<Event name="OnActivateRow">ДЗ_OnActivateRow</Event>
+				<Event name="OnChange">ДЗ_OnChange</Event>
+				<Event name="OnCurrentParentChange">ДЗ_OnCurrentParentChange</Event>
+				<Event name="OnEditEnd">ДЗ_OnEditEnd</Event>
+				<Event name="OnGetDataAtServer">ДЗ_OnGetDataAtServer</Event>
+				<Event name="OnHover">ДЗ_OnHover</Event>
+				<Event name="OnLoadUserSettingsAtServer">ДЗ_OnLoadUserSettingsAtServer</Event>
+				<Event name="OnSaveUserSettingsAtServer">ДЗ_OnSaveUserSettingsAtServer</Event>
+				<Event name="OnSelectedRowsSetChange">ДЗ_OnSelectedRowsSetChange</Event>
+				<Event name="OnStartEdit">ДЗ_OnStartEdit</Event>
+				<Event name="OnUpdateUserSettingSetAtServer">ДЗ_OnUpdateUserSettingSetAtServer</Event>
+				<Event name="RefreshRequestProcessing">ДЗ_RefreshRequestProcessing</Event>
+				<Event name="Selection">ДЗ_Selection</Event>
+				<Event name="URLGetProcessing">ДЗ_URLGetProcessing</Event>
+				<Event name="ValueChoice">ДЗ_ValueChoice</Event>
+			</Events>
+			<ChildItems>
+				<InputField name="ДЗКолонка" id="69">
+					<DataPath>ДЗ.Колонка</DataPath>
+					<ContextMenu name="ДЗКолонкаКонтекстноеМеню" id="70"/>
+					<ExtendedTooltip name="ДЗКолонкаРасширеннаяПодсказка" id="71"/>
+				</InputField>
+			</ChildItems>
+		</Table>
+		<Table name="ДС" id="72">
+			<CommandBarLocation>None</CommandBarLocation>
+			<DataPath>ДС</DataPath>
+			<RowPictureDataPath>ДС.DefaultPicture</RowPictureDataPath>
+			<AutoRefresh>false</AutoRefresh>
+			<AutoRefreshPeriod>60</AutoRefreshPeriod>
+			<Period>
+				<v8:variant xsi:type="v8:StandardPeriodVariant">Custom</v8:variant>
+				<v8:startDate>0001-01-01T00:00:00</v8:startDate>
+				<v8:endDate>0001-01-01T00:00:00</v8:endDate>
+			</Period>
+			<ChoiceFoldersAndItems>Items</ChoiceFoldersAndItems>
+			<RestoreCurrentRow>false</RestoreCurrentRow>
+			<TopLevelParent xsi:nil="true"/>
+			<ShowRoot>true</ShowRoot>
+			<AllowRootChoice>false</AllowRootChoice>
+			<UpdateOnDataChange>Auto</UpdateOnDataChange>
+			<AllowGettingCurrentRowURL>true</AllowGettingCurrentRowURL>
+			<ContextMenu name="ДСКонтекстноеМеню" id="73"/>
+			<AutoCommandBar name="ДСКоманднаяПанель" id="74">
+				<Autofill>false</Autofill>
+			</AutoCommandBar>
+			<ExtendedTooltip name="ДСРасширеннаяПодсказка" id="75"/>
+			<SearchStringAddition name="ДССтрокаПоиска" id="76">
+				<AdditionSource>
+					<Item>ДС</Item>
+					<Type>SearchStringRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="ДССтрокаПоискаКонтекстноеМеню" id="77"/>
+				<ExtendedTooltip name="ДССтрокаПоискаРасширеннаяПодсказка" id="78"/>
+			</SearchStringAddition>
+			<ViewStatusAddition name="ДССостояниеПросмотра" id="79">
+				<AdditionSource>
+					<Item>ДС</Item>
+					<Type>ViewStatusRepresentation</Type>
+				</AdditionSource>
+				<ContextMenu name="ДССостояниеПросмотраКонтекстноеМеню" id="80"/>
+				<ExtendedTooltip name="ДССостояниеПросмотраРасширеннаяПодсказка" id="81"/>
+			</ViewStatusAddition>
+			<SearchControlAddition name="ДСУправлениеПоиском" id="82">
+				<AdditionSource>
+					<Item>ДС</Item>
+					<Type>SearchControl</Type>
+				</AdditionSource>
+				<ContextMenu name="ДСУправлениеПоискомКонтекстноеМеню" id="83"/>
+				<ExtendedTooltip name="ДСУправлениеПоискомРасширеннаяПодсказка" id="84"/>
+			</SearchControlAddition>
+			<Events>
+				<Event name="AfterDeleteRow">ДС_AfterDeleteRow</Event>
+				<Event name="BeforeAddRow">ДС_BeforeAddRow</Event>
+				<Event name="BeforeCollapse">ДС_BeforeCollapse</Event>
+				<Event name="BeforeDeleteRow">ДС_BeforeDeleteRow</Event>
+				<Event name="BeforeEditEnd">ДС_BeforeEditEnd</Event>
+				<Event name="BeforeExpand">ДС_BeforeExpand</Event>
+				<Event name="BeforeLoadUserSettingsAtServer">ДС_BeforeLoadUserSettingsAtServer</Event>
+				<Event name="BeforeRowChange">ДС_BeforeRowChange</Event>
+				<Event name="ChoiceProcessing">ДС_ChoiceProcessing</Event>
+				<Event name="Drag">ДС_Drag</Event>
+				<Event name="DragCheck">ДС_DragCheck</Event>
+				<Event name="DragEnd">ДС_DragEnd</Event>
+				<Event name="DragStart">ДС_DragStart</Event>
+				<Event name="NewWriteProcessing">ДС_NewWriteProcessing</Event>
+				<Event name="OnActivateCell">ДС_OnActivateCell</Event>
+				<Event name="OnActivateField">ДС_OnActivateField</Event>
+				<Event name="OnActivateRow">ДС_OnActivateRow</Event>
+				<Event name="OnChange">ДС_OnChange</Event>
+				<Event name="OnCurrentParentChange">ДС_OnCurrentParentChange</Event>
+				<Event name="OnEditEnd">ДС_OnEditEnd</Event>
+				<Event name="OnGetDataAtServer">ДС_OnGetDataAtServer</Event>
+				<Event name="OnHover">ДС_OnHover</Event>
+				<Event name="OnLoadUserSettingsAtServer">ДС_OnLoadUserSettingsAtServer</Event>
+				<Event name="OnSaveUserSettingsAtServer">ДС_OnSaveUserSettingsAtServer</Event>
+				<Event name="OnSelectedRowsSetChange">ДС_OnSelectedRowsSetChange</Event>
+				<Event name="OnStartEdit">ДС_OnStartEdit</Event>
+				<Event name="OnUpdateUserSettingSetAtServer">ДС_OnUpdateUserSettingSetAtServer</Event>
+				<Event name="RefreshRequestProcessing">ДС_RefreshRequestProcessing</Event>
+				<Event name="Selection">ДС_Selection</Event>
+				<Event name="URLGetProcessing">ДС_URLGetProcessing</Event>
+				<Event name="ValueChoice">ДС_ValueChoice</Event>
+			</Events>
+			<ChildItems>
+				<InputField name="ДСНаименование" id="85">
+					<DataPath>ДС.Description</DataPath>
+					<ContextMenu name="ДСНаименованиеКонтекстноеМеню" id="86"/>
+					<ExtendedTooltip name="ДСНаименованиеРасширеннаяПодсказка" id="87"/>
+				</InputField>
+			</ChildItems>
+		</Table>
+	</ChildItems>
+	<Attributes>
+		<Attribute name="Объект" id="88">
+			<Type>
+				<v8:Type>cfg:DataProcessorObject.Стенд</v8:Type>
+			</Type>
+			<MainAttribute>true</MainAttribute>
+		</Attribute>
+		<Attribute name="Поле" id="89">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Поле</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type>xs:string</v8:Type>
+				<v8:StringQualifiers>
+					<v8:Length>0</v8:Length>
+					<v8:AllowedLength>Variable</v8:AllowedLength>
+				</v8:StringQualifiers>
+			</Type>
+		</Attribute>
+		<Attribute name="Дата" id="90">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Дата</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type>xs:dateTime</v8:Type>
+				<v8:DateQualifiers>
+					<v8:DateFractions>Date</v8:DateFractions>
+				</v8:DateQualifiers>
+			</Type>
+		</Attribute>
+		<Attribute name="Картинка" id="91">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Картинка</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type>xs:string</v8:Type>
+				<v8:StringQualifiers>
+					<v8:Length>0</v8:Length>
+					<v8:AllowedLength>Variable</v8:AllowedLength>
+				</v8:StringQualifiers>
+			</Type>
+		</Attribute>
+		<Attribute name="ТабДок" id="92">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Таб док</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type xmlns:mxl="http://v8.1c.ru/8.2/data/spreadsheet">mxl:SpreadsheetDocument</v8:Type>
+			</Type>
+		</Attribute>
+		<Attribute name="Планировщик" id="93">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Планировщик</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type xmlns:pl="http://v8.1c.ru/8.3/data/planner">pl:Planner</v8:Type>
+			</Type>
+		</Attribute>
+		<Attribute name="Список" id="94">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Список</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type>v8:ValueTable</v8:Type>
+			</Type>
+			<Columns>
+				<Column name="Колонка" id="95">
+					<Type>
+						<v8:Type>xs:string</v8:Type>
+						<v8:StringQualifiers>
+							<v8:Length>0</v8:Length>
+							<v8:AllowedLength>Variable</v8:AllowedLength>
+						</v8:StringQualifiers>
+					</Type>
+				</Column>
+			</Columns>
+		</Attribute>
+		<Attribute name="ТЗ" id="96">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>ТЗ</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type>v8:ValueTable</v8:Type>
+			</Type>
+			<Columns>
+				<Column name="Колонка" id="97">
+					<Type>
+						<v8:Type>xs:string</v8:Type>
+						<v8:StringQualifiers>
+							<v8:Length>0</v8:Length>
+							<v8:AllowedLength>Variable</v8:AllowedLength>
+						</v8:StringQualifiers>
+					</Type>
+				</Column>
+			</Columns>
+		</Attribute>
+		<Attribute name="ДЗ" id="98">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>ДЗ</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type>v8:ValueTree</v8:Type>
+			</Type>
+			<Columns>
+				<Column name="Колонка" id="99">
+					<Type>
+						<v8:Type>xs:string</v8:Type>
+						<v8:StringQualifiers>
+							<v8:Length>0</v8:Length>
+							<v8:AllowedLength>Variable</v8:AllowedLength>
+						</v8:StringQualifiers>
+					</Type>
+				</Column>
+			</Columns>
+		</Attribute>
+		<Attribute name="ДС" id="100">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>ДС</v8:content>
+				</v8:item>
+			</Title>
+			<Type>
+				<v8:Type>cfg:DynamicList</v8:Type>
+			</Type>
+			<Settings xsi:type="DynamicList">
+				<ManualQuery>false</ManualQuery>
+				<DynamicDataRead>true</DynamicDataRead>
+				<MainTable>Catalog.Товары</MainTable>
+				<ListSettings>
+					<dcsset:filter>
+						<dcsset:viewMode>Normal</dcsset:viewMode>
+						<dcsset:userSettingID>dfcece9d-5077-440b-b6b3-45a5cb4538eb</dcsset:userSettingID>
+					</dcsset:filter>
+					<dcsset:order>
+						<dcsset:viewMode>Normal</dcsset:viewMode>
+						<dcsset:userSettingID>88619765-ccb3-46c6-ac52-38e9c992ebd4</dcsset:userSettingID>
+					</dcsset:order>
+					<dcsset:conditionalAppearance>
+						<dcsset:viewMode>Normal</dcsset:viewMode>
+						<dcsset:userSettingID>b75fecce-942b-4aed-abc9-e6a02e460fb3</dcsset:userSettingID>
+					</dcsset:conditionalAppearance>
+					<dcsset:itemsViewMode>Normal</dcsset:itemsViewMode>
+					<dcsset:itemsUserSettingID>911b6018-f537-43e8-a417-da56b22f9aec</dcsset:itemsUserSettingID>
+				</ListSettings>
+			</Settings>
+		</Attribute>
+	</Attributes>
+	<Commands>
+		<Command name="Команда" id="101">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Команда</v8:content>
+				</v8:item>
+			</Title>
+			<Action>КомандаДействие</Action>
+		</Command>
+	</Commands>
+</Form>

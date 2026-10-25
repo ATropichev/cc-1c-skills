@@ -1,0 +1,17 @@
+{
+  "name": "Структура: источник дополнения — таблица с неверным тегом и комментарий внутри Item не дают ложных «not found»",
+  "setup": "fixture:structure-addition-source-quirks",
+  "params": {
+    "formPath": "DataProcessors/Стенд/Forms/Форма"
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] 18. <table> 'ТЗ': wrong case, use <Table>",
+      "1 errors, 0 warnings"
+    ],
+    "stdoutNotContains": [
+      "23."
+    ]
+  }
+}
