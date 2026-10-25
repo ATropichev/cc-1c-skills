@@ -498,6 +498,23 @@ const FAMILIES = [
         'web-publish'] }],
   },
   {
+    // Относительный -InfoBasePath — от корня проекта, как configSrc: ibcmd считает его от --data.
+    name: 'repository: resolve_infobase_path', py: 'resolve_infobase_path', ps1: 'Resolve-InfoBasePath',
+    variants: [{ id: 'base', authority: 'db-repo',
+      consumers: ['db-cfe-admin', 'db-create', 'db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf',
+        'db-load-dt', 'db-load-git', 'db-load-xml', 'db-run', 'db-update', 'epf-build', 'epf-dump',
+        'web-publish'] }],
+  },
+  {
+    // Пути файлов и каталогов — абсолютные от рабочего каталога: ibcmd отбрасывает ведущие «..».
+    // db-load-git PS уже делает Resolve-Path для -ConfigDir, поэтому копия только в py.
+    name: 'paths: resolve_work_path', py: 'resolve_work_path', ps1: 'Resolve-WorkPath',
+    variants: [{ id: 'base', authority: 'db-load-xml',
+      consumers: ['db-create', 'db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt',
+        'epf-build', 'epf-dump'],
+      consumersPy: ['db-load-git'] }],
+  },
+  {
     name: 'repository: resolve_settings', py: 'resolve_repository_settings', ps1: 'Resolve-RepositorySettings',
     variants: [{ id: 'base', authority: 'db-repo', consumers: ['db-dump-xml', 'db-load-git', 'db-load-xml', 'db-update', 'db-cfe-admin'] }],
   },

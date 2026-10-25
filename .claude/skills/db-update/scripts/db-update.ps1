@@ -1,4 +1,4 @@
-﻿# db-update v1.24 — Update 1C database configuration
+﻿# db-update v1.25 — Update 1C database configuration
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -161,7 +161,7 @@ function Find-ProjectDatabase {
     try { $proj = Get-Content $pf -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $null }
     if (-not $proj.databases) { return $null }
     foreach ($db in $proj.databases) {
-        if ($InfoBasePath -and $db.path -and (Test-SamePath $db.path $InfoBasePath)) { return $db }
+        if ($InfoBasePath -and $db.path -and (Test-SamePath ([System.IO.Path]::Combine((Split-Path $pf -Parent), $db.path)) $InfoBasePath)) { return $db }
         if ($InfoBaseServer -and $InfoBaseRef -and $db.server -and $db.ref) {
             if ($db.server.Equals($InfoBaseServer, [System.StringComparison]::OrdinalIgnoreCase) -and
                 $db.ref.Equals($InfoBaseRef, [System.StringComparison]::OrdinalIgnoreCase)) { return $db }
@@ -400,6 +400,24 @@ function ConvertTo-CleanPath {
 
 $V8Path = ConvertTo-CleanPath $V8Path '-V8Path'
 $InfoBasePath = ConvertTo-CleanPath $InfoBasePath '-InfoBasePath'
+function Resolve-InfoBasePath {
+    # Относительный путь к базе — от корня проекта (каталог .v8-project.json, вверх от рабочего
+    # каталога), как configSrc; без файла проекта — от рабочего каталога. Платформе уходит только
+    # абсолютный: ibcmd считает относительный --db-path от каталога --data, а он у навыков временный.
+    param([string]$Path)
+    if (-not $Path -or [System.IO.Path]::IsPathRooted($Path)) { return $Path }
+    $cwd = (Get-Location).Path
+    $base = $cwd
+    $d = $cwd
+    for ($i = 0; $i -lt 20 -and $d; $i++) {
+        if (Test-Path -LiteralPath (Join-Path $d ".v8-project.json")) { $base = $d; break }
+        $parent = [System.IO.Path]::GetDirectoryName($d)
+        if ($parent -eq $d) { break }
+        $d = $parent
+    }
+    return [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($base, $Path))
+}
+$InfoBasePath = Resolve-InfoBasePath $InfoBasePath
 
 function Assert-InfoBaseExists {
     # These skills work on a ready infobase. Saying so up front beats the platform's

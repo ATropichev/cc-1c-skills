@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# web-publish v1.12 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
+# web-publish v1.13 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 """
@@ -74,6 +74,28 @@ def same_path(a, b):
         return False
 
 
+def resolve_infobase_path(path):
+    """Относительный путь к базе — от корня проекта (каталог .v8-project.json, вверх от рабочего
+    каталога), как configSrc; без файла проекта — от рабочего каталога. Платформе уходит только
+    абсолютный: ibcmd считает относительный --db-path от каталога --data, а он у навыков временный."""
+    if not path or os.path.isabs(path):
+        return path
+    cwd = os.getcwd()
+    base = cwd
+    d = cwd
+    for _ in range(20):
+        if not d:
+            break
+        if os.path.isfile(os.path.join(d, ".v8-project.json")):
+            base = d
+            break
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return os.path.abspath(os.path.join(base, path))
+
+
 def find_project_database(args):
     """Запись базы в реестре, соответствующая переданному соединению. None, если не найдена."""
     pf = _sg_find_v8project(os.getcwd())
@@ -85,7 +107,7 @@ def find_project_database(args):
     except Exception:
         return None
     for db in proj.get("databases") or []:
-        if args.InfoBasePath and db.get("path") and same_path(db["path"], args.InfoBasePath):
+        if args.InfoBasePath and db.get("path") and same_path(os.path.join(os.path.dirname(pf), db["path"]), args.InfoBasePath):
             return db
         if args.InfoBaseServer and args.InfoBaseRef and db.get("server") and db.get("ref"):
             if (db["server"].lower() == args.InfoBaseServer.lower()
@@ -185,6 +207,7 @@ def main():
     parser.add_argument('-Port', type=int, default=8081, help='Port (default: 8081)')
     parser.add_argument('-Manual', action='store_true', help='Do not download Apache — only check and give instructions')
     args = ci_parse_args(parser)
+    args.InfoBasePath = resolve_infobase_path(args.InfoBasePath)
 
     # --- Resolve V8Path ---
     v8_path = args.V8Path

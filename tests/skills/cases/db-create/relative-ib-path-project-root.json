@@ -1,0 +1,13 @@
+{
+  "name": "Относительный путь к базе — от корня проекта (каталог .v8-project.json), а не от рабочего каталога",
+  "fakePlatform": { "log": "" },
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "databases": [] } } }
+  ],
+  "args_extra": ["-V8Path", "{fakePlatform}", "-InfoBasePath", "ib"],
+  "cwd": "workDir/sub",
+  "expect": {
+    "stdoutContains": "Information base created successfully"
+  },
+  "noSnapshot": "проверяется разрешение пути по stdout"
+}

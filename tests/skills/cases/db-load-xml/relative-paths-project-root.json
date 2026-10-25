@@ -1,0 +1,15 @@
+{
+  "name": "Относительные пути: база — от корня проекта, каталог выгрузки (с ..) — от рабочего каталога",
+  "fakePlatform": { "log": "" },
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "databases": [] } } },
+    { "writeFile": { "path": "src/Configuration.xml", "content": "<MetaDataObject/>" } }
+  ],
+  "args_extra": ["-V8Path", "{fakePlatform}", "-InfoBasePath", "ib", "-ConfigDir", "../src"],
+  "cwd": "workDir/sub",
+  "expect": {
+    "stdoutContains": "Load completed successfully",
+    "stdoutNotContains": "not found"
+  },
+  "noSnapshot": "проверяется разрешение путей по stdout"
+}

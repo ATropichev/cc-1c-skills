@@ -1,0 +1,10 @@
+{
+  "name": "Относительный путь к базе без .v8-project.json — от рабочего каталога",
+  "fakePlatform": { "log": "" },
+  "args_extra": ["-V8Path", "{fakePlatform}", "-InfoBasePath", "ib"],
+  "cwd": "workDir",
+  "expect": {
+    "stdoutContains": "Information base created successfully"
+  },
+  "noSnapshot": "проверяется разрешение пути по stdout"
+}

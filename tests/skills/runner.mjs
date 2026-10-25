@@ -200,6 +200,18 @@ function resolveScript(scriptRelPath, runtime) {
   return full;
 }
 
+// Рабочий каталог запуска навыка: 'workDir' — каталог кейса, 'workDir/<sub>' — его подкаталог
+// (создаётся); иначе — корень репозитория.
+function resolveExecCwd(cwd, workDir) {
+  if (cwd === 'workDir') return workDir;
+  if (typeof cwd === 'string' && cwd.startsWith('workDir/')) {
+    const dir = join(workDir, cwd.slice('workDir/'.length));
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  }
+  return undefined;
+}
+
 function execSkillRaw(runtime, scriptPath, args, cwd) {
   const execCwd = cwd || REPO_ROOT;
   if (runtime === 'python') {
@@ -963,7 +975,7 @@ async function runCaseAsync(testCase, opts) {
     let stdout = '', stderr = '', exitCode = 0;
     const execT0 = performance.now();
     try {
-      const execCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : undefined;
+      const execCwd = resolveExecCwd(caseData.cwd || skillConfig.cwd, workDir);
       ({ stdout, stderr } = await execSkillAsync(opts.runtime, scriptPath, args, execCwd));
     } catch (e) {
       exitCode = e.status ?? 1;
@@ -1000,14 +1012,14 @@ async function runCaseAsync(testCase, opts) {
         const needles = Array.isArray(caseData.expect.stdoutContains)
           ? caseData.expect.stdoutContains : [caseData.expect.stdoutContains];
         for (const needle of needles) {
-          if (!stdout.includes(needle)) errors.push(`stdout does not contain "${needle}"`);
+          if (!stdout.includes(substPlaceholders(needle, workDir))) errors.push(`stdout does not contain "${needle}"`);
         }
       }
       if (caseData.expect?.stdoutNotContains) {
         const needles = Array.isArray(caseData.expect.stdoutNotContains)
           ? caseData.expect.stdoutNotContains : [caseData.expect.stdoutNotContains];
         for (const needle of needles) {
-          if (stdout.includes(needle)) errors.push(`stdout unexpectedly contains "${needle}"`);
+          if (stdout.includes(substPlaceholders(needle, workDir))) errors.push(`stdout unexpectedly contains "${needle}"`);
         }
       }
       // Предупреждение — не отказ: навык печатает его в stderr и продолжает работу. Без
@@ -1079,7 +1091,7 @@ async function runCaseAsync(testCase, opts) {
       if (errors.length === 0 && caseData.idempotent && !workspace.readOnly) {
         const before = snapshotWorkDirBytes(workDir);
         try {
-          const execCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : undefined;
+          const execCwd = resolveExecCwd(caseData.cwd || skillConfig.cwd, workDir);
           await execSkillAsync(opts.runtime, scriptPath, args, execCwd);
         } catch (e) {
           errors.push(`Idempotency rerun failed: exitCode=${e.status}\nstderr: ${(e.stderr || '').substring(0, 300)}`);
@@ -1205,7 +1217,7 @@ function runCase(testCase, opts) {
 
     const execT0 = performance.now();
     try {
-      const execCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : undefined;
+      const execCwd = resolveExecCwd(caseData.cwd || skillConfig.cwd, workDir);
       stdout = execSkillRaw(opts.runtime, scriptPath, args, execCwd);
     } catch (e) {
       exitCode = e.status ?? 1;
@@ -1254,14 +1266,14 @@ function runCase(testCase, opts) {
         const needles = Array.isArray(caseData.expect.stdoutContains)
           ? caseData.expect.stdoutContains : [caseData.expect.stdoutContains];
         for (const needle of needles) {
-          if (!stdout.includes(needle)) errors.push(`stdout does not contain "${needle}"`);
+          if (!stdout.includes(substPlaceholders(needle, workDir))) errors.push(`stdout does not contain "${needle}"`);
         }
       }
       if (caseData.expect?.stdoutNotContains) {
         const needles = Array.isArray(caseData.expect.stdoutNotContains)
           ? caseData.expect.stdoutNotContains : [caseData.expect.stdoutNotContains];
         for (const needle of needles) {
-          if (stdout.includes(needle)) errors.push(`stdout unexpectedly contains "${needle}"`);
+          if (stdout.includes(substPlaceholders(needle, workDir))) errors.push(`stdout unexpectedly contains "${needle}"`);
         }
       }
       // Предупреждение — не отказ: навык печатает его в stderr и продолжает работу. Без
@@ -1335,7 +1347,7 @@ function runCase(testCase, opts) {
       if (errors.length === 0 && caseData.idempotent && !workspace.readOnly) {
         const before = snapshotWorkDirBytes(workDir);
         try {
-          const execCwd = (caseData.cwd || skillConfig.cwd) === 'workDir' ? workDir : undefined;
+          const execCwd = resolveExecCwd(caseData.cwd || skillConfig.cwd, workDir);
           execSkillRaw(opts.runtime, scriptPath, args, execCwd);
         } catch (e) {
           errors.push(`Idempotency rerun failed: exitCode=${e.status}\nstderr: ${(e.stderr || '').substring(0, 300)}`);

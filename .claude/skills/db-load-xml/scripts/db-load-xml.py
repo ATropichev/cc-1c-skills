@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-xml v1.34 — Load 1C configuration from XML files
+# db-load-xml v1.35 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -123,6 +123,36 @@ def same_path(a, b):
         return False
 
 
+def resolve_infobase_path(path):
+    """Относительный путь к базе — от корня проекта (каталог .v8-project.json, вверх от рабочего
+    каталога), как configSrc; без файла проекта — от рабочего каталога. Платформе уходит только
+    абсолютный: ibcmd считает относительный --db-path от каталога --data, а он у навыков временный."""
+    if not path or os.path.isabs(path):
+        return path
+    cwd = os.getcwd()
+    base = cwd
+    d = cwd
+    for _ in range(20):
+        if not d:
+            break
+        if os.path.isfile(os.path.join(d, ".v8-project.json")):
+            base = d
+            break
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    return os.path.abspath(os.path.join(base, path))
+
+
+def resolve_work_path(path):
+    """Путь файла или каталога — от рабочего каталога. Платформе уходит только абсолютный: ibcmd
+    отбрасывает ведущие «..» относительного пути и читает или пишет не там."""
+    if not path or os.path.isabs(path):
+        return path
+    return os.path.abspath(path)
+
+
 def find_project_database(args):
     """Запись базы в реестре, соответствующая переданному соединению. None, если не найдена."""
     pf = _sg_find_v8project(os.getcwd())
@@ -134,7 +164,7 @@ def find_project_database(args):
     except Exception:
         return None
     for db in proj.get("databases") or []:
-        if args.InfoBasePath and db.get("path") and same_path(db["path"], args.InfoBasePath):
+        if args.InfoBasePath and db.get("path") and same_path(os.path.join(os.path.dirname(pf), db["path"]), args.InfoBasePath):
             return db
         if args.InfoBaseServer and args.InfoBaseRef and db.get("server") and db.get("ref"):
             if (db["server"].lower() == args.InfoBaseServer.lower()
@@ -753,9 +783,12 @@ def main():
 
     args.V8Path = clean_path(args.V8Path, "-V8Path")
     args.InfoBasePath = clean_path(args.InfoBasePath, "-InfoBasePath")
+    args.InfoBasePath = resolve_infobase_path(args.InfoBasePath)
     assert_infobase_exists(args.InfoBasePath)
     args.ConfigDir = clean_path(args.ConfigDir, "-ConfigDir")
+    args.ConfigDir = resolve_work_path(args.ConfigDir)
     args.ListFile = clean_path(args.ListFile, "-ListFile")
+    args.ListFile = resolve_work_path(args.ListFile)
 
     # --- Resolve V8Path ---
     v8path = resolve_v8path(args.V8Path, args)
