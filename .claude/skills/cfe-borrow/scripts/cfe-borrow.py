@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# cfe-borrow v1.57 — Borrow objects from configuration into extension (CFE)
+# cfe-borrow v1.58 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -527,11 +527,12 @@ def get_new_object_position(cfg_dir):
             return "end"
         proj = json.loads(open(pj, encoding="utf-8-sig").read())
         proj_dir = os.path.dirname(pj)
-        cfg_full = os.path.normcase(os.path.abspath(cfg_dir or ".")).rstrip("\\/")
+        # Пути — настоящие (realpath): на macOS /var — ссылка на /private/var
+        cfg_full = os.path.normcase(os.path.realpath(cfg_dir or ".")).rstrip("\\/")
         for db in proj.get("databases", []):
             src = db.get("configSrc")
             if src and db.get("newObjectPosition"):
-                src_full = os.path.normcase(os.path.abspath(os.path.join(proj_dir, src))).rstrip("\\/")
+                src_full = os.path.normcase(os.path.realpath(os.path.join(proj_dir, src))).rstrip("\\/")
                 if cfg_full == src_full or cfg_full.startswith(src_full + os.sep):
                     return "byName" if str(db["newObjectPosition"]).lower() == "byname" else "end"
         if str(proj.get("newObjectPosition") or "").lower() == "byname":

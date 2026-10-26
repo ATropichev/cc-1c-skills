@@ -1,4 +1,4 @@
-﻿# xdto-edit v1.8 — Point edits of a 1C XDTO package (+support-guard: общая реализация вместо урезанной)
+﻿# xdto-edit v1.9 — Point edits of a 1C XDTO package (+support-guard: общая реализация вместо урезанной)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -62,15 +62,19 @@ function Find-V8Project([string]$startDir) {
 function Get-EditMode([string]$cfgDir) {
 	try {
 		$pj = Find-V8Project (Get-Location).ProviderPath
-		if (-not $pj) { $pj = Find-V8Project $cfgDir }
+		if (-not $pj) { $pj = Find-V8Project ([System.IO.Path]::GetFullPath($cfgDir)) }
 		if (-not $pj) { return 'deny' }
-		$proj = Get-Content -Raw $pj | ConvertFrom-Json
+		# UTF-8 явно: PS 5.1 читает файл без BOM как ANSI, и configSrc с кириллицей не совпал бы
+		$proj = Get-Content -Raw -Encoding UTF8 $pj | ConvertFrom-Json
+		# configSrc — от каталога .v8-project.json, а не от рабочего каталога: иначе из подкаталога
+		# проекта база не сопоставляется и берётся правило проекта.
+		$projDir = [System.IO.Path]::GetDirectoryName($pj)
 		$cfgFull = [System.IO.Path]::GetFullPath($cfgDir).TrimEnd('\', '/')
 		if ($proj.databases) {
 			foreach ($db in $proj.databases) {
 				if ($db.configSrc) {
-					$src = [System.IO.Path]::GetFullPath($db.configSrc).TrimEnd('\', '/')
-					if ($cfgFull -eq $src -or $cfgFull.StartsWith($src + [System.IO.Path]::DirectorySeparatorChar)) {
+					$src = [System.IO.Path]::GetFullPath([System.IO.Path]::Combine($projDir, $db.configSrc)).TrimEnd('\', '/')
+					if ($cfgFull -eq $src -or $cfgFull.StartsWith($src + [System.IO.Path]::DirectorySeparatorChar, [System.StringComparison]::OrdinalIgnoreCase)) {
 						if ($db.editingAllowedCheck) { return $db.editingAllowedCheck }
 					}
 				}
@@ -407,7 +411,7 @@ function Find-Declaration([System.Xml.XmlElement]$body, [string]$propName) {
 
 # Путь Тип.Свойство[.Вложенное...] — точка безопасна: имена в модели XDTO
 # являются идентификаторами 1С и точку содержать не могут
-function Resolve-Path($schema, [string]$path) {
+function Resolve-SchemaPath($schema, [string]$path) {
 	$segments = $path.Split(".")
 	$typeEl = Find-TypeElement $schema $segments[0]
 	if ($segments.Count -eq 1) { return [pscustomobject]@{ Type = $typeEl; Decl = $null } }
@@ -458,7 +462,7 @@ function Apply-ModelOperation($schema) {
 
 		"add-property" {
 			if (-not $Target) { throw "add-property требует -Target <Тип>" }
-			$loc = Resolve-Path $schema $Target
+			$loc = Resolve-SchemaPath $schema $Target
 			$body = Get-TypeBody $(if ($loc.Decl) { Get-SchemaFirst $loc.Decl "complexType" } else { $loc.Type })
 			foreach ($frag in (Import-Fragment $schema $Value)) {
 				$kind = $frag.get_LocalName()
@@ -484,7 +488,7 @@ function Apply-ModelOperation($schema) {
 
 		"replace-property" {
 			if (-not $Target) { throw "replace-property требует -Target `"Тип.Свойство`"" }
-			$loc = Resolve-Path $schema $Target
+			$loc = Resolve-SchemaPath $schema $Target
 			if (-not $loc.Decl) { throw "replace-property требует путь вида `"Тип.Свойство`"" }
 			$frags = Import-Fragment $schema $Value
 			if ($frags.Count -ne 1) { throw "replace-property ожидает ровно одно объявление" }
@@ -496,7 +500,7 @@ function Apply-ModelOperation($schema) {
 			if (-not $Target) { throw "remove-property требует путь `"Тип.Свойство`"" }
 			foreach ($one in ($Target -split "\s*;;\s*")) {
 				if (-not $one) { continue }
-				$loc = Resolve-Path $schema $one
+				$loc = Resolve-SchemaPath $schema $one
 				if (-not $loc.Decl) { throw "remove-property требует путь вида `"Тип.Свойство`", получено `"$one`"" }
 				$loc.Decl.ParentNode.RemoveChild($loc.Decl) | Out-Null
 				Write-Host "  − $one удалено"

@@ -1,0 +1,13 @@
+{
+  "name": "Guard: режим базы deny перекрывает off проекта и при запуске из подкаталога — защита не отключается",
+  "setup": "fixture:on-support",
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "editingAllowedCheck": "off", "databases": [ { "id": "dev", "configSrc": ".", "editingAllowedCheck": "deny" } ] } } }
+  ],
+  "cwd": "workDir/sub",
+  "input": [
+    { "operation": "modify-property", "value": "Version=1.0.0.2" }
+  ],
+  "expectError": "support-guard",
+  "noSnapshot": "проверяется решение защиты — правка отклонена, файлы не меняются"
+}

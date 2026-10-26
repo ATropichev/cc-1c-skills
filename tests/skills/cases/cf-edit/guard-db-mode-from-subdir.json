@@ -1,0 +1,15 @@
+{
+  "name": "Guard: режим базы (configSrc относительно .v8-project.json) действует и при запуске из подкаталога проекта",
+  "setup": "fixture:on-support",
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "databases": [ { "id": "dev", "configSrc": ".", "editingAllowedCheck": "off" } ] } } }
+  ],
+  "cwd": "workDir/sub",
+  "input": [
+    { "operation": "modify-property", "value": "Version=1.0.0.2" }
+  ],
+  "expect": {
+    "stderrNotContains": "support-guard"
+  },
+  "noSnapshot": "проверяется решение защиты, а не содержимое правки"
+}

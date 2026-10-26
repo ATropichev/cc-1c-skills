@@ -191,6 +191,22 @@ console.log('=== support-guard: §1A PreToolUse ===');
   const rOff = edit(join(SYNTH, 'Catalogs', 'Locked.xml'), SYNTH);
   check('guard off → silent allow', rOff.stdout === '' && rOff.stderr === '', JSON.stringify(rOff));
 
+  // Per-database rule from a subdirectory: configSrc counts from the .v8-project.json folder, not
+  // from cwd — otherwise the project-level 'off' wins and a locked file is editable.
+  // The project file sits one level above the synth config (test-tmp), so a cwd-relative
+  // configSrc lands on a non-existent <repo>/hooks-synth instead of matching by accident.
+  const parentPj = join(REPO, 'test-tmp', '.v8-project.json');
+  if (existsSync(join(SYNTH, '.v8-project.json'))) removePathSync(join(SYNTH, '.v8-project.json'));
+  writeFileSync(parentPj, JSON.stringify({
+    editingAllowedCheck: 'off', databases: [{ id: 'dev', configSrc: 'hooks-synth', editingAllowedCheck: 'deny' }] }));
+  try {
+    const rSub = edit(join(SYNTH, 'Catalogs', 'Locked.xml'), join(SYNTH, 'Catalogs'));
+    let dSub = null; try { dSub = JSON.parse(rSub.stdout); } catch { /* */ }
+    check('guard db deny over project off, cwd subdir → deny', dSub?.hookSpecificOutput?.permissionDecision === 'deny', JSON.stringify(rSub));
+  } finally {
+    if (existsSync(parentPj)) removePathSync(parentPj);
+  }
+
   // Real stdin→stdout wiring through node (deny path, default project).
   try {
     const payload = JSON.stringify({ tool_name: 'Edit', cwd: REPO, tool_input: { file_path: join(SYNTH, 'Catalogs', 'Locked.xml') } });

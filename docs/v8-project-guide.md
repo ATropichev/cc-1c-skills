@@ -105,7 +105,7 @@
 | `password` | string | нет | Пароль | `/db-list add` или руками |
 | `aliases` | string[] | нет | Альтернативные имена для обращения к базе | `/db-list add` или руками |
 | `branches` | string[] | нет | Git-ветки или glob-паттерны (`release/*`, `feature/*`) | Руками |
-| `configSrc` | string | нет | Каталог XML-выгрузки конфигурации (рекомендуется `src/cf`, см. структуру ниже). Путь относительный — от корня проекта | Руками |
+| `configSrc` | string | нет | Каталог XML-выгрузки конфигурации (рекомендуется `src/cf`, см. структуру ниже). Путь относительный — от каталога `.v8-project.json` | Руками |
 | `editingAllowedCheck` | `"deny"`/`"warn"`/`"off"` | нет | Override реакции support-guard для этой базы (см. ниже) | Руками |
 | `newObjectPosition` | `"end"`/`"byName"` | нет | Override места вставки в `<ChildObjects>` для этой базы (см. ниже) | Руками |
 | `skillSuggester` | `"on"`/`"off"` | нет | Override подсказок навыков для этой базы (см. ниже) | Руками |

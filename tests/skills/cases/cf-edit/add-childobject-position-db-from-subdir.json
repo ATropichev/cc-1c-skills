@@ -1,0 +1,24 @@
+{
+  "name": "add-childObject: newObjectPosition базы (configSrc от каталога .v8-project.json) действует и при запуске из подкаталога",
+  "setup": "fixture:unsorted-childobjects",
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "databases": [ { "id": "dev", "configSrc": ".", "newObjectPosition": "byName" } ] } } },
+    {
+      "script": "cf-edit/scripts/cf-edit",
+      "args": { "-ConfigPath": "{workDir}", "-Operation": "sort-childObjects", "-Value": "Catalog" }
+    },
+    {
+      "script": "cf-edit/scripts/cf-edit",
+      "args": { "-ConfigPath": "{workDir}", "-Operation": "remove-childObject", "-Value": "Catalog.Бета" }
+    }
+  ],
+  "cwd": "workDir/sub",
+  "input": [ { "operation": "add-childObject", "value": "Catalog.Бета" } ],
+  "expect": {
+    "fileContains": {
+      "file": "Configuration.xml",
+      "text": "<Catalog>Альфа</Catalog>\r\n\t\t\t<Catalog>Бета</Catalog>\r\n\t\t\t<Catalog>Гамма</Catalog>"
+    }
+  },
+  "noSnapshot": "место вставки проверяет fileContains; снимок той же правки — в add-childobject-position-byname"
+}

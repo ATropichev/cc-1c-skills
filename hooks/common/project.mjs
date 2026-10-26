@@ -1,4 +1,4 @@
-// project.mjs v1.0 — read reaction mode from .v8-project.json for Claude Code hooks
+// project.mjs v1.1 — read reaction mode from .v8-project.json for Claude Code hooks
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 //
 // Canonical port of Get-EditMode / _sg_get_edit_mode
@@ -7,13 +7,17 @@
 // in-skill guard §1B, so that a raw Edit and an edit-via-skill behave the same under the
 // same databases[].editingAllowedCheck. Never throws — falls back to the default.
 
-import { readFileSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, statSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 
 const WIN = process.platform === 'win32';
 
-function norm(p) {
-  let s = resolve(p).replace(/[\\/]+$/, '');
+// base: the folder a relative path counts from. The real path makes both sides comparable
+// where the OS aliases folders (macOS: /var → /private/var).
+function norm(p, base) {
+  let s = base ? resolve(base, p) : resolve(p);
+  try { s = realpathSync.native(s); } catch { /* does not exist — compare as resolved */ }
+  s = s.replace(/[\\/]+$/, '');
   return WIN ? s.toLowerCase() : s;
 }
 
@@ -42,7 +46,8 @@ export function getProjectSetting(key, cfgDir, cwd, fallback) {
       const cfgFull = norm(cfgDir);
       for (const db of proj.databases) {
         if (db && db.configSrc) {
-          const src = norm(db.configSrc);
+          // configSrc counts from the .v8-project.json folder, not from cwd (as in the skills)
+          const src = norm(db.configSrc, dirname(pj));
           if (cfgFull === src || cfgFull.startsWith(src + sep)) {
             if (db[key]) return db[key];
           }
