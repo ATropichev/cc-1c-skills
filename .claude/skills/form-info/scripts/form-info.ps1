@@ -1,4 +1,4 @@
-﻿# form-info v1.12 — Analyze 1C managed form structure
+﻿# form-info v1.13 — Analyze 1C managed form structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -16,7 +16,7 @@ $ErrorActionPreference = "Stop"
 
 # --- Resolve FormPath ---
 if (-not [System.IO.Path]::IsPathRooted($FormPath)) {
-	$FormPath = Join-Path (Get-Location).Path $FormPath
+	$FormPath = Join-Path (Get-Location).ProviderPath $FormPath
 }
 # A: Directory → Ext/Form.xml
 if (Test-Path $FormPath -PathType Container) {
@@ -47,7 +47,7 @@ if (-not (Test-Path $FormPath)) {
 
 $xmlDoc = New-Object System.Xml.XmlDocument
 $xmlDoc.PreserveWhitespace = $false
-$xmlDoc.Load((Resolve-Path $FormPath).Path)
+$xmlDoc.Load((Resolve-Path $FormPath).ProviderPath)
 
 $ns = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
 $ns.AddNamespace("d", "http://v8.1c.ru/8.3/xcf/logform")
@@ -153,7 +153,7 @@ function Get-ModuleOutline([string[]]$lines) {
 	return @{ procs = $procs; regions = $regions }
 }
 
-$script:modulePath = Join-Path (Split-Path (Resolve-Path $FormPath).Path -Parent) "Form\Module.bsl"
+$script:modulePath = Join-Path (Split-Path (Resolve-Path $FormPath).ProviderPath -Parent) "Form\Module.bsl"
 $script:moduleProcs = $null
 $script:moduleNotUtf8 = $false
 if ($Handlers -and (Test-Path -LiteralPath $script:modulePath)) {
@@ -492,7 +492,7 @@ function Build-TreeNodes($children, [string]$prefix) {
 
 # --- Determine form name and object from path ---
 
-$resolvedPath = (Resolve-Path $FormPath).Path
+$resolvedPath = (Resolve-Path $FormPath).ProviderPath
 $parts = $resolvedPath -split '[/\\]'
 
 $formName = ""
@@ -543,7 +543,7 @@ function Test-ExternalObjectRoot([string]$xmlPath) {
 }
 function Get-SupportStatusForPath([string]$targetPath) {
 	try {
-		$rp = (Resolve-Path $targetPath).Path
+		$rp = (Resolve-Path $targetPath).ProviderPath
 		$elemUuid = $null
 		$binPath = $null
 		# Reads the uuid of the first metadata element in an .xml file (or $null).

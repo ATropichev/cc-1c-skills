@@ -1,4 +1,4 @@
-﻿# cfe-validate v1.30 — Validate 1C configuration extension structure (CFE)
+﻿# cfe-validate v1.31 — Validate 1C configuration extension structure (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -22,7 +22,7 @@ $ErrorActionPreference = "Stop"
 
 # --- Resolve path ---
 if (-not [System.IO.Path]::IsPathRooted($ExtensionPath)) {
-	$ExtensionPath = Join-Path (Get-Location).Path $ExtensionPath
+	$ExtensionPath = Join-Path (Get-Location).ProviderPath $ExtensionPath
 }
 
 if (Test-Path $ExtensionPath -PathType Container) {
@@ -40,7 +40,7 @@ if (-not (Test-Path $ExtensionPath)) {
 	exit 1
 }
 
-$resolvedPath = (Resolve-Path $ExtensionPath).Path
+$resolvedPath = (Resolve-Path $ExtensionPath).ProviderPath
 $configDir = Split-Path $resolvedPath -Parent
 
 # --- Output infrastructure ---
@@ -1401,7 +1401,7 @@ if ($script:borrowedFormsWithTree.Count -eq 0) {
 # проверки 18; есть ли там Configuration.xml, она решает и сообщает сама.
 function Get-SourceConfigRoot {
 	$root = $ConfigPath
-	if (-not [System.IO.Path]::IsPathRooted($root)) { $root = Join-Path (Get-Location).Path $root }
+	if (-not [System.IO.Path]::IsPathRooted($root)) { $root = Join-Path (Get-Location).ProviderPath $root }
 	if ((Test-Path $root) -and -not (Test-Path $root -PathType Container)) { $root = Split-Path $root -Parent }
 	return $root
 }

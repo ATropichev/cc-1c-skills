@@ -1,4 +1,4 @@
-﻿# stub-db-create v1.16 — Create temp 1C infobase with metadata stubs for EPF/ERF build
+﻿# stub-db-create v1.17 — Create temp 1C infobase with metadata stubs for EPF/ERF build
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -103,7 +103,7 @@ function Test-ArgKeyMatch {
 function Get-ProjectExtraArgs {
     # v8args / ibcmdargs from .v8-project.json — same upward walk as v8path.
     param([string]$Name)
-    $dir = (Get-Location).Path
+    $dir = (Get-Location).ProviderPath
     while ($dir) {
         $pf = Join-Path $dir ".v8-project.json"
         if (Test-Path $pf) {

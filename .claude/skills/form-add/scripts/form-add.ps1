@@ -1,4 +1,4 @@
-﻿# form-add v1.32 — Add managed form to 1C config object
+﻿# form-add v1.33 — Add managed form to 1C config object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -64,7 +64,7 @@ function Find-V8Project([string]$startDir) {
 }
 function Get-EditMode([string]$cfgDir) {
 	try {
-		$pj = Find-V8Project (Get-Location).Path
+		$pj = Find-V8Project (Get-Location).ProviderPath
 		if (-not $pj) { $pj = Find-V8Project $cfgDir }
 		if (-not $pj) { return 'deny' }
 		$proj = Get-Content -Raw $pj | ConvertFrom-Json
@@ -86,7 +86,7 @@ function Get-EditMode([string]$cfgDir) {
 function Assert-EditAllowed([string]$targetPath, [string]$require) {
 	try {
 		$rp = $targetPath
-		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).Path } catch {}
+		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).ProviderPath } catch {}
 		# Autonomous external object (EPF/ERF): never part of a config on support (issue #39).
 		if (Test-ExternalObjectRoot $rp) { return }
 		$elemUuid = Get-RootUuid $rp
@@ -234,7 +234,7 @@ function Get-CompatModeRank([string]$mode) {
 
 # Resolve ObjectPath (directory → .xml)
 if (-not [System.IO.Path]::IsPathRooted($ObjectPath)) {
-	$ObjectPath = Join-Path (Get-Location).Path $ObjectPath
+	$ObjectPath = Join-Path (Get-Location).ProviderPath $ObjectPath
 }
 if (Test-Path $ObjectPath -PathType Container) {
 	$dirName = Split-Path $ObjectPath -Leaf
@@ -250,14 +250,14 @@ if (-not (Test-Path $ObjectPath)) {
 }
 
 $objectXmlFull = Resolve-Path $ObjectPath
-Assert-EditAllowed $objectXmlFull.Path 'editable'
+Assert-EditAllowed $objectXmlFull.ProviderPath 'editable'
 # Версию берём прежде всего из корня самого объекта — он её несёт всегда, а у автономной
 # внешней обработки/отчёта подниматься к Configuration.xml просто некуда.
 $script:formatVersion = $null
-$objHead = [System.IO.File]::ReadAllText($objectXmlFull.Path, [System.Text.Encoding]::UTF8)
+$objHead = [System.IO.File]::ReadAllText($objectXmlFull.ProviderPath, [System.Text.Encoding]::UTF8)
 $objHead = $objHead.Substring(0, [Math]::Min(2000, $objHead.Length))
 if ($objHead -match '<MetaDataObject[^>]+version="(\d+\.\d+)"') { $script:formatVersion = $Matches[1] }
-if (-not $script:formatVersion) { $script:formatVersion = Detect-FormatVersion (Split-Path $objectXmlFull.Path -Parent) }
+if (-not $script:formatVersion) { $script:formatVersion = Detect-FormatVersion (Split-Path $objectXmlFull.ProviderPath -Parent) }
 
 # Объявления пространств имён — одной переменной на корень: места эмиссии их только
 # интерполируют. Правки шапки (как xmlns:pal в формате 2.21) делаются здесь, в одном месте.
@@ -276,7 +276,7 @@ if ((Get-FormatRank $script:formatVersion) -ge 221) {
 # объявляет его только при использовании (пустая форма его не использует). Внешняя обработка и
 # нераспознанный режим (DontUse — ранг 0) — как текущая платформа. Старт подъёма — «каталог» самого
 # объекта: так первым проверяется его же X.xml, и корень внешней обработки узнаётся сразу.
-$script:compatMode = Detect-CompatibilityMode ($objectXmlFull.Path -replace '\.xml$', '')
+$script:compatMode = Detect-CompatibilityMode ($objectXmlFull.ProviderPath -replace '\.xml$', '')
 $compatRank = Get-CompatModeRank $script:compatMode
 if (-not ($compatRank -gt 0 -and $compatRank -lt 80319)) {
 	$script:formNsDecl = $script:formNsDecl -replace ' xmlns:dcsset=', ' xmlns:dcssch="http://v8.1c.ru/8.1/data-composition-system/schema" xmlns:dcsset='
@@ -284,7 +284,7 @@ if (-not ($compatRank -gt 0 -and $compatRank -lt 80319)) {
 
 $xmlDoc = New-Object System.Xml.XmlDocument
 $xmlDoc.PreserveWhitespace = $true
-$xmlDoc.Load($objectXmlFull.Path)
+$xmlDoc.Load($objectXmlFull.ProviderPath)
 
 $nsMgr = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
 $nsMgr.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
@@ -486,10 +486,10 @@ Write-Host ""
 $objectQualifiedName = $objectName
 $objectRef = "$objectType.$objectName"
 if ($objectType -eq "Table") {
-	$tablesDir = Split-Path -Parent $objectXmlFull.Path
+	$tablesDir = Split-Path -Parent $objectXmlFull.ProviderPath
 	$edsSource = Split-Path -Leaf (Split-Path -Parent $tablesDir)
 	if (-not $edsSource -or (Split-Path -Leaf $tablesDir) -ne "Tables") {
-		Write-Error "Таблица внешнего источника ожидается по пути ExternalDataSources/<Источник>/Tables/<Таблица>.xml, а не '$($objectXmlFull.Path)'"
+		Write-Error "Таблица внешнего источника ожидается по пути ExternalDataSources/<Источник>/Tables/<Таблица>.xml, а не '$($objectXmlFull.ProviderPath)'"
 		exit 1
 	}
 	$objectQualifiedName = "$edsSource.$objectName"
@@ -578,7 +578,7 @@ if ($purposeRule.MainAttr -and -not $purposeRule.AttrName) {
 
 # --- Фаза 3: Создание файлов ---
 
-$objectDir = [System.IO.Path]::ChangeExtension($objectXmlFull.Path, $null).TrimEnd('.')
+$objectDir = [System.IO.Path]::ChangeExtension($objectXmlFull.ProviderPath, $null).TrimEnd('.')
 $formsDir = Join-Path $objectDir "Forms"
 $formMetaPath = Join-Path $formsDir "$FormName.xml"
 
@@ -876,14 +876,14 @@ $xmlText = $xmlText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
 $xmlText = [regex]::Replace($xmlText, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
 # Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
 # новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
-$targetEol = if ((Test-Path -LiteralPath $objectXmlFull.Path) -and ([System.IO.File]::ReadAllText($objectXmlFull.Path) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+$targetEol = if ((Test-Path -LiteralPath $objectXmlFull.ProviderPath) -and ([System.IO.File]::ReadAllText($objectXmlFull.ProviderPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
 $xmlText = ($xmlText -replace "`r`n", "`n") -replace "`n", $targetEol
-[System.IO.File]::WriteAllText($objectXmlFull.Path, $xmlText, $encBom)
+[System.IO.File]::WriteAllText($objectXmlFull.ProviderPath, $xmlText, $encBom)
 
 # --- Фаза 5: Вывод ---
 
 # Относительные пути для вывода
-$basePath = Split-Path $objectXmlFull.Path -Parent
+$basePath = Split-Path $objectXmlFull.ProviderPath -Parent
 # Определяем корень (ищем родительский каталог типа Documents, Catalogs и т.д.)
 $relFormMeta = $formMetaPath.Replace($basePath, "").TrimStart("\", "/")
 $relFormXml = $formXmlPath.Replace($basePath, "").TrimStart("\", "/")

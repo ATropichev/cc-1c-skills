@@ -1,4 +1,4 @@
-﻿# cf-info v1.9 — Compact summary of 1C configuration root
+﻿# cf-info v1.10 — Compact summary of 1C configuration root
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -22,7 +22,7 @@ function Out([string]$text) { $script:lines += $text }
 
 # --- Resolve path ---
 if (-not [System.IO.Path]::IsPathRooted($ConfigPath)) {
-	$ConfigPath = Join-Path (Get-Location).Path $ConfigPath
+	$ConfigPath = Join-Path (Get-Location).ProviderPath $ConfigPath
 }
 
 # Directory -> find Configuration.xml

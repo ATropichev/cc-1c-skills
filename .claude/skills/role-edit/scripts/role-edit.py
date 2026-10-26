@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# role-edit v1.7 — Edit existing 1C role rights in place
+# role-edit v1.8 — Edit existing 1C role rights in place
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json

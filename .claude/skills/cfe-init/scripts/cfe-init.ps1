@@ -1,4 +1,4 @@
-﻿# cfe-init v1.12 — Create 1C configuration extension scaffold (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# cfe-init v1.13 — Create 1C configuration extension scaffold (CFE) (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -32,7 +32,7 @@ if (-not $NamePrefix) {
 
 # --- Resolve output dir ---
 if (-not [System.IO.Path]::IsPathRooted($OutputDir)) {
-	$OutputDir = Join-Path (Get-Location).Path $OutputDir
+	$OutputDir = Join-Path (Get-Location).ProviderPath $OutputDir
 }
 
 # --- Check existing ---
@@ -53,7 +53,7 @@ $langCode = "ru"
 $roleSuffix = "ОсновнаяРоль"
 if ($ConfigPath) {
 	if (-not [System.IO.Path]::IsPathRooted($ConfigPath)) {
-		$ConfigPath = Join-Path (Get-Location).Path $ConfigPath
+		$ConfigPath = Join-Path (Get-Location).ProviderPath $ConfigPath
 	}
 	if (Test-Path $ConfigPath -PathType Container) {
 		$candidate = Join-Path $ConfigPath "Configuration.xml"
@@ -61,11 +61,11 @@ if ($ConfigPath) {
 		else { Write-Error "No Configuration.xml in config directory: $ConfigPath"; exit 1 }
 	}
 	if (-not (Test-Path $ConfigPath)) { Write-Error "Config file not found: $ConfigPath"; exit 1 }
-	$cfgDir = Split-Path (Resolve-Path $ConfigPath).Path -Parent
+	$cfgDir = Split-Path (Resolve-Path $ConfigPath).ProviderPath -Parent
 
 	$baseCfgDoc = New-Object System.Xml.XmlDocument
 	$baseCfgDoc.PreserveWhitespace = $false
-	$baseCfgDoc.Load((Resolve-Path $ConfigPath).Path)
+	$baseCfgDoc.Load((Resolve-Path $ConfigPath).ProviderPath)
 	$baseCfgNs = New-Object System.Xml.XmlNamespaceManager($baseCfgDoc.NameTable)
 	$baseCfgNs.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
 

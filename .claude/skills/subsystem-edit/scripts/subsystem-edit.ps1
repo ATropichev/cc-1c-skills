@@ -1,4 +1,4 @@
-﻿# subsystem-edit v1.25 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+﻿# subsystem-edit v1.26 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -163,7 +163,7 @@ if (-not $DefinitionFile -and -not $Operation) { Write-Error "Either -Definition
 
 # --- Resolve path ---
 if (-not [System.IO.Path]::IsPathRooted($SubsystemPath)) {
-	$SubsystemPath = Join-Path (Get-Location).Path $SubsystemPath
+	$SubsystemPath = Join-Path (Get-Location).ProviderPath $SubsystemPath
 }
 if (Test-Path $SubsystemPath -PathType Container) {
 	$dirName = Split-Path $SubsystemPath -Leaf
@@ -183,7 +183,7 @@ if (-not (Test-Path $SubsystemPath)) {
 	}
 }
 if (-not (Test-Path $SubsystemPath)) { Write-Error "File not found: $SubsystemPath"; exit 1 }
-$resolvedPath = (Resolve-Path $SubsystemPath).Path
+$resolvedPath = (Resolve-Path $SubsystemPath).ProviderPath
 $script:resolvedPath = $resolvedPath
 
 # --- Support guard (Ext/ParentConfigurations.bin) ---
@@ -224,7 +224,7 @@ function Find-V8Project([string]$startDir) {
 }
 function Get-EditMode([string]$cfgDir) {
 	try {
-		$pj = Find-V8Project (Get-Location).Path
+		$pj = Find-V8Project (Get-Location).ProviderPath
 		if (-not $pj) { $pj = Find-V8Project $cfgDir }
 		if (-not $pj) { return 'deny' }
 		$proj = Get-Content -Raw $pj | ConvertFrom-Json
@@ -246,7 +246,7 @@ function Get-EditMode([string]$cfgDir) {
 function Assert-EditAllowed([string]$targetPath, [string]$require) {
 	try {
 		$rp = $targetPath
-		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).Path } catch {}
+		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).ProviderPath } catch {}
 		# Autonomous external object (EPF/ERF): never part of a config on support (issue #39).
 		if (Test-ExternalObjectRoot $rp) { return }
 		$elemUuid = Get-RootUuid $rp
@@ -701,7 +701,7 @@ function Do-SetProperty([string]$jsonVal) {
 $operations = @()
 if ($DefinitionFile) {
 	if (-not [System.IO.Path]::IsPathRooted($DefinitionFile)) {
-		$DefinitionFile = Join-Path (Get-Location).Path $DefinitionFile
+		$DefinitionFile = Join-Path (Get-Location).ProviderPath $DefinitionFile
 	}
 	$jsonText = Read-JsonInputFile $DefinitionFile
 	$ops = ConvertFrom-JsonInput $jsonText $DefinitionFile

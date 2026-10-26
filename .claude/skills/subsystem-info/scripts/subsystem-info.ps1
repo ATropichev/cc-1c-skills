@@ -1,4 +1,4 @@
-﻿# subsystem-info v1.6 — Compact summary of 1C subsystem structure
+﻿# subsystem-info v1.7 — Compact summary of 1C subsystem structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -30,7 +30,7 @@ function Test-ExternalObjectRoot([string]$xmlPath) {
 }
 function Get-SupportStatusForPath([string]$targetPath) {
 	try {
-		$rp = (Resolve-Path $targetPath).Path
+		$rp = (Resolve-Path $targetPath).ProviderPath
 		$elemUuid = $null
 		$binPath = $null
 		# Reads the uuid of the first metadata element in an .xml file (or $null).
@@ -91,7 +91,7 @@ function Get-SupportStatusForPath([string]$targetPath) {
 
 # --- Resolve path ---
 if (-not [System.IO.Path]::IsPathRooted($SubsystemPath)) {
-	$SubsystemPath = Join-Path (Get-Location).Path $SubsystemPath
+	$SubsystemPath = Join-Path (Get-Location).ProviderPath $SubsystemPath
 }
 
 # --- Helper: get LocalString text ---
@@ -578,7 +578,7 @@ if ($Limit -gt 0 -and $outLines.Count -gt $Limit) {
 
 if ($OutFile) {
 	if (-not [System.IO.Path]::IsPathRooted($OutFile)) {
-		$OutFile = Join-Path (Get-Location).Path $OutFile
+		$OutFile = Join-Path (Get-Location).ProviderPath $OutFile
 	}
 	$utf8 = New-Object System.Text.UTF8Encoding($true)
 	[System.IO.File]::WriteAllLines($OutFile, $outLines, $utf8)

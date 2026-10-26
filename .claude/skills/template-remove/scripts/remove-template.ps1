@@ -1,4 +1,4 @@
-﻿# template-remove v1.8 — Remove template from 1C object
+﻿# template-remove v1.9 — Remove template from 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -48,7 +48,7 @@ Write-Host "[OK] Удалён файл: $templateMetaPath"
 $rootXmlFull = Resolve-Path $rootXmlPath
 $xmlDoc = New-Object System.Xml.XmlDocument
 $xmlDoc.PreserveWhitespace = $true
-$xmlDoc.Load($rootXmlFull.Path)
+$xmlDoc.Load($rootXmlFull.ProviderPath)
 
 $nsMgr = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
 $nsMgr.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
@@ -102,8 +102,8 @@ $xmlText = $xmlText.Replace('encoding="utf-8"', 'encoding="UTF-8"')
 $xmlText = [regex]::Replace($xmlText, '(?s)<!\[CDATA\[.*?\]\]>|<!--.*?-->|(?<=\S) />', { param($m) if ($m.Value -eq ' />') { '/>' } else { $m.Value } })
 # Целевой перевод строки: стиль файла-назначения — правка наследует его (#44/#46/#47),
 # новый файл получает канон выгрузки CRLF. Зеркало _detect_xml_style в py-порту.
-$targetEol = if ((Test-Path -LiteralPath $rootXmlFull.Path) -and ([System.IO.File]::ReadAllText($rootXmlFull.Path) -notmatch "`r`n")) { "`n" } else { "`r`n" }
+$targetEol = if ((Test-Path -LiteralPath $rootXmlFull.ProviderPath) -and ([System.IO.File]::ReadAllText($rootXmlFull.ProviderPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
 $xmlText = ($xmlText -replace "`r`n", "`n") -replace "`n", $targetEol
-[System.IO.File]::WriteAllText($rootXmlFull.Path, $xmlText, $encBom)
+[System.IO.File]::WriteAllText($rootXmlFull.ProviderPath, $xmlText, $encBom)
 
 Write-Host "[OK] Макет $TemplateName удалён из $rootXmlPath"

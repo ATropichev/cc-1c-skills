@@ -1,4 +1,4 @@
-﻿# form-compile v1.214 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.215 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1524,7 +1524,7 @@ function Find-V8Project([string]$startDir) {
 }
 function Get-EditMode([string]$cfgDir) {
 	try {
-		$pj = Find-V8Project (Get-Location).Path
+		$pj = Find-V8Project (Get-Location).ProviderPath
 		if (-not $pj) { $pj = Find-V8Project $cfgDir }
 		if (-not $pj) { return 'deny' }
 		$proj = Get-Content -Raw $pj | ConvertFrom-Json
@@ -1546,7 +1546,7 @@ function Get-EditMode([string]$cfgDir) {
 function Assert-EditAllowed([string]$targetPath, [string]$require) {
 	try {
 		$rp = $targetPath
-		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).Path } catch {}
+		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).ProviderPath } catch {}
 		# Autonomous external object (EPF/ERF): never part of a config on support (issue #39).
 		if (Test-ExternalObjectRoot $rp) { return }
 		$elemUuid = Get-RootUuid $rp
@@ -1617,7 +1617,7 @@ function Assert-EditAllowed([string]$targetPath, [string]$require) {
 	} catch { return }
 }
 
-$script:outPathResolved = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path (Get-Location) $OutputPath }
+$script:outPathResolved = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path (Get-Location).ProviderPath $OutputPath }
 Assert-EditAllowed $script:outPathResolved 'editable'
 $script:formatVersion = Detect-FormatVersion ([System.IO.Path]::GetDirectoryName($script:outPathResolved))
 $script:extNamePrefix = Get-ExtensionNamePrefix ([System.IO.Path]::GetDirectoryName($script:outPathResolved))
@@ -1675,7 +1675,7 @@ if ($FromObject) {
 
 	# Resolve object path and purpose from OutputPath convention:
 	# .../TypePlural/ObjectName/Forms/FormName/Ext/Form.xml
-	$outAbs = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path (Get-Location) $OutputPath }
+	$outAbs = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path (Get-Location).ProviderPath $OutputPath }
 	$pathParts = $outAbs -split '[/\\]'
 	# Find "Forms" segment
 	$formsIdx = -1
@@ -1706,7 +1706,7 @@ if ($FromObject) {
 	# Apply: explicit -ObjectPath / -Purpose override resolved values
 	$fromObjPath = $null
 	if ($ObjectPath) {
-		$fromObjPath = if ([System.IO.Path]::IsPathRooted($ObjectPath)) { $ObjectPath } else { Join-Path (Get-Location) $ObjectPath }
+		$fromObjPath = if ([System.IO.Path]::IsPathRooted($ObjectPath)) { $ObjectPath } else { Join-Path (Get-Location).ProviderPath $ObjectPath }
 		# Append .xml if missing
 		if (-not $fromObjPath.EndsWith(".xml")) { $fromObjPath = "$fromObjPath.xml" }
 	} elseif ($resolvedObjectPath) {
@@ -1765,7 +1765,7 @@ if ($FromObject) {
 	# Emit DSL if requested
 	if ($EmitDsl) {
 		$dslJson = $dsl | ConvertTo-Json -Depth 20
-		$dslPath = if ([System.IO.Path]::IsPathRooted($EmitDsl)) { $EmitDsl } else { Join-Path (Get-Location) $EmitDsl }
+		$dslPath = if ([System.IO.Path]::IsPathRooted($EmitDsl)) { $EmitDsl } else { Join-Path (Get-Location).ProviderPath $EmitDsl }
 		$enc = New-Object System.Text.UTF8Encoding($true)
 		[System.IO.File]::WriteAllText($dslPath, $dslJson, $enc)
 		Write-Host "[from-object] DSL saved: $dslPath"
@@ -1787,7 +1787,7 @@ if ($FromObject) {
 }
 
 # Базовая директория для @file-ссылок в query динсписка (зеркало skd-compile)
-$script:queryBaseDir = if ($JsonPath) { [System.IO.Path]::GetDirectoryName((Resolve-Path $JsonPath).Path) } else { (Get-Location).Path }
+$script:queryBaseDir = if ($JsonPath) { [System.IO.Path]::GetDirectoryName((Resolve-Path $JsonPath).ProviderPath) } else { (Get-Location).ProviderPath }
 function Resolve-TextFromFile {
 	param([string]$val, [string]$baseDir)
 	if (-not $val.StartsWith("@")) { return $val }
@@ -1797,7 +1797,7 @@ function Resolve-TextFromFile {
 	} else {
 		$candidates = @(
 			(Join-Path $baseDir $filePath),
-			(Join-Path (Get-Location).Path $filePath)
+			(Join-Path (Get-Location).ProviderPath $filePath)
 		)
 	}
 	foreach ($c in $candidates) {
@@ -8249,7 +8249,7 @@ X '</Form>'
 
 # --- 13. Write output ---
 
-$outPath = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path (Get-Location) $OutputPath }
+$outPath = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath } else { Join-Path (Get-Location).ProviderPath $OutputPath }
 $outDir = [System.IO.Path]::GetDirectoryName($outPath)
 if (-not (Test-Path $outDir)) {
 	New-Item -ItemType Directory -Path $outDir -Force | Out-Null

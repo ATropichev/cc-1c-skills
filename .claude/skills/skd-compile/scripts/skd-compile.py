@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.136 — Compile 1C DCS from JSON
+# skd-compile v1.137 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json

@@ -1,4 +1,4 @@
-﻿# xdto-validate v1.5 — Validate a 1C XDTO package
+﻿# xdto-validate v1.6 — Validate a 1C XDTO package
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -66,7 +66,7 @@ function Report-Warn {
 # --- Resolve paths ---
 
 if (-not [System.IO.Path]::IsPathRooted($PackagePath)) {
-	$PackagePath = Join-Path (Get-Location).Path $PackagePath
+	$PackagePath = Join-Path (Get-Location).ProviderPath $PackagePath
 }
 
 $binPath = $null

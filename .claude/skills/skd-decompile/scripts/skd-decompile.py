@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-decompile v0.104 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+# skd-decompile v0.105 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os

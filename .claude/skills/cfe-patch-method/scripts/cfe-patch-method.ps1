@@ -1,4 +1,4 @@
-﻿# cfe-patch-method v2.13 — Source-aware method interceptor for 1C extension (CFE)
+﻿# cfe-patch-method v2.14 — Source-aware method interceptor for 1C extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -931,7 +931,7 @@ function Write-ResyncIndex {
 # ============================================================================
 
 # --- Resolve extension path ---
-if (-not [System.IO.Path]::IsPathRooted($ExtensionPath)) { $ExtensionPath = Join-Path (Get-Location).Path $ExtensionPath }
+if (-not [System.IO.Path]::IsPathRooted($ExtensionPath)) { $ExtensionPath = Join-Path (Get-Location).ProviderPath $ExtensionPath }
 if (Test-Path $ExtensionPath -PathType Leaf) { $ExtensionPath = Split-Path $ExtensionPath -Parent }
 $cfgFile = Join-Path $ExtensionPath "Configuration.xml"
 if (-not (Test-Path $cfgFile)) { Write-Error "Configuration.xml не найден в расширении: $ExtensionPath"; exit 1 }
@@ -1048,7 +1048,7 @@ $extName = if ($extNameNode -and $extNameNode.InnerText) { $extNameNode.InnerTex
 if ($Check -or $Actualize) {
 	if ($Check -and $Actualize) { Write-Error "Укажите либо -Check, либо -Actualize, не оба."; exit 1 }
 	if ([string]::IsNullOrEmpty($ConfigPath)) { Write-Error "Для -Check/-Actualize нужен -ConfigPath (сверка с исходником)."; exit 1 }
-	if (-not [System.IO.Path]::IsPathRooted($ConfigPath)) { $ConfigPath = Join-Path (Get-Location).Path $ConfigPath }
+	if (-not [System.IO.Path]::IsPathRooted($ConfigPath)) { $ConfigPath = Join-Path (Get-Location).ProviderPath $ConfigPath }
 	if (Test-Path $ConfigPath -PathType Leaf) { $ConfigPath = Split-Path $ConfigPath -Parent }
 	if (-not (Test-Path (Join-Path $ConfigPath "Configuration.xml"))) { Write-Error "Configuration.xml не найден в конфигурации-источнике: $ConfigPath"; exit 1 }
 
@@ -1134,7 +1134,7 @@ if ([string]::IsNullOrEmpty($ModulePath) -or [string]::IsNullOrEmpty($MethodName
 # --- Resolve module file paths (ModulePath = logical name OR path to a .bsl) ---
 $hasConfigPath = -not [string]::IsNullOrEmpty($ConfigPath)
 if ($hasConfigPath) {
-	if (-not [System.IO.Path]::IsPathRooted($ConfigPath)) { $ConfigPath = Join-Path (Get-Location).Path $ConfigPath }
+	if (-not [System.IO.Path]::IsPathRooted($ConfigPath)) { $ConfigPath = Join-Path (Get-Location).ProviderPath $ConfigPath }
 	if (Test-Path $ConfigPath -PathType Leaf) { $ConfigPath = Split-Path $ConfigPath -Parent }
 }
 
@@ -1142,7 +1142,7 @@ $isFilePath = ($ModulePath -match '[\\/]') -or ($ModulePath -match '\.bsl$')
 
 if ($isFilePath) {
 	# ModulePath is a filesystem path to the module .bsl
-	$mpAbs = if ([System.IO.Path]::IsPathRooted($ModulePath)) { $ModulePath } else { Join-Path (Get-Location).Path $ModulePath }
+	$mpAbs = if ([System.IO.Path]::IsPathRooted($ModulePath)) { $ModulePath } else { Join-Path (Get-Location).ProviderPath $ModulePath }
 	$relParts = Get-RelPartsFromFilePath $ModulePath
 	if (-not $relParts) { Write-Error "Не удалось определить объект по пути модуля: $ModulePath`n(нет распознаваемой типовой папки — Catalogs/Documents/CommonModules/…)"; exit 1 }
 	$extBsl = $ExtensionPath

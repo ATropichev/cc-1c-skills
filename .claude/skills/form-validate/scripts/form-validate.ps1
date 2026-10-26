@@ -1,4 +1,4 @@
-﻿# form-validate v1.34 — Validate 1C managed form
+﻿# form-validate v1.35 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -45,7 +45,7 @@ if (-not (Test-Path $FormPath)) {
 $xmlDoc = New-Object System.Xml.XmlDocument
 $xmlDoc.PreserveWhitespace = $false
 try {
-	$xmlDoc.Load((Resolve-Path $FormPath).Path)
+	$xmlDoc.Load((Resolve-Path $FormPath).ProviderPath)
 } catch {
 	Write-Host "[ERROR] XML parse error: $($_.Exception.Message)"
 	Write-Host ""
@@ -121,7 +121,7 @@ function Get-ExtBodyOwner([string]$bodyPath) {
 # обработка/отчёт. Ближайший побеждает: автономная обработка остаётся автономной, даже если её
 # исходники лежат внутри дерева с Configuration.xml (типовая раскладка проекта: src/cf рядом с
 # src/epf). Иначе её собственные External*-типы считались бы ошибкой.
-$script:dumpAnchor = Find-DumpAnchor (Split-Path (Resolve-Path $FormPath) -Parent)
+$script:dumpAnchor = Find-DumpAnchor (Split-Path (Resolve-Path $FormPath).ProviderPath -Parent)
 $script:isConfigContext = [bool]($script:dumpAnchor -and [System.IO.Path]::GetFileName($script:dumpAnchor) -eq "Configuration.xml")
 
 # --- Counters ---
@@ -565,7 +565,7 @@ if (-not $stopped) {
 	# Прочие привязки — <xr:DataPath> в <ChoiceParameterLinks>/<TypeLink> и любой *DataPath вне тегов
 	# выше: корень тоже должен быть реквизитом формы. Только своя часть: <BaseForm> — снимок исходной
 	# формы, его платформа разрешает по конфигурации. Items.* и номерные ссылки — как выше.
-	$ownText = ([System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $FormPath).Path, [System.Text.Encoding]::UTF8) -split '<BaseForm', 2)[0]
+	$ownText = ([System.IO.File]::ReadAllText((Resolve-Path -LiteralPath $FormPath).ProviderPath, [System.Text.Encoding]::UTF8) -split '<BaseForm', 2)[0]
 	# Порядок корней — как в файле: одинаков в обоих портах
 	$undeclared = New-Object System.Collections.Specialized.OrderedDictionary ([StringComparer]::OrdinalIgnoreCase)
 	foreach ($m in [regex]::Matches($ownText, '<(?:\w+:)?\w*DataPath[^>]*>([^<]+)</(?:\w+:)?\w*DataPath>')) {
@@ -1023,7 +1023,7 @@ if (-not $stopped) {
 
 if (-not $stopped) {
 	$formVer = $root.GetAttribute("version")
-	$formFull = (Resolve-Path $FormPath).Path
+	$formFull = (Resolve-Path $FormPath).ProviderPath
 	$ownerPath = Get-ExtBodyOwner $formFull
 	$ownerVer = if ($ownerPath) { Get-RootVersion $ownerPath } else { $null }
 	$dumpVer = if ($script:dumpAnchor) { Get-RootVersion $script:dumpAnchor } else { $null }
@@ -2345,7 +2345,7 @@ function Get-ModuleOutline([string[]]$lines) {
 $script:handlerArgPrefix = '(?:(?:ПодключитьОбработчикОжидания|AttachIdleHandler|ОписаниеОповещения|NotifyDescription)\s*\((?<a>[^,]*)|(?:УстановитьДействие|SetAction)\s*\([^,]*,(?<a>[^,]*)|\.(?:Действие|Action)\s*=(?<a>[^;]*))$'
 
 if (-not $stopped) {
-	$modulePath = Join-Path (Split-Path (Resolve-Path $FormPath) -Parent) "Form/Module.bsl"
+	$modulePath = Join-Path (Split-Path (Resolve-Path $FormPath).ProviderPath -Parent) "Form/Module.bsl"
 	$moduleText = if (Test-Path -LiteralPath $modulePath) { Read-ModuleText $modulePath } else { $null }
 	if (-not (Test-Path -LiteralPath $modulePath)) {
 		Report-OK "22. Form module handlers: no module — skipped"

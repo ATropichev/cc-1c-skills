@@ -1,4 +1,4 @@
-﻿# mxl-info v1.6 — Analyze 1C spreadsheet structure
+﻿# mxl-info v1.7 — Analyze 1C spreadsheet structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -87,7 +87,7 @@ function Format-XmlParseError {
 
 $xmlDoc = New-Object System.Xml.XmlDocument
 $xmlDoc.PreserveWhitespace = $false
-$resolvedPath = (Resolve-Path $TemplatePath).Path
+$resolvedPath = (Resolve-Path $TemplatePath).ProviderPath
 try {
 	$xmlDoc.Load($resolvedPath)
 } catch {
@@ -390,7 +390,7 @@ function Test-ExternalObjectRoot([string]$xmlPath) {
 }
 function Get-SupportStatusForPath([string]$targetPath) {
 	try {
-		$rp = (Resolve-Path $targetPath).Path
+		$rp = (Resolve-Path $targetPath).ProviderPath
 		$elemUuid = $null
 		$binPath = $null
 		# Reads the uuid of the first metadata element in an .xml file (or $null).

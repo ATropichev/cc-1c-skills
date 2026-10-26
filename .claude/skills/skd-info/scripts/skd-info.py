@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-info v1.13 — Analyze 1C DCS structure
+# skd-info v1.14 — Analyze 1C DCS structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse

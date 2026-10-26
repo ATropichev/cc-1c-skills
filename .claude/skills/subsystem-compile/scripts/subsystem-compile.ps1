@@ -1,4 +1,4 @@
-﻿# subsystem-compile v1.33 — Create 1C subsystem from JSON definition
+﻿# subsystem-compile v1.34 — Create 1C subsystem from JSON definition
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -88,7 +88,7 @@ if (-not $DefinitionFile -and -not $Value) {
 
 if ($DefinitionFile) {
 	if (-not [System.IO.Path]::IsPathRooted($DefinitionFile)) {
-		$DefinitionFile = Join-Path (Get-Location).Path $DefinitionFile
+		$DefinitionFile = Join-Path (Get-Location).ProviderPath $DefinitionFile
 	}
 	if (-not (Test-Path $DefinitionFile)) {
 		Write-Error "Definition file not found: $DefinitionFile"
@@ -114,7 +114,7 @@ $objName = "$($def.name)"
 
 # Resolve OutputDir
 if (-not [System.IO.Path]::IsPathRooted($OutputDir)) {
-	$OutputDir = Join-Path (Get-Location).Path $OutputDir
+	$OutputDir = Join-Path (Get-Location).ProviderPath $OutputDir
 }
 
 # --- Support guard (Ext/ParentConfigurations.bin) ---
@@ -155,7 +155,7 @@ function Find-V8Project([string]$startDir) {
 }
 function Get-EditMode([string]$cfgDir) {
 	try {
-		$pj = Find-V8Project (Get-Location).Path
+		$pj = Find-V8Project (Get-Location).ProviderPath
 		if (-not $pj) { $pj = Find-V8Project $cfgDir }
 		if (-not $pj) { return 'deny' }
 		$proj = Get-Content -Raw $pj | ConvertFrom-Json
@@ -177,7 +177,7 @@ function Get-EditMode([string]$cfgDir) {
 function Assert-EditAllowed([string]$targetPath, [string]$require) {
 	try {
 		$rp = $targetPath
-		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).Path } catch {}
+		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).ProviderPath } catch {}
 		# Autonomous external object (EPF/ERF): never part of a config on support (issue #39).
 		if (Test-ExternalObjectRoot $rp) { return }
 		$elemUuid = Get-RootUuid $rp
@@ -623,7 +623,7 @@ X '</MetaDataObject>'
 if ($Parent) {
 	# Nested subsystem
 	if (-not [System.IO.Path]::IsPathRooted($Parent)) {
-		$Parent = Join-Path (Get-Location).Path $Parent
+		$Parent = Join-Path (Get-Location).ProviderPath $Parent
 	}
 	if (-not (Test-Path $Parent)) {
 		Write-Error "Parent subsystem not found: $Parent"

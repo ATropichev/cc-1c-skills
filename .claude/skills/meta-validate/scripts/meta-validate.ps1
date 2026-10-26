@@ -1,4 +1,4 @@
-﻿# meta-validate v1.41 — Validate 1C metadata object structure
+﻿# meta-validate v1.42 — Validate 1C metadata object structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -44,7 +44,7 @@ if ($pathList.Count -gt 1) {
 # --- Resolve path ---
 
 if (-not [System.IO.Path]::IsPathRooted($ObjectPath)) {
-	$ObjectPath = Join-Path (Get-Location).Path $ObjectPath
+	$ObjectPath = Join-Path (Get-Location).ProviderPath $ObjectPath
 }
 
 if (Test-Path $ObjectPath -PathType Container) {
@@ -87,7 +87,7 @@ if (-not (Test-Path $ObjectPath)) {
 	exit 1
 }
 
-$resolvedPath = (Resolve-Path $ObjectPath).Path
+$resolvedPath = (Resolve-Path $ObjectPath).ProviderPath
 
 # --- Detect config directory (for cross-object checks) ---
 

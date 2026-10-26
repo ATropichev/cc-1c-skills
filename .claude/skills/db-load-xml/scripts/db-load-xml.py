@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-xml v1.37 — Load 1C configuration from XML files
+# db-load-xml v1.38 — Load 1C configuration from XML files
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse

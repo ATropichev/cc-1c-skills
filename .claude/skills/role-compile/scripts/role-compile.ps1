@@ -1,4 +1,4 @@
-﻿# role-compile v1.45 — Compile 1C role from JSON
+﻿# role-compile v1.46 — Compile 1C role from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -114,7 +114,7 @@ function Find-V8Project([string]$startDir) {
 }
 function Get-EditMode([string]$cfgDir) {
 	try {
-		$pj = Find-V8Project (Get-Location).Path
+		$pj = Find-V8Project (Get-Location).ProviderPath
 		if (-not $pj) { $pj = Find-V8Project $cfgDir }
 		if (-not $pj) { return 'deny' }
 		$proj = Get-Content -Raw $pj | ConvertFrom-Json
@@ -136,7 +136,7 @@ function Get-EditMode([string]$cfgDir) {
 function Assert-EditAllowed([string]$targetPath, [string]$require) {
 	try {
 		$rp = $targetPath
-		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).Path } catch {}
+		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).ProviderPath } catch {}
 		# Autonomous external object (EPF/ERF): never part of a config on support (issue #39).
 		if (Test-ExternalObjectRoot $rp) { return }
 		$elemUuid = Get-RootUuid $rp
@@ -1155,7 +1155,7 @@ function Resolve-TextFromFile {
 	} else {
 		$candidates = @(
 			(Join-Path $baseDir $filePath),
-			(Join-Path (Get-Location).Path $filePath)
+			(Join-Path (Get-Location).ProviderPath $filePath)
 		)
 	}
 	foreach ($c in $candidates) {
@@ -1411,10 +1411,10 @@ function Parse-ObjectEntry {
 if (-not $def.objects -and $def.rights) { $def | Add-Member -NotePropertyName objects -NotePropertyValue $def.rights }
 
 # Путь нужен уже здесь: раскрытие сервисного корня читает метаданные сервиса рядом с ролью.
-$resolvedOutputDir = if ([System.IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path (Get-Location) $OutputDir }
+$resolvedOutputDir = if ([System.IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path (Get-Location).ProviderPath $OutputDir }
 
 # Относительный путь @файла ищем сначала рядом с JSON-описанием роли.
-$script:textBaseDir = [System.IO.Path]::GetDirectoryName((Resolve-Path $JsonPath).Path)
+$script:textBaseDir = [System.IO.Path]::GetDirectoryName((Resolve-Path $JsonPath).ProviderPath)
 
 $parsedObjects = @()
 $seenObjectNames = @{}
@@ -1606,7 +1606,7 @@ $rightsXml = $script:xmlBuf.ToString()
 $outDir = if ([System.IO.Path]::IsPathRooted($OutputDir)) {
 	$OutputDir
 } else {
-	Join-Path (Get-Location) $OutputDir
+	Join-Path (Get-Location).ProviderPath $OutputDir
 }
 
 # Determine Roles dir and config root
@@ -1652,7 +1652,7 @@ $enc = New-Object System.Text.UTF8Encoding($true)
 function Get-NewObjectPosition([string]$cfgDir) {
 	try {
 		if (-not $cfgDir) { $cfgDir = "." }
-		$pj = Find-V8Project (Get-Location).Path
+		$pj = Find-V8Project (Get-Location).ProviderPath
 		if (-not $pj) { $pj = Find-V8Project ([System.IO.Path]::GetFullPath($cfgDir)) }
 		if (-not $pj) { return "end" }
 		$proj = Get-Content -Raw $pj | ConvertFrom-Json

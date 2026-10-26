@@ -1,4 +1,4 @@
-﻿# support-edit v1.2 — Toggle 1C configuration support state (Ext/ParentConfigurations.bin)
+﻿# support-edit v1.3 — Toggle 1C configuration support state (Ext/ParentConfigurations.bin)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -33,7 +33,7 @@ if (-not (Test-Path $TargetPath)) {
 	[Console]::Error.WriteLine("Путь не найден: $TargetPath")
 	exit 1
 }
-$rp = (Resolve-Path $TargetPath).Path
+$rp = (Resolve-Path $TargetPath).ProviderPath
 $elemUuid = Get-RootUuid $rp
 $cfgDir = $null; $binPath = $null
 $d = if (Test-Path $rp -PathType Container) { $rp } else { [System.IO.Path]::GetDirectoryName($rp) }

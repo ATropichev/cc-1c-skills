@@ -1,4 +1,4 @@
-﻿# meta-remove v1.13 — Remove metadata object from 1C configuration dump
+﻿# meta-remove v1.14 — Remove metadata object from 1C configuration dump
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -66,7 +66,7 @@ $typePluralMap = @{
 # --- Resolve paths ---
 
 if (-not [System.IO.Path]::IsPathRooted($ConfigDir)) {
-	$ConfigDir = Join-Path (Get-Location).Path $ConfigDir
+	$ConfigDir = Join-Path (Get-Location).ProviderPath $ConfigDir
 }
 
 if (-not (Test-Path $ConfigDir -PathType Container)) {
@@ -122,7 +122,7 @@ function Find-V8Project([string]$startDir) {
 }
 function Get-EditMode([string]$cfgDir) {
 	try {
-		$pj = Find-V8Project (Get-Location).Path
+		$pj = Find-V8Project (Get-Location).ProviderPath
 		if (-not $pj) { $pj = Find-V8Project $cfgDir }
 		if (-not $pj) { return 'deny' }
 		$proj = Get-Content -Raw $pj | ConvertFrom-Json
@@ -144,7 +144,7 @@ function Get-EditMode([string]$cfgDir) {
 function Assert-EditAllowed([string]$targetPath, [string]$require) {
 	try {
 		$rp = $targetPath
-		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).Path } catch {}
+		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).ProviderPath } catch {}
 		# Autonomous external object (EPF/ERF): never part of a config on support (issue #39).
 		if (Test-ExternalObjectRoot $rp) { return }
 		$elemUuid = Get-RootUuid $rp

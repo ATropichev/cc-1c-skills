@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.104 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.105 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -83,7 +83,7 @@ if (-not (Test-Path $TemplatePath)) {
 	exit 1
 }
 
-$TemplatePath = (Resolve-Path $TemplatePath).Path
+$TemplatePath = (Resolve-Path $TemplatePath).ProviderPath
 
 $xmlDoc = New-Object System.Xml.XmlDocument
 $xmlDoc.PreserveWhitespace = $false
@@ -2829,7 +2829,7 @@ $script:outputDir = $null
 $script:outputBasename = $null
 if ($OutputPath) {
 	if (-not [System.IO.Path]::IsPathRooted($OutputPath)) {
-		$OutputPath = Join-Path (Get-Location).Path $OutputPath
+		$OutputPath = Join-Path (Get-Location).ProviderPath $OutputPath
 	}
 	$script:outputDir = [System.IO.Path]::GetDirectoryName($OutputPath)
 	$script:outputBasename = [System.IO.Path]::GetFileNameWithoutExtension($OutputPath)

@@ -1,4 +1,4 @@
-﻿# form-remove v1.10 — Remove form from 1C object
+﻿# form-remove v1.11 — Remove form from 1C object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -40,7 +40,7 @@ if (-not (Test-Path $formMetaPath)) {
 $rootXmlFull = Resolve-Path $rootXmlPath
 $xmlDoc = New-Object System.Xml.XmlDocument
 $xmlDoc.PreserveWhitespace = $true
-$xmlDoc.Load($rootXmlFull.Path)
+$xmlDoc.Load($rootXmlFull.ProviderPath)
 
 $nsMgr = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
 $nsMgr.AddNamespace("md", "http://v8.1c.ru/8.3/MDClasses")
@@ -159,7 +159,7 @@ for ($depth = 0; $depth -lt 4; $depth++) {
 	$probe = Split-Path $probe
 }
 
-$rootXmlLong = Get-LongPath $rootXmlFull.Path
+$rootXmlLong = Get-LongPath $rootXmlFull.ProviderPath
 $formMetaFull = Get-LongPath $formMetaPath
 $formDirFull = Get-LongPath $formDir
 
@@ -234,7 +234,7 @@ foreach ($node in $formNodes) {
 # (form-add пишет свойство по назначению) и ChoiceForm у реквизитов.
 Clear-FormRefs $xmlDoc $formRef | Out-Null
 
-Save-XmlPreservingStyle $xmlDoc $rootXmlFull.Path
+Save-XmlPreservingStyle $xmlDoc $rootXmlFull.ProviderPath
 
 Write-Host "[OK] Форма $FormName удалена из $rootXmlPath"
 

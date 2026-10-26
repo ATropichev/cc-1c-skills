@@ -1,4 +1,4 @@
-﻿# web-info v1.6 — Apache & 1C publication status
+﻿# web-info v1.7 — Apache & 1C publication status
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -47,7 +47,7 @@ if (-not (Test-Path $httpdExe)) {
 }
 
 # --- Check process (only our Apache) ---
-$httpdExeNorm = (Resolve-Path $httpdExe -ErrorAction SilentlyContinue).Path
+$httpdExeNorm = (Resolve-Path $httpdExe -ErrorAction SilentlyContinue).ProviderPath
 $ourProc = Get-Process httpd -ErrorAction SilentlyContinue | Where-Object {
     try { $_.Path -eq $httpdExeNorm } catch { $false }
 }

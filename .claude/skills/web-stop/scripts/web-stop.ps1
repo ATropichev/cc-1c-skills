@@ -1,4 +1,4 @@
-﻿# web-stop v1.3 — Stop Apache HTTP Server
+﻿# web-stop v1.4 — Stop Apache HTTP Server
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -35,7 +35,7 @@ if (-not $ApachePath) {
 
 # --- Helper: filter httpd processes by our ApachePath ---
 $httpdExe = Join-Path (Join-Path $ApachePath "bin") "httpd.exe"
-$httpdExeNorm = (Resolve-Path $httpdExe -ErrorAction SilentlyContinue).Path
+$httpdExeNorm = (Resolve-Path $httpdExe -ErrorAction SilentlyContinue).ProviderPath
 function Get-OurHttpd {
     Get-Process httpd -ErrorAction SilentlyContinue | Where-Object {
         try { $_.Path -eq $httpdExeNorm } catch { $false }

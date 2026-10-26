@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# web-unpublish v1.3 — Remove 1C web publication
+# web-unpublish v1.4 — Remove 1C web publication
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 """

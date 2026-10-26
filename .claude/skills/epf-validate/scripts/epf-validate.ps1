@@ -1,4 +1,4 @@
-﻿# epf-validate v1.10 — Validate 1C external data processor / report structure
+﻿# epf-validate v1.11 — Validate 1C external data processor / report structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # Works for both EPF (ExternalDataProcessor) and ERF (ExternalReport) — auto-detects
 [CmdletBinding(PositionalBinding=$false)]
@@ -20,7 +20,7 @@ $ErrorActionPreference = "Stop"
 # --- Resolve path ---
 
 if (-not [System.IO.Path]::IsPathRooted($ObjectPath)) {
-	$ObjectPath = Join-Path (Get-Location).Path $ObjectPath
+	$ObjectPath = Join-Path (Get-Location).ProviderPath $ObjectPath
 }
 
 if (Test-Path $ObjectPath -PathType Container) {
@@ -57,7 +57,7 @@ if (-not (Test-Path $ObjectPath)) {
 	exit 1
 }
 
-$resolvedPath = (Resolve-Path $ObjectPath).Path
+$resolvedPath = (Resolve-Path $ObjectPath).ProviderPath
 $srcDir = Split-Path $resolvedPath -Parent
 
 # --- Output infrastructure ---

@@ -1,4 +1,4 @@
-﻿# xdto-info v1.2 — Analyze 1C XDTO package structure
+﻿# xdto-info v1.3 — Analyze 1C XDTO package structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -53,7 +53,7 @@ function Flush-Output {
 # либо на конкретный пакет.
 
 if (-not [System.IO.Path]::IsPathRooted($PackagePath)) {
-	$PackagePath = Join-Path (Get-Location).Path $PackagePath
+	$PackagePath = Join-Path (Get-Location).ProviderPath $PackagePath
 }
 if (-not (Test-Path $PackagePath)) { Fail "Путь не найден: $PackagePath" }
 

@@ -1,4 +1,4 @@
-﻿# meta-decompile v0.69 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
+﻿# meta-decompile v0.70 — XML объекта метаданных 1С → JSON-черновик формата meta-compile
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 #
 # Поддержаны: Catalog, ExchangePlan, ChartOfCharacteristicTypes, ChartOfAccounts, ChartOfCalculationTypes, Document,
@@ -75,7 +75,7 @@ function Quote-Json {
 # --- XML загрузка + namespace manager ---
 $doc = New-Object System.Xml.XmlDocument
 $doc.PreserveWhitespace = $true
-$doc.Load((Resolve-Path -LiteralPath $ObjectPath).Path)
+$doc.Load((Resolve-Path -LiteralPath $ObjectPath).ProviderPath)
 $nsm = New-Object System.Xml.XmlNamespaceManager($doc.NameTable)
 $nsm.AddNamespace('md',  'http://v8.1c.ru/8.3/MDClasses')
 $nsm.AddNamespace('v8',  'http://v8.1c.ru/8.1/data/core')
@@ -1519,7 +1519,7 @@ if ($childObjs) {
 # --- Предопределённые (соседний Ext/Predefined.xml) → DSL predefined.
 # Плоский элемент → строка "(Код) Имя [Наименование]" (Наименование: ==авто → опустить; '' → []; иначе [текст]).
 # Группа/иерархия → object {name, [code], [description], isFolder, childItems}. codeType — из свойства каталога. ---
-$objDir = Split-Path -Parent (Resolve-Path -LiteralPath $ObjectPath).Path
+$objDir = Split-Path -Parent (Resolve-Path -LiteralPath $ObjectPath).ProviderPath
 $predefPath = Join-Path (Join-Path (Join-Path $objDir $objName) 'Ext') 'Predefined.xml'
 if (Test-Path -LiteralPath $predefPath) {
 	$pdoc = New-Object System.Xml.XmlDocument
@@ -1698,7 +1698,7 @@ if ($objType -eq 'ExternalDataSource') {
 		return ,$out
 	}
 
-	$srcDir = Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $ObjectPath).Path) $objName
+	$srcDir = Join-Path (Split-Path -Parent (Resolve-Path -LiteralPath $ObjectPath).ProviderPath) $objName
 	$childObjsEds = $objNode.SelectSingleNode('md:ChildObjects', $nsm)
 	if ($childObjsEds) {
 		$tablesMap = [ordered]@{}

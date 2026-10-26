@@ -1,4 +1,4 @@
-﻿# meta-info v1.15 — Compact summary of 1C metadata object
+﻿# meta-info v1.16 — Compact summary of 1C metadata object
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -20,7 +20,7 @@ function Out([string]$text) { $script:lines += $text }
 
 # --- Resolve path ---
 if (-not [System.IO.Path]::IsPathRooted($ObjectPath)) {
-	$ObjectPath = Join-Path (Get-Location).Path $ObjectPath
+	$ObjectPath = Join-Path (Get-Location).ProviderPath $ObjectPath
 }
 
 # Directory -> find XML inside or as sibling
@@ -1757,7 +1757,7 @@ if ($Limit -gt 0 -and $outLines.Count -gt $Limit) {
 
 if ($OutFile) {
 	if (-not [System.IO.Path]::IsPathRooted($OutFile)) {
-		$OutFile = Join-Path (Get-Location).Path $OutFile
+		$OutFile = Join-Path (Get-Location).ProviderPath $OutFile
 	}
 	$utf8 = New-Object System.Text.UTF8Encoding($true)
 	[System.IO.File]::WriteAllLines($OutFile, $outLines, $utf8)

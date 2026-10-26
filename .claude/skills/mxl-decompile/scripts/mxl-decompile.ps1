@@ -1,4 +1,4 @@
-﻿# mxl-decompile v1.31 — Decompile 1C spreadsheet to JSON
+﻿# mxl-decompile v1.32 — Decompile 1C spreadsheet to JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -23,7 +23,7 @@ $xmlDoc = New-Object System.Xml.XmlDocument
 # PreserveWhitespace = $false схлопывает узел из одних пробелов в пустой, и текст ячейки
 # вида "  " терялся молча (25 макетов пилота). Значащие пробелы в тексте надписи есть.
 $xmlDoc.PreserveWhitespace = $true
-$xmlDoc.Load((Resolve-Path $TemplatePath).Path)
+$xmlDoc.Load((Resolve-Path $TemplatePath).ProviderPath)
 
 $root = $xmlDoc.DocumentElement
 $ns = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
@@ -1769,7 +1769,7 @@ if ($OutputPath) {
 	# Путь принимаем и относительным, и абсолютным: безусловная склейка с текущим каталогом
 	# давала "C:\cwd\C:\out.json" и роняла WriteAllText сообщением про формат пути.
 	$outAbs = if ([System.IO.Path]::IsPathRooted($OutputPath)) { $OutputPath }
-	          else { Join-Path (Get-Location).Path $OutputPath }
+	          else { Join-Path (Get-Location).ProviderPath $OutputPath }
 	$enc = New-Object System.Text.UTF8Encoding($false)
 	[System.IO.File]::WriteAllText(
 		$outAbs,

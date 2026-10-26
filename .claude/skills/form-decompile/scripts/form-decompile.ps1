@@ -1,4 +1,4 @@
-﻿# form-decompile v0.154 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.155 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 [CmdletBinding(PositionalBinding=$false)]
@@ -18,7 +18,7 @@ if (-not (Test-Path $FormPath)) {
 	Write-Error "Form not found: $FormPath"
 	exit 1
 }
-$FormPath = (Resolve-Path $FormPath).Path
+$FormPath = (Resolve-Path $FormPath).ProviderPath
 
 $xmlDoc = New-Object System.Xml.XmlDocument
 $xmlDoc.PreserveWhitespace = $false
@@ -86,7 +86,7 @@ $script:outputDir = $null
 $script:outputBasename = $null
 if ($OutputPath) {
 	$od = Split-Path -Parent $OutputPath
-	if (-not $od) { $od = (Get-Location).Path }
+	if (-not $od) { $od = (Get-Location).ProviderPath }
 	$script:outputDir = $od
 	$script:outputBasename = [System.IO.Path]::GetFileNameWithoutExtension($OutputPath)
 }

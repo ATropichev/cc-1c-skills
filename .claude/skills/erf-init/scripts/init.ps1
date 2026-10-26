@@ -1,4 +1,4 @@
-﻿# erf-init v1.8 — Init 1C external report scaffold (+write_xml_file/write_utf8_bom: общий эталон записи)
+﻿# erf-init v1.9 — Init 1C external report scaffold (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 param(
 	[Parameter(Mandatory)]
@@ -151,7 +151,7 @@ function Write-XmlFile([string]$path, [string]$text, $encoding) {
 	[System.IO.File]::WriteAllText($path, $t.TrimEnd("`r", "`n"), $encoding)
 }
 
-Write-XmlFile (Resolve-Path $SrcDir | Join-Path -ChildPath "$Name.xml") $xml $enc
+Write-XmlFile (Join-Path (Resolve-Path $SrcDir).ProviderPath "$Name.xml") $xml $enc
 
 # --- Модуль объекта ---
 

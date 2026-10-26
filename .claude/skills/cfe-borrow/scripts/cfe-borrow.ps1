@@ -1,4 +1,4 @@
-﻿# cfe-borrow v1.56 — Borrow objects from configuration into extension (CFE)
+﻿# cfe-borrow v1.57 — Borrow objects from configuration into extension (CFE)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -437,7 +437,7 @@ function Insert-OwnChildOrDie {
 
 # --- 1. Resolve paths ---
 if (-not [System.IO.Path]::IsPathRooted($ExtensionPath)) {
-	$ExtensionPath = Join-Path (Get-Location).Path $ExtensionPath
+	$ExtensionPath = Join-Path (Get-Location).ProviderPath $ExtensionPath
 }
 if (Test-Path $ExtensionPath -PathType Container) {
 	$candidate = Join-Path $ExtensionPath "Configuration.xml"
@@ -445,11 +445,11 @@ if (Test-Path $ExtensionPath -PathType Container) {
 	else { Write-Error "No Configuration.xml in extension directory: $ExtensionPath"; exit 1 }
 }
 if (-not (Test-Path $ExtensionPath)) { Write-Error "Extension file not found: $ExtensionPath"; exit 1 }
-$extResolvedPath = (Resolve-Path $ExtensionPath).Path
+$extResolvedPath = (Resolve-Path $ExtensionPath).ProviderPath
 $extDir = Split-Path $extResolvedPath -Parent
 
 if (-not [System.IO.Path]::IsPathRooted($ConfigPath)) {
-	$ConfigPath = Join-Path (Get-Location).Path $ConfigPath
+	$ConfigPath = Join-Path (Get-Location).ProviderPath $ConfigPath
 }
 if (Test-Path $ConfigPath -PathType Container) {
 	$candidate = Join-Path $ConfigPath "Configuration.xml"
@@ -457,7 +457,7 @@ if (Test-Path $ConfigPath -PathType Container) {
 	else { Write-Error "No Configuration.xml in config directory: $ConfigPath"; exit 1 }
 }
 if (-not (Test-Path $ConfigPath)) { Write-Error "Config file not found: $ConfigPath"; exit 1 }
-$cfgResolvedPath = (Resolve-Path $ConfigPath).Path
+$cfgResolvedPath = (Resolve-Path $ConfigPath).ProviderPath
 $cfgDir = Split-Path $cfgResolvedPath -Parent
 
 # --- 2. Load extension Configuration.xml ---
@@ -3275,7 +3275,7 @@ function Find-V8Project([string]$startDir) {
 function Get-NewObjectPosition([string]$cfgDir) {
 	try {
 		if (-not $cfgDir) { $cfgDir = "." }
-		$pj = Find-V8Project (Get-Location).Path
+		$pj = Find-V8Project (Get-Location).ProviderPath
 		if (-not $pj) { $pj = Find-V8Project ([System.IO.Path]::GetFullPath($cfgDir)) }
 		if (-not $pj) { return "end" }
 		$proj = Get-Content -Raw $pj | ConvertFrom-Json

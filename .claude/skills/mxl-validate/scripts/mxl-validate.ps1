@@ -1,4 +1,4 @@
-﻿# mxl-validate v1.9 — Validate 1C spreadsheet
+﻿# mxl-validate v1.10 — Validate 1C spreadsheet
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -99,7 +99,7 @@ function Format-XmlParseError {
 	return $out
 }
 
-$resolvedPath = (Resolve-Path $TemplatePath).Path
+$resolvedPath = (Resolve-Path $TemplatePath).ProviderPath
 # Имя — из разрешённого пути, как в py: у голого «Template.xml» GetDirectoryName даёт пустую
 # строку, и второй вызов на ней бросает исключение.
 $templateName = [System.IO.Path]::GetFileName([System.IO.Path]::GetDirectoryName([System.IO.Path]::GetDirectoryName($resolvedPath)))

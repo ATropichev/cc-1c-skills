@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.34 — Validate 1C managed form
+# form-validate v1.35 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse

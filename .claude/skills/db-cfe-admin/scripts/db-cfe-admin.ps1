@@ -1,4 +1,4 @@
-﻿# db-cfe-admin v1.7 — Configuration extensions in a 1C infobase: list, check, properties, delete
+﻿# db-cfe-admin v1.8 — Configuration extensions in a 1C infobase: list, check, properties, delete
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -142,7 +142,7 @@ function Test-SamePath {
 
 function Find-ProjectDatabase {
     # Запись базы в реестре, соответствующая переданному соединению. $null, если не найдена.
-    $pf = Find-V8Project (Get-Location).Path
+    $pf = Find-V8Project (Get-Location).ProviderPath
     if (-not $pf) { return $null }
     try { $proj = Get-Content $pf -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $null }
     if (-not $proj.databases) { return $null }
@@ -269,7 +269,7 @@ function Test-ArgKeyMatch {
 function Get-ProjectExtraArgs {
     # v8args / ibcmdargs from .v8-project.json — same upward walk as v8path.
     param([string]$Name)
-    $dir = (Get-Location).Path
+    $dir = (Get-Location).ProviderPath
     while ($dir) {
         $pf = Join-Path $dir ".v8-project.json"
         if (Test-Path $pf) {
@@ -406,7 +406,7 @@ function Resolve-InfoBasePath {
     param([string]$Path)
     if (-not $Path) { return $Path }
     if ($Path -notmatch '^([A-Za-z]:[\\/]|[\\/]{2})') {
-        $cwd = (Get-Location).Path
+        $cwd = (Get-Location).ProviderPath
         $base = $cwd
         $d = $cwd
         for ($i = 0; $i -lt 20 -and $d; $i++) {
@@ -443,7 +443,7 @@ function Find-ProjectV8Path {
     # платформы, а версию формата выгрузки задаёт та платформа, которая выгружает.
     $dbRec = Find-ProjectDatabase
     if ($dbRec -and $dbRec.v8path) { return [string]$dbRec.v8path }
-    $dir = (Get-Location).Path
+    $dir = (Get-Location).ProviderPath
     while ($dir) {
         $pf = Join-Path $dir ".v8-project.json"
         if (Test-Path $pf) {

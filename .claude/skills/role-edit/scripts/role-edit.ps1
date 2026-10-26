@@ -1,4 +1,4 @@
-﻿# role-edit v1.7 — Edit existing 1C role rights in place
+﻿# role-edit v1.8 — Edit existing 1C role rights in place
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -109,7 +109,7 @@ function Find-V8Project([string]$startDir) {
 }
 function Get-EditMode([string]$cfgDir) {
 	try {
-		$pj = Find-V8Project (Get-Location).Path
+		$pj = Find-V8Project (Get-Location).ProviderPath
 		if (-not $pj) { $pj = Find-V8Project $cfgDir }
 		if (-not $pj) { return 'deny' }
 		$proj = Get-Content -Raw $pj | ConvertFrom-Json
@@ -131,7 +131,7 @@ function Get-EditMode([string]$cfgDir) {
 function Assert-EditAllowed([string]$targetPath, [string]$require) {
 	try {
 		$rp = $targetPath
-		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).Path } catch {}
+		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).ProviderPath } catch {}
 		# Autonomous external object (EPF/ERF): never part of a config on support (issue #39).
 		if (Test-ExternalObjectRoot $rp) { return }
 		$elemUuid = Get-RootUuid $rp
@@ -1103,7 +1103,7 @@ function Resolve-TextFromFile {
 	} else {
 		$candidates = @(
 			(Join-Path $baseDir $filePath),
-			(Join-Path (Get-Location).Path $filePath)
+			(Join-Path (Get-Location).ProviderPath $filePath)
 		)
 	}
 	foreach ($c in $candidates) {
@@ -1456,7 +1456,7 @@ function Resolve-RolePaths([string]$inputPath) {
 		[Console]::Error.WriteLine("[role-edit] Путь не найден: $inputPath")
 		exit 1
 	}
-	$full = (Resolve-Path -LiteralPath $inputPath).Path
+	$full = (Resolve-Path -LiteralPath $inputPath).ProviderPath
 	$rightsPath = $null
 	if (Test-Path -LiteralPath $full -PathType Leaf) {
 		$leaf = [System.IO.Path]::GetFileName($full)
@@ -1477,7 +1477,7 @@ function Resolve-RolePaths([string]$inputPath) {
 		[Console]::Error.WriteLine("  Ожидается каталог роли, Roles/Имя.xml или Roles/Имя/Ext/Rights.xml.")
 		exit 1
 	}
-	$rightsPath = (Resolve-Path -LiteralPath $rightsPath).Path
+	$rightsPath = (Resolve-Path -LiteralPath $rightsPath).ProviderPath
 	# Rights.xml лежит в <Roles>/<Имя>/Ext/, метаданные — в <Roles>/<Имя>.xml
 	$roleDir = [System.IO.Path]::GetDirectoryName([System.IO.Path]::GetDirectoryName($rightsPath))
 	$roleName = [System.IO.Path]::GetFileName($roleDir)
@@ -1506,7 +1506,7 @@ if (-not $DefinitionFile -and -not $Operation) {
 
 # База относительного пути @файла: каталог списка операций, иначе каталог самой роли.
 # Текущий каталог функция проверяет вторым кандидатом в любом случае.
-$script:textBaseDir = if ($DefinitionFile) { [System.IO.Path]::GetDirectoryName((Resolve-Path $DefinitionFile).Path) }
+$script:textBaseDir = if ($DefinitionFile) { [System.IO.Path]::GetDirectoryName((Resolve-Path $DefinitionFile).ProviderPath) }
                       else { [System.IO.Path]::GetDirectoryName($script:paths.RightsPath) }
 
 $targetForGuard = if (Test-Path -LiteralPath $script:roleXmlPath) { $script:roleXmlPath } else { $script:rightsPath }

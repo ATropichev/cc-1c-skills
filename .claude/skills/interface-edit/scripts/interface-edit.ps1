@@ -1,4 +1,4 @@
-﻿# interface-edit v1.22 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
+﻿# interface-edit v1.23 — Edit 1C CommandInterface.xml (+русские алиасы типов: формы с ё и без)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -84,7 +84,7 @@ function Read-JsonInputFile([string]$path) {
 
 # --- Resolve path ---
 if (-not [System.IO.Path]::IsPathRooted($CIPath)) {
-	$CIPath = Join-Path (Get-Location).Path $CIPath
+	$CIPath = Join-Path (Get-Location).ProviderPath $CIPath
 }
 $resolvedPath = $CIPath
 
@@ -127,7 +127,7 @@ function Find-V8Project([string]$startDir) {
 }
 function Get-EditMode([string]$cfgDir) {
 	try {
-		$pj = Find-V8Project (Get-Location).Path
+		$pj = Find-V8Project (Get-Location).ProviderPath
 		if (-not $pj) { $pj = Find-V8Project $cfgDir }
 		if (-not $pj) { return 'deny' }
 		$proj = Get-Content -Raw $pj | ConvertFrom-Json
@@ -149,7 +149,7 @@ function Get-EditMode([string]$cfgDir) {
 function Assert-EditAllowed([string]$targetPath, [string]$require) {
 	try {
 		$rp = $targetPath
-		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).Path } catch {}
+		try { $rp = (Resolve-Path $targetPath -ErrorAction Stop).ProviderPath } catch {}
 		# Autonomous external object (EPF/ERF): never part of a config on support (issue #39).
 		if (Test-ExternalObjectRoot $rp) { return }
 		$elemUuid = Get-RootUuid $rp
@@ -287,7 +287,7 @@ if (-not (Test-Path $CIPath)) {
 		exit 1
 	}
 }
-$resolvedPath = (Resolve-Path $CIPath).Path
+$resolvedPath = (Resolve-Path $CIPath).ProviderPath
 
 # --- Load XML ---
 $script:xmlDoc = New-Object System.Xml.XmlDocument
@@ -714,7 +714,7 @@ function Do-GroupOrder([string]$jsonVal) {
 $operations = @()
 if ($DefinitionFile) {
 	if (-not [System.IO.Path]::IsPathRooted($DefinitionFile)) {
-		$DefinitionFile = Join-Path (Get-Location).Path $DefinitionFile
+		$DefinitionFile = Join-Path (Get-Location).ProviderPath $DefinitionFile
 	}
 	$jsonText = Read-JsonInputFile $DefinitionFile
 	$ops = ConvertFrom-JsonInput $jsonText $DefinitionFile

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# v8-xsd-fetch v1.0 — Download 1C platform XSD schemas (dump format) into .v8-xsd
+# v8-xsd-fetch v1.1 — Download 1C platform XSD schemas (dump format) into .v8-xsd
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Загрузка XSD-схем формата выгрузки 1С по версиям формата.
 

@@ -1,4 +1,4 @@
-﻿# role-validate v1.8 — Validate 1C role structure
+﻿# role-validate v1.9 — Validate 1C role structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -354,7 +354,7 @@ function Get-ExtBodyOwner([string]$bodyPath) {
 
 # --- Resolve path ---
 if (-not [System.IO.Path]::IsPathRooted($RightsPath)) {
-	$RightsPath = Join-Path (Get-Location).Path $RightsPath
+	$RightsPath = Join-Path (Get-Location).ProviderPath $RightsPath
 }
 # A: Directory → Ext/Rights.xml
 if (Test-Path $RightsPath -PathType Container) {
@@ -376,7 +376,7 @@ if (-not (Test-Path $RightsPath)) {
 	$result = $script:output.ToString()
 	Write-Host $result
 	if ($OutFile) {
-		$outPath = if ([System.IO.Path]::IsPathRooted($OutFile)) { $OutFile } else { Join-Path (Get-Location) $OutFile }
+		$outPath = if ([System.IO.Path]::IsPathRooted($OutFile)) { $OutFile } else { Join-Path (Get-Location).ProviderPath $OutFile }
 		$outDir = [System.IO.Path]::GetDirectoryName($outPath)
 		if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
 		$utf8Bom = New-Object System.Text.UTF8Encoding $true
@@ -387,7 +387,7 @@ if (-not (Test-Path $RightsPath)) {
 }
 
 # Auto-detect metadata: Roles/Name/Ext/Rights.xml → Roles/Name.xml
-$resolvedRights = (Resolve-Path $RightsPath).Path
+$resolvedRights = (Resolve-Path $RightsPath).ProviderPath
 $extDir = Split-Path $resolvedRights -Parent
 $roleDir = Split-Path $extDir -Parent
 $rolesDir = Split-Path $roleDir -Parent
@@ -403,7 +403,7 @@ try {
 	$result = $script:output.ToString()
 	Write-Host $result
 	if ($OutFile) {
-		$outPath = if ([System.IO.Path]::IsPathRooted($OutFile)) { $OutFile } else { Join-Path (Get-Location) $OutFile }
+		$outPath = if ([System.IO.Path]::IsPathRooted($OutFile)) { $OutFile } else { Join-Path (Get-Location).ProviderPath $OutFile }
 		$outDir = [System.IO.Path]::GetDirectoryName($outPath)
 		if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
 		$utf8Bom = New-Object System.Text.UTF8Encoding $true
@@ -687,7 +687,7 @@ if ($script:errors -eq 0 -and $script:warnings -eq 0 -and -not $Detailed) {
 Write-Host $result
 
 if ($OutFile) {
-	$outPath = if ([System.IO.Path]::IsPathRooted($OutFile)) { $OutFile } else { Join-Path (Get-Location) $OutFile }
+	$outPath = if ([System.IO.Path]::IsPathRooted($OutFile)) { $OutFile } else { Join-Path (Get-Location).ProviderPath $OutFile }
 	$outDir = [System.IO.Path]::GetDirectoryName($outPath)
 	if (-not (Test-Path $outDir)) {
 		New-Item -ItemType Directory -Path $outDir -Force | Out-Null

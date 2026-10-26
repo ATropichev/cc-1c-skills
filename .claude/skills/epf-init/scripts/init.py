@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# epf-init v1.8 — Init 1C external data processor scaffold (+write_xml_file/write_utf8_bom: общий эталон записи)
+# epf-init v1.9 — Init 1C external data processor scaffold (+write_xml_file/write_utf8_bom: общий эталон записи)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 """Generates minimal XML source files for a 1C external data processor."""
 import sys, os, re, argparse, uuid

@@ -1,4 +1,4 @@
-﻿# role-info v1.6 — Analyze 1C role rights
+﻿# role-info v1.7 — Analyze 1C role rights
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -18,7 +18,7 @@ function Out([string]$text) { $script:lines += $text }
 
 # --- Resolve paths ---
 if (-not [System.IO.Path]::IsPathRooted($RightsPath)) {
-	$RightsPath = Join-Path (Get-Location).Path $RightsPath
+	$RightsPath = Join-Path (Get-Location).ProviderPath $RightsPath
 }
 
 if (-not (Test-Path $RightsPath)) {
@@ -158,7 +158,7 @@ function Test-ExternalObjectRoot([string]$xmlPath) {
 }
 function Get-SupportStatusForPath([string]$targetPath) {
 	try {
-		$rp = (Resolve-Path $targetPath).Path
+		$rp = (Resolve-Path $targetPath).ProviderPath
 		$elemUuid = $null
 		$binPath = $null
 		# Reads the uuid of the first metadata element in an .xml file (or $null).
@@ -309,7 +309,7 @@ if ($Limit -gt 0 -and $lines.Count -gt $Limit) {
 
 if ($OutFile) {
 	if (-not [System.IO.Path]::IsPathRooted($OutFile)) {
-		$OutFile = Join-Path (Get-Location).Path $OutFile
+		$OutFile = Join-Path (Get-Location).ProviderPath $OutFile
 	}
 	$utf8 = New-Object System.Text.UTF8Encoding($true)
 	[System.IO.File]::WriteAllLines($OutFile, $lines, $utf8)

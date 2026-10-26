@@ -1,4 +1,4 @@
-﻿# skd-validate v1.7 — Validate 1C DCS structure
+﻿# skd-validate v1.8 — Validate 1C DCS structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -19,7 +19,7 @@ $ErrorActionPreference = "Stop"
 # --- Resolve path ---
 
 if (-not [System.IO.Path]::IsPathRooted($TemplatePath)) {
-	$TemplatePath = Join-Path (Get-Location).Path $TemplatePath
+	$TemplatePath = Join-Path (Get-Location).ProviderPath $TemplatePath
 }
 # A: Directory → Ext/Template.xml
 if (Test-Path $TemplatePath -PathType Container) {
@@ -46,7 +46,7 @@ if (-not (Test-Path $TemplatePath)) {
 	exit 1
 }
 
-$resolvedPath = (Resolve-Path $TemplatePath).Path
+$resolvedPath = (Resolve-Path $TemplatePath).ProviderPath
 $fileName = [System.IO.Path]::GetFileName($resolvedPath)
 
 # --- Output infrastructure ---
@@ -1031,7 +1031,7 @@ function Test-XsdVersionDir([string]$dir) {
 # от текущего каталога; xsdPath из него, иначе .v8-xsd рядом с ним. Нет проекта — нет схем.
 function Resolve-XsdRoot([string]$templateDir) {
 	$pj = Find-V8Project $templateDir
-	if (-not $pj) { $pj = Find-V8Project (Get-Location).Path }
+	if (-not $pj) { $pj = Find-V8Project (Get-Location).ProviderPath }
 	if (-not $pj) { return $null }
 	$pjDir = [System.IO.Path]::GetDirectoryName($pj)
 	$rel = ".v8-xsd"

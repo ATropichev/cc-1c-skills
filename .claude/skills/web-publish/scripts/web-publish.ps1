@@ -1,4 +1,4 @@
-﻿# web-publish v1.15 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
+﻿# web-publish v1.16 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -123,7 +123,7 @@ function Resolve-InfoBasePath {
     param([string]$Path)
     if (-not $Path) { return $Path }
     if ($Path -notmatch '^([A-Za-z]:[\\/]|[\\/]{2})') {
-        $cwd = (Get-Location).Path
+        $cwd = (Get-Location).ProviderPath
         $base = $cwd
         $d = $cwd
         for ($i = 0; $i -lt 20 -and $d; $i++) {
@@ -167,7 +167,7 @@ function Test-SamePath {
 }
 function Find-ProjectDatabase {
     # Запись базы в реестре, соответствующая переданному соединению. $null, если не найдена.
-    $pf = Find-V8Project (Get-Location).Path
+    $pf = Find-V8Project (Get-Location).ProviderPath
     if (-not $pf) { return $null }
     try { $proj = Get-Content $pf -Raw -Encoding UTF8 | ConvertFrom-Json } catch { return $null }
     if (-not $proj.databases) { return $null }
@@ -190,7 +190,7 @@ function Find-ProjectV8Path {
     # платформы, а версию формата выгрузки задаёт та платформа, которая выгружает.
     $dbRec = Find-ProjectDatabase
     if ($dbRec -and $dbRec.v8path) { return [string]$dbRec.v8path }
-    $dir = (Get-Location).Path
+    $dir = (Get-Location).ProviderPath
     while ($dir) {
         $pf = Join-Path $dir ".v8-project.json"
         if (Test-Path $pf) {
@@ -245,7 +245,7 @@ if (-not $ApachePath) {
 }
 # Ensure absolute path (agent may pass relative like "tools/apache24")
 if (-not [System.IO.Path]::IsPathRooted($ApachePath)) {
-    $ApachePath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location).Path $ApachePath))
+    $ApachePath = [System.IO.Path]::GetFullPath((Join-Path (Get-Location).ProviderPath $ApachePath))
 }
 
 # --- Check / Install Apache ---
@@ -469,7 +469,7 @@ Write-Host "httpd.conf обновлён" -ForegroundColor Green
 
 # --- Helper: filter httpd processes by our ApachePath ---
 function Get-OurHttpd {
-    $httpdExeNorm = (Resolve-Path $httpdExe -ErrorAction SilentlyContinue).Path
+    $httpdExeNorm = (Resolve-Path $httpdExe -ErrorAction SilentlyContinue).ProviderPath
     Get-Process httpd -ErrorAction SilentlyContinue | Where-Object {
         try { $_.Path -eq $httpdExeNorm } catch { $false }
     }
