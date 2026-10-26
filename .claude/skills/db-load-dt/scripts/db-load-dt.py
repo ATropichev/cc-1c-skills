@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# db-load-dt v1.21 — Load 1C information base from DT file
+# db-load-dt v1.22 — Load 1C information base from DT file
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -73,7 +73,7 @@ def resolve_infobase_path(path):
     if not path:
         return path
     # Абсолютный на Windows — только с диском и разделителем или UNC, как в PS-порте; «\\x» берёт
-    # диск базового каталога (os.path.join). На POSIX — os.path.isabs.
+    # диск базового каталога (os.path.join); «C:x» отклоняет ещё clean_path. На POSIX — os.path.isabs.
     absolute = re.match(r"^([A-Za-z]:[\\/]|[\\/]{2})", path) if os.name == "nt" else os.path.isabs(path)
     if not absolute:
         cwd = os.getcwd()
@@ -90,8 +90,10 @@ def resolve_infobase_path(path):
                 break
             d = parent
         path = os.path.abspath(os.path.join(base, path))
-    if len(path) > 3:
-        path = path.rstrip("\\/" if os.name == "nt" else "/")
+    # Хвостовые разделители срезаются, но корень («C:\\», на POSIX «/») остаётся корнем
+    seps, keep = ("\\/", 3) if os.name == "nt" else ("/", 1)
+    while len(path) > keep and path[-1] in seps:
+        path = path[:-1]
     return path
 
 
@@ -104,8 +106,9 @@ def resolve_work_path(path):
     absolute = re.match(r"^([A-Za-z]:[\\/]|[\\/]{2})", path) if os.name == "nt" else os.path.isabs(path)
     if not absolute:
         path = os.path.abspath(os.path.join(os.getcwd(), path))
-    if len(path) > 3:
-        path = path.rstrip("\\/" if os.name == "nt" else "/")
+    seps, keep = ("\\/", 3) if os.name == "nt" else ("/", 1)
+    while len(path) > keep and path[-1] in seps:
+        path = path[:-1]
     return path
 
 
@@ -456,6 +459,13 @@ def clean_path(value, param=""):
     v = value.strip()
     if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
         v = v[1:-1].strip()
+    # «C:x» — от текущего каталога диска C, своего у каждого процесса: смысл не угадать, почти
+    # всегда это опечатка в «C:\x». Отказ с подсказкой, а не путь «где-то» у платформы.
+    if os.name == "nt" and re.match(r"^[A-Za-z]:(?![\\/])", v):
+        drive = v[:2]
+        print(f"Error: {param or 'path'} is relative to the current directory of drive {drive} ({value})"
+              f" - use {drive}\\{v[2:]} or a path without a drive")
+        sys.exit(1)
     if len(v) > 3 and v[-1] in "\\/":
         v = v[:-1]
     if '"' in v:

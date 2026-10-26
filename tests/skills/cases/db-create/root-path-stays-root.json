@@ -1,0 +1,13 @@
+{
+  "name": "Корень диска с лишними разделителями остаётся корнем (C:\\), а не становится C:",
+  "osOnly": "win32",
+  "preRun": [
+    { "writeFile": { "path": "fake.cmd", "content": "@echo off\r\necho ARGS: %*\r\nexit /b 1\r\n" } }
+  ],
+  "args_extra": ["-V8Path", "{workDir}\\fake.cmd", "-InfoBasePath", "C:\\\\\\"],
+  "expect": {
+    "stdoutContains": "ARGS: CREATEINFOBASE File=\"C:\\\""
+  },
+  "expectError": true,
+  "noSnapshot": "фейк платформы только печатает аргументы — база не создаётся"
+}

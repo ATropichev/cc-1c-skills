@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# stub-db-create v1.15 — Create temp 1C infobase with metadata stubs for EPF/ERF build
+# stub-db-create v1.16 — Create temp 1C infobase with metadata stubs for EPF/ERF build
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -91,10 +91,17 @@ def clean_path(value, param=""):
     v = value.strip()
     if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
         v = v[1:-1].strip()
+    # «C:x» — от текущего каталога диска C, своего у каждого процесса: смысл не угадать, почти
+    # всегда это опечатка в «C:\x». Отказ с подсказкой, а не путь «где-то» у платформы.
+    if os.name == "nt" and re.match(r"^[A-Za-z]:(?![\\/])", v):
+        drive = v[:2]
+        print(f"Error: {param or 'path'} is relative to the current directory of drive {drive} ({value})"
+              f" - use {drive}\\{v[2:]} or a path without a drive")
+        sys.exit(1)
     if len(v) > 3 and v[-1] in "\\/":
         v = v[:-1]
     if '"' in v:
-        print(f"Error: {param or 'path'} contains a quote character: {value}", file=sys.stderr)
+        print(f"Error: {param or 'path'} contains a quote character: {value}")
         sys.exit(1)
     return v
 

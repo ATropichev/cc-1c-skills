@@ -1,0 +1,14 @@
+{
+  "name": "Несколько хвостовых разделителей у пути к базе срезаются все — платформе уходит путь без них",
+  "osOnly": "win32",
+  "preRun": [
+    { "writeFile": { "path": "fake.cmd", "content": "@echo off\r\necho ARGS: %*\r\nexit /b 1\r\n" } }
+  ],
+  "args_extra": ["-V8Path", "{workDir}\\fake.cmd", "-InfoBasePath", "{workDir}\\ib\\\\\\"],
+  "expect": {
+    "stdoutContains": "\\ib\" /Out",
+    "stdoutNotContains": "\\ib\\\" /Out"
+  },
+  "expectError": true,
+  "noSnapshot": "проверяется путь в командной строке платформы; без {workDir} — PS разворачивает короткие имена 8.3 временного каталога"
+}

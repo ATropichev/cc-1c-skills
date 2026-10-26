@@ -1,0 +1,16 @@
+{
+  "name": "Относительный путь к базе уходит платформе абсолютным — от корня проекта, не от подкаталога",
+  "osOnly": "win32",
+  "preRun": [
+    { "writeFile": { "path": ".v8-project.json", "content": { "databases": [] } } },
+    { "writeFile": { "path": "fake.cmd", "content": "@echo off\r\necho ARGS: %*\r\nexit /b 1\r\n" } }
+  ],
+  "args_extra": ["-V8Path", "{workDir}\\fake.cmd", "-InfoBasePath", "ib"],
+  "cwd": "workDir/sub",
+  "expect": {
+    "stdoutContains": "\\ib\" /Out",
+    "stdoutNotContains": ["\\sub\\ib", "File=\"ib\""]
+  },
+  "expectError": true,
+  "noSnapshot": "проверяется путь в командной строке платформы; без {workDir} — PS разворачивает короткие имена 8.3 временного каталога"
+}

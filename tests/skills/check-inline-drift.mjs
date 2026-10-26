@@ -507,12 +507,18 @@ const FAMILIES = [
   },
   {
     // Пути файлов и каталогов — абсолютные от рабочего каталога: ibcmd отбрасывает ведущие «..».
-    // db-load-git PS уже делает Resolve-Path для -ConfigDir, поэтому копия только в py.
     name: 'paths: resolve_work_path', py: 'resolve_work_path', ps1: 'Resolve-WorkPath',
     variants: [{ id: 'base', authority: 'db-load-xml',
       consumers: ['db-create', 'db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf', 'db-load-dt',
-        'epf-build', 'epf-dump'],
-      consumersPy: ['db-load-git'] }],
+        'db-load-git', 'epf-build', 'epf-dump'] }],
+  },
+  {
+    // Очистка пути, переданного вызывающим: кавычки, хвостовой разделитель, отказ на «C:x».
+    name: 'paths: clean_path', py: 'clean_path', ps1: 'ConvertTo-CleanPath',
+    variants: [{ id: 'base', authority: 'db-load-xml',
+      consumers: ['db-cfe-admin', 'db-create', 'db-dump-cf', 'db-dump-dt', 'db-dump-xml', 'db-load-cf',
+        'db-load-dt', 'db-load-git', 'db-repo', 'db-run', 'db-update', 'epf-build', 'epf-dump',
+        'web-publish'] }],
   },
   {
     name: 'repository: resolve_settings', py: 'resolve_repository_settings', ps1: 'Resolve-RepositorySettings',

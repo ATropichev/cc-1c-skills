@@ -1,4 +1,4 @@
-﻿# epf-dump v1.20 — Dump external data processor or report (EPF/ERF) to XML sources
+﻿# epf-dump v1.21 — Dump external data processor or report (EPF/ERF) to XML sources
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # NB: *nix-раскладку платформы (/opt/1cv8/<ver>/1cv8, без .exe) знает только .py-порт — PS на *nix не исполняется.
 <#
@@ -246,6 +246,13 @@ function ConvertTo-CleanPath {
     if ($v.Length -ge 2 -and $v[0] -eq $v[-1] -and ($v[0] -eq '"' -or $v[0] -eq "'")) {
         $v = $v.Substring(1, $v.Length - 2).Trim()
     }
+    # «C:x» — от текущего каталога диска C, своего у каждого процесса: смысл не угадать, почти
+    # всегда это опечатка в «C:\x». Отказ с подсказкой, а не путь «где-то» у платформы.
+    if ($v -match '^[A-Za-z]:(?![\\/])') {
+        $drive = $v.Substring(0, 2)
+        Write-Host "Error: $ParamName is relative to the current directory of drive $drive ($Value) - use $drive\$($v.Substring(2)) or a path without a drive" -ForegroundColor Red
+        exit 1
+    }
     if ($v.Length -gt 3 -and ($v[-1] -eq '\' -or $v[-1] -eq '/')) { $v = $v.Substring(0, $v.Length - 1) }
     if ($v.Contains('"')) {
         Write-Host "Error: $ParamName contains a quote character: $Value" -ForegroundColor Red
@@ -260,8 +267,9 @@ function Resolve-InfoBasePath {
     # Относительный путь к базе — от корня проекта (каталог .v8-project.json, вверх от рабочего
     # каталога), как configSrc; без файла проекта — от рабочего каталога. Платформе уходит только
     # абсолютный: ibcmd считает относительный --db-path от каталога --data, а он у навыков временный.
-    # Абсолютный — только с диском и разделителем или UNC: «\x» и «C:x» .NET считает корневыми,
-    # а платформа разрешила бы их от своего каталога. «\x» берёт диск базового каталога.
+    # Абсолютный — только с диском и разделителем или UNC: «\x» .NET считает корневым, а платформа
+    # разрешила бы его от своего каталога; «\x» берёт диск базового каталога. «C:x» отклоняет ещё
+    # ConvertTo-CleanPath. Хвостовые разделители срезаются, но корень («C:\») остаётся корнем.
     param([string]$Path)
     if (-not $Path) { return $Path }
     if ($Path -notmatch '^([A-Za-z]:[\\/]|[\\/]{2})') {
@@ -278,7 +286,7 @@ function Resolve-InfoBasePath {
             else { [System.IO.Path]::Combine($base, $Path) }
         $Path = [System.IO.Path]::GetFullPath($joined)
     }
-    if ($Path.Length -gt 3) { $Path = $Path.TrimEnd('\', '/') }
+    while ($Path.Length -gt 3 -and ($Path[-1] -eq '\' -or $Path[-1] -eq '/')) { $Path = $Path.Substring(0, $Path.Length - 1) }
     return $Path
 }
 $InfoBasePath = Resolve-InfoBasePath $InfoBasePath
@@ -294,7 +302,7 @@ function Resolve-WorkPath {
             else { [System.IO.Path]::Combine($cwd, $Path) }
         $Path = [System.IO.Path]::GetFullPath($joined)
     }
-    if ($Path.Length -gt 3) { $Path = $Path.TrimEnd('\', '/') }
+    while ($Path.Length -gt 3 -and ($Path[-1] -eq '\' -or $Path[-1] -eq '/')) { $Path = $Path.Substring(0, $Path.Length - 1) }
     return $Path
 }
 $InputFile = ConvertTo-CleanPath $InputFile '-InputFile'

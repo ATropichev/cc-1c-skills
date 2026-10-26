@@ -1,0 +1,14 @@
+{
+  "name": "Путь с диском без разделителя (C:ib) — отказ с подсказкой, платформа не запускается",
+  "osOnly": "win32",
+  "preRun": [
+    { "writeFile": { "path": "fake.cmd", "content": "@echo off\r\necho ARGS: %*\r\nexit /b 1\r\n" } }
+  ],
+  "args_extra": ["-V8Path", "{workDir}\\fake.cmd", "-InfoBasePath", "C:ib"],
+  "expect": {
+    "stdoutContains": "-InfoBasePath is relative to the current directory of drive C:",
+    "stdoutNotContains": "ARGS:"
+  },
+  "expectError": true,
+  "noSnapshot": "отказ до запуска платформы — файлов на выходе нет"
+}
