@@ -74,6 +74,8 @@ Stop recording and finalize the MP4 file. Saves `.captions.json` next to the vid
 | `size` | number | File size in bytes |
 | `captions` | number | Number of captions collected during recording |
 
+- Throws with ffmpeg's error message if encoding failed; recording is stopped either way
+
 ### `isRecording()` → boolean
 
 Check if recording is active.

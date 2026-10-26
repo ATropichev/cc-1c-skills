@@ -1,4 +1,4 @@
-// web-test recording/capture v1.17 — Recording lifecycle (CDP screencast + ffmpeg pipe), screenshot, wait helpers.
+// web-test recording/capture v1.18 — Recording lifecycle (CDP screencast + ffmpeg pipe), screenshot, wait helpers.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { spawn } from 'child_process';
@@ -52,6 +52,27 @@ export async function wait(seconds) {
 // Video recording — CDP screencast + ffmpeg
 // ============================================================
 
+/** ffmpeg arguments: JPEG frames on stdin → H.264 MP4 at outputPath. */
+export function ffmpegEncodeArgs(fps, outputPath) {
+  return [
+    '-y',                          // overwrite output
+    '-hide_banner', '-loglevel', 'error', // stderr carries only errors (it becomes the error message)
+    '-f', 'image2pipe',            // input: piped images
+    '-framerate', String(fps),     // input framerate
+    '-i', '-',                     // read from stdin
+    '-c:v', 'libx264',            // H.264 codec
+    '-preset', 'fast',             // good quality/speed balance
+    '-crf', '23',                  // default quality (good for screen content)
+    // libx264 + yuv420p reject odd sizes, and a maximized window can give one (1920x945):
+    // crop to even width/height first (drops at most one pixel row/column).
+    '-vf', 'crop=trunc(iw/2)*2:trunc(ih/2)*2,scale=in_range=full:out_range=limited', // JPEG full→H.264 limited range
+    '-pix_fmt', 'yuv420p',        // broad compatibility
+    '-color_range', 'tv',          // limited range (16-235) — standard for H.264 players
+    '-movflags', '+faststart',     // web-friendly MP4
+    outputPath
+  ];
+}
+
 /** Check if video recording is active. */
 export function isRecording() {
   return recorder !== null;
@@ -87,22 +108,11 @@ export async function startRecording(outputPath, opts = {}) {
   mkdirSync(dirname(resolvedPath), { recursive: true });
 
   // Spawn ffmpeg process — single output file across context switches
-  const ffmpeg = spawn(ffmpegPath, [
-    '-y',                          // overwrite output
-    '-f', 'image2pipe',            // input: piped images
-    '-framerate', String(fps),     // input framerate
-    '-i', '-',                     // read from stdin
-    '-c:v', 'libx264',            // H.264 codec
-    '-preset', 'fast',             // good quality/speed balance
-    '-crf', '23',                  // default quality (good for screen content)
-    '-vf', 'scale=in_range=full:out_range=limited', // JPEG full→H.264 limited range
-    '-pix_fmt', 'yuv420p',        // broad compatibility
-    '-color_range', 'tv',          // limited range (16-235) — standard for H.264 players
-    '-movflags', '+faststart',     // web-friendly MP4
-    resolvedPath
-  ], { stdio: ['pipe', 'ignore', 'pipe'] });
+  const ffmpeg = spawn(ffmpegPath, ffmpegEncodeArgs(fps, resolvedPath), { stdio: ['pipe', 'ignore', 'pipe'] });
 
   ffmpeg.on('error', err => { if (recorder) recorder.ffmpegError += err.message; });
+  // A frame written while ffmpeg is dying fails with EPIPE; unhandled, it would crash the process.
+  ffmpeg.stdin.on('error', err => { if (recorder) recorder.ffmpegError += err.message; });
 
   const frameDuration = 1000 / fps;
   const speechRate = opts.speechRate || 70; // ms per character for smart TTS wait
@@ -202,6 +212,13 @@ export async function stopRecording() {
 
   // Close ffmpeg stdin and wait for encoding to finish
   await new Promise((resolve, reject) => {
+    // ffmpeg that already died (bad input size, codec error) never emits 'close' again:
+    // report its own error instead of waiting 30s for a misleading timeout.
+    if (ffmpeg.exitCode !== null || ffmpeg.signalCode !== null) {
+      reject(new Error(`ffmpeg exited early (${ffmpeg.exitCode ?? ffmpeg.signalCode}): ${recorder?.ffmpegError || ''}`));
+      return;
+    }
+
     const timeout = setTimeout(() => {
       ffmpeg.kill('SIGKILL');
       reject(new Error('ffmpeg timed out after 30s'));
@@ -218,6 +235,9 @@ export async function stopRecording() {
     });
 
     ffmpeg.stdin.end();
+  }).catch((err) => {
+    setRecorder(null); // a failed recording must not block the next startRecording()
+    throw err;
   });
 
   const duration = (Date.now() - startTime) / 1000;

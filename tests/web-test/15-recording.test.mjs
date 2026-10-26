@@ -130,4 +130,35 @@ export default async function({
     assert.ok(!after.includes('__web_test_highlight'), 'highlight overlay удалён');
     await closeForm();
   });
+
+  // Длительность самого видео (ffprobe), а не stopRecording().duration: та считается по часам
+  // и замедления видео не видит.
+  const { resolveFfmpeg, getAudioDuration } = await import(
+    new URL('../../.claude/skills/web-test/scripts/engine/recording/tts.mjs', import.meta.url));
+  const videoSeconds = (file) => getAudioDuration(file, resolveFfmpeg());
+
+  // Кадр нечетного размера (развернутое окно дает, например, 1920x945) гоним через тот же
+  // конвейер ffmpeg без браузера: размер кадра screencast зависит от масштаба экрана, и
+  // эмуляция окна на 125% дает четный кадр — такой шаг ничего бы не проверял.
+  await step('odd frame: кадр нечетного размера кодируется, ffmpeg не падает', async () => {
+    const { execFileSync, spawnSync } = await import('child_process');
+    const { ffmpegEncodeArgs } = await import(
+      new URL('../../.claude/skills/web-test/scripts/engine/recording/capture.mjs', import.meta.url));
+    const ffmpegPath = resolveFfmpeg();
+    const oddPath = path.resolve(dir, 'odd.mp4');
+    try { fs.unlinkSync(oddPath); } catch {}
+    // testsrc, а не однотонный color: крошечный однотонный JPEG image2pipe не распознает как mjpeg
+    const jpeg = execFileSync(ffmpegPath, ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc=size=101x51',
+      '-frames:v', '1', '-f', 'image2pipe', '-c:v', 'mjpeg', '-']);
+    const enc = spawnSync(ffmpegPath, ffmpegEncodeArgs(10, oddPath),
+      { input: Buffer.concat(Array(20).fill(jpeg)), timeout: 30000 });
+    const stderr = (enc.stderr?.toString() || '').split(/\r?\n/);
+    const why = stderr.find(l => /divisible/i.test(l)) || stderr.filter(Boolean).slice(-3).join(' | ');
+    assert.equal(enc.status, 0, `ffmpeg на кадре 101x51: ${why}`);
+    const size = execFileSync(ffmpegPath.replace(/ffmpeg(\.exe)?$/i, 'ffprobe$1'), ['-v', 'error',
+      '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', oddPath],
+      { encoding: 'utf8' }).trim();
+    log(`odd frame: ${size}, video=${videoSeconds(oddPath)}s`);
+    assert.equal(size, '100,50', 'кадр обрезан до четного размера');
+  });
 }
