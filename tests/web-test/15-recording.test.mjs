@@ -161,4 +161,40 @@ export default async function({
     log(`odd frame: ${size}, video=${videoSeconds(oddPath)}s`);
     assert.equal(size, '100,50', 'кадр обрезан до четного размера');
   });
+
+  await step('frame grid: на странице с анимацией видео не длиннее реального времени', async () => {
+    const p = await getPage();
+    const animPath = path.join(dir, 'animated.mp4');
+    try { fs.unlinkSync(animPath); } catch {}
+    try {
+      // Элемент перекрашивается на каждом кадре браузера: screencast шлет кадры чаще fps.
+      await p.evaluate(() => {
+        const d = document.createElement('div');
+        d.id = '__web_test_anim_probe';
+        d.style.cssText = 'position:fixed;left:0;top:0;width:40px;height:40px;z-index:999999';
+        document.body.appendChild(d);
+        let i = 0;
+        const tick = () => {
+          if (!d.isConnected) return;
+          d.style.background = i++ % 2 ? '#f00' : '#00f';
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+      // wall — от вызова startRecording до вызова stopRecording: финализация mp4 в видео не попадает,
+      // а поиск ffmpeg и его запуск — попадают в wall, но не в видео (отсюда нижний допуск)
+      const t0 = Date.now();
+      await startRecording(animPath, { fps: 10 });
+      await p.waitForTimeout(6000);
+      const wall = (Date.now() - t0) / 1000;
+      const result = await stopRecording();
+      const video = videoSeconds(result.file);
+      log(`animated: video=${video}s wall=${wall.toFixed(1)}s duration=${result.duration}s`);
+      assert.ok(video <= wall + 0.5, `видео не длиннее реального времени (video ${video}s, wall ${wall.toFixed(1)}s)`);
+      assert.ok(video >= wall - 1, `видео не короче реального времени (video ${video}s, wall ${wall.toFixed(1)}s)`);
+      assert.ok(Math.abs(result.duration - video) < 0.2, `duration = длина видео (${result.duration}s vs ${video}s)`);
+    } finally {
+      await p.evaluate(() => document.getElementById('__web_test_anim_probe')?.remove()).catch(() => {});
+    }
+  });
 }

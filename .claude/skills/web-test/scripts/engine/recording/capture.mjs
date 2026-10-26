@@ -110,88 +110,89 @@ export async function startRecording(outputPath, opts = {}) {
   // Spawn ffmpeg process — single output file across context switches
   const ffmpeg = spawn(ffmpegPath, ffmpegEncodeArgs(fps, resolvedPath), { stdio: ['pipe', 'ignore', 'pipe'] });
 
-  ffmpeg.on('error', err => { if (recorder) recorder.ffmpegError += err.message; });
-  // A frame written while ffmpeg is dying fails with EPIPE; unhandled, it would crash the process.
-  ffmpeg.stdin.on('error', err => { if (recorder) recorder.ffmpegError += err.message; });
-
   const frameDuration = 1000 / fps;
   const speechRate = opts.speechRate || 70; // ms per character for smart TTS wait
 
-  // Frame handler shared across CDP sessions (lives in recorder, not closure):
-  // when the active context switches, we attach a new CDP session and route its
-  // frames to the same ffmpeg pipe — preserving a single continuous timeline.
+  // This recording's own state. The closures below use `rec`, not the module-global
+  // `recorder`, so a late event of a finished recording cannot touch the next one.
+  const rec = {
+    cdp: null,
+    activePage: null,
+    ffmpeg,
+    startTime: Date.now(),
+    clockStart: performance.now(), // monotonic: the frame grid must not follow wall-clock jumps
+    outputPath: resolvedPath,
+    ffmpegError: '',
+    captions: [],
+    framesWritten: 0,
+    frameDuration,
+    lastFrameBuf: null,
+    speechRate,
+    // Video time of "now". Slots are filled lazily (next frame or flush), so this is exact
+    // without a flush, even before the first screencast frame arrives.
+    get videoTimeMs() { return slotNow() * frameDuration; },
+  };
+
+  // Subscribed at spawn: an ffmpeg that dies during recording (odd size, codec error) has
+  // already emitted 'close' by the time stopRecording runs. 'close' also means stderr is drained.
+  rec.closed = new Promise(resolve => ffmpeg.once('close', (code, signal) => resolve(code ?? signal)));
+  const appendError = (msg) => { rec.ffmpegError += msg; };
+  ffmpeg.on('error', err => appendError(err.message));
+  // A frame written while ffmpeg is dying fails with EPIPE; unhandled, it would crash the process.
+  // Not appended to the error: ffmpeg's own stderr says why it died.
+  ffmpeg.stdin.on('error', () => {});
+  ffmpeg.stderr.on('data', d => appendError(d.toString()));
+
+  // Frames sit on a grid of 1/fps slots from the start of recording: a page that repaints
+  // faster than fps (animation) must not stretch the video, or narration drifts from the picture.
+  // A slot is written once it is over, with the newest frame received by then (lastFrameBuf).
+  const slotNow = () => Math.floor((performance.now() - rec.clockStart) / frameDuration);
+  const fillUpTo = (slot, buf) => {
+    while (rec.framesWritten < slot) { ffmpeg.stdin.write(buf); rec.framesWritten++; }
+  };
+
+  // Frame handler shared across CDP sessions: when the active context switches, we attach
+  // a new CDP session and route its frames to the same ffmpeg pipe — one continuous timeline.
   const frameHandler = async ({ data, sessionId }, cdp) => {
-    if (!recorder) return;
     const buf = Buffer.from(data, 'base64');
-    const now = Date.now();
-    if (!ffmpeg.stdin.destroyed) {
-      let framesWritten = 0;
-      if (recorder.lastFrameTime && recorder.lastFrameBuf) {
-        const gap = now - recorder.lastFrameTime;
-        const dupes = Math.round(gap / frameDuration) - 1;
-        for (let i = 0; i < dupes && i < fps * 30; i++) {
-          ffmpeg.stdin.write(recorder.lastFrameBuf);
-          framesWritten++;
-        }
-      }
-      ffmpeg.stdin.write(buf);
-      framesWritten++;
-      recorder.videoTimeMs += framesWritten * frameDuration;
-    }
-    recorder.lastFrameTime = now;
-    recorder.lastFrameBuf = buf;
+    // Close the slots before this frame's one; the very first frame also covers the start.
+    if (ffmpeg.stdin.writable) fillUpTo(slotNow(), rec.lastFrameBuf || buf);
+    rec.lastFrameBuf = buf;
     try { await cdp.send('Page.screencastFrameAck', { sessionId }); } catch {}
   };
 
-  // Duplicate the last frame to fill wall-clock gaps (static periods, context switches).
-  const _flushFrames = () => {
-    if (!recorder || !recorder.lastFrameBuf || !recorder.lastFrameTime || ffmpeg.stdin.destroyed) return;
-    const now = Date.now();
-    const gap = now - recorder.lastFrameTime;
-    const dupes = Math.round(gap / frameDuration);
-    for (let i = 0; i < dupes; i++) {
-      ffmpeg.stdin.write(recorder.lastFrameBuf);
-      recorder.videoTimeMs += frameDuration;
-    }
-    if (dupes > 0) recorder.lastFrameTime = now;
+  // Write the slots that are over (static periods, context switches); `final` also writes
+  // the current, partly elapsed one.
+  rec._flushFrames = (final = false) => {
+    if (!rec.lastFrameBuf || !ffmpeg.stdin.writable) return;
+    fillUpTo(slotNow() + (final ? 1 : 0), rec.lastFrameBuf);
   };
 
   // Attach screencast to a specific page. Stops the old CDP first (if any).
   // Called by startRecording for the initial page, and by setActiveContext when
   // the active context changes mid-recording.
-  const _attachPage = async (targetPage) => {
-    if (recorder.cdp) {
-      _flushFrames(); // freeze the last frame of the outgoing page up to "now"
-      try { await recorder.cdp.send('Page.stopScreencast'); } catch {}
-      try { await recorder.cdp.detach(); } catch {}
-      recorder.cdp = null;
+  rec._attachPage = async (targetPage) => {
+    if (rec.cdp) {
+      rec._flushFrames(); // freeze the last frame of the outgoing page up to "now"
+      try { await rec.cdp.send('Page.stopScreencast'); } catch {}
+      try { await rec.cdp.detach(); } catch {}
+      rec.cdp = null;
     }
     const cdp = await targetPage.context().newCDPSession(targetPage);
     cdp.on('Page.screencastFrame', (ev) => frameHandler(ev, cdp));
     await cdp.send('Page.startScreencast', { format: 'jpeg', quality, everyNthFrame: 1 });
-    recorder.cdp = cdp;
-    recorder.activePage = targetPage;
+    rec.cdp = cdp;
+    rec.activePage = targetPage;
   };
 
-  setRecorder({
-    cdp: null,
-    activePage: null,
-    ffmpeg,
-    startTime: Date.now(),
-    outputPath: resolvedPath,
-    ffmpegError: '',
-    captions: [],
-    videoTimeMs: 0,
-    frameDuration,
-    lastFrameTime: null,
-    lastFrameBuf: null,
-    _flushFrames,
-    _attachPage,
-    speechRate,
-  });
-  ffmpeg.stderr.on('data', d => { recorder.ffmpegError += d.toString(); });
-
-  await _attachPage(page);
+  setRecorder(rec);
+  try {
+    await rec._attachPage(page);
+  } catch (err) {
+    setRecorder(null); // no screencast — do not leave a recording that nothing feeds
+    ffmpeg.kill();
+    throw err;
+  }
 }
 
 /**
@@ -201,37 +202,29 @@ export async function startRecording(outputPath, opts = {}) {
 export async function stopRecording() {
   if (!recorder) return { file: null, duration: 0, size: 0 };
 
-  const { cdp, ffmpeg, startTime, outputPath } = recorder;
+  const rec = recorder;
+  const { cdp, ffmpeg, outputPath } = rec;
 
-  // Final frame flush: write remaining frames to cover the gap since the last screencast frame
-  if (recorder._flushFrames) recorder._flushFrames();
+  // Final frame flush, current slot included; the video ends here, so does the duration
+  rec._flushFrames(true);
+  const duration = rec.framesWritten * rec.frameDuration / 1000;
 
   // Stop CDP screencast
   try { await cdp.send('Page.stopScreencast'); } catch {}
   try { await cdp.detach(); } catch {}
 
-  // Close ffmpeg stdin and wait for encoding to finish
+  // Close ffmpeg stdin and wait for encoding to finish. An ffmpeg that already died
+  // resolves rec.closed at once, so its own error is reported instead of a timeout.
   await new Promise((resolve, reject) => {
-    // ffmpeg that already died (bad input size, codec error) never emits 'close' again:
-    // report its own error instead of waiting 30s for a misleading timeout.
-    if (ffmpeg.exitCode !== null || ffmpeg.signalCode !== null) {
-      reject(new Error(`ffmpeg exited early (${ffmpeg.exitCode ?? ffmpeg.signalCode}): ${recorder?.ffmpegError || ''}`));
-      return;
-    }
-
     const timeout = setTimeout(() => {
       ffmpeg.kill('SIGKILL');
       reject(new Error('ffmpeg timed out after 30s'));
     }, 30000);
 
-    ffmpeg.on('close', (code) => {
+    rec.closed.then((code) => {
       clearTimeout(timeout);
       if (code === 0) resolve();
-      else reject(new Error(`ffmpeg exited with code ${code}: ${recorder?.ffmpegError || ''}`));
-    });
-    ffmpeg.on('error', (err) => {
-      clearTimeout(timeout);
-      reject(err);
+      else reject(new Error(`ffmpeg failed (${code}): ${rec.ffmpegError}`));
     });
 
     ffmpeg.stdin.end();
@@ -240,11 +233,10 @@ export async function stopRecording() {
     throw err;
   });
 
-  const duration = (Date.now() - startTime) / 1000;
   const stats = statSync(outputPath);
 
   // Preserve captions for addNarration()
-  setLastCaptions(recorder.captions || []);
+  setLastCaptions(rec.captions);
   setLastRecordingDuration(duration);
   if (lastCaptions.length) {
     const captionsPath = outputPath.replace(/\.[^.]+$/, '.captions.json');
