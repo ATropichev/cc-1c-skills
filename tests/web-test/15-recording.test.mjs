@@ -197,4 +197,31 @@ export default async function({
       await p.evaluate(() => document.getElementById('__web_test_anim_probe')?.remove()).catch(() => {});
     }
   });
+
+  // Ключа OpenAI в стенде нет: fetch подменяется, проверяется тело запроса, а mp3-ответ —
+  // секунда тишины, чтобы addNarration довел склейку до конца.
+  await step('openai instructions: addNarration передает instructions в тело запроса OpenAI', async () => {
+    const { execFileSync } = await import('child_process');
+    const mp3 = execFileSync(resolveFfmpeg(), ['-v', 'error', '-f', 'lavfi', '-i', 'anullsrc=r=24000:cl=mono',
+      '-t', '1', '-c:a', 'libmp3lame', '-f', 'mp3', '-']);
+    const bodies = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (url, init) => { bodies.push(JSON.parse(init.body)); return new Response(mp3); };
+    try {
+      const narrate = (extra) => addNarration(videoPath, {
+        provider: 'openai', apiKey: 'test', model: 'gpt-4o-mini-tts', ...extra,
+        captions: [{ text: 'a', speech: 'Проверка', time: 0 }],
+        outputPath: path.join(dir, 'openai-narrated.mp4'),
+      });
+      const withInstr = await narrate({ instructions: 'Говори по-русски без акцента' });
+      assert.ok(!withInstr.warnings?.length, `озвучка без предупреждений: ${withInstr.warnings}`);
+      assert.equal(bodies.length, 1, 'один запрос на одну подпись');
+      assert.equal(bodies[0].instructions, 'Говори по-русски без акцента', 'instructions в теле запроса');
+      assert.equal(bodies[0].model, 'gpt-4o-mini-tts', 'model в теле запроса');
+      await narrate({});
+      assert.ok(!('instructions' in bodies[1]), 'без opts.instructions поля в запросе нет');
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
 }

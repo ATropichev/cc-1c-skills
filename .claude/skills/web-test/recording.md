@@ -259,10 +259,13 @@ For OpenAI-compatible provider:
   "tts": {
     "provider": "openai",
     "apiKey": "sk-...",
-    "voice": "alloy"
+    "model": "gpt-4o-mini-tts",
+    "voice": "cedar",
+    "instructions": "Говори по-русски без акцента"
   }
 }
 ```
+If the model supports `instructions` (e.g. `gpt-4o-mini-tts`), a short one removes most of the English accent in Russian speech.
 
 For ElevenLabs:
 ```json
@@ -297,10 +300,11 @@ Generate TTS and merge audio with video. Call after `stopRecording()`.
 | `videoPath` | `string` | Path to the recorded MP4 file |
 | `opts.captions` | `Array` | Explicit captions (default: from last recording or `.captions.json`). Each caption may include a `voice` field to override the global voice for that segment |
 | `opts.provider` | `string` | `'edge'` (default), `'openai'`, or `'elevenlabs'` |
-| `opts.voice` | `string` | Voice name (provider-specific) |
+| `opts.voice` | `string` | Voice name (provider-specific; openai `cedar`/`marin` are not available on `tts-1`/`tts-1-hd`) |
 | `opts.apiKey` | `string` | API key (for openai) |
 | `opts.apiUrl` | `string` | Endpoint (for openai) |
 | `opts.model` | `string` | Model (for openai, default: `tts-1`) |
+| `opts.instructions` | `string` | Speaking style, for models that support it (openai, e.g. `gpt-4o-mini-tts`) |
 | `opts.ffmpegPath` | `string` | Path to ffmpeg binary |
 | `opts.outputPath` | `string` | Output file (default: `video-narrated.mp4`) |
 
