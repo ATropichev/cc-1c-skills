@@ -1,4 +1,4 @@
-// web-test nav/navigation v1.17 — Section navigation, openCommand, switchTab, navigateLink (Shift+F11), openFile.
+// web-test nav/navigation v1.18 — Section navigation, openCommand, switchTab, navigateLink (Shift+F11), openFile.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import {
@@ -13,6 +13,7 @@ import { dismissPendingErrors, checkForErrors } from '../core/errors.mjs';
 import { waitForStable, waitForCondition } from '../core/wait.mjs';
 import { highlight, unhighlight } from '../recording/highlight.mjs';
 import { returnFormState } from '../core/helpers.mjs';
+import { HTML_FILE_DIALOG_VISIBLE, selectFileInHtmlDialog } from '../forms/file-dialog.mjs';
 // Static import — ESM cycle that resolves at call time.
 import { pasteText } from '../core/clipboard.mjs';
 import { getFormState } from '../forms/state.mjs';
@@ -149,30 +150,11 @@ export async function openFile(filePath) {
     await page.keyboard.press('Control+o');
 
     // 2. Wait for the file selection dialog
-    const dialogOk = await waitForCondition(`(() => {
-      const ok = document.querySelector('#fileSelectDialogOk');
-      return ok && ok.offsetWidth > 0 ? true : false;
-    })()`, 3000);
+    const dialogOk = await waitForCondition(HTML_FILE_DIALOG_VISIBLE, 3000);
     if (!dialogOk) throw new Error("File selection dialog did not open (Ctrl+O)");
 
-    // 3. Click "выберите с диска" to trigger the native OS file picker
-    let fileChooser;
-    try {
-      [fileChooser] = await Promise.all([
-        page.waitForEvent('filechooser', { timeout: 5000 }),
-        page.click('a.underline.pointer'),
-      ]);
-    } catch (e) {
-      // Try closing the dialog before throwing
-      await page.keyboard.press('Escape');
-      throw new Error(`File chooser did not appear: ${e.message}`);
-    }
-
-    // 4. Set the file path and click OK
-    await fileChooser.setFiles(absPath);
-    await page.waitForTimeout(500);
-    await page.click('#fileSelectDialogOk');
-    await waitForStable(formBefore);
+    // 3-4. "выберите с диска" → browser file chooser → file → OK
+    await selectFileInHtmlDialog(absPath, formBefore);
 
     // 5. Check for security dialog
     const err = await checkForErrors();

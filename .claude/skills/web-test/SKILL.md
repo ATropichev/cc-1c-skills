@@ -273,7 +273,7 @@ Sections + all open tabs.
 
 **Return shape convention.** All action functions return a **flat form state** (same shape as `getFormState()`) with action-specific extras: `clicked`, `focused`, `selected`, `filled`, `notFilled`, `closed`, `opened`, `navigated`, `deleted`, `filtered`, `unfiltered`. Errors always sit at the top level under `.errors` (when present) — the exec-wrapper automatically throws on `.errors.modal` / `.errors.balloon`.
 
-#### `clickElement(text, { dblclick?, table?, expand?, modifier?, scroll? })` → form state
+#### `clickElement(text, { dblclick?, table?, expand?, modifier?, scroll?, file? })` → form state
 Click button, hyperlink, tab, navigation panel link, or grid row (fuzzy match).
 
 **Disabled controls throw.** `clickElement`, `fillFields`, and `selectValue` throw `"X" is disabled` on an unavailable control instead of reporting a fake success — check `getFormState().buttons[].disabled` / `fields[].disabled` first.
@@ -296,6 +296,11 @@ Click button, hyperlink, tab, navigation panel link, or grid row (fuzzy match).
   ```js
   await clickElement('ИСУ ФХД');                      // select row
   await clickElement('ИСУ ФХД', { expand: true });    // expand/collapse
+  ```
+- **Choose a file or folder** with `file`: for a button that opens a file selection dialog («Добавить из файла...», «Загрузить»), clicks it and picks the path in whatever dialog appears — the 1C «Выбор файлов» window, or (Windows) the native file/folder dialog of the 1C file system extension. A folder can be chosen only in the native dialog. Returns `file: { path, via: 'html' | 'native' }`; throws if the path is missing or no dialog appears within `timeout` (default 10 s):
+  ```js
+  await clickElement('Добавить из файла...', { file: 'build/МоёРасширение.cfe' });
+  await clickElement('Выбрать каталог', { file: 'C:/Exchange/out' });
   ```
 - **Focus a field** (last resort, when no `table` given): if `text` matches no clickable control but matches a form field's name/label, clicks the input to focus it **without changing its value**. Returns `focused: { field, id, ok }` (`ok: false` if the field couldn't take focus). Use it to drive focus-dependent keys:
   ```js
