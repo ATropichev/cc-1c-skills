@@ -1,4 +1,4 @@
-// web-test core/wait v1.18 — Smart wait helpers: DOM stability polling, JS-expression polling, CDP network monitor.
+// web-test core/wait v1.19 — Smart wait helpers: DOM stability polling, JS-expression polling, CDP network monitor.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { page, MAX_WAIT, BUSY_MAX_WAIT, POLL_INTERVAL, STABLE_CYCLES } from './state.mjs';
@@ -80,22 +80,29 @@ export async function startNetworkMonitor() {
   const client = await page.context().newCDPSession(page);
   await client.send('Network.enable');
 
-  let pending = 0;
+  // In-flight requests by id, not a bare counter: a request started before the monitor still
+  // reports its loadingFinished here — counted, it drove the counter to -1, and the "all done"
+  // state (exactly 0) never came, so the wait ran to its timeout. A redirect re-sends
+  // requestWillBeSent with the same id, which a Set also absorbs.
+  const inFlight = new Set();
   let total = 0;
   let lastZeroTime = null;
   const DEBOUNCE = 300;
+  // A purely client-side command (&НаКлиенте, no server call) sends nothing at all, and the
+  // loop below used to run to its full timeout (~10 s per click). Server buttons send their
+  // first request 30–80 ms after the click (measured), so a second of silence means none is coming.
+  const IDLE_GRACE = 1000;
 
-  client.on('Network.requestWillBeSent', () => {
-    pending++;
+  client.on('Network.requestWillBeSent', (e) => {
+    inFlight.add(e.requestId);
     total++;
     lastZeroTime = null;
   });
-  client.on('Network.loadingFinished', () => {
-    if (--pending === 0) lastZeroTime = Date.now();
-  });
-  client.on('Network.loadingFailed', () => {
-    if (--pending === 0) lastZeroTime = Date.now();
-  });
+  const settle = (e) => {
+    if (inFlight.delete(e.requestId) && inFlight.size === 0) lastZeroTime = Date.now();
+  };
+  client.on('Network.loadingFinished', settle);
+  client.on('Network.loadingFailed', settle);
 
   return {
     /** Wait until all network requests complete (300ms debounce) or UI element appears. */
@@ -113,10 +120,11 @@ export async function startNetworkMonitor() {
         })()`);
         if (ui) return;
 
-        // CDP debounce: pending===0 held for DEBOUNCE ms
-        if (total > 0 && pending === 0 && lastZeroTime !== null) {
+        // CDP debounce: nothing in flight held for DEBOUNCE ms
+        if (total > 0 && inFlight.size === 0 && lastZeroTime !== null) {
           if (Date.now() - lastZeroTime >= DEBOUNCE) return;
         }
+        if (total === 0 && Date.now() - start >= IDLE_GRACE) return;
       }
     },
     /** Detach CDP session. Always call this when done. */
