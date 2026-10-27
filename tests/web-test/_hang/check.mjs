@@ -1,4 +1,4 @@
-// web-test _hang/check v1.0 — automated verdict for the hang fixture
+// web-test _hang/check v1.1 — automated verdict for the hang fixture
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 //
 // The fixture itself cannot assert on the runner that is running it, and its expected result
@@ -8,7 +8,7 @@
 //   node tests/web-test/_hang/check.mjs
 //
 // Exit codes: 0 — the abort machinery works; 1 — it regressed; 2 — inconclusive (stand down).
-import { spawn } from 'child_process';
+import { spawn, spawnSync } from 'child_process';
 import { existsSync, readdirSync, readFileSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -57,6 +57,17 @@ function runFixture() {
   });
 }
 
+// Playwright's chrome.exe (Windows only). A renderer wedged in a JS loop outlives a browser shut
+// down right after its tab is closed — it then spins a core with no parent. Don't run other
+// web-test sessions alongside: the before/after diff would count them.
+function playwrightChromePids() {
+  if (process.platform !== 'win32') return null;
+  const r = spawnSync('powershell.exe', ['-NoProfile', '-Command',
+    "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -match 'ms-playwright' } | ForEach-Object { $_.ProcessId }"],
+    { encoding: 'utf8', windowsHide: true, timeout: 30000 });
+  return new Set((r.stdout || '').split(/\s+/).filter(Boolean));
+}
+
 function allureResults() {
   if (!existsSync(reportDir)) return [];
   return readdirSync(reportDir)
@@ -75,7 +86,10 @@ if (!await standIsUp()) {
 
 mkdirSync(reportDir, { recursive: true });
 console.log(`running fixture (deadline ${DEADLINE_MS / 1000}s)…`);
+const chromeBefore = playwrightChromePids();
 const { out, code, timedOut } = await runFixture();
+const chromeAfter = playwrightChromePids();
+const leftover = chromeBefore && chromeAfter ? [...chromeAfter].filter(p => !chromeBefore.has(p)) : null;
 const results = allureResults();
 
 const hung = results.find(r => /заблокированный JS-поток/.test(r.name));
@@ -109,6 +123,11 @@ const checks = [
     ok: hung?.status === 'failed',
     detail: hung ? `status=${hung.status}` : 'результата 01 нет — инкрементальная запись сломана',
   },
+  ...(leftover ? [{
+    name: 'процессов Chromium не осталось (зависший рендерер не пережил браузер)',
+    ok: leftover.length === 0,
+    detail: leftover.length ? `остались PID ${leftover.join(', ')}` : 'чисто',
+  }] : []),
   {
     name: 'код выхода 1 (падение зависшего теста — штатное)',
     ok: code === 1,

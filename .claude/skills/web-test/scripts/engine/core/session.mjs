@@ -1,4 +1,4 @@
-// web-test core/session v1.23 — Browser session lifecycle: connect/disconnect/attach/detach, multi-context registry.
+// web-test core/session v1.24 — Browser session lifecycle: connect/disconnect/attach/detach, multi-context registry.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { chromium } from 'playwright';
@@ -584,22 +584,31 @@ export async function closeContext(name) {
  * killed while the browser process is still alive. Playwright's Browser exposes no process()
  * for chromium.launch(); the pid comes from CDP — served by the browser process, it answers
  * even while a renderer is wedged.
+ *
+ * The same orphan appears when the wedged page was closed just before (abortContext closing the
+ * last tab): the browser drops the renderer from its own list at once but needs a moment to
+ * terminate it — shut the browser down in that moment and the renderer outlives it, invisible
+ * to CDP. Only the OS still knows it as a child of the browser, so the children are snapshotted
+ * before close() and the survivors reaped after.
  * @returns {Promise<boolean>} true when the browser closed gracefully
  */
 async function shutdownBrowser(b, closeMs = 10000) {
   if (!b) return true;
   const pid = await softDeadline(browserPid(b), 2000, 'browserPid');
+  const root = pid.ok ? pid.value : null;
   const pages = typeof b.pages === 'function' ? b.pages() : (b.contexts?.() || []).flatMap(c => c.pages());
   for (const p of pages) {
     if (p.isClosed()) continue;
     const alive = await softDeadline(p.evaluate(() => 1), 1000, 'renderer probe');
-    if (!alive.ok && pid.ok && pid.value) {
-      killProcessTree(pid.value);
+    if (!alive.ok && root) {
+      killProcessTree(root);
       return false;
     }
   }
+  const children = root ? descendantPids(root) : [];
   const closed = await softDeadline(Promise.resolve(b.close()), closeMs, 'browser.close');
-  if (!closed.ok && pid.ok) killProcessTree(pid.value);
+  if (!closed.ok && root) killProcessTree(root);
+  reapOrphans(children);
   return closed.ok;
 }
 
@@ -624,6 +633,46 @@ function killProcessTree(pid) {
   } else {
     try { process.kill(pid, 'SIGKILL'); } catch {}
   }
+}
+
+/** chrome.exe processes as [{ pid, parent }] — Windows only (elsewhere children die with the browser). */
+function chromeProcesses() {
+  if (process.platform !== 'win32') return [];
+  const r = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+    "Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | ForEach-Object { \"$($_.ProcessId) $($_.ParentProcessId)\" }"],
+    { encoding: 'utf8', timeout: 10000, windowsHide: true });
+  return (r.stdout || '').split(/\r?\n/).map(l => l.trim().split(/\s+/).map(Number))
+    .filter(([pid, parent]) => pid && parent).map(([pid, parent]) => ({ pid, parent }));
+}
+
+/** Child processes of a live browser, for reapOrphans() after it is gone. */
+async function browserChildren(b) {
+  if (!b || process.platform !== 'win32') return [];
+  const pid = await softDeadline(browserPid(b), 2000, 'browserPid');
+  return pid.ok && pid.value ? descendantPids(pid.value) : [];
+}
+
+/** All descendants of `root` as [{ pid, parent }]. */
+function descendantPids(root) {
+  const all = chromeProcesses();
+  const tree = new Set([root]);
+  const out = [];
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const p of all) {
+      if (!tree.has(p.pid) && tree.has(p.parent)) { tree.add(p.pid); out.push(p); grew = true; }
+    }
+  }
+  return out;
+}
+
+/** Kill those of `children` still running under the same parent — a reused pid has another one. */
+function reapOrphans(children) {
+  if (!children.length) return;
+  const now = new Map(chromeProcesses().map(p => [p.pid, p.parent]));
+  const left = children.filter(c => now.get(c.pid) === c.parent).map(c => c.pid);
+  if (!left.length) return;
+  spawnSync('taskkill', ['/F', ...left.flatMap(p => ['/PID', String(p)])], { timeout: 5000, stdio: 'ignore', windowsHide: true });
 }
 
 /**
@@ -759,6 +808,10 @@ export async function abortContext(name, { logoutMs = 3000, closeMs = 5000, park
   // with "Failed to open a new tab". When this is the only slot, tear the browser down on
   // purpose and reset state — the next createContext() then relaunches cleanly.
   const lastPageInTabMode = activeMode === 'tab' && contexts.size === 1;
+  // Closing that last tab takes Chromium down at once — too fast to terminate a wedged renderer,
+  // which then outlives it (see shutdownBrowser). The browser is gone before shutdownBrowser
+  // could look, so its children are snapshotted here.
+  const preClose = lastPageInTabMode ? await browserChildren(browser) : [];
 
   // ── Close. runBeforeUnload:false is what survives a wedged renderer: the browser process
   // tears the target down instead of asking the page's JS to agree.
@@ -798,6 +851,7 @@ export async function abortContext(name, { logoutMs = 3000, closeMs = 5000, park
   if (lastPageInTabMode) {
     out.notes.push('last tab closed — browser torn down, next createContext relaunches it');
     await shutdownBrowser(browser, 5000);
+    reapOrphans(preClose);
     setBrowser(null);
     setPage(null);
     setSessionPrefix(null);
