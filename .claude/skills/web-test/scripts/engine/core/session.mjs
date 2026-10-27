@@ -1,4 +1,4 @@
-// web-test core/session v1.24 — Browser session lifecycle: connect/disconnect/attach/detach, multi-context registry.
+// web-test core/session v1.25 — Browser session lifecycle: connect/disconnect/attach/detach, multi-context registry.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { chromium } from 'playwright';
@@ -251,19 +251,25 @@ export async function connect(url, { extensionPath } = {}) {
 
 /**
  * Best-effort POST /e1cib/logout on a slot to release the 1C session license.
- * Silent — if page is closed or session info missing, just returns.
+ * Never throws: false when the page is closed, session info is missing, or the POST failed.
  * @param {object} slot   { page, sessionPrefix, seanceId } from contexts Map
  * @param {number} [waitMs=500]  pause after logout fetch (gives 1C time to process)
  */
 async function logoutSlot(slot, waitMs = 500) {
-  if (!slot?.page || slot.page.isClosed() || !slot.seanceId || !slot.sessionPrefix) return;
+  if (!slot?.page || slot.page.isClosed() || !slot.seanceId || !slot.sessionPrefix) return false;
   try {
     const logoutUrl = `${slot.sessionPrefix}/e1cib/logout?seanceId=${slot.seanceId}`;
-    await slot.page.evaluate(async (url) => {
-      await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"root":{}}' });
+    const status = await slot.page.evaluate(async (url) => {
+      const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"root":{}}' });
+      return r.status;
     }, logoutUrl);
     await slot.page.waitForTimeout(waitMs);
-  } catch {}
+    return status >= 200 && status < 300;
+  } catch {
+    // A crashed renderer or a page torn down mid-call lands here — the caller falls back to
+    // nodeLogout, which needs neither.
+    return false;
+  }
 }
 
 /**
@@ -285,7 +291,7 @@ export async function disconnect() {
       // nodeLogout is the fallback that needs no renderer — it is what keeps the license
       // from leaking when the page is the thing that died.
       const own = await softDeadline(logoutSlot(slot), 3000, 'logoutSlot');
-      if (!own.ok) await nodeLogout(slot, 3000);
+      if (!(own.ok && own.value)) await nodeLogout(slot, 3000);
     }
     contexts.clear();
     setActiveContextName(null);
@@ -304,7 +310,7 @@ export async function disconnect() {
     if (!wasMultiContext) {
       const slot = { page, sessionPrefix, seanceId };
       const own = await softDeadline(logoutSlot(slot, 1000), 4000, 'logoutSlot');
-      if (!own.ok) await nodeLogout(slot, 3000);
+      if (!(own.ok && own.value)) await nodeLogout(slot, 3000);
     }
     await shutdownBrowser(browser);
     setBrowser(null);
@@ -588,8 +594,9 @@ export async function closeContext(name) {
  * The same orphan appears when the wedged page was closed just before (abortContext closing the
  * last tab): the browser drops the renderer from its own list at once but needs a moment to
  * terminate it — shut the browser down in that moment and the renderer outlives it, invisible
- * to CDP. Only the OS still knows it as a child of the browser, so the children are snapshotted
- * before close() and the survivors reaped after.
+ * to CDP. Only the OS still knows it as a child of the browser, so abortContext snapshots the
+ * children before that close and reaps the survivors after (browserChildren/reapOrphans) — not
+ * done here, where every page answered its probe: the snapshot costs a PowerShell run.
  * @returns {Promise<boolean>} true when the browser closed gracefully
  */
 async function shutdownBrowser(b, closeMs = 10000) {
@@ -599,16 +606,16 @@ async function shutdownBrowser(b, closeMs = 10000) {
   const pages = typeof b.pages === 'function' ? b.pages() : (b.contexts?.() || []).flatMap(c => c.pages());
   for (const p of pages) {
     if (p.isClosed()) continue;
+    // Only a breached deadline means a wedge; a rejection ("Execution context was destroyed"
+    // mid-navigation) is a live renderer and gets the graceful close.
     const alive = await softDeadline(p.evaluate(() => 1), 1000, 'renderer probe');
-    if (!alive.ok && root) {
+    if (alive.timedOut && root) {
       killProcessTree(root);
       return false;
     }
   }
-  const children = root ? descendantPids(root) : [];
   const closed = await softDeadline(Promise.resolve(b.close()), closeMs, 'browser.close');
   if (!closed.ok && root) killProcessTree(root);
-  reapOrphans(children);
   return closed.ok;
 }
 
@@ -780,7 +787,7 @@ export async function abortContext(name, { logoutMs = 3000, closeMs = 5000, park
       out.logout = 'node';
     } else {
       const own = await softDeadline(logoutSlot(slot, 0), logoutMs, 'logoutSlot');
-      if (own.ok) {
+      if (own.ok && own.value) {
         out.logout = 'page';
       } else {
         // Same origin ⇒ same seance namespace; a live sibling can post the logout for us.
@@ -831,6 +838,7 @@ export async function abortContext(name, { logoutMs = 3000, closeMs = 5000, park
     out.escalated = true;
     out.notes.push('close breached its deadline — killing the browser');
     await shutdownBrowser(browser, 5000);
+    reapOrphans(preClose);
     out.closed = 'browser-killed';
     contexts.clear();
     setBrowser(null);

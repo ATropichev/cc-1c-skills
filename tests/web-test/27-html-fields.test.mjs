@@ -57,7 +57,13 @@ export default async function({ navigateLink, getFormState, clickElement, closeF
     assert.includes(amb || '', 'pass a name', 'два видимых поля без имени — неоднозначность');
     await clickElement('Лог', { expand: false });
 
+    // Команда чисто клиентская: запросов к серверу нет. Ожидание сети после клика раньше
+    // упиралось в свой потолок (~10 с) — теперь отпускает через секунду тишины.
+    const t0 = Date.now();
     s = await clickElement('Переключить скрытое');
+    const ms = Date.now() - t0;
+    log(`client command click: ${ms}ms`);
+    assert.ok(ms < 6000, `клик по клиентской команде без 10-секундного ожидания сети (${ms}ms)`);
     assert.includes(names(s), 'ПолеСкрытое', 'Видимость=Истина — поле в htmlFields');
     assert.equal(await (await getHtmlFrame('ПолеСкрытое')).getByTestId('hidden-mark').innerText({ timeout: 3000 }), 'скрытое');
     s = await clickElement('Переключить скрытое');
@@ -74,6 +80,15 @@ export default async function({ navigateLink, getFormState, clickElement, closeF
     await closeForm();
     const back = await getFormState();
     assert.includes(names(back), 'ПолеЧата', 'окно закрыто — поле снова доступно');
+    await closeForm();
+  });
+
+  await step('форма только с HTML-полем (без полей ввода и кнопок) распознаётся', async () => {
+    const s = await navigateLink('Обработка.ТолькоHTML');
+    log(`form=${s.form} htmlFields=${JSON.stringify(s.htmlFields)}`);
+    assert.ok(s.form != null, 'форма распознана');
+    assert.deepEqual(s.htmlFields, [{ name: 'ПолеПанели' }], 'поле в htmlFields');
+    assert.equal(await (await getHtmlFrame()).getByTestId('panel').innerText({ timeout: 3000 }), 'панель');
     await closeForm();
   });
 }

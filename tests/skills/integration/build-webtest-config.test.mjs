@@ -1524,6 +1524,50 @@ export const steps = [
 `,
   },
 
+  // Обработка ТолькоHTML — форма, на которой видно ТОЛЬКО поле HTML-документа (без командной
+  // панели): ни поля ввода, ни кнопки. Регресс на распознавание такой формы (detectForm).
+  {
+    name: 'meta-compile: Обработка ТолькоHTML',
+    script: 'meta-compile/scripts/meta-compile',
+    input: {
+      type: 'DataProcessor', name: 'ТолькоHTML',
+    },
+    args: { '-JsonPath': '{inputFile}', '-OutputDir': '{workDir}' },
+    validate: { script: 'meta-validate/scripts/meta-validate', flag: '-ObjectPath', path: 'DataProcessors/ТолькоHTML' },
+  },
+  {
+    name: 'form-add: Форма обработки ТолькоHTML',
+    script: 'form-add/scripts/form-add',
+    args: { '-ObjectPath': '{workDir}/DataProcessors/ТолькоHTML.xml', '-FormName': 'ФормаОбработки' },
+  },
+  {
+    name: 'form-compile: Форма обработки ТолькоHTML',
+    script: 'form-compile/scripts/form-compile',
+    input: {
+      title: 'Только HTML',
+      properties: { commandBarLocation: 'None' },
+      events: { OnCreateAtServer: 'ПриСозданииНаСервере' },
+      attributes: [
+        { name: 'Объект', type: 'DataProcessorObject.ТолькоHTML', main: true },
+        { name: 'ПанельHTML', type: 'string' },
+      ],
+      elements: [
+        { html: 'ПолеПанели', path: 'ПанельHTML', titleLocation: 'none' },
+      ],
+    },
+    args: { '-JsonPath': '{inputFile}', '-OutputPath': '{workDir}/DataProcessors/ТолькоHTML/Forms/ФормаОбработки/Ext/Form.xml' },
+    validate: { script: 'form-validate/scripts/form-validate', flag: '-FormPath', path: 'DataProcessors/ТолькоHTML/Forms/ФормаОбработки/Ext/Form.xml' },
+  },
+  {
+    name: 'writeFile: ТолькоHTML form Module.bsl',
+    writeFile: 'DataProcessors/ТолькоHTML/Forms/ФормаОбработки/Ext/Form/Module.bsl',
+    content: `&НаСервере
+Процедура ПриСозданииНаСервере(Отказ, СтандартнаяОбработка)
+\tПанельHTML = "<html><body><h2 data-testid=""panel"">панель</h2></body></html>";
+КонецПроцедуры
+`,
+  },
+
   // Обработка МножественныйВыбор — основная форма с 4 полями типа «список значений».
   {
     name: 'form-add: Основная форма МножественныйВыбор',

@@ -1,4 +1,4 @@
-// web-test dom shared v1.11 — embedded JS function constants
+// web-test dom shared v1.12 — embedded JS function constants
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * Shared function strings embedded into page.evaluate() generators.
@@ -450,7 +450,7 @@ function resolveColumnByName(model, name) {
 // детектировалась (form=null). ANY_SEL добавляет контентные/интерактивные классы декораций, чтобы
 // такие формы регистрировались. form0 (рабочий стол, тоже полон гиперссылок) исключается фильтром n>0.
 const FORM_DETECT_EDIT_SEL = 'input.editInput[id], textarea[id], a.press[id]';
-const FORM_DETECT_ANY_SEL = FORM_DETECT_EDIT_SEL + ', .staticTextHyper[id], .frameButton[id], .checkbox[id], .radio[id], .tumblerItem[id], .grid[id]';
+const FORM_DETECT_ANY_SEL = FORM_DETECT_EDIT_SEL + ', .staticTextHyper[id], .frameButton[id], .checkbox[id], .radio[id], .tumblerItem[id], .grid[id], .htmlDocContainer[id]';
 
 /** Detect active form number. Picks form with most visible elements, skipping form0.
  *  When modalSurface is visible — prefer the highest-numbered form (modal dialog). */
@@ -500,7 +500,7 @@ function detectForms() {
   return { allForms: nums.sort((a, b) => a - b), formCount: nums.length, modal: hasVisibleModal() };
 }`;
 
-/** Read form state given prefix p. Returns { fields, buttons, tabs, texts, hyperlinks, table, iframes }. */
+/** Read form state given prefix p. Returns { fields, buttons, tabs, texts, hyperlinks, table, htmlFields }. */
 export const READ_FORM_FN = HEADERLESS_GRID_FN + GROUP_STATE_FN + HTML_FIELDS_FN + `
 function readForm(p) {
   const result = {};
@@ -823,13 +823,6 @@ function readForm(p) {
       });
     }
   }
-
-  // Iframes
-  let iframeCount = 0;
-  document.querySelectorAll('[id^="' + p + '"] iframe, iframe[id^="' + p + '"]').forEach(el => {
-    if (el.offsetWidth > 0 && el.offsetHeight > 0) iframeCount++;
-  });
-  if (iframeCount) result.iframes = iframeCount;
 
   // HTML document fields — only those on screen; getHtmlFrame() explains the hidden ones.
   const htmlFieldList = htmlFields(p).filter(f => f.visible).map(f => f.label ? { name: f.name, label: f.label } : { name: f.name });

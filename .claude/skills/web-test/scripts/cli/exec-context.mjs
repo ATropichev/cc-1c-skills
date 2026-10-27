@@ -1,4 +1,4 @@
-// web-test cli/exec-context v1.2 — buildContext + executeScript для run/exec/test
+// web-test cli/exec-context v1.3 — buildContext + executeScript для run/exec/test
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
@@ -133,8 +133,16 @@ export async function executeScript(code, { noRecord, timeoutMs } = {}) {
     console.error = origErr;
     return { ok: true, output: output.join('\n'), elapsed: elapsed(t0) };
   } catch (e) {
-    console.log = origLog;
-    console.error = origErr;
+    if (e instanceof DeadlineError) {
+      // The timed-out script keeps running through the teardown; its logs must not reach stdout,
+      // which carries the JSON result alone.
+      const toStderr = (prefix) => (...a) => process.stderr.write(prefix + a.map(String).join(' ') + '\n');
+      console.log = toStderr('[after timeout] ');
+      console.error = toStderr('[after timeout][ERR] ');
+    } else {
+      console.log = origLog;
+      console.error = origErr;
+    }
 
     // Auto-stop recording if active (prevents "Already recording" on next exec).
     // Bounded: after a script timeout the renderer may be the thing that hangs.

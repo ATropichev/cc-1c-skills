@@ -1,4 +1,4 @@
-// web-test _run-timeout/check v1.0 — automated verdict for `run --timeout`
+// web-test _run-timeout/check v1.1 — automated verdict for `run --timeout`
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 //
 // `run` bounds the script with --timeout and must then exit on its own: keep what the script
@@ -89,9 +89,11 @@ if (!await standIsUp()) {
 // ── 2. pending promise: bound fires, log survives ─────────────────────────────
 {
   const before = playwrightChromePids();
+  // Keeps logging after the deadline — through the teardown those logs must not reach stdout.
   const r = await runCli(['run', URL, '-', '--timeout=10000'],
-    "console.log('before');\nawait getFormState();\nawait new Promise(() => {});\n");
+    "console.log('before');\nawait getFormState();\nwhile (true) { await new Promise(r => setTimeout(r, 300)); console.log('tick'); }\n");
   check('зависший сценарий: run завершился сам', !r.timedOut, r.timedOut ? `убит через ${DEADLINE_MS / 1000}s` : `${Math.round(r.ms / 1000)}s`);
+  check('зависший сценарий: stdout — только JSON результата', r.json !== null, r.json ? 'разобран' : `stdout не JSON: ${r.out.slice(0, 120)}`);
   check('зависший сценарий: exit 2 и timedOut', r.code === 2 && r.json?.timedOut === true, `exit ${r.code}, timedOut=${r.json?.timedOut}`);
   check('зависший сценарий: вывод до зависания сохранён', /before/.test(r.json?.output || ''), `output=${JSON.stringify(r.json?.output)}`);
   const left = leftovers(before);
