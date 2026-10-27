@@ -1,0 +1,19 @@
+{
+  "name": "добавление существующего реквизита → отказ с подсказкой про set",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "name": "Данные",
+        "type": "ValueTable"
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "to change it: { \"set\": \"Данные\""
+  }
+}

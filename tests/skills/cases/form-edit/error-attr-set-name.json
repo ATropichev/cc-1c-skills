@@ -1,0 +1,19 @@
+{
+  "name": "set реквизита: name → отказ с подсказкой про rename",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "set": "Данные",
+        "name": "Строки"
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "\"rename\": \"Данные\""
+  }
+}

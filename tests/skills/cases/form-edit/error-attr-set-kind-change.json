@@ -1,0 +1,19 @@
+{
+  "name": "set реквизита: тип меняет вид (таблица → значение) → отказ",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "set": "Данные",
+        "type": "string"
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "тип меняет вид реквизита"
+  }
+}

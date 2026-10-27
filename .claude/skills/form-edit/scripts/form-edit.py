@@ -8001,6 +8001,10 @@ NS["dcsset"] = DCSSET_NS
 remove_log = []
 removed_count = 0
 left_handlers = []
+change_log = []
+section_changed = 0
+warn_log = []
+module_outline = None
 _module_scan = None
 
 
@@ -8647,10 +8651,10 @@ def update_excluded_commands(spec):
         form_changed += 1
 
 
-# Параметры формы: определения — как в form-compile; { remove: имя | [...] } — удалить.
+# Параметры формы — по порядку: определения — как в form-compile; { remove: имя | [...] } — удалить;
+# { set: имя, … } — изменить.
 def update_form_parameters(lst):
     global form_changed
-    adds = []
     for i, p in enumerate(lst if isinstance(lst, list) else [lst]):
         if isinstance(p, dict) and 'remove' in p:
             assert_op_keys(p, ['remove'], f"parameters[{i}] remove")
@@ -8672,24 +8676,21 @@ def update_form_parameters(lst):
                     remove_node_with_ws(sec)
                 form_log.append(f"  - параметр {n}")
                 form_changed += 1
+        elif isinstance(p, dict) and 'set' in p:
+            invoke_param_set(p, i)
         else:
-            adds.append(p)
-    if not adds:
-        return
-    sec = get_or_create_root_section('Parameters')
-    seen = set()
-    for p in adds:
-        _assert_edit_unique(str(p.get('name')), seen, 'parameter name')
-        for e in sec.findall("f:Parameter", NS):
-            if (e.get('name') or '').lower() == str(p.get('name')).lower():
-                fail(f"parameters: параметр '{p.get('name')}' уже есть в форме")
-    wrap = invoke_section_emit(lambda lines: emit_parameters(lines, adds, '\t'))[0]
-    for node in list(wrap.findall("f:Parameter", NS)):
-        wrap.remove(node)
-        node.tail = None
-        insert_node_at(sec, node, None, get_child_indent(sec))
-        form_log.append(f"  + параметр {node.get('name')}")
-        form_changed += 1
+            assert_op_keys(p, PARAM_KEYS, f"parameters[{i}] '{p.get('name')}'")
+            sec = get_or_create_root_section('Parameters')
+            for e in sec.findall("f:Parameter", NS):
+                if (e.get('name') or '').lower() == str(p.get('name')).lower():
+                    fail(f"parameters: параметр '{p.get('name')}' уже есть в форме; изменить: {{ \"set\": \"{p.get('name')}\", … }}")
+            wrap = invoke_section_emit(lambda lines: emit_parameters(lines, [p], '\t'))[0]
+            for node in list(wrap.findall("f:Parameter", NS)):
+                wrap.remove(node)
+                node.tail = None
+                insert_node_at(sec, node, None, get_child_indent(sec))
+                form_log.append(f"  + параметр {node.get('name')}")
+                form_changed += 1
 
 
 # Условное оформление: правила — как в form-compile; добавляются в конец оформления формы.
@@ -8753,6 +8754,559 @@ def add_form_command_interface(ci):
 
 # Обработчики, которые были в форме до правки: callType по умолчанию ставится только новым
 _preexisting_handlers = set(n for n in root.iter(f"{{{FORM_NS}}}Event", f"{{{FORM_NS}}}Action"))
+
+# ── 9f. Реквизиты, команды, параметры: изменение (set), колонки по пути ──
+
+# Ключи записей — те, что читают эмиттеры form-compile, с их синонимами. Эмиттер незнакомый ключ
+# молча пропустил бы — поэтому он ошибка.
+ATTR_KEYS = ['name', 'title', 'type', 'valueType', 'typeDescription', 'описаниеТипов', 'типЗначений', 'planner', 'chart', 'main', 'view', 'edit', 'savedData', 'save', 'fillCheck', 'fillChecking', 'useAlways', 'functionalOptions', 'columns', 'additionalColumns', 'settings']
+COL_KEYS = ['name', 'title', 'type', 'fillCheck', 'fillChecking', 'functionalOptions', 'view', 'edit', 'useAlways']
+CMD_KEYS = ['name', 'title', 'tooltip', 'use', 'shortcut', 'picture', 'loadTransparent', 'action', 'actions', 'callType', 'functionalOptions', 'representation', 'modifiesSavedData', 'currentRowUse', 'table', 'associatedTableElementId', 'используемаяТаблица']
+PARAM_KEYS = ['name', 'type', 'key']
+
+# Тег, который пишет ключ. Ключи одного тега меняются одной пробой (action + callType, picture + loadTransparent).
+ATTR_KEY_TAGS = CIDict({'title': 'Title', 'type': 'Type', 'valueType': 'Settings', 'typeDescription': 'Settings', 'описаниеТипов': 'Settings', 'типЗначений': 'Settings', 'planner': 'Settings', 'chart': 'Settings', 'view': 'View', 'edit': 'Edit', 'savedData': 'SavedData', 'save': 'Save', 'fillCheck': 'FillCheck', 'fillChecking': 'FillCheck', 'useAlways': 'UseAlways', 'functionalOptions': 'FunctionalOptions', 'settings': 'Settings'})
+COL_KEY_TAGS = CIDict({'title': 'Title', 'type': 'Type', 'fillCheck': 'FillCheck', 'fillChecking': 'FillCheck', 'functionalOptions': 'FunctionalOptions', 'view': 'View', 'edit': 'Edit'})
+CMD_KEY_TAGS = CIDict({'title': 'Title', 'tooltip': 'ToolTip', 'use': 'Use', 'shortcut': 'Shortcut', 'picture': 'Picture', 'loadTransparent': 'Picture', 'action': 'Action', 'actions': 'Action', 'callType': 'Action', 'functionalOptions': 'FunctionalOptions', 'representation': 'Representation', 'modifiesSavedData': 'ModifiesSavedData', 'currentRowUse': 'CurrentRowUse', 'table': 'AssociatedTableElementId', 'associatedTableElementId': 'AssociatedTableElementId', 'используемаяТаблица': 'AssociatedTableElementId'})
+PARAM_KEY_TAGS = CIDict({'type': 'Type', 'key': 'KeyParameter'})
+
+# Порядок детей — как пишут эмиттеры (он же платформенный). Settings динамического списка — после Columns.
+SECTION_CHILD_ORDER = {
+    'Attribute': ['Title', 'Type', 'Settings', 'MainAttribute', 'View', 'Edit', 'SavedData', 'Save', 'FillCheck', 'UseAlways', 'FunctionalOptions', 'Columns', 'Settings#DynamicList'],
+    'Column': ['Title', 'Type', 'FillCheck', 'FunctionalOptions', 'View', 'Edit'],
+    'Command': ['Title', 'ToolTip', 'Use', 'Shortcut', 'Picture', 'Action', 'FunctionalOptions', 'Representation', 'ModifiesSavedData', 'CurrentRowUse', 'AssociatedTableElementId'],
+    'Parameter': ['Type', 'KeyParameter'],
+    # Настройки динамического списка — порядок корпуса (ERP, БП, УТ)
+    'Settings': ['AutoFillAvailableFields', 'ManualQuery', 'DynamicDataRead', 'QueryText', 'Field', 'CalculatedField', 'Parameter', 'KeyType', 'MainTable', 'KeyField', 'AutoSaveUserSettings', 'GetInvisibleFieldPresentations', 'ListSettings'],
+}
+
+
+def get_section_child_rank(parent_tag, child):
+    ln = local_name(child)
+    if ln == 'Settings' and child.get(f"{{{XSI_NS}}}type") == 'DynamicList':
+        ln = 'Settings#DynamicList'
+    order = SECTION_CHILD_ORDER.get(parent_tag, [])
+    return order.index(ln) if ln in order else -1
+
+
+def insert_section_child(parent, child, indent=None):
+    if not indent:
+        indent = get_child_indent(parent)
+    rank = get_section_child_rank(local_name(parent), child)
+    ref = None
+    for c in parent:
+        if not _is_el(c):
+            continue
+        if get_section_child_rank(local_name(parent), c) > rank:
+            ref = c
+            break
+    insert_node_at(parent, child, ref, indent)
+
+
+def new_dsl_spec(h):
+    return ci_json(json.loads(json.dumps(h, ensure_ascii=False)))
+
+
+# Узел секции по имени (имена в 1С регистронезависимы)
+def find_section_item(section, tag, name):
+    for n in root.findall(f"f:{section}/f:{tag}", NS):
+        if (n.get('name') or '').lower() == name.lower():
+            return n
+    return None
+
+
+def test_main_attribute(node):
+    m = node.find("f:MainAttribute", NS)
+    return m is not None and (m.text or '').strip() == 'true'
+
+
+# Вид реквизита: таблица (свои колонки), динамический список или прочее
+def get_attr_kind(node):
+    ts = [(t.text or '').strip() for t in node.findall("f:Type/v8:Type", NS)]
+    if len(ts) == 1 and ts[0] in ('v8:ValueTable', 'v8:ValueTree'):
+        return 'table'
+    if len(ts) == 1 and ts[0] == 'cfg:DynamicList':
+        return 'dynlist'
+    return 'scalar'
+
+
+# Тип для вывода — в записи DSL: string(150), decimal(15,2), CatalogRef.X, A | B
+def format_type_node(t):
+    tys = [] if t is None else [c for c in t if _is_el(c) and etree.QName(c.tag).namespace == V8_NS and local_name(c) in ('Type', 'TypeSet', 'TypeId')]
+    if not tys:
+        return '(no type)'
+    parts = []
+    for ty in tys:
+        v = re.sub(r'^(cfg|v8|xs|d\d+p\d+):', '', (ty.text or '').strip())
+        if v == 'string':
+            l = t.find("v8:StringQualifiers/v8:Length", NS)
+            if l is not None and (l.text or '').strip() != '0':
+                v = f"string({(l.text or '').strip()})"
+        elif v == 'decimal':
+            d = t.find("v8:NumberQualifiers/v8:Digits", NS)
+            f = t.find("v8:NumberQualifiers/v8:FractionDigits", NS)
+            if d is not None:
+                v = f"decimal({(d.text or '').strip()},{(f.text or '').strip() if f is not None else '0'})"
+        elif v == 'dateTime':
+            df = t.find("v8:DateQualifiers/v8:DateFractions", NS)
+            if df is not None:
+                v = {'Date': 'date', 'Time': 'time', 'DateTime': 'dateTime'}.get((df.text or '').strip())
+        parts.append(v)
+    return ' | '.join(str(p) for p in parts)
+
+
+# Пробы эмиттеров form-compile: узел, каким его пишет создание формы, — с отступами места назначения
+def get_attr_probe(spec, attr_indent):
+    ind = attr_indent[1:] if len(attr_indent) > 0 else ''
+    wrap = invoke_section_emit(lambda lines: emit_attributes(lines, [spec], ind), normalize=True)[0]
+    return wrap.find("f:Attribute", NS)
+
+
+def get_column_probe(spec, attr_name):
+    a = get_attr_probe(new_dsl_spec({'name': attr_name, 'title': '', 'type': 'ValueTable', 'columns': [spec]}), "\t\t")
+    return a.find("f:Columns/f:Column", NS)
+
+
+def get_command_probe(spec):
+    wrap = invoke_section_emit(lambda lines: emit_commands(lines, [spec], '\t'), normalize=True)[0]
+    return wrap.find("f:Command", NS)
+
+
+def get_parameter_probe(spec):
+    wrap = invoke_section_emit(lambda lines: emit_parameters(lines, [spec], '\t'))[0]
+    return wrap.find("f:Parameter", NS)
+
+
+# Теги ключа: у узла снимаются, из пробы встают на своё место (в пробе нет — так и остаётся: false, null)
+def set_section_tags(target, probe, tags):
+    # Отступ детей — до снятия тегов: без детей у узла остаётся только закрывающий перевод строки
+    ci = get_child_indent(target)
+    for t in tags:
+        for x in list(target.findall(f"f:{t}", NS)):
+            remove_node_with_ws(x)
+    if probe is None:
+        return
+    for t in tags:
+        for pn in list(probe.findall(f"f:{t}", NS)):
+            old = get_node_indent(pn)
+            remove_node_with_ws(pn)
+            insert_section_child(target, pn, ci)
+            set_subtree_indent(pn, old, ci)
+
+
+def format_set_value(v):
+    if v is None:
+        return 'null'
+    if isinstance(v, bool):
+        return str(v).lower()
+    if isinstance(v, (str, int, float)):
+        return str(v)
+    return json.dumps(v, ensure_ascii=False, separators=(',', ':'))
+
+
+# Общий ход set: ключи — по тегам; на каждый тег одна проба со всеми его ключами. probe_of — проба по
+# ключам тега, x — что ей нужно знать об узле (имя, отступ)
+def set_section_node(node, props, key_tags, probe_of, x, label, c):
+    global section_changed
+    by_tag = {}
+    for k, v in props:
+        by_tag.setdefault(key_tags[k], []).append((k, v))
+    for tag, ps in by_tag.items():
+        given = [(k, v) for k, v in ps if v is not None]
+        probe = None
+        if given:
+            probe = probe_of(dict(given), x)
+        before_type = format_type_node(node.find("f:Type", NS)) if tag == 'Type' else None
+        set_section_tags(node, probe, [tag])
+        if tag == 'Type':
+            change_log.append(f"  ~ {label}: type {before_type} → {format_type_node(node.find('f:Type', NS))}")
+        else:
+            shown = ', '.join(f"{k} сброшено" if v is None else f"{k}={format_set_value(v)}" for k, v in ps)
+            change_log.append(f"  ~ {label}: {shown}")
+        section_changed += 1
+
+
+def assert_set_keys(props, key_tags, c, rename_hint, extra=()):
+    for k, _ in props:
+        if k.lower() == 'name':
+            fail(f"{c}: имя через set не меняется — переименование: {rename_hint}")
+        if k not in key_tags and k.lower() not in [e.lower() for e in extra]:
+            allowed = sorted(set(list(key_tags.keys()) + list(extra)), key=str.lower)
+            fail(f"{c}: неизвестный ключ '{k}'; допустимы: {', '.join(allowed)}")
+
+
+def _set_targets(op):
+    v = op.get('set')
+    items = v if isinstance(v, list) else [v]
+    return [str(x) for x in items if x is not None and str(x) != '']
+
+
+# Колонка по пути: Таблица.Колонка — своя колонка реквизита-таблицы; Объект.ТЧ.Колонка — доп. колонка
+# табличной части (группа AdditionalColumns table="Объект.ТЧ")
+def resolve_column_path(path, c):
+    segs = path.split('.')
+    if len(segs) < 2 or any(not s for s in segs):
+        fail(f"{c}: путь колонки — Таблица.Колонка или Объект.ТабличнаяЧасть.Колонка")
+    attr = find_section_item('Attributes', 'Attribute', segs[0])
+    if attr is None:
+        fail(f"{c}: реквизит '{segs[0]}' не найден в форме")
+    col_name = segs[-1]
+    cols = attr.find("f:Columns", NS)
+    if len(segs) == 2:
+        kind = get_attr_kind(attr)
+        if kind == 'dynlist':
+            fail(f"{c}: у динамического списка колонок нет — поля задаёт запрос (set + settings)")
+        if kind != 'table':
+            fail(f"{c}: у '{segs[0]}' нет своих колонок; доп. колонка табличной части — путь {segs[0]}.ТабличнаяЧасть.Колонка")
+        container = cols
+        table = None
+    else:
+        table = '.'.join(segs[:-1])
+        container = None
+        if cols is not None:
+            for g in cols.findall("f:AdditionalColumns", NS):
+                if (g.get('table') or '').lower() == table.lower():
+                    container = g
+                    break
+    col = None
+    if container is not None:
+        for x in container.findall("f:Column", NS):
+            if (x.get('name') or '').lower() == col_name.lower():
+                col = x
+                break
+    return {'Attr': attr, 'Container': container, 'Table': table, 'Name': col_name, 'Column': col, 'Columns': cols}
+
+
+def invoke_attr_set(op, idx):
+    ctx = f"attributes[{idx}] set"
+    targets = _set_targets(op)
+    if not targets:
+        fail(f"{ctx}: укажи имя реквизита (колонку — путём Таблица.Колонка) или список имён")
+    props = [(k, v) for k, v in op.items() if k.lower() != 'set']
+    if not props:
+        fail(f"{ctx}: не указано, что менять")
+    for t in targets:
+        c = f"{ctx} '{t}'"
+        if '.' in t:
+            r = resolve_column_path(t, c)
+            if r['Column'] is None:
+                fail(f"{c}: колонка не найдена")
+            if test_borrowed(r['Attr'].get('name'), 'attribute'):
+                fail(f"{c}: колонка заимствованного реквизита — её свойства задаёт исходная форма")
+            assert_set_keys(props, COL_KEY_TAGS, c, f'{{ "rename": "{t}", "to": "НовоеИмя" }}')
+
+            def col_probe(h, x):
+                h['name'] = x['Col']
+                return get_column_probe(new_dsl_spec(h), x['Attr'])
+            set_section_node(r['Column'], props, COL_KEY_TAGS, col_probe, {'Col': r['Column'].get('name'), 'Attr': r['Attr'].get('name')}, t, c)
+            continue
+        node = find_section_item('Attributes', 'Attribute', t)
+        if node is None:
+            fail(f"{c}: реквизит не найден в форме")
+        name = node.get('name')
+        if test_borrowed(name, 'attribute'):
+            fail(f"{c}: заимствованный реквизит — его свойства задаёт исходная форма")
+        for k, _ in props:
+            if k.lower() in ('columns', 'additionalcolumns'):
+                fail(f'{c}: колонки задаются путём: {{ "name": "{name}.Колонка", … }} — добавить, {{ "set": "{name}.Колонка", … }} — изменить, {{ "remove": "{name}.Колонка" }} — удалить')
+            if k.lower() == 'main':
+                fail(f"{c}: основной реквизит через set не назначается")
+        assert_set_keys(props, ATTR_KEY_TAGS, c, f'{{ "rename": "{name}", "to": "НовоеИмя" }}')
+        kind = get_attr_kind(node)
+        is_main = test_main_attribute(node)
+        settings_op = [(k, v) for k, v in props if k.lower() == 'settings']
+        rest = [(k, v) for k, v in props if k.lower() != 'settings']
+        for k, v in rest:
+            tag = ATTR_KEY_TAGS[k]
+            if k.lower() == 'type':
+                if v is None or str(v) == '':
+                    fail(f"{c}: тип обязателен — укажи новый")
+                if is_main:
+                    fail(f"{c}: тип основного реквизита не меняется — он задаёт, что редактирует форма")
+            if tag == 'Settings' and kind == 'dynlist':
+                fail(f"{c}: '{k}' к динамическому списку не применимо — его настройки меняет settings")
+        ind = get_node_indent(node)
+        if rest:
+            type_op = [v for k, v in rest if k.lower() == 'type']
+            if type_op:
+                pt = get_attr_probe(new_dsl_spec({'name': name, 'title': '', 'type': type_op[0]}), ind)
+                nk = get_attr_kind(pt)
+                if nk != kind:
+                    what = {'table': 'таблица значений/дерево', 'dynlist': 'динамический список', 'scalar': 'значение'}
+                    fail(f"{c}: тип меняет вид реквизита ({what[kind]} → {what[nk]}) — колонки, настройки и привязанные элементы не переносятся; такой реквизит удаляют и добавляют заново")
+
+            def attr_probe(h, x):
+                h['name'] = x['Name']
+                if not any(k.lower() == 'title' for k in h):
+                    h['title'] = ''
+                return get_attr_probe(new_dsl_spec(h), x['Ind'])
+            set_section_node(node, rest, ATTR_KEY_TAGS, attr_probe, {'Name': name, 'Ind': ind}, name, c)
+        if settings_op:
+            set_dyn_list_settings(node, settings_op[0][1], ind, c)
+
+
+# Настройки динамического списка: перевыпускаются только переданные части (запрос, основная таблица,
+# поля…); остальное — в том числе пользовательские настройки списка — остаётся
+def set_dyn_list_settings(node, v, ind, c):
+    global section_changed
+    name = node.get('name')
+    if get_attr_kind(node) != 'dynlist':
+        fail(f"{c}: settings — настройки динамического списка, а '{name}' не динамический список")
+    if not isinstance(v, dict) or not v:
+        fail(f'{c}: settings — объект с меняемыми настройками, напр. {{ "query": "…" }}')
+    target = None
+    for s in node.findall("f:Settings", NS):
+        if s.get(f"{{{XSI_NS}}}type") == 'DynamicList':
+            target = s
+            break
+    if target is None:
+        fail(f"{c}: у '{name}' нет настроек динамического списка")
+    with_ = get_attr_probe(new_dsl_spec({'name': name, 'title': '', 'settings': v}), ind).find("f:Settings", NS)
+    without = get_attr_probe(new_dsl_spec({'name': name, 'title': '', 'settings': {'_': None}}), ind).find("f:Settings", NS)
+    d = get_probe_diff(without, with_)
+    if not test_probe_diff(d):
+        change_log.append(f"  = {name}: settings — без изменений")
+        return
+    set_section_tags(target, with_, list(d['Tags']))
+    change_log.append(f"  ~ {name}: settings.{', settings.'.join(v.keys())} → {', '.join(get_probe_diff_label(d))}")
+    section_changed += 1
+
+
+# Новый реквизит формы — как в form-compile; id — из пула формы
+def add_form_attribute(attr, idx):
+    ctx = f"attributes[{idx}] '{attr.get('name')}'"
+    assert_op_keys(attr, ATTR_KEYS, ctx)
+    cols_in = attr.get('columns')
+    for col in (cols_in if isinstance(cols_in, list) else ([cols_in] if cols_in else [])):
+        if isinstance(col, dict):
+            assert_op_keys(col, COL_KEYS, f"{ctx} column '{col.get('name')}'")
+    add_in = attr.get('additionalColumns')
+    for g in (add_in if isinstance(add_in, list) else ([add_in] if add_in else [])):
+        if not isinstance(g, dict):
+            continue
+        assert_op_keys(g, ['table', 'columns'], f"{ctx} additionalColumns")
+        gc = g.get('columns')
+        for col in (gc if isinstance(gc, list) else ([gc] if gc else [])):
+            if isinstance(col, dict):
+                assert_op_keys(col, COL_KEYS, f"{ctx} additionalColumns '{g.get('table')}' column '{col.get('name')}'")
+    attrs_section = get_or_create_root_section('Attributes')
+    if attr.get("columns"):
+        dsl_col_names = set()
+        for col in attr["columns"]:
+            _assert_edit_unique(str(col["name"]), dsl_col_names, f"column name of '{attr['name']}'")
+    for a in attrs_section.findall("f:Attribute", NS):
+        if (a.get('name') or '').lower() == str(attr['name']).lower():
+            print(f"[ERROR] Attribute '{attr['name']}' already exists in form — attribute names must be unique; to change it: {{ \"set\": \"{attr['name']}\", … }}")
+            sys.exit(1)
+    if attr.get("main") is True:
+        for m in attrs_section.findall("f:Attribute/f:MainAttribute", NS):
+            if (m.text or '').strip() == 'true':
+                fail(f"attributes: '{attr['name']}' — у формы уже есть основной реквизит '{m.getparent().get('name')}'")
+    attr_child_indent = get_child_indent(attrs_section)
+    # Реквизиты пишет эмиттер form-compile (все его ключи); id — из пулов формы
+    wrap = invoke_section_emit(lambda lines: emit_attributes(lines, [attr], '\t'), normalize=True)[0]
+    for node in list(wrap.findall("f:Attribute", NS)):
+        attr_id = new_attr_id()
+        node.set('id', str(attr_id))
+        col_id = 1
+        for col in node.iterfind(".//f:Column", NS):
+            col.set('id', str(col_id))
+            col_id += 1
+        wrap.remove(node)
+        node.tail = None
+        # Условное оформление — последнее в Attributes: реквизит встаёт перед ним
+        ca_node = attrs_section.find("f:ConditionalAppearance", NS)
+        if ca_node is not None:
+            insert_node_at(attrs_section, node, ca_node, attr_child_indent)
+        else:
+            insert_into_container(attrs_section, node, None, attr_child_indent)
+        added_attrs.append(f"  + {node.get('name')}: {format_type_node(node.find('f:Type', NS))} (id={attr_id})")
+
+
+# Новая колонка существующего реквизита: { "name": "Таблица.Колонка" } / { "name": "Объект.ТЧ.Колонка" }.
+# id — следующий за наибольшим id колонок реквизита: Конфигуратор нумерует колонки внутри реквизита.
+def add_attr_column(op, idx):
+    path = str(op.get('name'))
+    c = f"attributes[{idx}] '{path}'"
+    assert_op_keys(op, [k for k in COL_KEYS if k != 'useAlways'], c)
+    if not op.get('type'):
+        fail(f"{c}: укажи тип колонки (type)")
+    r = resolve_column_path(path, c)
+    if r['Column'] is not None:
+        fail(f'{c}: колонка уже есть; изменить: {{ "set": "{path}", … }}')
+    if test_borrowed(r['Attr'].get('name'), 'attribute'):
+        fail(f"{c}: заимствованный реквизит — его колонки задаёт исходная форма")
+    attr = r['Attr']
+    cols = r['Columns']
+    if cols is None:
+        cols = etree.Element(f"{{{FORM_NS}}}Columns")
+        insert_section_child(attr, cols)
+    container = r['Container']
+    if container is None and r['Table'] is not None:
+        container = etree.Element(f"{{{FORM_NS}}}AdditionalColumns")
+        container.set('table', r['Table'])
+        insert_node_at(cols, container, None, get_child_indent(cols))
+    h = {k: v for k, v in op.items()}
+    h['name'] = r['Name']
+    col = get_column_probe(new_dsl_spec(h), attr.get('name'))
+    mx = 0
+    for x in attr.iterfind(".//f:Column", NS):
+        try:
+            n = int(x.get('id') or '')
+        except ValueError:
+            continue
+        if n > mx:
+            mx = n
+    col.set('id', str(mx + 1))
+    old = get_node_indent(col)
+    remove_node_with_ws(col)
+    if container is None:
+        # Своя колонка — перед группами доп. колонок
+        ref = cols.find("f:AdditionalColumns", NS)
+        insert_node_at(cols, col, ref, get_child_indent(cols))
+    else:
+        insert_node_at(container, col, None, get_child_indent(container))
+    set_subtree_indent(col, old, get_node_indent(col))
+    added_attrs.append(f"  + {path}: {format_type_node(col.find('f:Type', NS))} (id={mx + 1})")
+
+
+# Удаление колонки: элементы на ней — ошибка, как у реквизита; её поля в сохранении и «всегда
+# использовать» реквизита уходят вместе с ней (иначе платформа не загрузит форму)
+def remove_attr_column(path, idx):
+    global removed_count
+    c = f"attributes[{idx}] remove '{path}'"
+    r = resolve_column_path(path, c)
+    if r['Column'] is None:
+        fail(f"{c}: колонка не найдена")
+    attr_name = r['Attr'].get('name')
+    if test_borrowed(attr_name, 'attribute'):
+        fail(f"{c}: колонка заимствованного реквизита — платформа не даёт удалять её в расширении")
+    full = f"{r['Table']}.{r['Name']}" if r['Table'] is not None else f"{attr_name}.{r['Name']}"
+
+    def is_path(t):
+        return t.lower() == full.lower() or t.lower().startswith(full.lower() + ".")
+
+    users = []
+    for s in get_element_scopes():
+        for t in s.iterdescendants():
+            if _is_el(t) and local_name(t).endswith('DataPath') and is_path(_text(t)):
+                o = get_owner_element(t)
+                if o is not None:
+                    users.append(f"{o.get('name')} ({local_name(t)})")
+    ca = _form_ca()
+    if ca is not None:
+        for t in ca.iterdescendants():
+            if not _is_el(t) or etree.QName(t.tag).namespace != DCSSET_NS or local_name(t) not in ('left', 'right'):
+                continue
+            xt = t.get(f"{{{XSI_NS}}}type") or ""
+            if xt.endswith(':Field') and is_path(_text(t)):
+                users.append(f"условное оформление (отбор по {_text(t)})")
+    if users:
+        fail(f"{c}: к колонке привязаны: {'; '.join(_uniq(users))} — удали или перепривяжи их раньше (elements выполняются до attributes)")
+    for f in list(r['Attr'].findall("f:Save/f:Field", NS)) + list(r['Attr'].findall("f:UseAlways/f:Field", NS)):
+        if is_path(_text(f).lstrip('~')):
+            box = f.getparent()
+            remove_node_with_ws(f)
+            if get_first_element_child(box) is None:
+                remove_node_with_ws(box)
+            remove_log.append(f"  - {local_name(box)}/Field {_text(f)}")
+    container = r['Column'].getparent()
+    remove_node_with_ws(r['Column'])
+    if get_first_element_child(container) is None:
+        if local_name(container) == 'Columns':
+            remove_node_with_ws(container)
+        else:
+            for ch in list(container):
+                container.remove(ch)
+            container.text = None
+    remove_log.append(f"  - колонка {path}")
+    removed_count += 1
+    add_module_candidates(f"column '{path}' removed", rf"\.\s*{re.escape(r['Name'])}(?![\wА-Яа-яЁё])")
+
+
+# Строки модуля, где возможно обращение (к колонке — через строку таблицы, надёжно не найти): в отчёт
+def add_module_candidates(what, pattern):
+    scan = get_module_scan()
+    if not scan["Exists"]:
+        return
+    hits = [i + 1 for i, l in enumerate(scan["Code"]) if re.search(pattern, l, re.I)]
+    if not hits:
+        return
+    warn_log.append(f"[WARN] {what} — Module.bsl may still refer to it, check these lines:")
+    for l in hits:
+        warn_log.append(f"  {format_module_line(l)}")
+
+
+def format_module_line(l):
+    global module_outline
+    scan = get_module_scan()
+    if module_outline is None:
+        module_outline = get_module_outline(scan["Code"])
+    m = ''
+    for p in module_outline['procs']:
+        if p['start'] <= l <= p['end']:
+            m = f" [{p['name']}]"
+            break
+    return f"Module.bsl:{l}{m}: {scan['Lines'][l - 1].strip()}"
+
+
+def invoke_cmd_set(op, idx):
+    ctx = f"commands[{idx}] set"
+    targets = _set_targets(op)
+    if not targets:
+        fail(f"{ctx}: укажи имя команды или список имён")
+    props = [(k, v) for k, v in op.items() if k.lower() != 'set']
+    if not props:
+        fail(f"{ctx}: не указано, что менять")
+    for t in targets:
+        c = f"{ctx} '{t}'"
+        node = find_section_item('Commands', 'Command', t)
+        if node is None:
+            fail(f"{c}: команда не найдена в форме")
+        name = node.get('name')
+        assert_set_keys(props, CMD_KEY_TAGS, c, f'{{ "rename": "{name}", "to": "НовоеИмя" }}')
+        names = [k.lower() for k, _ in props]
+        if 'calltype' in names and not ('action' in names or 'actions' in names):
+            fail(f"{c}: callType задаётся вместе с action")
+        if 'action' in names or 'actions' in names:
+            old_acts = [(a.text or '').strip() for a in node.findall("f:Action", NS)]
+            acts = op.get('actions')
+            acts = acts if isinstance(acts, list) else ([acts] if acts else [])
+            new_acts = [str(x) for x in [op.get('action')] + [a.get('handler') if isinstance(a, dict) else None for a in acts] if x]
+            add_left_handlers([a for a in old_acts if a not in new_acts])
+
+        def cmd_probe(h, x):
+            h['name'] = x['Name']
+            if not any(k.lower() == 'title' for k in h):
+                h['title'] = ''
+            return get_command_probe(new_dsl_spec(h))
+        set_section_node(node, props, CMD_KEY_TAGS, cmd_probe, {'Name': name}, f"команда {name}", c)
+
+
+def invoke_param_set(op, idx):
+    ctx = f"parameters[{idx}] set"
+    targets = _set_targets(op)
+    if not targets:
+        fail(f"{ctx}: укажи имя параметра или список имён")
+    props = [(k, v) for k, v in op.items() if k.lower() != 'set']
+    if not props:
+        fail(f"{ctx}: не указано, что менять")
+    for t in targets:
+        c = f"{ctx} '{t}'"
+        node = find_section_item('Parameters', 'Parameter', t)
+        if node is None:
+            fail(f"{c}: параметр не найден в форме")
+        name = node.get('name')
+        assert_set_keys(props, PARAM_KEY_TAGS, c, f'{{ "rename": "{name}", "to": "НовоеИмя" }}')
+        for k, v in props:
+            if k.lower() == 'type' and (v is None or str(v) == ''):
+                fail(f"{c}: тип обязателен — укажи новый")
+
+        def param_probe(h, x):
+            h['name'] = x['Name']
+            return get_parameter_probe(new_dsl_spec(h))
+        set_section_node(node, props, PARAM_KEY_TAGS, param_probe, {'Name': name}, f"параметр {name}", c)
+
 
 # ── 10. Elements: добавление, перенос, изменение, удаление — по порядку ──
 
@@ -8825,12 +9379,10 @@ if elements_list:
             invoke_add(op, op_kinds[i], i)
     companion_count = (next_elem_id - start_elem_id) - added_count
 
-# ── 11. Add attributes ──────────────────────────────────────
+# ── 11. Attributes: удаление, изменение, колонки по пути, добавление — по порядку ──
 
 added_attrs = []
 
-# Удаления (запись с ключом remove) — по порядку, до добавлений
-attrs_list = []
 _attr_ops = defn.get("attributes") or []
 if not isinstance(_attr_ops, list):
     _attr_ops = [_attr_ops]
@@ -8838,58 +9390,21 @@ for _i, _op in enumerate(_attr_ops):
     if isinstance(_op, dict) and "remove" in _op:
         assert_op_keys(_op, ['remove'], f"attributes[{_i}] remove")
         for _rn in _names_of(_op.get("remove")):
-            remove_form_attribute({"remove": _rn}, _i)
+            if '.' in _rn:
+                remove_attr_column(_rn, _i)
+            else:
+                remove_form_attribute({"remove": _rn}, _i)
+    elif isinstance(_op, dict) and "set" in _op:
+        invoke_attr_set(_op, _i)
+    elif '.' in str(_op.get("name")):
+        add_attr_column(_op, _i)
     else:
-        attrs_list.append(_op)
-if attrs_list:
-    attrs_section = get_or_create_root_section('Attributes')
-    attr_child_indent = get_child_indent(attrs_section)
+        add_form_attribute(_op, _i)
 
-    # Уникальность имён реквизитов: внутри JSON-определения (+ колонки в пределах реквизита) и
-    # против уже существующих реквизитов формы.
-    dsl_attr_names = set()
-    for attr in attrs_list:
-        _assert_edit_unique(str(attr["name"]), dsl_attr_names, "attribute name")
-        if attr.get("columns"):
-            dsl_col_names = set()
-            for col in attr["columns"]:
-                _assert_edit_unique(str(col["name"]), dsl_col_names, f"column name of '{attr['name']}'")
-        for a in attrs_section.findall("f:Attribute", NS):
-            if (a.get('name') or '').lower() == str(attr['name']).lower():
-                print(f"[ERROR] Attribute '{attr['name']}' already exists in form — attribute names must be unique")
-                sys.exit(1)
-        if attr.get("main") is True:
-            for m in attrs_section.findall("f:Attribute/f:MainAttribute", NS):
-                if (m.text or '').strip() == 'true':
-                    fail(f"attributes: '{attr['name']}' — у формы уже есть основной реквизит '{m.getparent().get('name')}'")
-
-    # Реквизиты пишет эмиттер form-compile (все его ключи); id — из пулов формы
-    wrap = invoke_section_emit(lambda lines: emit_attributes(lines, attrs_list, '\t'), normalize=True)[0]
-    for node in list(wrap.findall("f:Attribute", NS)):
-        attr_id = new_attr_id()
-        node.set('id', str(attr_id))
-        col_id = 1
-        for col in node.iterfind(".//f:Column", NS):
-            col.set('id', str(col_id))
-            col_id += 1
-        wrap.remove(node)
-        node.tail = None
-        # Условное оформление — последнее в Attributes: реквизит встаёт перед ним
-        ca_node = attrs_section.find("f:ConditionalAppearance", NS)
-        if ca_node is not None:
-            insert_node_at(attrs_section, node, ca_node, attr_child_indent)
-        else:
-            insert_into_container(attrs_section, node, None, attr_child_indent)
-        t = node.find("f:Type/v8:Type", NS)
-        type_str = t.text if t is not None else "(no type)"
-        added_attrs.append(f"  + {node.get('name')}: {type_str} (id={attr_id})")
-
-# ── 12. Add commands ────────────────────────────────────────
+# ── 12. Commands: удаление, изменение, добавление — по порядку ──
 
 added_cmds = []
 
-# Удаления (запись с ключом remove) — по порядку, до добавлений
-cmds_list = []
 _cmd_ops = defn.get("commands") or []
 if not isinstance(_cmd_ops, list):
     _cmd_ops = [_cmd_ops]
@@ -8898,29 +9413,24 @@ for _i, _op in enumerate(_cmd_ops):
         assert_op_keys(_op, ['remove'], f"commands[{_i}] remove")
         for _rn in _names_of(_op.get("remove")):
             remove_form_command({"remove": _rn}, _i)
-    else:
-        cmds_list.append(_op)
-if cmds_list:
+        continue
+    if isinstance(_op, dict) and "set" in _op:
+        invoke_cmd_set(_op, _i)
+        continue
+    assert_op_keys(_op, CMD_KEYS, f"commands[{_i}] '{_op.get('name')}'")
     cmds_section = get_or_create_root_section('Commands')
-    cmd_child_indent = get_child_indent(cmds_section)
-
-    # Уникальность имён команд: внутри JSON-определения и против существующих команд формы.
-    dsl_cmd_names = set()
-    for cmd in cmds_list:
-        _assert_edit_unique(str(cmd["name"]), dsl_cmd_names, "command name")
-        for c in cmds_section.findall("f:Command", NS):
-            if (c.get('name') or '').lower() == str(cmd['name']).lower():
-                print(f"[ERROR] Command '{cmd['name']}' already exists in form — command names must be unique")
-                sys.exit(1)
-
+    for c in cmds_section.findall("f:Command", NS):
+        if (c.get('name') or '').lower() == str(_op['name']).lower():
+            print(f"[ERROR] Command '{_op['name']}' already exists in form — command names must be unique; to change it: {{ \"set\": \"{_op['name']}\", … }}")
+            sys.exit(1)
     # Команды пишет эмиттер form-compile (все его ключи); id — из пула формы
-    wrap = invoke_section_emit(lambda lines: emit_commands(lines, cmds_list, '\t'), normalize=True)[0]
+    wrap = invoke_section_emit(lambda lines: emit_commands(lines, [_op], '	'), normalize=True)[0]
     for node in list(wrap.findall("f:Command", NS)):
         cmd_id = new_cmd_id()
         node.set('id', str(cmd_id))
         wrap.remove(node)
         node.tail = None
-        insert_into_container(cmds_section, node, None, cmd_child_indent)
+        insert_into_container(cmds_section, node, None, get_child_indent(cmds_section))
         acts = node.findall("f:Action", NS)
         if len(acts) == 1:
             action_str = f" -> {acts[0].text or ''}"
@@ -9188,6 +9698,12 @@ if form_log:
         print(line)
     print()
 
+if change_log:
+    print("Changed attributes, commands, parameters:")
+    for line in change_log:
+        print(line)
+    print()
+
 if added_attrs:
     print("Added attributes:")
     for line in added_attrs:
@@ -9202,6 +9718,12 @@ if added_cmds:
 
 if handler_report:
     for line in handler_report:
+        print(line)
+    print()
+
+# Предупреждения — последним блоком: их должно быть видно
+if warn_log:
+    for line in warn_log:
         print(line)
     print()
 
@@ -9220,6 +9742,8 @@ if changed_count > 0:
     total_parts.append(f"{changed_count} property change(s)")
 if removed_count > 0:
     total_parts.append(f"{removed_count} removed")
+if section_changed > 0:
+    total_parts.append(f"{section_changed} attribute/command/parameter change(s)")
 if added_attrs:
     total_parts.append(f"{len(added_attrs)} attribute(s)")
 if added_cmds:

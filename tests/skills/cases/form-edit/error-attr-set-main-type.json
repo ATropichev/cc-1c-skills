@@ -1,0 +1,19 @@
+{
+  "name": "set реквизита: тип основного реквизита → отказ",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "set": "Объект",
+        "type": "CatalogObject.Товары"
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "тип основного реквизита не меняется"
+  }
+}

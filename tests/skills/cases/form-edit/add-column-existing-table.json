@@ -1,0 +1,22 @@
+{
+  "name": "Колонка в существующую таблицу значений — вместе с полем",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "name": "Данные.Код",
+        "type": "string(9)"
+      }
+    ],
+    "elements": [
+      {
+        "input": "ДанныеКод",
+        "path": "Данные.Код",
+        "into": "Данные"
+      }
+    ]
+  }
+}

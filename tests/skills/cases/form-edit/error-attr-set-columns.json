@@ -1,0 +1,24 @@
+{
+  "name": "set реквизита: columns → отказ с подсказкой про пути колонок",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "set": "Данные",
+        "columns": [
+          {
+            "name": "Х",
+            "type": "string"
+          }
+        ]
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "колонки задаются путём"
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "set команды: callType без action → отказ",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "commands": [
+      {
+        "set": "Загрузить",
+        "callType": "After"
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "callType задаётся вместе с action"
+  }
+}

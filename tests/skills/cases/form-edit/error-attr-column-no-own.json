@@ -1,0 +1,19 @@
+{
+  "name": "колонка по пути у реквизита без своих колонок → отказ с подсказкой про ТЧ",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "name": "Объект.Код",
+        "type": "string"
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "у 'Объект' нет своих колонок"
+  }
+}

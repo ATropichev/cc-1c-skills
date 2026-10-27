@@ -1,0 +1,20 @@
+{
+  "name": "добавление реквизита: неизвестный ключ → отказ со списком допустимых",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "name": "Новый",
+        "type": "string",
+        "updateModule": true
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "неизвестный ключ 'updateModule'"
+  }
+}

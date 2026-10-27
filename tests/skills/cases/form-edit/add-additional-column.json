@@ -1,0 +1,22 @@
+{
+  "name": "Доп. колонка табличной части основного реквизита",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "name": "Объект.Состав.Доп2",
+        "type": "boolean"
+      }
+    ],
+    "elements": [
+      {
+        "check": "СоставДоп2",
+        "path": "Объект.Состав.Доп2",
+        "into": "Состав"
+      }
+    ]
+  }
+}
