@@ -2483,7 +2483,8 @@ if (-not $stopped) {
 			foreach ($p in $outline.procs) { for ($k = $p.start; $k -le $p.end -and $k -le $bsl.Code.Count; $k++) { $inProc[$k] = $true } }
 			# @{} регистронезависим — как имена в BSL
 			$formAttrs = @{}
-			foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute", $nsMgr)) { $formAttrs[$a.GetAttribute('name')] = $a.GetAttribute('name') }
+			# В форме расширения модуль видит и реквизиты исходной формы (<BaseForm>) — замер на 8.3.24
+			foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute | f:BaseForm/f:Attributes/f:Attribute", $nsMgr)) { $formAttrs[$a.GetAttribute('name')] = $a.GetAttribute('name') }
 			$check24Ok = $true
 			foreach ($v in (Get-VarDeclarations $bsl.Mask)) {
 				if ($inProc[$v.Line] -or -not $formAttrs.ContainsKey($v.Name)) { continue }
@@ -2492,6 +2493,47 @@ if (-not $stopped) {
 			}
 			if ($check24Ok) { Report-OK "24. Module variables: no clash with form attributes" }
 		}
+	}
+}
+
+# --- Check 25: поля условного оформления формы ---
+# Поле отбора условного оформления — путь от реквизита формы. Устаревший путь (реквизит или колонку
+# переименовали, удалили) платформа принимает молча — правило просто не срабатывает (замер 8.3.24/8.3.27).
+# Глубже корня проверяются только колонки таблиц значений: поля объекта и динамического списка — в метаданных.
+if (-not $stopped) {
+	$caNode = $root.SelectSingleNode("f:Attributes/f:ConditionalAppearance", $nsMgr)
+	if ($null -eq $caNode) {
+		Report-OK "25. Conditional appearance fields: none"
+	} else {
+		$caNs = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
+		$caNs.AddNamespace("dcsset", "http://v8.1c.ru/8.1/data-composition-system/settings")
+		# @{} регистронезависим — как имена в 1С; в форме расширения — и реквизиты исходной формы
+		$caAttrs = @{}
+		foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute | f:BaseForm/f:Attributes/f:Attribute", $nsMgr)) { $caAttrs[$a.GetAttribute('name')] = $a }
+		$check25Ok = $true
+		$seen25 = @{}
+		foreach ($t in $caNode.SelectNodes(".//dcsset:left | .//dcsset:right", $caNs)) {
+			if (-not $t.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance").EndsWith(':Field')) { continue }
+			$path = $t.InnerText.Trim()
+			if (-not $path -or $seen25.ContainsKey($path)) { continue }
+			$seen25[$path] = $true
+			$segs = @($path -split '\.')
+			$attr = $caAttrs[$segs[0]]
+			if ($null -eq $attr) {
+				Report-Warn "25. Conditional appearance: filter field '$path' — the form has no attribute '$($segs[0])' — a stale path, the platform accepts it without error"
+				$check25Ok = $false
+				continue
+			}
+			$ts = @($attr.SelectNodes("f:Type/v8:Type", $nsMgr) | ForEach-Object { $_.InnerText.Trim() })
+			if ($segs.Count -lt 2 -or $ts.Count -ne 1 -or @('v8:ValueTable','v8:ValueTree') -notcontains $ts[0]) { continue }
+			$cols = @{}
+			foreach ($c in $attr.SelectNodes("f:Columns/f:Column | f:Columns/f:AdditionalColumns/f:Column", $nsMgr)) { $cols[$c.GetAttribute('name')] = $true }
+			if (-not $cols.ContainsKey($segs[1])) {
+				Report-Warn "25. Conditional appearance: filter field '$path' — attribute '$($segs[0])' has no column '$($segs[1])' — a stale path, the platform accepts it without error"
+				$check25Ok = $false
+			}
+		}
+		if ($check25Ok) { Report-OK "25. Conditional appearance fields: rooted at form attributes" }
 	}
 }
 

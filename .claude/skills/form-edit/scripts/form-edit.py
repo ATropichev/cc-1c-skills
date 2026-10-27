@@ -8812,9 +8812,9 @@ SECTION_CHILD_ORDER = {
     'Column': ['Title', 'Type', 'FillCheck', 'FunctionalOptions', 'View', 'Edit'],
     'Command': ['Title', 'ToolTip', 'Use', 'Shortcut', 'Picture', 'Action', 'FunctionalOptions', 'Representation', 'ModifiesSavedData', 'CurrentRowUse', 'AssociatedTableElementId'],
     'Parameter': ['Type', 'KeyParameter'],
-    # Настройки динамического списка — порядок корпуса (ERP, БП, УТ)
+    # Настройки динамического списка — порядок корпуса (ERP, БП, УТ); KeyField и MainTable вместе не встречаются — как в эмиттере
     'ListSettings': ['filter', 'dataParameters', 'order', 'conditionalAppearance', 'item', 'itemsViewMode', 'itemsUserSettingID', 'itemsUserSettingPresentation'],
-    'Settings': ['AutoFillAvailableFields', 'ManualQuery', 'DynamicDataRead', 'QueryText', 'Field', 'CalculatedField', 'Parameter', 'KeyType', 'MainTable', 'KeyField', 'AutoSaveUserSettings', 'GetInvisibleFieldPresentations', 'ListSettings'],
+    'Settings': ['AutoFillAvailableFields', 'ManualQuery', 'DynamicDataRead', 'QueryText', 'Field', 'CalculatedField', 'Parameter', 'KeyType', 'KeyField', 'MainTable', 'AutoSaveUserSettings', 'GetInvisibleFieldPresentations', 'ListSettings'],
 }
 
 

@@ -1,0 +1,31 @@
+{
+  "name": "Условное оформление: поле отбора от несуществующего реквизита и несуществующей колонки ТЗ — предупреждение; существующее — нет",
+  "setup": "fixture:module-handler-orphan",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "DataProcessors/БезДействия/Forms/Форма/Ext/Form.xml",
+        "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Form xmlns=\"http://v8.1c.ru/8.3/xcf/logform\" xmlns:dcscor=\"http://v8.1c.ru/8.1/data-composition-system/core\" xmlns:dcsset=\"http://v8.1c.ru/8.1/data-composition-system/settings\" xmlns:v8=\"http://v8.1c.ru/8.1/data/core\" xmlns:v8ui=\"http://v8.1c.ru/8.1/data/ui\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" version=\"2.17\">\n\t<AutoCommandBar name=\"ФормаКоманднаяПанель\" id=\"-1\"/>\n\t<Attributes>\n\t\t<Attribute name=\"Данные\" id=\"1\">\n\t\t\t<Type>\n\t\t\t\t<v8:Type>v8:ValueTable</v8:Type>\n\t\t\t</Type>\n\t\t\t<Columns>\n\t\t\t\t<Column name=\"А\" id=\"1\">\n\t\t\t\t\t<Type>\n\t\t\t\t\t\t<v8:Type>xs:string</v8:Type>\n\t\t\t\t\t</Type>\n\t\t\t\t</Column>\n\t\t\t</Columns>\n\t\t</Attribute>\n\t\t<ConditionalAppearance>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter>\n\t\t\t\t\t<dcsset:item xsi:type=\"dcsset:FilterItemComparison\">\n\t\t\t\t\t\t<dcsset:left xsi:type=\"dcscor:Field\">Данные.А</dcsset:left>\n\t\t\t\t\t\t<dcsset:comparisonType>Filled</dcsset:comparisonType>\n\t\t\t\t\t</dcsset:item>\n\t\t\t\t</dcsset:filter>\n\t\t\t\t<dcsset:appearance/>\n\t\t\t</dcsset:item>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter>\n\t\t\t\t\t<dcsset:item xsi:type=\"dcsset:FilterItemComparison\">\n\t\t\t\t\t\t<dcsset:left xsi:type=\"dcscor:Field\">Данные.Б</dcsset:left>\n\t\t\t\t\t\t<dcsset:comparisonType>Filled</dcsset:comparisonType>\n\t\t\t\t\t</dcsset:item>\n\t\t\t\t</dcsset:filter>\n\t\t\t\t<dcsset:appearance/>\n\t\t\t</dcsset:item>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter>\n\t\t\t\t\t<dcsset:item xsi:type=\"dcsset:FilterItemComparison\">\n\t\t\t\t\t\t<dcsset:left xsi:type=\"dcscor:Field\">Строки</dcsset:left>\n\t\t\t\t\t\t<dcsset:comparisonType>Filled</dcsset:comparisonType>\n\t\t\t\t\t</dcsset:item>\n\t\t\t\t</dcsset:filter>\n\t\t\t\t<dcsset:appearance/>\n\t\t\t</dcsset:item>\n\t\t</ConditionalAppearance>\n\t</Attributes>\n</Form>\n"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "DataProcessors/БезДействия/Forms/Форма/Ext/Form/Module.bsl",
+        "content": ""
+      }
+    }
+  ],
+  "noSnapshot": "валидатор файлы не меняет; проверяется вывод",
+  "expect": {
+    "stdoutContains": [
+      "[WARN]  25. Conditional appearance: filter field 'Данные.Б' — attribute 'Данные' has no column 'Б'",
+      "[WARN]  25. Conditional appearance: filter field 'Строки' — the form has no attribute 'Строки'"
+    ],
+    "stdoutNotContains": [
+      "'Данные.А'"
+    ]
+  }
+}
