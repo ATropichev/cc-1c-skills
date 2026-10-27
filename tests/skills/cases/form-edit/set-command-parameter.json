@@ -1,0 +1,27 @@
+{
+  "name": "set команды (заголовок, обработчик, сочетание клавиш) и параметра (тип, ключевой)",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "commands": [
+      {
+        "set": "Загрузить",
+        "title": "Загрузить из файла",
+        "action": "ЗагрузитьИзФайла",
+        "shortcut": "Ctrl+L"
+      }
+    ],
+    "parameters": [
+      {
+        "set": "Основание",
+        "type": "CatalogRef.Товары | String(10)",
+        "key": true
+      }
+    ]
+  },
+  "expect": {
+    "stdoutContains": "ЗагрузитьОбработка"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "Модуль формы: переменная модуля с именем реквизита в многострочном Перем и во втором Перем строки — ошибка",
+  "setup": "fixture:module-handler-orphan",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "DataProcessors/БезДействия/Forms/Форма/Ext/Form/Module.bsl",
+        "content": "&НаКлиенте\nПерем А,\n\tОбъект;\n&НаСервере\nПерем Б; Перем объект Экспорт;\n\n&НаКлиенте\nПроцедура ПолеПриИзменении(Элемент)\nКонецПроцедуры\n\n&НаКлиенте\nПроцедура Выполнить(Команда)\nКонецПроцедуры\n"
+      }
+    }
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] 24. Module variable 'Объект' (Module.bsl:3)",
+      "[ERROR] 24. Module variable 'объект' (Module.bsl:5)"
+    ]
+  }
+}

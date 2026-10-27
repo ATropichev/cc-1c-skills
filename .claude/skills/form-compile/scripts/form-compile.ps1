@@ -1,4 +1,4 @@
-﻿# form-compile v1.216 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.217 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -3117,50 +3117,57 @@ function Get-FormModuleTemplate {
 
 # Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
 # от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
-# заменён на ""; Literals — @{ Line; Text; Prefix — код этой строки слева от литерала }.
+# заменён на ""; Mask — строки той же длины, литералы и комментарии — пробелами (позиции в маске —
+# позиции в тексте); Literals — @{ Line; Text; Prefix — код этой строки слева от литерала; Col — начало
+# текста литерала в строке, -1 у многострочного }.
 function Get-BslScan([string]$text) {
 	$lines = $text -replace "`r", "" -split "`n"
 	$code = New-Object System.Collections.ArrayList
+	$mask = New-Object System.Collections.ArrayList
 	$lits = New-Object System.Collections.ArrayList
-	$inStr = $false; $cur = $null; $curLine = 0; $curPrefix = ""
+	$inStr = $false; $cur = $null; $curLine = 0; $curPrefix = ""; $curCol = -1
 	for ($i = 0; $i -lt $lines.Count; $i++) {
 		$line = $lines[$i]
 		# строка без кавычек вне литерала — только отрезать комментарий (посимвольный разбор в PS медленный)
 		if (-not $inStr -and $line.IndexOf('"') -lt 0) {
 			$k = $line.IndexOf('//')
 			[void]$code.Add($(if ($k -ge 0) { $line.Substring(0, $k) } else { $line }))
+			[void]$mask.Add($(if ($k -ge 0) { $line.Substring(0, $k) + (' ' * ($line.Length - $k)) } else { $line }))
 			continue
 		}
 		$sb = New-Object System.Text.StringBuilder
+		$mk = $line.ToCharArray()
 		$j = 0
 		if ($inStr) {
 			# продолжение многострочного литерала: пробелы, затем «|»
 			while ($j -lt $line.Length -and ($line[$j] -eq ' ' -or $line[$j] -eq "`t")) { $j++ }
 			# строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
-			if ($j + 1 -lt $line.Length -and $line[$j] -eq '/' -and $line[$j + 1] -eq '/') { [void]$code.Add(""); continue }
-			if ($j -lt $line.Length -and $line[$j] -eq '|') { $j++ }
+			if ($j + 1 -lt $line.Length -and $line[$j] -eq '/' -and $line[$j + 1] -eq '/') { [void]$code.Add(""); [void]$mask.Add(' ' * $line.Length); continue }
+			if ($j -lt $line.Length -and $line[$j] -eq '|') { $mk[$j] = ' '; $j++ }
 			$cur += "`n"
+			$curCol = -1
 		}
 		while ($j -lt $line.Length) {
 			$c = $line[$j]
 			if ($inStr) {
 				if ($c -eq '"') {
-					if ($j + 1 -lt $line.Length -and $line[$j + 1] -eq '"') { $cur += '"'; $j += 2; continue }
+					if ($j + 1 -lt $line.Length -and $line[$j + 1] -eq '"') { $cur += '"'; $mk[$j] = ' '; $mk[$j + 1] = ' '; $j += 2; continue }
 					$inStr = $false
-					[void]$lits.Add(@{ Line = $curLine; Text = $cur; Prefix = $curPrefix })
+					[void]$lits.Add(@{ Line = $curLine; Text = $cur; Prefix = $curPrefix; Col = $curCol })
 					[void]$sb.Append('""')
 					$j++
 					continue
 				}
-				$cur += $c; $j++; continue
+				$cur += $c; $mk[$j] = ' '; $j++; continue
 			}
-			if ($c -eq '/' -and $j + 1 -lt $line.Length -and $line[$j + 1] -eq '/') { break }
-			if ($c -eq '"') { $inStr = $true; $cur = ""; $curLine = $i + 1; $curPrefix = $sb.ToString(); $j++; continue }
+			if ($c -eq '/' -and $j + 1 -lt $line.Length -and $line[$j + 1] -eq '/') { for ($q = $j; $q -lt $mk.Length; $q++) { $mk[$q] = ' ' }; break }
+			if ($c -eq '"') { $inStr = $true; $cur = ""; $curLine = $i + 1; $curPrefix = $sb.ToString(); $curCol = $j + 1; $j++; continue }
 			[void]$sb.Append($c); $j++
 		}
 		[void]$code.Add($sb.ToString())
+		[void]$mask.Add([string]::new($mk))
 	}
-	return @{ Lines = $lines; Code = $code.ToArray(); Literals = $lits.ToArray() }
+	return @{ Lines = $lines; Code = $code.ToArray(); Mask = $mask.ToArray(); Literals = $lits.ToArray() }
 }
 
 # Процедуры и функции модуля (имя, первая и последняя строка; первая — с аннотациями над заголовком)

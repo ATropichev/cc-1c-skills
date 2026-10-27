@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-info v1.13 — Analyze 1C managed form structure
+# form-info v1.14 — Analyze 1C managed form structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -193,18 +193,22 @@ def read_module_text(path):
 def get_bsl_scan(text):
     lines = text.replace("\r", "").split("\n")
     code = []
+    mask = []
     lits = []
     in_str = False
     cur = None
     cur_line = 0
     cur_prefix = ""
+    cur_col = -1
     for i, line in enumerate(lines):
         # строка без кавычек вне литерала — только отрезать комментарий
         if not in_str and '"' not in line:
             k = line.find('//')
             code.append(line[:k] if k >= 0 else line)
+            mask.append(line[:k] + ' ' * (len(line) - k) if k >= 0 else line)
             continue
         sb = []
+        mk = list(line)
         j = 0
         if in_str:
             # продолжение многострочного литерала: пробелы, затем «|»
@@ -213,39 +217,49 @@ def get_bsl_scan(text):
             # строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
             if line.startswith('//', j):
                 code.append("")
+                mask.append(' ' * len(line))
                 continue
             if j < len(line) and line[j] == '|':
+                mk[j] = ' '
                 j += 1
             cur += "\n"
+            cur_col = -1
         while j < len(line):
             c = line[j]
             if in_str:
                 if c == '"':
                     if j + 1 < len(line) and line[j + 1] == '"':
                         cur += '"'
+                        mk[j] = ' '
+                        mk[j + 1] = ' '
                         j += 2
                         continue
                     in_str = False
-                    lits.append({"Line": cur_line, "Text": cur, "Prefix": cur_prefix})
+                    lits.append({"Line": cur_line, "Text": cur, "Prefix": cur_prefix, "Col": cur_col})
                     sb.append('""')
                     j += 1
                     continue
                 cur += c
+                mk[j] = ' '
                 j += 1
                 continue
             if c == '/' and j + 1 < len(line) and line[j + 1] == '/':
+                for q in range(j, len(mk)):
+                    mk[q] = ' '
                 break
             if c == '"':
                 in_str = True
                 cur = ""
                 cur_line = i + 1
                 cur_prefix = "".join(sb)
+                cur_col = j + 1
                 j += 1
                 continue
             sb.append(c)
             j += 1
         code.append("".join(sb))
-    return {"Lines": lines, "Code": code, "Literals": lits}
+        mask.append("".join(mk))
+    return {"Lines": lines, "Code": code, "Mask": mask, "Literals": lits}
 
 
 # Процедуры и функции модуля (имя, первая и последняя строка; первая — с аннотациями над заголовком)

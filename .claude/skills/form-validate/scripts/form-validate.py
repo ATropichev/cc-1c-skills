@@ -3,6 +3,7 @@
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
+import bisect
 import os
 import re
 import sys
@@ -1045,18 +1046,22 @@ ELEMENT_PROPERTY_TAGS = {
 def get_bsl_scan(text):
     lines = text.replace("\r", "").split("\n")
     code = []
+    mask = []
     lits = []
     in_str = False
     cur = None
     cur_line = 0
     cur_prefix = ""
+    cur_col = -1
     for i, line in enumerate(lines):
         # строка без кавычек вне литерала — только отрезать комментарий
         if not in_str and '"' not in line:
             k = line.find('//')
             code.append(line[:k] if k >= 0 else line)
+            mask.append(line[:k] + ' ' * (len(line) - k) if k >= 0 else line)
             continue
         sb = []
+        mk = list(line)
         j = 0
         if in_str:
             # продолжение многострочного литерала: пробелы, затем «|»
@@ -1065,39 +1070,49 @@ def get_bsl_scan(text):
             # строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
             if line.startswith('//', j):
                 code.append("")
+                mask.append(' ' * len(line))
                 continue
             if j < len(line) and line[j] == '|':
+                mk[j] = ' '
                 j += 1
             cur += "\n"
+            cur_col = -1
         while j < len(line):
             c = line[j]
             if in_str:
                 if c == '"':
                     if j + 1 < len(line) and line[j + 1] == '"':
                         cur += '"'
+                        mk[j] = ' '
+                        mk[j + 1] = ' '
                         j += 2
                         continue
                     in_str = False
-                    lits.append({"Line": cur_line, "Text": cur, "Prefix": cur_prefix})
+                    lits.append({"Line": cur_line, "Text": cur, "Prefix": cur_prefix, "Col": cur_col})
                     sb.append('""')
                     j += 1
                     continue
                 cur += c
+                mk[j] = ' '
                 j += 1
                 continue
             if c == '/' and j + 1 < len(line) and line[j + 1] == '/':
+                for q in range(j, len(mk)):
+                    mk[q] = ' '
                 break
             if c == '"':
                 in_str = True
                 cur = ""
                 cur_line = i + 1
                 cur_prefix = "".join(sb)
+                cur_col = j + 1
                 j += 1
                 continue
             sb.append(c)
             j += 1
         code.append("".join(sb))
-    return {"Lines": lines, "Code": code, "Literals": lits}
+        mask.append("".join(mk))
+    return {"Lines": lines, "Code": code, "Mask": mask, "Literals": lits}
 
 # Процедуры и функции модуля (имя, первая и последняя строка; первая — с аннотациями над заголовком)
 # и области (имя, строки #Область и #КонецОбласти, вложенность). Строки нумеруются с 1.
@@ -1132,6 +1147,27 @@ def get_module_outline(lines):
 
 
 # Текст модуля формы; None — модуль не в UTF-8 (с заменой символов имена процедур не найти — лучше сказать прямо)
+# Объявления Перем по операторам (в строке их может быть несколько, оператор — на несколько строк):
+# имя и строка, где оно стоит
+def get_var_declarations(mask):
+    text = '\n'.join(mask)
+    starts = []
+    acc = 0
+    for l in mask:
+        starts.append(acc)
+        acc += len(l) + 1
+    out = []
+    for m in re.finditer(r'(?:^|;)\s*(?:Перем|Var)\s+([^;]*)', text, re.I | re.M):
+        off = m.start(1)
+        for part in m.group(1).split(','):
+            nm = re.sub(r'\s+(Экспорт|Export)\s*$', '', part, flags=re.I).strip()
+            if nm:
+                pos = off + part.index(nm)
+                out.append({'Name': nm, 'Line': bisect.bisect_right(starts, pos)})
+            off += len(part) + 1
+    return out
+
+
 def read_module_text(path):
     try:
         with open(path, encoding='utf-8-sig', newline='') as fh:
@@ -2429,15 +2465,11 @@ def main():
                 for a in root.findall(f"{{{F_NS}}}Attributes/{{{F_NS}}}Attribute"):
                     form_attrs[(a.get('name') or '').lower()] = a.get('name')
                 check24_ok = True
-                for i, code in enumerate(bsl['Code']):
-                    m = re.match(r'^\s*(?:Перем|Var)\s+([^;]*)', code, re.I)
-                    if in_proc[i + 1] or not m:
+                for v in get_var_declarations(bsl['Mask']):
+                    if in_proc[v['Line']] or v['Name'].lower() not in form_attrs:
                         continue
-                    for v in m.group(1).split(','):
-                        v = re.sub(r'\s+(Экспорт|Export)\s*$', '', v, flags=re.I).strip()
-                        if v and v.lower() in form_attrs:
-                            report_error(f"24. Module variable '{v}' (Module.bsl:{i + 1}) has the same name as form attribute '{form_attrs[v.lower()]}' — the platform will not compile the module: \"Переменная с указанным именем уже определена\"")
-                            check24_ok = False
+                    report_error(f"24. Module variable '{v['Name']}' (Module.bsl:{v['Line']}) has the same name as form attribute '{form_attrs[v['Name'].lower()]}' — the platform will not compile the module: \"Переменная с указанным именем уже определена\"")
+                    check24_ok = False
                 if check24_ok:
                     report_ok("24. Module variables: no clash with form attributes")
 

@@ -1,0 +1,19 @@
+{
+  "name": "вложенная таблица ТЗ: колонка-владелец не таблица → отказ",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "name": "Данные2.А.Х",
+        "type": "string"
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "колонка 'Данные2.А' — не таблица значений"
+  }
+}

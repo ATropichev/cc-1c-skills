@@ -1,0 +1,19 @@
+{
+  "name": "доп. колонка: нет такой табличной части у объекта → отказ со списком",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "name": "Объект.Товры.Скидка",
+        "type": "decimal(15,2)"
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "у объекта нет табличной части 'Товры'; есть: Состав"
+  }
+}

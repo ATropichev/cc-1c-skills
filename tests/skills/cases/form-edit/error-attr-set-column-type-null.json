@@ -1,0 +1,19 @@
+{
+  "name": "set колонки: type null → отказ",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "set": "Данные.Сумма",
+        "type": null
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "тип обязателен"
+  }
+}

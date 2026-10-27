@@ -2262,50 +2262,57 @@ function Read-ModuleText([string]$path) {
 
 # Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
 # от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
-# заменён на ""; Literals — @{ Line; Text; Prefix — код этой строки слева от литерала }.
+# заменён на ""; Mask — строки той же длины, литералы и комментарии — пробелами (позиции в маске —
+# позиции в тексте); Literals — @{ Line; Text; Prefix — код этой строки слева от литерала; Col — начало
+# текста литерала в строке, -1 у многострочного }.
 function Get-BslScan([string]$text) {
 	$lines = $text -replace "`r", "" -split "`n"
 	$code = New-Object System.Collections.ArrayList
+	$mask = New-Object System.Collections.ArrayList
 	$lits = New-Object System.Collections.ArrayList
-	$inStr = $false; $cur = $null; $curLine = 0; $curPrefix = ""
+	$inStr = $false; $cur = $null; $curLine = 0; $curPrefix = ""; $curCol = -1
 	for ($i = 0; $i -lt $lines.Count; $i++) {
 		$line = $lines[$i]
 		# строка без кавычек вне литерала — только отрезать комментарий (посимвольный разбор в PS медленный)
 		if (-not $inStr -and $line.IndexOf('"') -lt 0) {
 			$k = $line.IndexOf('//')
 			[void]$code.Add($(if ($k -ge 0) { $line.Substring(0, $k) } else { $line }))
+			[void]$mask.Add($(if ($k -ge 0) { $line.Substring(0, $k) + (' ' * ($line.Length - $k)) } else { $line }))
 			continue
 		}
 		$sb = New-Object System.Text.StringBuilder
+		$mk = $line.ToCharArray()
 		$j = 0
 		if ($inStr) {
 			# продолжение многострочного литерала: пробелы, затем «|»
 			while ($j -lt $line.Length -and ($line[$j] -eq ' ' -or $line[$j] -eq "`t")) { $j++ }
 			# строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
-			if ($j + 1 -lt $line.Length -and $line[$j] -eq '/' -and $line[$j + 1] -eq '/') { [void]$code.Add(""); continue }
-			if ($j -lt $line.Length -and $line[$j] -eq '|') { $j++ }
+			if ($j + 1 -lt $line.Length -and $line[$j] -eq '/' -and $line[$j + 1] -eq '/') { [void]$code.Add(""); [void]$mask.Add(' ' * $line.Length); continue }
+			if ($j -lt $line.Length -and $line[$j] -eq '|') { $mk[$j] = ' '; $j++ }
 			$cur += "`n"
+			$curCol = -1
 		}
 		while ($j -lt $line.Length) {
 			$c = $line[$j]
 			if ($inStr) {
 				if ($c -eq '"') {
-					if ($j + 1 -lt $line.Length -and $line[$j + 1] -eq '"') { $cur += '"'; $j += 2; continue }
+					if ($j + 1 -lt $line.Length -and $line[$j + 1] -eq '"') { $cur += '"'; $mk[$j] = ' '; $mk[$j + 1] = ' '; $j += 2; continue }
 					$inStr = $false
-					[void]$lits.Add(@{ Line = $curLine; Text = $cur; Prefix = $curPrefix })
+					[void]$lits.Add(@{ Line = $curLine; Text = $cur; Prefix = $curPrefix; Col = $curCol })
 					[void]$sb.Append('""')
 					$j++
 					continue
 				}
-				$cur += $c; $j++; continue
+				$cur += $c; $mk[$j] = ' '; $j++; continue
 			}
-			if ($c -eq '/' -and $j + 1 -lt $line.Length -and $line[$j + 1] -eq '/') { break }
-			if ($c -eq '"') { $inStr = $true; $cur = ""; $curLine = $i + 1; $curPrefix = $sb.ToString(); $j++; continue }
+			if ($c -eq '/' -and $j + 1 -lt $line.Length -and $line[$j + 1] -eq '/') { for ($q = $j; $q -lt $mk.Length; $q++) { $mk[$q] = ' ' }; break }
+			if ($c -eq '"') { $inStr = $true; $cur = ""; $curLine = $i + 1; $curPrefix = $sb.ToString(); $curCol = $j + 1; $j++; continue }
 			[void]$sb.Append($c); $j++
 		}
 		[void]$code.Add($sb.ToString())
+		[void]$mask.Add([string]::new($mk))
 	}
-	return @{ Lines = $lines; Code = $code.ToArray(); Literals = $lits.ToArray() }
+	return @{ Lines = $lines; Code = $code.ToArray(); Mask = $mask.ToArray(); Literals = $lits.ToArray() }
 }
 
 # Процедуры и функции модуля (имя, первая и последняя строка; первая — с аннотациями над заголовком)
@@ -2434,6 +2441,29 @@ if (-not $stopped) {
 	}
 }
 
+# Объявления Перем по операторам (в строке их может быть несколько, оператор — на несколько строк):
+# имя и строка, где оно стоит
+function Get-VarDeclarations([string[]]$mask) {
+	$text = $mask -join "`n"
+	$starts = New-Object int[] $mask.Count
+	$acc = 0
+	for ($k = 0; $k -lt $mask.Count; $k++) { $starts[$k] = $acc; $acc += $mask[$k].Length + 1 }
+	$out = @()
+	foreach ($m in [regex]::Matches($text, '(?im)(?:^|;)\s*(?:Перем|Var)\s+([^;]*)')) {
+		$off = $m.Groups[1].Index
+		foreach ($part in ($m.Groups[1].Value -split ',')) {
+			$nm = ($part -replace '\s+(Экспорт|Export)\s*$', '').Trim()
+			if ($nm) {
+				$pos = $off + $part.IndexOf($nm)
+				$b = [array]::BinarySearch($starts, $pos)
+				$out += [pscustomobject]@{ Name = $nm; Line = $(if ($b -ge 0) { $b + 1 } else { -bnot $b }) }
+			}
+			$off += $part.Length + 1
+		}
+	}
+	return $out
+}
+
 # --- Check 24: переменные модуля против реквизитов формы ---
 # Переменная модуля (Перем вне процедур) с именем реквизита формы — модуль не компилируется: «Переменная
 # с указанным именем уже определена». Загрузка XML и обновление конфигурации этого не показывают — ошибка
@@ -2455,15 +2485,10 @@ if (-not $stopped) {
 			$formAttrs = @{}
 			foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute", $nsMgr)) { $formAttrs[$a.GetAttribute('name')] = $a.GetAttribute('name') }
 			$check24Ok = $true
-			for ($i = 0; $i -lt $bsl.Code.Count; $i++) {
-				if ($inProc[$i + 1] -or $bsl.Code[$i] -notmatch '^\s*(?:Перем|Var)\s+([^;]*)') { continue }
-				foreach ($v in ($Matches[1] -split ',')) {
-					$v = ($v -replace '\s+(Экспорт|Export)\s*$', '').Trim()
-					if ($v -and $formAttrs.ContainsKey($v)) {
-						Report-Error "24. Module variable '$v' (Module.bsl:$($i + 1)) has the same name as form attribute '$($formAttrs[$v])' — the platform will not compile the module: `"Переменная с указанным именем уже определена`""
-						$check24Ok = $false
-					}
-				}
+			foreach ($v in (Get-VarDeclarations $bsl.Mask)) {
+				if ($inProc[$v.Line] -or -not $formAttrs.ContainsKey($v.Name)) { continue }
+				Report-Error "24. Module variable '$($v.Name)' (Module.bsl:$($v.Line)) has the same name as form attribute '$($formAttrs[$v.Name])' — the platform will not compile the module: `"Переменная с указанным именем уже определена`""
+				$check24Ok = $false
 			}
 			if ($check24Ok) { Report-OK "24. Module variables: no clash with form attributes" }
 		}

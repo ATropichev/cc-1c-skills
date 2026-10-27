@@ -1,6 +1,7 @@
 # form-edit v1.39 — Edit 1C managed form elements (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
+import bisect
 import contextlib
 import copy
 import io
@@ -8014,18 +8015,22 @@ _module_scan = None
 def get_bsl_scan(text):
     lines = text.replace("\r", "").split("\n")
     code = []
+    mask = []
     lits = []
     in_str = False
     cur = None
     cur_line = 0
     cur_prefix = ""
+    cur_col = -1
     for i, line in enumerate(lines):
         # строка без кавычек вне литерала — только отрезать комментарий
         if not in_str and '"' not in line:
             k = line.find('//')
             code.append(line[:k] if k >= 0 else line)
+            mask.append(line[:k] + ' ' * (len(line) - k) if k >= 0 else line)
             continue
         sb = []
+        mk = list(line)
         j = 0
         if in_str:
             # продолжение многострочного литерала: пробелы, затем «|»
@@ -8034,39 +8039,49 @@ def get_bsl_scan(text):
             # строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
             if line.startswith('//', j):
                 code.append("")
+                mask.append(' ' * len(line))
                 continue
             if j < len(line) and line[j] == '|':
+                mk[j] = ' '
                 j += 1
             cur += "\n"
+            cur_col = -1
         while j < len(line):
             c = line[j]
             if in_str:
                 if c == '"':
                     if j + 1 < len(line) and line[j + 1] == '"':
                         cur += '"'
+                        mk[j] = ' '
+                        mk[j + 1] = ' '
                         j += 2
                         continue
                     in_str = False
-                    lits.append({"Line": cur_line, "Text": cur, "Prefix": cur_prefix})
+                    lits.append({"Line": cur_line, "Text": cur, "Prefix": cur_prefix, "Col": cur_col})
                     sb.append('""')
                     j += 1
                     continue
                 cur += c
+                mk[j] = ' '
                 j += 1
                 continue
             if c == '/' and j + 1 < len(line) and line[j + 1] == '/':
+                for q in range(j, len(mk)):
+                    mk[q] = ' '
                 break
             if c == '"':
                 in_str = True
                 cur = ""
                 cur_line = i + 1
                 cur_prefix = "".join(sb)
+                cur_col = j + 1
                 j += 1
                 continue
             sb.append(c)
             j += 1
         code.append("".join(sb))
-    return {"Lines": lines, "Code": code, "Literals": lits}
+        mask.append("".join(mk))
+    return {"Lines": lines, "Code": code, "Mask": mask, "Literals": lits}
 
 
 # Модуль формы — рядом с Form.xml: <...>/Ext/Form/Module.bsl.
@@ -8074,7 +8089,7 @@ def get_module_scan():
     global _module_scan
     if _module_scan is not None:
         return _module_scan
-    scan = {"Exists": False, "Raw": "", "RawLines": [], "Lines": [], "Code": [], "Literals": []}
+    scan = {"Exists": False, "Raw": "", "RawLines": [], "Lines": [], "Code": [], "Mask": [], "Literals": []}
     path = os.path.join(os.path.dirname(resolved_form_path), "Form", "Module.bsl")
     if os.path.exists(path):
         scan["Exists"] = True
@@ -8084,6 +8099,7 @@ def get_module_scan():
         bsl = get_bsl_scan(scan["Raw"])
         scan["Lines"] = bsl["Lines"]
         scan["Code"] = bsl["Code"]
+        scan["Mask"] = bsl["Mask"]
         scan["Literals"] = bsl["Literals"]
     _module_scan = scan
     return scan
@@ -8119,6 +8135,8 @@ def find_module_refs(name, kind):
         else:
             # Реквизит формы: имя целым словом не после точки; после точки — только ЭтаФорма./ЭтотОбъект.
             # В методе без контекста реквизитов формы нет; где имя объявлено локально, голое имя — локальное
+            if name.lower() not in code.lower():
+                continue
             meth = get_method_at(mm, i + 1)
             if meth is not None and meth['noCtx']:
                 continue
@@ -8937,12 +8955,12 @@ def set_section_node(node, props, key_tags, probe_of, x, label, c):
         section_changed += 1
 
 
-def assert_set_keys(props, key_tags, c, rename_hint, extra=()):
+def assert_set_keys(props, key_tags, c, rename_hint):
     for k, _ in props:
         if k.lower() == 'name':
             fail(f"{c}: имя через set не меняется — переименование: {rename_hint}")
-        if k not in key_tags and k.lower() not in [e.lower() for e in extra]:
-            allowed = sorted(set(list(key_tags.keys()) + list(extra)), key=str.lower)
+        if k not in key_tags:
+            allowed = sorted(set(key_tags.keys()), key=str.lower)
             fail(f"{c}: неизвестный ключ '{k}'; допустимы: {', '.join(allowed)}")
 
 
@@ -8963,10 +8981,10 @@ def resolve_column_path(path, c):
         fail(f"{c}: реквизит '{segs[0]}' не найден в форме")
     col_name = segs[-1]
     cols = attr.find("f:Columns", NS)
+    kind = get_attr_kind(attr)
+    if kind == 'dynlist':
+        fail(f"{c}: у динамического списка колонок нет — поля задаёт запрос (set + settings)")
     if len(segs) == 2:
-        kind = get_attr_kind(attr)
-        if kind == 'dynlist':
-            fail(f"{c}: у динамического списка колонок нет — поля задаёт запрос (set + settings)")
         if kind != 'table':
             fail(f"{c}: у '{segs[0]}' нет своих колонок; доп. колонка табличной части — путь {segs[0]}.ТабличнаяЧасть.Колонка")
         container = cols
@@ -8985,7 +9003,50 @@ def resolve_column_path(path, c):
             if (x.get('name') or '').lower() == col_name.lower():
                 col = x
                 break
-    return {'Attr': attr, 'Container': container, 'Table': table, 'Name': col_name, 'Column': col, 'Columns': cols}
+    return {'Attr': attr, 'Container': container, 'Table': table, 'Name': col_name, 'Column': col, 'Columns': cols, 'Segs': segs, 'Kind': kind}
+
+
+# Табличные части объекта формы — из его описания рядом (<Объект>.xml над Forms); нет описания — None
+def get_object_tabular_sections():
+    d = os.path.dirname(resolved_form_path)
+    for _ in range(3):
+        d = os.path.dirname(d)
+        if not d:
+            return None
+    xml = d + '.xml'
+    if not os.path.exists(xml):
+        return None
+    with open(xml, encoding='utf-8-sig', errors='replace') as fh:
+        t = fh.read()
+    return re.findall(r'<TabularSection uuid="[^"]*">[\s\S]*?<Properties>\s*<Name>([^<]+)</Name>', t)
+
+
+# Новая группа доп. колонок: путь таблицы — от колонки-таблицы реквизита или табличной части объекта.
+# Что можно проверить по форме и описанию объекта — проверяется; остальное проверит платформа при загрузке.
+def assert_additional_table(r, c):
+    segs = r['Segs']
+    an = r['Attr'].get('name')
+    if r['Kind'] == 'table':
+        owner = None
+        if r['Columns'] is not None:
+            for x in r['Columns'].findall("f:Column", NS):
+                if (x.get('name') or '').lower() == segs[1].lower():
+                    owner = x
+                    break
+        if owner is None:
+            fail(f"{c}: у '{an}' нет колонки '{segs[1]}' — путь вложенной таблицы идёт от колонки реквизита")
+        # Вложенная таблица — колонка-таблица (в корпусе только ValueTable/ValueTree)
+        ot = [(t.text or '').strip() for t in owner.findall("f:Type/v8:Type", NS)]
+        if len(ot) != 1 or ot[0] not in ('v8:ValueTable', 'v8:ValueTree'):
+            fail(f"{c}: колонка '{an}.{segs[1]}' — не таблица значений, вложенных колонок у неё нет")
+        return
+    if len(segs) == 3 and test_main_attribute(r['Attr']) and not is_extension:
+        ts = get_object_tabular_sections()
+        if ts is not None:
+            if segs[1].lower() not in [x.lower() for x in ts]:
+                fail(f"{c}: у объекта нет табличной части '{segs[1]}'" + (f"; есть: {', '.join(ts)}" if ts else ""))
+            return
+    warn_log.append(f"[WARN] new additional columns of '{r['Table']}' — the table path is not checked here; the platform rejects a wrong one at load")
 
 
 def invoke_attr_set(op, idx):
@@ -9005,6 +9066,9 @@ def invoke_attr_set(op, idx):
             if test_borrowed(r['Attr'].get('name'), 'attribute'):
                 fail(f"{c}: колонка заимствованного реквизита — её свойства задаёт исходная форма")
             assert_set_keys(props, COL_KEY_TAGS, c, f'{{ "rename": "{t}", "to": "НовоеИмя" }}')
+            for k, v in props:
+                if k.lower() == 'type' and (v is None or str(v) == ''):
+                    fail(f"{c}: тип обязателен — укажи новый")
 
             def col_probe(h, x):
                 h['name'] = x['Col']
@@ -9155,6 +9219,7 @@ def add_attr_column(op, idx):
         insert_section_child(attr, cols)
     container = r['Container']
     if container is None and r['Table'] is not None:
+        assert_additional_table(r, c)
         container = etree.Element(f"{{{FORM_NS}}}AdditionalColumns")
         container.set('table', r['Table'])
         insert_node_at(cols, container, None, get_child_indent(cols))
@@ -9280,6 +9345,8 @@ def invoke_cmd_set(op, idx):
         names = [k.lower() for k, _ in props]
         if 'calltype' in names and not ('action' in names or 'actions' in names):
             fail(f"{c}: callType задаётся вместе с action")
+        if 'loadtransparent' in names and 'picture' not in names:
+            fail(f"{c}: loadTransparent задаётся вместе с picture")
         if 'action' in names or 'actions' in names:
             old_acts = [(a.text or '').strip() for a in node.findall("f:Action", NS)]
             acts = op.get('actions')
@@ -9292,7 +9359,13 @@ def invoke_cmd_set(op, idx):
             if not any(k.lower() == 'title' for k in h):
                 h['title'] = ''
             return get_command_probe(new_dsl_spec(h))
-        set_section_node(node, props, CMD_KEY_TAGS, cmd_probe, {'Name': name}, f"команда {name}", c)
+        # В расширении новый обработчик без callType — с видом вызова прежнего (иначе эмиттер поставит Before)
+        tp = list(props)
+        if is_extension and 'action' in names and 'calltype' not in names:
+            acts = node.findall("f:Action", NS)
+            if len(acts) == 1 and acts[0].get('callType') is not None:
+                tp.append(('callType', acts[0].get('callType')))
+        set_section_node(node, tp, CMD_KEY_TAGS, cmd_probe, {'Name': name}, f"команда {name}", c)
 
 
 def invoke_param_set(op, idx):
@@ -9322,59 +9395,6 @@ def invoke_param_set(op, idx):
 
 # ── 9g. Переименование: ссылки в форме, модуль, коллизии имён ──
 
-# Маска модуля: строки той же длины, литералы и комментарии — пробелами. Позиции в маске — позиции
-# в тексте, поэтому по ней правят модуль. Однострочные литералы — с позицией (многострочные — запросы).
-def get_bsl_mask(lines):
-    mask = []
-    lits = []
-    in_str = False
-    for i, line in enumerate(lines):
-        if not in_str and '"' not in line:
-            k = line.find('//')
-            mask.append(line[:k] + ' ' * (len(line) - k) if k >= 0 else line)
-            continue
-        ch = list(line)
-        j = 0
-        start = -1
-        if in_str:
-            while j < len(ch) and ch[j] in (' ', '\t'):
-                j += 1
-            if j + 1 < len(ch) and ch[j] == '/' and ch[j + 1] == '/':
-                mask.append(' ' * len(line))
-                continue
-            if j < len(ch) and ch[j] == '|':
-                ch[j] = ' '
-                j += 1
-            start = -2
-        while j < len(ch):
-            c = ch[j]
-            if in_str:
-                if c == '"':
-                    if j + 1 < len(ch) and ch[j + 1] == '"':
-                        ch[j] = ' '
-                        ch[j + 1] = ' '
-                        j += 2
-                        continue
-                    in_str = False
-                    if start >= 0:
-                        lits.append({'Line': i + 1, 'Col': start, 'Text': line[start:j], 'Prefix': ''.join(ch[:start - 1])})
-                    j += 1
-                    continue
-                ch[j] = ' '
-                j += 1
-                continue
-            if c == '/' and j + 1 < len(ch) and ch[j + 1] == '/':
-                for q in range(j, len(ch)):
-                    ch[q] = ' '
-                break
-            if c == '"':
-                in_str = True
-                start = j + 1
-            j += 1
-        mask.append(''.join(ch))
-    return {'Mask': mask, 'Lits': lits}
-
-
 module_methods = None
 module_dirty = False
 module_log = []
@@ -9387,7 +9407,7 @@ def get_module_methods():
     if module_methods is not None:
         return module_methods
     scan = get_module_scan()
-    m = get_bsl_mask(scan["Lines"])
+    m = {'Mask': scan['Mask'], 'Lits': [x for x in scan['Literals'] if x['Col'] >= 0]}
     outline = get_module_outline(m['Mask'])
     methods = []
     for p in outline['procs']:
@@ -9416,7 +9436,7 @@ def get_module_methods():
                 if x:
                     params.append(x)
         methods.append({'name': p['name'], 'start': p['start'], 'end': p['end'], 'header': hdr + 1, 'noCtx': no_ctx, 'params': params})
-    module_methods = {'Mask': m['Mask'], 'Lits': m['Lits'], 'Methods': methods}
+    module_methods = {'Mask': m['Mask'], 'Lits': m['Lits'], 'Methods': methods, 'Vars': None}
     return module_methods
 
 
@@ -9436,8 +9456,19 @@ def find_module_spans(name, kind):
         return []
     mm = get_module_methods()
     n = re.escape(name)
-    # Метод, где имя объявлено локально (Перем, параметр), — там это не реквизит
+    # Метод, где имя объявлено локально (Перем, параметр), — там это не реквизит. Команды./Параметры. —
+    # коллекции формы только в методе с контекстом, где это слово не локальное
     local_names = find_module_decl(name)['Locals'] if kind == 'attribute' else {}
+    coll_words = ['Команды', 'Commands'] if kind == 'command' else ['Параметры', 'Parameters']
+    coll_local = set()
+    if kind != 'attribute':
+        for w in coll_words:
+            d = find_module_decl(w)
+            coll_local.update(d['Locals'].keys())
+            for l in d['Assigns']:
+                mt = get_method_at(mm, l)
+                if mt is not None:
+                    coll_local.add(mt['name'])
     spans = []
     for i, code in enumerate(mm['Mask']):
         if name.lower() not in code.lower():
@@ -9455,17 +9486,39 @@ def find_module_spans(name, kind):
                     qual = True
                 if not qual and meth is not None and meth['name'] in local_names:
                     continue
-                spans.append({'Line': i + 1, 'Col': m.start(), 'Len': m.end() - m.start(), 'Method': meth, 'Qualified': qual})
+                spans.append({'Line': i + 1, 'Col': m.start(), 'Len': m.end() - m.start(), 'Method': meth, 'Qualified': qual, 'Doubtful': False})
         else:
-            coll = 'Команды|Commands' if kind == 'command' else 'Параметры|Parameters'
+            coll = '|'.join(coll_words)
+            doubt = meth is not None and (meth['noCtx'] or meth['name'] in coll_local)
             for m in re.finditer(rf"(?<!\w)(?:{coll})\s*\.\s*({n})(?!\w)", code, re.I):
-                spans.append({'Line': i + 1, 'Col': m.start(1), 'Len': m.end(1) - m.start(1), 'Method': meth, 'Qualified': True})
+                spans.append({'Line': i + 1, 'Col': m.start(1), 'Len': m.end(1) - m.start(1), 'Method': meth, 'Qualified': True, 'Doubtful': doubt})
     if kind == 'attribute':
         for lit in mm['Lits']:
             t = lit['Text']
             if (t.lower() == name.lower() or t.lower().startswith(name.lower() + '.')) and re.search(ATTR_LITERAL_CONTEXT, lit['Prefix'], re.I):
-                spans.append({'Line': lit['Line'], 'Col': lit['Col'], 'Len': len(name), 'Method': get_method_at(mm, lit['Line']), 'Qualified': True})
+                spans.append({'Line': lit['Line'], 'Col': lit['Col'], 'Len': len(name), 'Method': get_method_at(mm, lit['Line']), 'Qualified': True, 'Doubtful': False})
     return spans
+
+
+# Объявления Перем по операторам (в строке их может быть несколько, оператор — на несколько строк):
+# имя и строка, где оно стоит
+def get_var_declarations(mask):
+    text = '\n'.join(mask)
+    starts = []
+    acc = 0
+    for l in mask:
+        starts.append(acc)
+        acc += len(l) + 1
+    out = []
+    for m in re.finditer(r'(?:^|;)\s*(?:Перем|Var)\s+([^;]*)', text, re.I | re.M):
+        off = m.start(1)
+        for part in m.group(1).split(','):
+            nm = re.sub(r'\s+(Экспорт|Export)\s*$', '', part, flags=re.I).strip()
+            if nm:
+                pos = off + part.index(nm)
+                out.append({'Name': nm, 'Line': bisect.bisect_right(starts, pos)})
+            off += len(part) + 1
+    return out
 
 
 # Где имя объявлено в модуле: переменная модуля, локальная (Перем, параметр) — по методам;
@@ -9480,18 +9533,16 @@ def find_module_decl(name):
     for x in mm['Methods']:
         if name.lower() in [p.lower() for p in x['params']]:
             r['Locals'][x['name']] = x['header']
-    for i, code in enumerate(mm['Mask']):
-        if name.lower() not in code.lower():
+    if mm['Vars'] is None:
+        mm['Vars'] = get_var_declarations(mm['Mask'])
+    for v in mm['Vars']:
+        if v['Name'].lower() != name.lower():
             continue
-        m = re.match(r'^\s*(?:Перем|Var)\s+([^;]*)', code, re.I)
-        if m:
-            names = [re.sub(r'\s+(Экспорт|Export)\s*$', '', x, flags=re.I).strip().lower() for x in m.group(1).split(',')]
-            if name.lower() in names:
-                meth = get_method_at(mm, i + 1)
-                if meth is None:
-                    r['ModuleVars'].append(i + 1)
-                elif meth['name'] not in r['Locals']:
-                    r['Locals'][meth['name']] = i + 1
+        meth = get_method_at(mm, v['Line'])
+        if meth is None:
+            r['ModuleVars'].append(v['Line'])
+        elif meth['name'] not in r['Locals']:
+            r['Locals'][meth['name']] = v['Line']
     for i, code in enumerate(mm['Mask']):
         if not re.search(rf"(^|;)\s*{n}\s*=", code, re.I):
             continue
@@ -9550,6 +9601,7 @@ def edit_module_spans(spans, new):
     bsl = get_bsl_scan(scan['Raw'])
     scan['Lines'] = bsl['Lines']
     scan['Code'] = bsl['Code']
+    scan['Mask'] = bsl['Mask']
     scan['Literals'] = bsl['Literals']
     module_methods = None
     module_outline = None
@@ -9572,6 +9624,8 @@ def rename_in_module(old, new, kind, in_module):
     if not scan["Exists"]:
         return
     spans = find_module_spans(old, kind)
+    doubt = [s for s in spans if s['Doubtful']]
+    spans = [s for s in spans if not s['Doubtful']]
     skipped = []
     if kind == 'attribute':
         decl = add_attr_collision_warnings(new)
@@ -9595,11 +9649,18 @@ def rename_in_module(old, new, kind, in_module):
         warn_log.append(f"[WARN] '{new}' is a local name in these methods — a renamed reference would point to the local; left as is: qualify it as ЭтаФорма.{new} or rename the local:")
         for l in sorted(set(s['Line'] for s in skipped)):
             warn_log.append(f"  {format_module_line(l)}")
+    if doubt:
+        w = 'Команды' if kind == 'command' else 'Параметры'
+        warn_log.append(f"[WARN] not rewritten — in these methods {w} is not the form's (no form context, or a local of that name); check these lines:")
+        for l in sorted(set(s['Line'] for s in doubt)):
+            warn_log.append(f"  {format_module_line(l)}")
     if kind == 'attribute':
         # Без контекста реквизит доступен только через переданную форму — не переписываем, показываем
         mm = get_module_methods()
         cand = []
         for i, code in enumerate(mm['Mask']):
+            if old.lower() not in code.lower():
+                continue
             meth = get_method_at(mm, i + 1)
             if meth is None or not meth['noCtx']:
                 continue
@@ -9921,7 +9982,7 @@ for _i, _op in enumerate(_cmd_ops):
             print(f"[ERROR] Command '{_op['name']}' already exists in form — command names must be unique; to change it: {{ \"set\": \"{_op['name']}\", … }}")
             sys.exit(1)
     # Команды пишет эмиттер form-compile (все его ключи); id — из пула формы
-    wrap = invoke_section_emit(lambda lines: emit_commands(lines, [_op], '	'), normalize=True)[0]
+    wrap = invoke_section_emit(lambda lines: emit_commands(lines, [_op], '\t'), normalize=True)[0]
     for node in list(wrap.findall("f:Command", NS)):
         cmd_id = new_cmd_id()
         node.set('id', str(cmd_id))

@@ -7436,56 +7436,63 @@ $script:moduleScan = $null
 
 # Сканер BSL: строковые литералы (с "" и многострочными продолжениями «|») и комментарии // отделяются
 # от кода, номера строк сохраняются. Lines — строки текста; Code — они же без комментариев, литерал
-# заменён на ""; Literals — @{ Line; Text; Prefix — код этой строки слева от литерала }.
+# заменён на ""; Mask — строки той же длины, литералы и комментарии — пробелами (позиции в маске —
+# позиции в тексте); Literals — @{ Line; Text; Prefix — код этой строки слева от литерала; Col — начало
+# текста литерала в строке, -1 у многострочного }.
 function Get-BslScan([string]$text) {
 	$lines = $text -replace "`r", "" -split "`n"
 	$code = New-Object System.Collections.ArrayList
+	$mask = New-Object System.Collections.ArrayList
 	$lits = New-Object System.Collections.ArrayList
-	$inStr = $false; $cur = $null; $curLine = 0; $curPrefix = ""
+	$inStr = $false; $cur = $null; $curLine = 0; $curPrefix = ""; $curCol = -1
 	for ($i = 0; $i -lt $lines.Count; $i++) {
 		$line = $lines[$i]
 		# строка без кавычек вне литерала — только отрезать комментарий (посимвольный разбор в PS медленный)
 		if (-not $inStr -and $line.IndexOf('"') -lt 0) {
 			$k = $line.IndexOf('//')
 			[void]$code.Add($(if ($k -ge 0) { $line.Substring(0, $k) } else { $line }))
+			[void]$mask.Add($(if ($k -ge 0) { $line.Substring(0, $k) + (' ' * ($line.Length - $k)) } else { $line }))
 			continue
 		}
 		$sb = New-Object System.Text.StringBuilder
+		$mk = $line.ToCharArray()
 		$j = 0
 		if ($inStr) {
 			# продолжение многострочного литерала: пробелы, затем «|»
 			while ($j -lt $line.Length -and ($line[$j] -eq ' ' -or $line[$j] -eq "`t")) { $j++ }
 			# строка «//…» между строками литерала — комментарий, литерал продолжается на следующей
-			if ($j + 1 -lt $line.Length -and $line[$j] -eq '/' -and $line[$j + 1] -eq '/') { [void]$code.Add(""); continue }
-			if ($j -lt $line.Length -and $line[$j] -eq '|') { $j++ }
+			if ($j + 1 -lt $line.Length -and $line[$j] -eq '/' -and $line[$j + 1] -eq '/') { [void]$code.Add(""); [void]$mask.Add(' ' * $line.Length); continue }
+			if ($j -lt $line.Length -and $line[$j] -eq '|') { $mk[$j] = ' '; $j++ }
 			$cur += "`n"
+			$curCol = -1
 		}
 		while ($j -lt $line.Length) {
 			$c = $line[$j]
 			if ($inStr) {
 				if ($c -eq '"') {
-					if ($j + 1 -lt $line.Length -and $line[$j + 1] -eq '"') { $cur += '"'; $j += 2; continue }
+					if ($j + 1 -lt $line.Length -and $line[$j + 1] -eq '"') { $cur += '"'; $mk[$j] = ' '; $mk[$j + 1] = ' '; $j += 2; continue }
 					$inStr = $false
-					[void]$lits.Add(@{ Line = $curLine; Text = $cur; Prefix = $curPrefix })
+					[void]$lits.Add(@{ Line = $curLine; Text = $cur; Prefix = $curPrefix; Col = $curCol })
 					[void]$sb.Append('""')
 					$j++
 					continue
 				}
-				$cur += $c; $j++; continue
+				$cur += $c; $mk[$j] = ' '; $j++; continue
 			}
-			if ($c -eq '/' -and $j + 1 -lt $line.Length -and $line[$j + 1] -eq '/') { break }
-			if ($c -eq '"') { $inStr = $true; $cur = ""; $curLine = $i + 1; $curPrefix = $sb.ToString(); $j++; continue }
+			if ($c -eq '/' -and $j + 1 -lt $line.Length -and $line[$j + 1] -eq '/') { for ($q = $j; $q -lt $mk.Length; $q++) { $mk[$q] = ' ' }; break }
+			if ($c -eq '"') { $inStr = $true; $cur = ""; $curLine = $i + 1; $curPrefix = $sb.ToString(); $curCol = $j + 1; $j++; continue }
 			[void]$sb.Append($c); $j++
 		}
 		[void]$code.Add($sb.ToString())
+		[void]$mask.Add([string]::new($mk))
 	}
-	return @{ Lines = $lines; Code = $code.ToArray(); Literals = $lits.ToArray() }
+	return @{ Lines = $lines; Code = $code.ToArray(); Mask = $mask.ToArray(); Literals = $lits.ToArray() }
 }
 
 # Модуль формы — рядом с Form.xml: <...>/Ext/Form/Module.bsl.
 function Get-ModuleScan {
 	if ($null -ne $script:moduleScan) { return $script:moduleScan }
-	$scan = @{ Exists = $false; Raw = ""; RawLines = @(); Lines = @(); Code = @(); Literals = @() }
+	$scan = @{ Exists = $false; Raw = ""; RawLines = @(); Lines = @(); Code = @(); Mask = @(); Literals = @() }
 	$path = Join-Path ([System.IO.Path]::GetDirectoryName($resolvedFormPath)) "Form/Module.bsl"
 	if (Test-Path -LiteralPath $path) {
 		$scan.Exists = $true
@@ -7494,6 +7501,7 @@ function Get-ModuleScan {
 		$bsl = Get-BslScan $scan.Raw
 		$scan.Lines = $bsl.Lines
 		$scan.Code = $bsl.Code
+		$scan.Mask = $bsl.Mask
 		$scan.Literals = $bsl.Literals
 	}
 	$script:moduleScan = $scan
@@ -7525,6 +7533,7 @@ function Find-ModuleRefs([string]$name, [string]$kind) {
 		} else {
 			# Реквизит формы: имя целым словом не после точки; после точки — только ЭтаФорма./ЭтотОбъект.
 			# В методе без контекста реквизитов формы нет; где имя объявлено локально, голое имя — локальное
+			if ($code.IndexOf($name, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
 			$meth = Get-MethodAt $mm ($i + 1)
 			if ($null -ne $meth -and $meth.noCtx) { continue }
 			$isLocal = $null -ne $meth -and $locals.ContainsKey($meth.name)
@@ -8267,11 +8276,11 @@ function Set-SectionNode($node, $props, $keyTags, [scriptblock]$probeOf, $x, [st
 	}
 }
 
-function Assert-SetKeys($props, $keyTags, [string]$c, [string]$renameHint, [string[]]$extra = @()) {
+function Assert-SetKeys($props, $keyTags, [string]$c, [string]$renameHint) {
 	foreach ($p in $props) {
 		if ($p.Name -eq 'name') { Fail "${c}: имя через set не меняется — переименование: $renameHint" }
-		if (-not $keyTags.ContainsKey($p.Name) -and $extra -notcontains $p.Name) {
-			Fail "${c}: неизвестный ключ '$($p.Name)'; допустимы: $((@($keyTags.Keys) + $extra | Sort-Object -Unique) -join ', ')"
+		if (-not $keyTags.ContainsKey($p.Name)) {
+			Fail "${c}: неизвестный ключ '$($p.Name)'; допустимы: $((@($keyTags.Keys) | Sort-Object -Unique) -join ', ')"
 		}
 	}
 }
@@ -8285,9 +8294,9 @@ function Resolve-ColumnPath([string]$path, [string]$c) {
 	if ($null -eq $attr) { Fail "${c}: реквизит '$($segs[0])' не найден в форме" }
 	$colName = $segs[$segs.Count - 1]
 	$cols = $attr.SelectSingleNode("f:Columns", $nsMgr)
+	$kind = Get-AttrKind $attr
+	if ($kind -eq 'dynlist') { Fail "${c}: у динамического списка колонок нет — поля задаёт запрос (set + settings)" }
 	if ($segs.Count -eq 2) {
-		$kind = Get-AttrKind $attr
-		if ($kind -eq 'dynlist') { Fail "${c}: у динамического списка колонок нет — поля задаёт запрос (set + settings)" }
 		if ($kind -ne 'table') { Fail "${c}: у '$($segs[0])' нет своих колонок; доп. колонка табличной части — путь $($segs[0]).ТабличнаяЧасть.Колонка" }
 		$container = $cols
 		$table = $null
@@ -8298,7 +8307,42 @@ function Resolve-ColumnPath([string]$path, [string]$c) {
 	}
 	$col = $null
 	if ($null -ne $container) { foreach ($x in $container.SelectNodes("f:Column", $nsMgr)) { if ($x.GetAttribute('name') -eq $colName) { $col = $x; break } } }
-	return @{ Attr = $attr; Container = $container; Table = $table; Name = $colName; Column = $col; Columns = $cols }
+	return @{ Attr = $attr; Container = $container; Table = $table; Name = $colName; Column = $col; Columns = $cols; Segs = $segs; Kind = $kind }
+}
+
+# Табличные части объекта формы — из его описания рядом (<Объект>.xml над Forms); нет описания — $null
+function Get-ObjectTabularSections {
+	$d = [System.IO.Path]::GetDirectoryName($resolvedFormPath)
+	for ($k = 0; $k -lt 3; $k++) { $d = [System.IO.Path]::GetDirectoryName($d); if (-not $d) { return $null } }
+	$xml = "$d.xml"
+	if (-not (Test-Path -LiteralPath $xml)) { return $null }
+	$t = [System.IO.File]::ReadAllText($xml)
+	# пустой список — тоже ответ («частей нет»), не $null: запятая не даёт PS развернуть его в ничто
+	return ,@([regex]::Matches($t, '<TabularSection uuid="[^"]*">[\s\S]*?<Properties>\s*<Name>([^<]+)</Name>') | ForEach-Object { $_.Groups[1].Value })
+}
+
+# Новая группа доп. колонок: путь таблицы — от колонки-таблицы реквизита или табличной части объекта.
+# Что можно проверить по форме и описанию объекта — проверяется; остальное проверит платформа при загрузке.
+function Assert-AdditionalTable($r, [string]$c) {
+	$segs = $r.Segs
+	$an = $r.Attr.GetAttribute('name')
+	if ($r.Kind -eq 'table') {
+		$owner = $null
+		if ($null -ne $r.Columns) { foreach ($x in $r.Columns.SelectNodes("f:Column", $nsMgr)) { if ($x.GetAttribute('name') -eq $segs[1]) { $owner = $x; break } } }
+		if ($null -eq $owner) { Fail "${c}: у '$an' нет колонки '$($segs[1])' — путь вложенной таблицы идёт от колонки реквизита" }
+		# Вложенная таблица — колонка-таблица (в корпусе только ValueTable/ValueTree)
+		$ot = @($owner.SelectNodes("f:Type/v8:Type", $nsMgr) | ForEach-Object { $_.InnerText.Trim() })
+		if ($ot.Count -ne 1 -or @('v8:ValueTable','v8:ValueTree') -notcontains $ot[0]) { Fail "${c}: колонка '$an.$($segs[1])' — не таблица значений, вложенных колонок у неё нет" }
+		return
+	}
+	if ($segs.Count -eq 3 -and (Test-MainAttribute $r.Attr) -and -not $script:isExtension) {
+		$ts = Get-ObjectTabularSections
+		if ($null -ne $ts) {
+			if ($ts -notcontains $segs[1]) { Fail "${c}: у объекта нет табличной части '$($segs[1])'$(if ($ts.Count) { "; есть: $($ts -join ', ')" })" }
+			return
+		}
+	}
+	$script:warnLog += "[WARN] new additional columns of '$($r.Table)' — the table path is not checked here; the platform rejects a wrong one at load"
 }
 
 function Invoke-AttrSet($op, [int]$idx) {
@@ -8314,6 +8358,7 @@ function Invoke-AttrSet($op, [int]$idx) {
 			if ($null -eq $r.Column) { Fail "${c}: колонка не найдена" }
 			if (Test-Borrowed $r.Attr.GetAttribute('name') 'attribute') { Fail "${c}: колонка заимствованного реквизита — её свойства задаёт исходная форма" }
 			Assert-SetKeys $props $script:colKeyTags $c "{ `"rename`": `"$t`", `"to`": `"НовоеИмя`" }"
+			foreach ($p in $props) { if ($p.Name -eq 'type' -and ($null -eq $p.Value -or "$($p.Value)" -eq '')) { Fail "${c}: тип обязателен — укажи новый" } }
 			Set-SectionNode $r.Column $props $script:colKeyTags { param($h, $x) $h['name'] = $x.Col; Get-ColumnProbe (New-DslSpec $h) $x.Attr } @{ Col = $r.Column.GetAttribute('name'); Attr = $r.Attr.GetAttribute('name') } $t $c
 			continue
 		}
@@ -8435,6 +8480,7 @@ function Add-AttrColumn($op, [int]$idx) {
 	}
 	$container = $r.Container
 	if ($null -eq $container -and $null -ne $r.Table) {
+		Assert-AdditionalTable $r $c
 		$container = $xmlDoc.CreateElement('AdditionalColumns', $formNs)
 		$container.SetAttribute('table', $r.Table)
 		Insert-NodeAt $cols $container $null (Get-ChildIndent $cols)
@@ -8541,12 +8587,19 @@ function Invoke-CmdSet($op, [int]$idx) {
 		Assert-SetKeys $props $script:cmdKeyTags $c "{ `"rename`": `"$name`", `"to`": `"НовоеИмя`" }"
 		$names = @($props | ForEach-Object { $_.Name })
 		if ($names -contains 'callType' -and -not ($names -contains 'action' -or $names -contains 'actions')) { Fail "${c}: callType задаётся вместе с action" }
+		if ($names -contains 'loadTransparent' -and -not ($names -contains 'picture')) { Fail "${c}: loadTransparent задаётся вместе с picture" }
 		if ($names -contains 'action' -or $names -contains 'actions') {
 			$oldActs = @($node.SelectNodes("f:Action", $nsMgr) | ForEach-Object { $_.InnerText.Trim() })
 			$newActs = @(@($op.action) + @(@($op.actions) | ForEach-Object { if ($null -ne $_) { $_.handler } }) | Where-Object { $_ } | ForEach-Object { "$_" })
 			Add-LeftHandlers @($oldActs | Where-Object { $newActs -notcontains $_ })
 		}
-		Set-SectionNode $node $props $script:cmdKeyTags { param($h, $x) $h['name'] = $x.Name; if (-not $h.Contains('title')) { $h['title'] = '' }; Get-CommandProbe (New-DslSpec $h) } @{ Name = $name } "команда $name" $c
+		# В расширении новый обработчик без callType — с видом вызова прежнего (иначе эмиттер поставит Before)
+		$tp = @($props)
+		if ($script:isExtension -and $names -contains 'action' -and -not ($names -contains 'callType')) {
+			$acts = @($node.SelectNodes("f:Action", $nsMgr))
+			if ($acts.Count -eq 1 -and $acts[0].HasAttribute('callType')) { $tp += [pscustomobject]@{ Name = 'callType'; Value = $acts[0].GetAttribute('callType') } }
+		}
+		Set-SectionNode $node $tp $script:cmdKeyTags { param($h, $x) $h['name'] = $x.Name; if (-not $h.Contains('title')) { $h['title'] = '' }; Get-CommandProbe (New-DslSpec $h) } @{ Name = $name } "команда $name" $c
 	}
 }
 
@@ -8569,47 +8622,6 @@ function Invoke-ParamSet($op, [int]$idx) {
 
 # === 9g. Переименование: ссылки в форме, модуль, коллизии имён ===
 
-# Маска модуля: строки той же длины, литералы и комментарии — пробелами. Позиции в маске — позиции
-# в тексте, поэтому по ней правят модуль. Однострочные литералы — с позицией (многострочные — запросы).
-function Get-BslMask([string[]]$lines) {
-	$mask = New-Object System.Collections.ArrayList
-	$lits = New-Object System.Collections.ArrayList
-	$inStr = $false
-	for ($i = 0; $i -lt $lines.Count; $i++) {
-		$line = $lines[$i]
-		if (-not $inStr -and $line.IndexOf('"') -lt 0) {
-			$k = $line.IndexOf('//')
-			[void]$mask.Add($(if ($k -ge 0) { $line.Substring(0, $k) + (' ' * ($line.Length - $k)) } else { $line }))
-			continue
-		}
-		$ch = $line.ToCharArray()
-		$j = 0; $start = -1
-		if ($inStr) {
-			while ($j -lt $ch.Length -and ($ch[$j] -eq ' ' -or $ch[$j] -eq "`t")) { $j++ }
-			if ($j + 1 -lt $ch.Length -and $ch[$j] -eq '/' -and $ch[$j + 1] -eq '/') { [void]$mask.Add(' ' * $line.Length); continue }
-			if ($j -lt $ch.Length -and $ch[$j] -eq '|') { $ch[$j] = ' '; $j++ }
-			$start = -2
-		}
-		while ($j -lt $ch.Length) {
-			$c = $ch[$j]
-			if ($inStr) {
-				if ($c -eq '"') {
-					if ($j + 1 -lt $ch.Length -and $ch[$j + 1] -eq '"') { $ch[$j] = ' '; $ch[$j + 1] = ' '; $j += 2; continue }
-					$inStr = $false
-					if ($start -ge 0) { [void]$lits.Add(@{ Line = $i + 1; Col = $start; Text = $line.Substring($start, $j - $start); Prefix = [string]::new($ch, 0, $start - 1) }) }
-					$j++; continue
-				}
-				$ch[$j] = ' '; $j++; continue
-			}
-			if ($c -eq '/' -and $j + 1 -lt $ch.Length -and $ch[$j + 1] -eq '/') { for ($q = $j; $q -lt $ch.Length; $q++) { $ch[$q] = ' ' }; break }
-			if ($c -eq '"') { $inStr = $true; $start = $j + 1 }
-			$j++
-		}
-		[void]$mask.Add([string]::new($ch))
-	}
-	return @{ Mask = $mask.ToArray(); Lits = $lits.ToArray() }
-}
-
 $script:moduleMethods = $null
 $script:moduleDirty = $false
 $script:moduleLog = @()
@@ -8619,7 +8631,7 @@ $script:noCtxDirective = '^\s*&\s*(НаСервереБезКонтекста|Н
 function Get-ModuleMethods {
 	if ($null -ne $script:moduleMethods) { return $script:moduleMethods }
 	$scan = Get-ModuleScan
-	$m = Get-BslMask $scan.Lines
+	$m = @{ Mask = $scan.Mask; Lits = @($scan.Literals | Where-Object { $_.Col -ge 0 }) }
 	$outline = Get-ModuleOutline $m.Mask
 	$methods = @()
 	foreach ($p in $outline.procs) {
@@ -8637,7 +8649,7 @@ function Get-ModuleMethods {
 		}
 		$methods += [pscustomobject]@{ name = $p.name; start = $p.start; end = $p.end; header = $hdr + 1; noCtx = $noCtx; params = $params }
 	}
-	$script:moduleMethods = @{ Mask = $m.Mask; Lits = $m.Lits; Methods = $methods }
+	$script:moduleMethods = @{ Mask = $m.Mask; Lits = $m.Lits; Methods = $methods; Vars = $null }
 	return $script:moduleMethods
 }
 
@@ -8654,8 +8666,18 @@ function Find-ModuleSpans([string]$name, [string]$kind) {
 	if (-not $scan.Exists) { return @() }
 	$mm = Get-ModuleMethods
 	$n = [regex]::Escape($name)
-	# Метод, где имя объявлено локально (Перем, параметр), — там это не реквизит
+	# Метод, где имя объявлено локально (Перем, параметр), — там это не реквизит. Команды./Параметры. —
+	# коллекции формы только в методе с контекстом, где это слово не локальное
 	$locals = if ($kind -eq 'attribute') { (Find-ModuleDecl $name).Locals } else { @{} }
+	$collWords = if ($kind -eq 'command') { @('Команды','Commands') } else { @('Параметры','Parameters') }
+	$collLocal = @{}
+	if ($kind -ne 'attribute') {
+		foreach ($w in $collWords) {
+			$d = Find-ModuleDecl $w
+			foreach ($k in $d.Locals.Keys) { $collLocal[$k] = $true }
+			foreach ($l in $d.Assigns) { $mt = Get-MethodAt $mm $l; if ($null -ne $mt) { $collLocal[$mt.name] = $true } }
+		}
+	}
 	$spans = @()
 	for ($i = 0; $i -lt $mm.Mask.Count; $i++) {
 		$code = $mm.Mask[$i]
@@ -8671,13 +8693,14 @@ function Find-ModuleSpans([string]$name, [string]$kind) {
 					$qual = $true
 				}
 				if (-not $qual -and $null -ne $meth -and $locals.ContainsKey($meth.name)) { continue }
-				$spans += [pscustomobject]@{ Line = $i + 1; Col = $m.Index; Len = $m.Length; Method = $meth; Qualified = $qual }
+				$spans += [pscustomobject]@{ Line = $i + 1; Col = $m.Index; Len = $m.Length; Method = $meth; Qualified = $qual; Doubtful = $false }
 			}
 		} else {
-			$coll = if ($kind -eq 'command') { 'Команды|Commands' } else { 'Параметры|Parameters' }
+			$coll = $collWords -join '|'
+			$doubt = $null -ne $meth -and ($meth.noCtx -or $collLocal.ContainsKey($meth.name))
 			foreach ($m in [regex]::Matches($code, "(?<!\w)(?:$coll)\s*\.\s*($n)(?!\w)", 'IgnoreCase')) {
 				$g = $m.Groups[1]
-				$spans += [pscustomobject]@{ Line = $i + 1; Col = $g.Index; Len = $g.Length; Method = $meth; Qualified = $true }
+				$spans += [pscustomobject]@{ Line = $i + 1; Col = $g.Index; Len = $g.Length; Method = $meth; Qualified = $true; Doubtful = $doubt }
 			}
 		}
 	}
@@ -8685,11 +8708,34 @@ function Find-ModuleSpans([string]$name, [string]$kind) {
 		foreach ($lit in $mm.Lits) {
 			$t = $lit.Text
 			if (($t -eq $name -or $t.StartsWith("$name.", [System.StringComparison]::OrdinalIgnoreCase)) -and [regex]::IsMatch($lit.Prefix, $script:attrLiteralContext, 'IgnoreCase')) {
-				$spans += [pscustomobject]@{ Line = $lit.Line; Col = $lit.Col; Len = $name.Length; Method = (Get-MethodAt $mm $lit.Line); Qualified = $true }
+				$spans += [pscustomobject]@{ Line = $lit.Line; Col = $lit.Col; Len = $name.Length; Method = (Get-MethodAt $mm $lit.Line); Qualified = $true; Doubtful = $false }
 			}
 		}
 	}
 	return $spans
+}
+
+# Объявления Перем по операторам (в строке их может быть несколько, оператор — на несколько строк):
+# имя и строка, где оно стоит
+function Get-VarDeclarations([string[]]$mask) {
+	$text = $mask -join "`n"
+	$starts = New-Object int[] $mask.Count
+	$acc = 0
+	for ($k = 0; $k -lt $mask.Count; $k++) { $starts[$k] = $acc; $acc += $mask[$k].Length + 1 }
+	$out = @()
+	foreach ($m in [regex]::Matches($text, '(?im)(?:^|;)\s*(?:Перем|Var)\s+([^;]*)')) {
+		$off = $m.Groups[1].Index
+		foreach ($part in ($m.Groups[1].Value -split ',')) {
+			$nm = ($part -replace '\s+(Экспорт|Export)\s*$', '').Trim()
+			if ($nm) {
+				$pos = $off + $part.IndexOf($nm)
+				$b = [array]::BinarySearch($starts, $pos)
+				$out += [pscustomobject]@{ Name = $nm; Line = $(if ($b -ge 0) { $b + 1 } else { -bnot $b }) }
+			}
+			$off += $part.Length + 1
+		}
+	}
+	return $out
 }
 
 # Где имя объявлено в модуле: переменная модуля, локальная (Перем, параметр) — по методам;
@@ -8701,16 +8747,11 @@ function Find-ModuleDecl([string]$name) {
 	$mm = Get-ModuleMethods
 	$n = [regex]::Escape($name)
 	foreach ($x in $mm.Methods) { if ($x.params -contains $name) { $r.Locals[$x.name] = $x.header } }
-	for ($i = 0; $i -lt $mm.Mask.Count; $i++) {
-		$code = $mm.Mask[$i]
-		if ($code.IndexOf($name, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
-		if ($code -match '^\s*(?:Перем|Var)\s+([^;]*)') {
-			$names = @($Matches[1] -split ',' | ForEach-Object { ($_ -replace '\s+(Экспорт|Export)\s*$', '').Trim() })
-			if ($names -contains $name) {
-				$meth = Get-MethodAt $mm ($i + 1)
-				if ($null -eq $meth) { $r.ModuleVars += ($i + 1) } elseif (-not $r.Locals.ContainsKey($meth.name)) { $r.Locals[$meth.name] = $i + 1 }
-			}
-		}
+	if ($null -eq $mm.Vars) { $mm.Vars = @(Get-VarDeclarations $mm.Mask) }
+	foreach ($v in $mm.Vars) {
+		if ($v.Name -ne $name) { continue }
+		$meth = Get-MethodAt $mm $v.Line
+		if ($null -eq $meth) { $r.ModuleVars += $v.Line } elseif (-not $r.Locals.ContainsKey($meth.name)) { $r.Locals[$meth.name] = $v.Line }
 	}
 	for ($i = 0; $i -lt $mm.Mask.Count; $i++) {
 		$code = $mm.Mask[$i]
@@ -8762,7 +8803,7 @@ function Edit-ModuleSpans($spans, [string]$new) {
 	}
 	$scan.Raw = $scan.RawLines -join "`n"
 	$bsl = Get-BslScan $scan.Raw
-	$scan.Lines = $bsl.Lines; $scan.Code = $bsl.Code; $scan.Literals = $bsl.Literals
+	$scan.Lines = $bsl.Lines; $scan.Code = $bsl.Code; $scan.Mask = $bsl.Mask; $scan.Literals = $bsl.Literals
 	$script:moduleMethods = $null; $script:moduleOutline = $null
 	$script:moduleDirty = $true
 }
@@ -8780,6 +8821,8 @@ function Rename-InModule([string]$old, [string]$new, [string]$kind, [bool]$inMod
 	$scan = Get-ModuleScan
 	if (-not $scan.Exists) { return }
 	$spans = @(Find-ModuleSpans $old $kind)
+	$doubt = @($spans | Where-Object { $_.Doubtful })
+	$spans = @($spans | Where-Object { -not $_.Doubtful })
 	$skipped = @()
 	if ($kind -eq 'attribute') {
 		$decl = Add-AttrCollisionWarnings $new
@@ -8805,11 +8848,17 @@ function Rename-InModule([string]$old, [string]$new, [string]$kind, [bool]$inMod
 		$script:warnLog += "[WARN] '$new' is a local name in these methods — a renamed reference would point to the local; left as is: qualify it as ЭтаФорма.$new or rename the local:"
 		foreach ($l in @($skipped | ForEach-Object { $_.Line } | Sort-Object -Unique)) { $script:warnLog += "  $(Format-ModuleLine $l)" }
 	}
+	if ($doubt.Count -gt 0) {
+		$w = if ($kind -eq 'command') { 'Команды' } else { 'Параметры' }
+		$script:warnLog += "[WARN] not rewritten — in these methods $w is not the form's (no form context, or a local of that name); check these lines:"
+		foreach ($l in @($doubt | ForEach-Object { $_.Line } | Sort-Object -Unique)) { $script:warnLog += "  $(Format-ModuleLine $l)" }
+	}
 	if ($kind -eq 'attribute') {
 		# Без контекста реквизит доступен только через переданную форму — не переписываем, показываем
 		$mm = Get-ModuleMethods
 		$cand = @()
 		for ($i = 0; $i -lt $mm.Mask.Count; $i++) {
+			if ($mm.Mask[$i].IndexOf($old, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
 			$meth = Get-MethodAt $mm ($i + 1)
 			if ($null -eq $meth -or -not $meth.noCtx) { continue }
 			if ([regex]::IsMatch($mm.Mask[$i], "\.\s*$([regex]::Escape($old))(?!\w)", 'IgnoreCase')) { $cand += ($i + 1) }

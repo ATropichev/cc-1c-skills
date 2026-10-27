@@ -1,0 +1,19 @@
+{
+  "name": "вложенная таблица ТЗ: нет такой колонки у реквизита → отказ",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "name": "Данные.Нет.Х",
+        "type": "string"
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "у 'Данные' нет колонки 'Нет'"
+  }
+}

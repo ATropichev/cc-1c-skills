@@ -1,0 +1,25 @@
+{
+  "name": "расширение: set команды с новым action без callType сохраняет вид вызова прежнего обработчика",
+  "setup": "fixture:move-cfe",
+  "params": {
+    "formPath": "Documents/ЗаказТест/Forms/ФормаДокумента/Ext/Form.xml"
+  },
+  "input": {
+    "commands": [
+      {
+        "name": "Расш1_Сделать",
+        "title": "Сделать",
+        "action": "Расш1_СделатьВместо",
+        "callType": "Override"
+      },
+      {
+        "set": "Расш1_Сделать",
+        "action": "Расш1_СделатьНовое"
+      }
+    ]
+  },
+  "expect": {
+    "stdoutContains": "callType=Override"
+  },
+  "skipPlatformVerify": "фикстура — расширение без базовой конфигурации"
+}

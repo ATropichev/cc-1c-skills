@@ -1,0 +1,19 @@
+{
+  "name": "set команды: loadTransparent без picture → отказ (иначе картинка пропала бы)",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "commands": [
+      {
+        "set": "Загрузить",
+        "loadTransparent": false
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "loadTransparent задаётся вместе с picture"
+  }
+}

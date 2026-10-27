@@ -80,7 +80,7 @@
 			</SearchControlAddition>
 			<ChildItems>
 				<InputField name="ДанныеПредставление" id="36">
-					<DataPath>Строки.Представление</DataPath>
+					<DataPath>Строки.Наименование</DataPath>
 					<ContextMenu name="ДанныеПредставлениеКонтекстноеМеню" id="37"/>
 					<ExtendedTooltip name="ДанныеПредставлениеРасширеннаяПодсказка" id="38"/>
 				</InputField>
@@ -161,7 +161,7 @@
 				<v8:Type>v8:ValueTable</v8:Type>
 			</Type>
 			<Columns>
-				<Column name="Представление" id="61">
+				<Column name="Наименование" id="61">
 					<Type>
 						<v8:Type>xs:string</v8:Type>
 						<v8:StringQualifiers>
