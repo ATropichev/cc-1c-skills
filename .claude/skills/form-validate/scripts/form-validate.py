@@ -1168,6 +1168,16 @@ def get_var_declarations(mask):
     return out
 
 
+# Реквизиты формы по имени (регистронезависимо — как имена в 1С). В форме расширения — и реквизиты
+# исходной формы (<BaseForm>): их видит модуль и на них ссылаются пути. Своя копия заимствованного
+# реквизита побеждает — в ней изменения расширения (добавленные колонки).
+def get_form_attribute_map(root):
+    m = {}
+    for a in root.findall(f"{{{F_NS}}}Attributes/{{{F_NS}}}Attribute") + root.findall(f"{{{F_NS}}}BaseForm/{{{F_NS}}}Attributes/{{{F_NS}}}Attribute"):
+        m.setdefault((a.get('name') or '').lower(), a)
+    return m
+
+
 def read_module_text(path):
     try:
         with open(path, encoding='utf-8-sig', newline='') as fh:
@@ -2461,15 +2471,13 @@ def main():
                 for p in outline['procs']:
                     for k in range(p['start'], min(p['end'], len(bsl['Code'])) + 1):
                         in_proc[k] = True
-                form_attrs = {}
-                # В форме расширения модуль видит и реквизиты исходной формы (<BaseForm>) — замер на 8.3.24
-                for a in root.findall(f"{{{F_NS}}}Attributes/{{{F_NS}}}Attribute") + root.findall(f"{{{F_NS}}}BaseForm/{{{F_NS}}}Attributes/{{{F_NS}}}Attribute"):
-                    form_attrs[(a.get('name') or '').lower()] = a.get('name')
+                # В форме расширения модуль видит и реквизиты исходной формы — замер на 8.3.24
+                form_attrs = get_form_attribute_map(root)
                 check24_ok = True
                 for v in get_var_declarations(bsl['Mask']):
                     if in_proc[v['Line']] or v['Name'].lower() not in form_attrs:
                         continue
-                    report_error(f"24. Module variable '{v['Name']}' (Module.bsl:{v['Line']}) has the same name as form attribute '{form_attrs[v['Name'].lower()]}' — the platform will not compile the module: \"Переменная с указанным именем уже определена\"")
+                    report_error(f"24. Module variable '{v['Name']}' (Module.bsl:{v['Line']}) has the same name as form attribute '{form_attrs[v['Name'].lower()].get('name')}' — the platform will not compile the module: \"Переменная с указанным именем уже определена\"")
                     check24_ok = False
                 if check24_ok:
                     report_ok("24. Module variables: no clash with form attributes")
@@ -2485,9 +2493,8 @@ def main():
         else:
             dcsset_ns = "http://v8.1c.ru/8.1/data-composition-system/settings"
             xsi_ns = "http://www.w3.org/2001/XMLSchema-instance"
-            ca_attrs = {}
-            for a in root.findall(f"{{{F_NS}}}Attributes/{{{F_NS}}}Attribute") + root.findall(f"{{{F_NS}}}BaseForm/{{{F_NS}}}Attributes/{{{F_NS}}}Attribute"):
-                ca_attrs.setdefault((a.get('name') or '').lower(), a)
+            ca_attrs = get_form_attribute_map(root)
+            ca_cols = {}
             check25_ok = True
             seen25 = set()
             for t in ca_node.iter(f"{{{dcsset_ns}}}left", f"{{{dcsset_ns}}}right"):
@@ -2506,8 +2513,11 @@ def main():
                 ts = [(x.text or '').strip() for x in attr.findall(f"{{{F_NS}}}Type/{{{V8_NS}}}Type")]
                 if len(segs) < 2 or len(ts) != 1 or ts[0] not in ('v8:ValueTable', 'v8:ValueTree'):
                     continue
-                cols = set((c.get('name') or '').lower() for c in attr.findall(f"{{{F_NS}}}Columns/{{{F_NS}}}Column") + attr.findall(f"{{{F_NS}}}Columns/{{{F_NS}}}AdditionalColumns/{{{F_NS}}}Column"))
-                if segs[1].lower() not in cols:
+                # Второй сегмент — своя колонка таблицы (AdditionalColumns у неё — колонки вложенных таблиц, уровнем ниже)
+                an = (attr.get('name') or '').lower()
+                if an not in ca_cols:
+                    ca_cols[an] = set((c.get('name') or '').lower() for c in attr.findall(f"{{{F_NS}}}Columns/{{{F_NS}}}Column"))
+                if segs[1].lower() not in ca_cols[an]:
                     report_warn(f"25. Conditional appearance: filter field '{path}' — attribute '{segs[0]}' has no column '{segs[1]}' — a stale path, the platform accepts it without error")
                     check25_ok = False
             if check25_ok:

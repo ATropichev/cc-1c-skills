@@ -2464,6 +2464,18 @@ function Get-VarDeclarations([string[]]$mask) {
 	return $out
 }
 
+# Реквизиты формы по имени (@{} регистронезависим — как имена в 1С). В форме расширения — и реквизиты
+# исходной формы (<BaseForm>): их видит модуль и на них ссылаются пути. Своя копия заимствованного
+# реквизита побеждает — в ней изменения расширения (добавленные колонки).
+function Get-FormAttributeMap {
+	$map = @{}
+	foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute | f:BaseForm/f:Attributes/f:Attribute", $nsMgr)) {
+		$n = $a.GetAttribute('name')
+		if (-not $map.ContainsKey($n)) { $map[$n] = $a }
+	}
+	return $map
+}
+
 # --- Check 24: переменные модуля против реквизитов формы ---
 # Переменная модуля (Перем вне процедур) с именем реквизита формы — модуль не компилируется: «Переменная
 # с указанным именем уже определена». Загрузка XML и обновление конфигурации этого не показывают — ошибка
@@ -2481,14 +2493,12 @@ if (-not $stopped) {
 			$outline = Get-ModuleOutline $bsl.Code
 			$inProc = New-Object bool[] ($bsl.Code.Count + 1)
 			foreach ($p in $outline.procs) { for ($k = $p.start; $k -le $p.end -and $k -le $bsl.Code.Count; $k++) { $inProc[$k] = $true } }
-			# @{} регистронезависим — как имена в BSL
-			$formAttrs = @{}
-			# В форме расширения модуль видит и реквизиты исходной формы (<BaseForm>) — замер на 8.3.24
-			foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute | f:BaseForm/f:Attributes/f:Attribute", $nsMgr)) { $formAttrs[$a.GetAttribute('name')] = $a.GetAttribute('name') }
+			# В форме расширения модуль видит и реквизиты исходной формы — замер на 8.3.24
+			$formAttrs = Get-FormAttributeMap
 			$check24Ok = $true
 			foreach ($v in (Get-VarDeclarations $bsl.Mask)) {
 				if ($inProc[$v.Line] -or -not $formAttrs.ContainsKey($v.Name)) { continue }
-				Report-Error "24. Module variable '$($v.Name)' (Module.bsl:$($v.Line)) has the same name as form attribute '$($formAttrs[$v.Name])' — the platform will not compile the module: `"Переменная с указанным именем уже определена`""
+				Report-Error "24. Module variable '$($v.Name)' (Module.bsl:$($v.Line)) has the same name as form attribute '$($formAttrs[$v.Name].GetAttribute('name'))' — the platform will not compile the module: `"Переменная с указанным именем уже определена`""
 				$check24Ok = $false
 			}
 			if ($check24Ok) { Report-OK "24. Module variables: no clash with form attributes" }
@@ -2507,9 +2517,8 @@ if (-not $stopped) {
 	} else {
 		$caNs = New-Object System.Xml.XmlNamespaceManager($xmlDoc.NameTable)
 		$caNs.AddNamespace("dcsset", "http://v8.1c.ru/8.1/data-composition-system/settings")
-		# @{} регистронезависим — как имена в 1С; в форме расширения — и реквизиты исходной формы
-		$caAttrs = @{}
-		foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute | f:BaseForm/f:Attributes/f:Attribute", $nsMgr)) { $caAttrs[$a.GetAttribute('name')] = $a }
+		$caAttrs = Get-FormAttributeMap
+		$caCols = @{}
 		$check25Ok = $true
 		$seen25 = @{}
 		foreach ($t in $caNode.SelectNodes(".//dcsset:left | .//dcsset:right", $caNs)) {
@@ -2526,9 +2535,14 @@ if (-not $stopped) {
 			}
 			$ts = @($attr.SelectNodes("f:Type/v8:Type", $nsMgr) | ForEach-Object { $_.InnerText.Trim() })
 			if ($segs.Count -lt 2 -or $ts.Count -ne 1 -or @('v8:ValueTable','v8:ValueTree') -notcontains $ts[0]) { continue }
-			$cols = @{}
-			foreach ($c in $attr.SelectNodes("f:Columns/f:Column | f:Columns/f:AdditionalColumns/f:Column", $nsMgr)) { $cols[$c.GetAttribute('name')] = $true }
-			if (-not $cols.ContainsKey($segs[1])) {
+			# Второй сегмент — своя колонка таблицы (AdditionalColumns у неё — колонки вложенных таблиц, уровнем ниже)
+			$an = $attr.GetAttribute('name')
+			if (-not $caCols.ContainsKey($an)) {
+				$cols = @{}
+				foreach ($c in $attr.SelectNodes("f:Columns/f:Column", $nsMgr)) { $cols[$c.GetAttribute('name')] = $true }
+				$caCols[$an] = $cols
+			}
+			if (-not $caCols[$an].ContainsKey($segs[1])) {
 				Report-Warn "25. Conditional appearance: filter field '$path' — attribute '$($segs[0])' has no column '$($segs[1])' — a stale path, the platform accepts it without error"
 				$check25Ok = $false
 			}
