@@ -137,7 +137,7 @@ Returns current form structure. This is the primary way to understand what's on 
 
 **form** — active form number, or `null` when no form is open (desktop).
 
-**formCount** — number of open forms. Use this to know how many windows are stacked. `0` means desktop.
+**formCount** — number of open forms.
 
 **openForms** — array of all open form numbers (e.g. `[0, 1]`). Works even when the open-windows tab bar is hidden in 1C settings.
 

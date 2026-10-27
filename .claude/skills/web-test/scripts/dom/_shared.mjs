@@ -1,4 +1,4 @@
-// web-test dom shared v1.12 — embedded JS function constants
+// web-test dom shared v1.13 — embedded JS function constants
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * Shared function strings embedded into page.evaluate() generators.
@@ -485,18 +485,19 @@ function detectForm() {
   return pool.reduce((best, n) => metric[n] > metric[best] ? n : best);
 }`;
 
-/** Detect all open forms + modal state. Returns { activeForm, allForms, formCount, modal }.
- *  Works even when the open-windows tab bar is hidden. */
+/** Detect all open forms + modal state. Returns { allForms, formCount, modal }.
+ *  Works even when the open-windows tab bar is hidden.
+ *  Counted by presence, not visibility: a form on a background tab is hidden whole, yet open.
+ *  Every form has exactly one `form{N}_container` node, and the platform removes it on close
+ *  (measured: the set of containers matched the open forms at every step — tabs, modal,
+ *  lock-owner window, home page, closing). */
 export const DETECT_FORMS_FN = HAS_VISIBLE_MODAL_FN + `
 function detectForms() {
-  const anySel = ${JSON.stringify(FORM_DETECT_ANY_SEL)};
-  const counts = {};
-  document.querySelectorAll(anySel).forEach(el => {
-    if (el.offsetWidth === 0) return;
-    const m = el.id.match(/^form(\\d+)_/);
-    if (m) counts[m[1]] = (counts[m[1]] || 0) + 1;
+  const nums = [];
+  document.querySelectorAll('[id^="form"][id$="_container"]').forEach(el => {
+    const m = el.id.match(/^form(\\d+)_container$/);
+    if (m) nums.push(Number(m[1]));
   });
-  const nums = Object.keys(counts).map(Number);
   return { allForms: nums.sort((a, b) => a - b), formCount: nums.length, modal: hasVisibleModal() };
 }`;
 

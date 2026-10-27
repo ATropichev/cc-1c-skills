@@ -2,7 +2,7 @@ export const name = 'getFormState: базовая структура — fields,
 export const tags = ['formstate', 'smoke'];
 export const timeout = 60000;
 
-export default async function({ navigateSection, openCommand, clickElement, closeForm, getFormState, getPage, assert, step, log }) {
+export default async function({ navigateSection, openCommand, navigateLink, switchTab, clickElement, closeForm, getFormState, getPage, assert, step, log }) {
 
   await step('basic: getFormState на форме списка возвращает таблицу и команды', async () => {
     await navigateSection('Склад');
@@ -18,6 +18,24 @@ export default async function({ navigateSection, openCommand, clickElement, clos
     // она отключаема в настройках 1С. Панель остаётся запасным источником.
     assert.formTitle(s, 'Контрагенты', 'Заголовок формы списка');
     assert.noErrors(s, 'На только что открытой форме списка ошибок быть не должно');
+    await closeForm();
+  });
+
+  await step('openForms: форма на фоновой вкладке считается открытой', async () => {
+    // Фоновая вкладка скрыта целиком — раньше выпадала из счёта (openForms [3] при двух открытых).
+    await navigateSection('Склад');
+    const a = await openCommand('Контрагенты');
+    const b = await navigateLink('Справочник.Номенклатура');
+    log(`a.form=${a.form} b.form=${b.form} openForms=${JSON.stringify(b.openForms)}`);
+    assert.notEqual(a.form, b.form, 'две разные формы');
+    assert.equal(b.formCount, 2, 'обе формы открыты — formCount 2');
+    assert.deepEqual(b.openForms, [a.form, b.form].sort((x, y) => x - y), 'openForms содержит обе');
+    const back = await switchTab('Контрагенты');
+    assert.equal(back.form, a.form, 'активна снова первая');
+    assert.equal(back.formCount, 2, 'после переключения — по-прежнему две');
+    const one = await closeForm();
+    assert.equal(one.formCount, 1, 'закрыли одну — осталась одна');
+    assert.deepEqual(one.openForms, [b.form], 'осталась вторая');
     await closeForm();
   });
 
