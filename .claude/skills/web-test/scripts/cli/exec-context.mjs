@@ -1,10 +1,10 @@
-// web-test cli/exec-context v1.1 — buildContext + executeScript для run/exec/test
+// web-test cli/exec-context v1.2 — buildContext + executeScript для run/exec/test
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import { readFileSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import * as browser from '../browser.mjs';
-import { elapsed, slugify } from './util.mjs';
+import { elapsed, slugify, withDeadline, softDeadline, DeadlineError } from './util.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ERROR_SHOT_PATH = resolve(__dirname, '..', '..', 'error-shot.png');
@@ -107,7 +107,7 @@ export function buildContext({ noRecord = false } = {}) {
   return ctx;
 }
 
-export async function executeScript(code, { noRecord } = {}) {
+export async function executeScript(code, { noRecord, timeoutMs } = {}) {
   const output = [];
   const origLog = console.log;
   const origErr = console.error;
@@ -124,7 +124,10 @@ export async function executeScript(code, { noRecord } = {}) {
 
     const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
     const fn = new AsyncFunction(...Object.keys(ctx), code);
-    await fn(...Object.values(ctx));
+    const run = fn(...Object.values(ctx));
+    // The deadline only stops waiting — a hung call keeps running until the caller tears the
+    // browser down (cmdRun disconnects right after).
+    await (timeoutMs ? withDeadline(run, timeoutMs, 'script') : run);
 
     console.log = origLog;
     console.error = origErr;
@@ -133,22 +136,28 @@ export async function executeScript(code, { noRecord } = {}) {
     console.log = origLog;
     console.error = origErr;
 
-    // Auto-stop recording if active (prevents "Already recording" on next exec)
+    // Auto-stop recording if active (prevents "Already recording" on next exec).
+    // Bounded: after a script timeout the renderer may be the thing that hangs.
     if (browser.isRecording()) {
-      try { await browser.stopRecording(); } catch {}
+      await softDeadline(browser.stopRecording(), 40000, 'stopRecording');
     }
 
     // Error screenshot (skip if already taken before fetchErrorStack closed the modal)
     let shotFile = e.onecError?.screenshot;
     if (!shotFile) {
-      try {
-        const png = await browser.screenshot();
-        shotFile = nextErrorShotPath('script');
-        writeFileSync(shotFile, png);
-      } catch {}
+      const shot = await softDeadline(browser.screenshot(), 5000, 'screenshot');
+      if (shot.ok) {
+        try {
+          shotFile = nextErrorShotPath('script');
+          writeFileSync(shotFile, shot.value);
+        } catch { shotFile = undefined; }
+      }
     }
 
-    const result = { ok: false, error: e.message, output: output.join('\n'), screenshot: shotFile, elapsed: elapsed(t0) };
+    const timedOut = e instanceof DeadlineError;
+    const error = timedOut ? `Script timed out after ${e.ms}ms (--timeout)` : e.message;
+    const result = { ok: false, error, output: output.join('\n'), screenshot: shotFile, elapsed: elapsed(t0) };
+    if (timedOut) result.timedOut = true;
 
     // Enrich with 1C error context if available
     if (e.onecError) {

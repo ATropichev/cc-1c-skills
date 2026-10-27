@@ -1,4 +1,4 @@
-// web-test cli/commands/run v1.1 — autonomous connect → exec → disconnect (no server)
+// web-test cli/commands/run v1.2 — autonomous connect → exec → disconnect (no server)
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -6,8 +6,9 @@ import * as browser from '../../browser.mjs';
 import { out, die, readStdin } from '../util.mjs';
 import { executeScript } from '../exec-context.mjs';
 
-export async function cmdRun(url, fileOrDash) {
-  if (!url || !fileOrDash) die('Usage: node src/run.mjs run <url> <file|->');
+// Exit codes: 0 — ok, 1 — script error, 2 — script hit --timeout (same code as `test --global-timeout`).
+export async function cmdRun(url, fileOrDash, execTimeoutMs) {
+  if (!url || !fileOrDash) die('Usage: node src/run.mjs run <url> <file|-> [--timeout=<ms>|--timeout-min=<min>]');
 
   const code = fileOrDash === '-'
     ? await readStdin()
@@ -21,9 +22,11 @@ export async function cmdRun(url, fileOrDash) {
   } catch (e) {
     die(e.message);
   }
-  const result = await executeScript(code);
+  const result = await executeScript(code, { timeoutMs: execTimeoutMs });
+  // disconnect() bounds every step itself and kills Chromium as the last resort.
   await browser.disconnect();
 
   out(result);
-  if (!result.ok) process.exit(1);
+  // Explicit exit: after a timeout the hung script promise is still pending.
+  process.exit(result.timedOut ? 2 : result.ok ? 0 : 1);
 }

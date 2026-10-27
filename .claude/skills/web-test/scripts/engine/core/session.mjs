@@ -1,4 +1,4 @@
-// web-test core/session v1.22 — Browser session lifecycle: connect/disconnect/attach/detach, multi-context registry.
+// web-test core/session v1.23 — Browser session lifecycle: connect/disconnect/attach/detach, multi-context registry.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { chromium } from 'playwright';
@@ -7,6 +7,7 @@ import { statSync, mkdirSync, readdirSync, openSync, closeSync } from 'fs';
 import { join as pathJoin, dirname } from 'path';
 import { removePathSync } from './fsutil.mjs';
 import { tmpdir, userInfo } from 'os';
+import { spawnSync } from 'child_process';
 import {
   browser, page, sessionPrefix, seanceId, recorder, highlightMode,
   contexts, activeContextName, activeMode, persistentUserDataDir,
@@ -301,12 +302,11 @@ export async function disconnect() {
     // Skipped after the multi-context path: `page` still mirrors the last active slot, which
     // was just logged out above — re-sending it would pay a hung page's cost a second time.
     if (!wasMultiContext) {
-      await softDeadline(logoutSlot({ page, sessionPrefix, seanceId }, 1000), 4000, 'logoutSlot');
+      const slot = { page, sessionPrefix, seanceId };
+      const own = await softDeadline(logoutSlot(slot, 1000), 4000, 'logoutSlot');
+      if (!own.ok) await nodeLogout(slot, 3000);
     }
-    await softDeadline(browser.close(), 10000, 'browser.close');
-    // Floor: if Chromium ignored close(), take the process out — never leave an orphan.
-    try { browser.browser?.()?.process?.()?.kill('SIGKILL'); } catch {}
-    try { browser.process?.()?.kill('SIGKILL'); } catch {}
+    await shutdownBrowser(browser);
     setBrowser(null);
     setPage(null);
     setSessionPrefix(null);
@@ -575,6 +575,58 @@ export async function closeContext(name) {
 }
 
 /**
+ * Shut a browser (Browser or persistent BrowserContext) down without leaving processes behind.
+ *
+ * A renderer stuck in a JS loop survives everything graceful (measured on Windows): closing its
+ * page succeeds yet leaves the process alive, browser.close() then hangs, the browser process
+ * exits on its own and the renderer is orphaned, spinning a core forever. By then the tree is
+ * gone and taskkill /T has no root to walk. So the wedge is detected up front and the tree
+ * killed while the browser process is still alive. Playwright's Browser exposes no process()
+ * for chromium.launch(); the pid comes from CDP — served by the browser process, it answers
+ * even while a renderer is wedged.
+ * @returns {Promise<boolean>} true when the browser closed gracefully
+ */
+async function shutdownBrowser(b, closeMs = 10000) {
+  if (!b) return true;
+  const pid = await softDeadline(browserPid(b), 2000, 'browserPid');
+  const pages = typeof b.pages === 'function' ? b.pages() : (b.contexts?.() || []).flatMap(c => c.pages());
+  for (const p of pages) {
+    if (p.isClosed()) continue;
+    const alive = await softDeadline(p.evaluate(() => 1), 1000, 'renderer probe');
+    if (!alive.ok && pid.ok && pid.value) {
+      killProcessTree(pid.value);
+      return false;
+    }
+  }
+  const closed = await softDeadline(Promise.resolve(b.close()), closeMs, 'browser.close');
+  if (!closed.ok && pid.ok) killProcessTree(pid.value);
+  return closed.ok;
+}
+
+async function browserPid(b) {
+  const root = b.browser?.() || b;
+  if (typeof root.newBrowserCDPSession !== 'function') return null;
+  const cdp = await root.newBrowserCDPSession();
+  try {
+    const { processInfo } = await cdp.send('SystemInfo.getProcessInfo');
+    return processInfo.find(p => p.type === 'browser')?.id ?? null;
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
+function killProcessTree(pid) {
+  if (!pid) return;
+  if (process.platform === 'win32') {
+    // taskkill /T walks the tree while the root is alive; TerminateProcess alone would orphan
+    // the renderers.
+    spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { timeout: 5000, stdio: 'ignore', windowsHide: true });
+  } else {
+    try { process.kill(pid, 'SIGKILL'); } catch {}
+  }
+}
+
+/**
  * Release a 1C seance straight from Node — no renderer, no CDP, no browser involved.
  *
  * Measured on the webtest stand: the seance is identified by `seanceId` in the URL and the
@@ -725,10 +777,7 @@ export async function abortContext(name, { logoutMs = 3000, closeMs = 5000, park
   if (out.closed === 'failed') {
     out.escalated = true;
     out.notes.push('close breached its deadline — killing the browser');
-    const b = browser;
-    await softDeadline(Promise.resolve(b?.close?.()), 5000, 'browser.close');
-    try { b?.browser?.()?.process?.()?.kill('SIGKILL'); } catch {}
-    try { b?.process?.()?.kill('SIGKILL'); } catch {}
+    await shutdownBrowser(browser, 5000);
     out.closed = 'browser-killed';
     contexts.clear();
     setBrowser(null);
@@ -748,8 +797,7 @@ export async function abortContext(name, { logoutMs = 3000, closeMs = 5000, park
 
   if (lastPageInTabMode) {
     out.notes.push('last tab closed — browser torn down, next createContext relaunches it');
-    await softDeadline(Promise.resolve(browser?.close?.()), 5000, 'browser.close');
-    try { browser?.browser?.()?.process?.()?.kill('SIGKILL'); } catch {}
+    await shutdownBrowser(browser, 5000);
     setBrowser(null);
     setPage(null);
     setSessionPrefix(null);

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// web-test run v1.19 — CLI entry-point (распилено по cli/)
+// web-test run v1.20 — CLI entry-point (распилено по cli/)
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * CLI runner for 1C web client automation.
@@ -20,7 +20,7 @@
  * commands/{start,run,exec,shot,stop,status,test}, test-runner/*.
  */
 import * as browser from './browser.mjs';
-import { usage } from './cli/util.mjs';
+import { usage, die } from './cli/util.mjs';
 import { cmdStart } from './cli/commands/start.mjs';
 import { cmdRun } from './cli/commands/run.mjs';
 import { cmdExec } from './cli/commands/exec.mjs';
@@ -32,7 +32,8 @@ import { cmdTest } from './cli/commands/test.mjs';
 const [,, cmd, ...rawArgs] = process.argv;
 const flags = {
   noRecord: rawArgs.includes('--no-record'),
-  execTimeoutMs: parseExecTimeoutMs(rawArgs),
+  // `test` has its own per-test --timeout=ms — parse the exec bound only where it applies.
+  execTimeoutMs: (cmd === 'run' || cmd === 'exec') ? parseExecTimeoutMs(rawArgs) : undefined,
 };
 const args = rawArgs.filter(a => !a.startsWith('--'));
 
@@ -44,18 +45,28 @@ browser.setPreserveClipboard(preserveClipboard);
 
 function parseExecTimeoutMs(argv) {
   const DEFAULT_MS = 30 * 60 * 1000;
+  // setTimeout turns anything above 2^31-1 (Infinity included) into 1 ms — a bound that large
+  // would kill the script at once instead of never.
+  const MAX_MS = 2147483647;
+  const check = (ms, source) => {
+    if (!Number.isFinite(ms) || ms <= 0 || ms > MAX_MS) {
+      die(`Invalid ${source}: expected a positive number of ms up to ${MAX_MS} `
+        + `(--timeout=<ms>, --timeout-min=<min>, WEB_TEST_EXEC_TIMEOUT_MS=<ms>)`);
+    }
+    return Math.round(ms);
+  };
   const flagMs = argv.find(a => a.startsWith('--timeout='));
-  if (flagMs) return Math.max(1, Number(flagMs.slice('--timeout='.length))) || DEFAULT_MS;
+  if (flagMs) return check(Number(flagMs.slice('--timeout='.length)), flagMs);
   const flagMin = argv.find(a => a.startsWith('--timeout-min='));
-  if (flagMin) return Math.max(1, Number(flagMin.slice('--timeout-min='.length))) * 60 * 1000 || DEFAULT_MS;
+  if (flagMin) return check(Number(flagMin.slice('--timeout-min='.length)) * 60 * 1000, flagMin);
   const env = process.env.WEB_TEST_EXEC_TIMEOUT_MS;
-  if (env) return Math.max(1, Number(env)) || DEFAULT_MS;
+  if (env) return check(Number(env), `WEB_TEST_EXEC_TIMEOUT_MS=${env}`);
   return DEFAULT_MS;
 }
 
 switch (cmd) {
   case 'start':  await cmdStart(args[0]); break;
-  case 'run':    await cmdRun(args[0], args[1]); break;
+  case 'run':    await cmdRun(args[0], args[1], flags.execTimeoutMs); break;
   case 'exec':   await cmdExec(args[0], flags); break;
   case 'shot':   await cmdShot(args[0]); break;
   case 'stop':   await cmdStop(); break;
