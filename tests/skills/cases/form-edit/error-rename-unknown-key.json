@@ -1,0 +1,20 @@
+{
+  "name": "rename с неизвестным ключом → отказ со списком допустимых",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "rename": "Данные",
+        "to": "Строки",
+        "updateModule": true
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "допустимы: rename, to, renameInModule"
+  }
+}

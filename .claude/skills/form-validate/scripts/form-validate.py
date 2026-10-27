@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.35 — Validate 1C managed form
+# form-validate v1.36 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -2405,6 +2405,41 @@ def main():
                 check22_ok = False
             if check22_ok:
                 report_ok("22. Form module handlers: bindings match procedures")
+
+    # --- Check 24: переменные модуля против реквизитов формы ---
+    # Переменная модуля (Перем вне процедур) с именем реквизита формы — модуль не компилируется: «Переменная
+    # с указанным именем уже определена». Загрузка XML и обновление конфигурации этого не показывают — ошибка
+    # всплывает при первом обращении к форме. Локальная Перем в процедуре реквизит перекрывает, это допустимо.
+    if not stopped:
+        module_path = os.path.join(os.path.dirname(os.path.abspath(form_path)), 'Form', 'Module.bsl')
+        if not os.path.isfile(module_path):
+            report_ok("24. Module variables: no module — skipped")
+        else:
+            module_text = read_module_text(module_path)
+            if module_text is None:
+                report_warn("24. Form module is not UTF-8 — module variables are not checked")
+            else:
+                bsl = get_bsl_scan(module_text)
+                outline = get_module_outline(bsl['Code'])
+                in_proc = [False] * (len(bsl['Code']) + 1)
+                for p in outline['procs']:
+                    for k in range(p['start'], min(p['end'], len(bsl['Code'])) + 1):
+                        in_proc[k] = True
+                form_attrs = {}
+                for a in root.findall(f"{{{F_NS}}}Attributes/{{{F_NS}}}Attribute"):
+                    form_attrs[(a.get('name') or '').lower()] = a.get('name')
+                check24_ok = True
+                for i, code in enumerate(bsl['Code']):
+                    m = re.match(r'^\s*(?:Перем|Var)\s+([^;]*)', code, re.I)
+                    if in_proc[i + 1] or not m:
+                        continue
+                    for v in m.group(1).split(','):
+                        v = re.sub(r'\s+(Экспорт|Export)\s*$', '', v, flags=re.I).strip()
+                        if v and v.lower() in form_attrs:
+                            report_error(f"24. Module variable '{v}' (Module.bsl:{i + 1}) has the same name as form attribute '{form_attrs[v.lower()]}' — the platform will not compile the module: \"Переменная с указанным именем уже определена\"")
+                            check24_ok = False
+                if check24_ok:
+                    report_ok("24. Module variables: no clash with form attributes")
 
     # --- Finalize ---
     checks = ok_count + errors + warnings

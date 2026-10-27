@@ -1,0 +1,26 @@
+{
+  "name": "remove реквизита: голое имя в методе без контекста и параметр-тёзка — не обращения к реквизиту",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form/Module.bsl",
+        "content": "&НаСервереБезКонтекста\nПроцедура Т()\n\tВрем = 1;\nКонецПроцедуры\n\n&НаКлиенте\nПроцедура У(Врем)\n\tВрем = 2;\nКонецПроцедуры\n"
+      }
+    }
+  ],
+  "input": {
+    "attributes": [
+      {
+        "name": "Врем",
+        "type": "string"
+      },
+      {
+        "remove": "Врем"
+      }
+    ]
+  }
+}

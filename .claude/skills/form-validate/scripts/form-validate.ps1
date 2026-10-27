@@ -1,4 +1,4 @@
-﻿# form-validate v1.35 — Validate 1C managed form
+﻿# form-validate v1.36 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2431,6 +2431,42 @@ if (-not $stopped) {
 			$check22Ok = $false
 		}
 		if ($check22Ok) { Report-OK "22. Form module handlers: bindings match procedures" }
+	}
+}
+
+# --- Check 24: переменные модуля против реквизитов формы ---
+# Переменная модуля (Перем вне процедур) с именем реквизита формы — модуль не компилируется: «Переменная
+# с указанным именем уже определена». Загрузка XML и обновление конфигурации этого не показывают — ошибка
+# всплывает при первом обращении к форме. Локальная Перем в процедуре реквизит перекрывает, это допустимо.
+if (-not $stopped) {
+	$modulePath = Join-Path (Split-Path (Resolve-Path $FormPath).ProviderPath -Parent) "Form/Module.bsl"
+	if (-not (Test-Path -LiteralPath $modulePath)) {
+		Report-OK "24. Module variables: no module — skipped"
+	} else {
+		$moduleText = Read-ModuleText $modulePath
+		if ($null -eq $moduleText) {
+			Report-Warn "24. Form module is not UTF-8 — module variables are not checked"
+		} else {
+			$bsl = Get-BslScan $moduleText
+			$outline = Get-ModuleOutline $bsl.Code
+			$inProc = New-Object bool[] ($bsl.Code.Count + 1)
+			foreach ($p in $outline.procs) { for ($k = $p.start; $k -le $p.end -and $k -le $bsl.Code.Count; $k++) { $inProc[$k] = $true } }
+			# @{} регистронезависим — как имена в BSL
+			$formAttrs = @{}
+			foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute", $nsMgr)) { $formAttrs[$a.GetAttribute('name')] = $a.GetAttribute('name') }
+			$check24Ok = $true
+			for ($i = 0; $i -lt $bsl.Code.Count; $i++) {
+				if ($inProc[$i + 1] -or $bsl.Code[$i] -notmatch '^\s*(?:Перем|Var)\s+([^;]*)') { continue }
+				foreach ($v in ($Matches[1] -split ',')) {
+					$v = ($v -replace '\s+(Экспорт|Export)\s*$', '').Trim()
+					if ($v -and $formAttrs.ContainsKey($v)) {
+						Report-Error "24. Module variable '$v' (Module.bsl:$($i + 1)) has the same name as form attribute '$($formAttrs[$v])' — the platform will not compile the module: `"Переменная с указанным именем уже определена`""
+						$check24Ok = $false
+					}
+				}
+			}
+			if ($check24Ok) { Report-OK "24. Module variables: no clash with form attributes" }
+		}
 	}
 }
 

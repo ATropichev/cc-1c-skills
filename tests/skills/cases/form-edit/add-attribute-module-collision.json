@@ -1,0 +1,32 @@
+{
+  "name": "добавление реквизита: переменная модуля с тем же именем и неявное присваивание — в предупреждении",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form/Module.bsl",
+        "content": "&НаКлиенте\nПерем Флажок;\n\n&НаКлиенте\nПроцедура Т()\n\tФлажок2 = Истина;\nКонецПроцедуры\n\n&НаКлиенте\nПроцедура У(Флажок)\n\tФлажок = Ложь;\nКонецПроцедуры\n\n&НаСервере\nПроцедура С()\n\tФлажок = Истина;\nКонецПроцедуры\n"
+      }
+    }
+  ],
+  "input": {
+    "attributes": [
+      {
+        "name": "Флажок",
+        "type": "boolean"
+      }
+    ]
+  },
+  "expect": {
+    "stdoutContains": [
+      "[WARN] module variable 'Флажок' has the same name as the form attribute",
+      "Module.bsl:16 [С]"
+    ],
+    "stdoutNotContains": [
+      "Module.bsl:11"
+    ]
+  }
+}

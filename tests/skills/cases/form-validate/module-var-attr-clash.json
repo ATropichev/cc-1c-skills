@@ -1,0 +1,24 @@
+{
+  "setup": "fixture:module-handler-orphan",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "name": "Модуль формы: переменная модуля с именем реквизита — ошибка (модуль не скомпилируется); Перем в процедуре — не ошибка",
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "DataProcessors/БезДействия/Forms/Форма/Ext/Form/Module.bsl",
+        "content": "&НаКлиенте\nПерем Счетчик, объект Экспорт;\n\n&НаКлиенте\nПроцедура ПолеПриИзменении(Элемент)\n\tПерем Объект;\n\tОбъект = 1;\nКонецПроцедуры\n\n&НаКлиенте\nПроцедура Выполнить(Команда)\nКонецПроцедуры\n"
+      }
+    }
+  ],
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "[ERROR] 24. Module variable 'объект' (Module.bsl:2) has the same name as form attribute 'Объект'"
+    ],
+    "stdoutNotContains": [
+      "Module.bsl:6"
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "rename основного реквизита → отказ",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "rename": "Объект",
+        "to": "Товар"
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "основной реквизит не переименовывается"
+  }
+}

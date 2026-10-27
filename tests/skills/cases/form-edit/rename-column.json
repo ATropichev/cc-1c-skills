@@ -1,0 +1,15 @@
+{
+  "name": "rename колонки: пути элементов перепривязаны; код через строки таблицы не переписывается",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "rename": "Данные.Представление",
+        "to": "Наименование"
+      }
+    ]
+  }
+}

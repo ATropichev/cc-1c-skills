@@ -1,0 +1,20 @@
+{
+  "setup": "fixture:module-handler-orphan",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "name": "Модуль формы: переменные модуля без совпадений с реквизитами — проверка 24 проходит",
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "DataProcessors/БезДействия/Forms/Форма/Ext/Form/Module.bsl",
+        "content": "&НаКлиенте\nПерем Счетчик;\n\n&НаКлиенте\nПроцедура ПолеПриИзменении(Элемент)\nКонецПроцедуры\n\n&НаКлиенте\nПроцедура Выполнить(Команда)\nКонецПроцедуры\n"
+      }
+    }
+  ],
+  "expect": {
+    "stdoutNotContains": [
+      "24. Module variable"
+    ]
+  }
+}

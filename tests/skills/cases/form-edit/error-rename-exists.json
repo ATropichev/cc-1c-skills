@@ -1,0 +1,19 @@
+{
+  "name": "rename в существующее имя → отказ",
+  "setup": "fixture:modify-form",
+  "params": {
+    "formPath": "Catalogs/Товары/Forms/ФормаЭлемента/Ext/Form.xml"
+  },
+  "input": {
+    "attributes": [
+      {
+        "rename": "Данные",
+        "to": "Данные2"
+      }
+    ]
+  },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": "реквизит 'Данные2' уже есть в форме"
+  }
+}

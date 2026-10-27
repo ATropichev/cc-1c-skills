@@ -1,4 +1,4 @@
-﻿# form-edit v1.38 — Edit 1C managed form elements
+﻿# form-edit v1.39 — Edit 1C managed form elements
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -7485,11 +7485,12 @@ function Get-BslScan([string]$text) {
 # Модуль формы — рядом с Form.xml: <...>/Ext/Form/Module.bsl.
 function Get-ModuleScan {
 	if ($null -ne $script:moduleScan) { return $script:moduleScan }
-	$scan = @{ Exists = $false; Raw = ""; Lines = @(); Code = @(); Literals = @() }
+	$scan = @{ Exists = $false; Raw = ""; RawLines = @(); Lines = @(); Code = @(); Literals = @() }
 	$path = Join-Path ([System.IO.Path]::GetDirectoryName($resolvedFormPath)) "Form/Module.bsl"
 	if (Test-Path -LiteralPath $path) {
 		$scan.Exists = $true
 		$scan.Raw = [System.IO.File]::ReadAllText($path)
+		$scan.RawLines = $scan.Raw -split "`n"
 		$bsl = Get-BslScan $scan.Raw
 		$scan.Lines = $bsl.Lines
 		$scan.Code = $bsl.Code
@@ -7512,6 +7513,7 @@ function Find-ModuleRefs([string]$name, [string]$kind) {
 	if (-not $scan.Exists) { return @() }
 	$n = [regex]::Escape($name)
 	$opt = [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+	if ($kind -eq 'attribute') { $mm = Get-ModuleMethods; $locals = (Find-ModuleDecl $name).Locals }
 	for ($i = 0; $i -lt $scan.Code.Count; $i++) {
 		$code = $scan.Code[$i]
 		if ($kind -eq 'element') {
@@ -7522,11 +7524,15 @@ function Find-ModuleRefs([string]$name, [string]$kind) {
 			if ([regex]::IsMatch($code, "(?<!\w)(Параметры|Parameters)\s*\.\s*$n(?!\w)", $opt)) { [void]$hits.Add($i + 1) }
 		} else {
 			# Реквизит формы: имя целым словом не после точки; после точки — только ЭтаФорма./ЭтотОбъект.
+			# В методе без контекста реквизитов формы нет; где имя объявлено локально, голое имя — локальное
+			$meth = Get-MethodAt $mm ($i + 1)
+			if ($null -ne $meth -and $meth.noCtx) { continue }
+			$isLocal = $null -ne $meth -and $locals.ContainsKey($meth.name)
 			foreach ($m in [regex]::Matches($code, "(?<!\w)$n(?!\w)", $opt)) {
 				$before = $code.Substring(0, $m.Index)
 				if ($before -match '\.\s*$') {
 					if ([regex]::IsMatch($before, '(?<![\w.])(ЭтаФорма|ЭтотОбъект|ThisForm|ThisObject)\s*\.\s*$', $opt)) { [void]$hits.Add($i + 1) }
-				} else {
+				} elseif (-not $isLocal) {
 					[void]$hits.Add($i + 1)
 				}
 			}
@@ -8020,6 +8026,8 @@ function Update-FormParameters($list) {
 			}
 		} elseif ($null -ne $p.PSObject.Properties['set']) {
 			Invoke-ParamSet $p $i
+		} elseif ($null -ne $p.PSObject.Properties['rename']) {
+			Invoke-ParamRename $p $i
 		} else {
 			Assert-OpKeys $p $script:paramKeys "parameters[$i] '$($p.name)'"
 			$sec = Get-OrCreateRootSection 'Parameters'
@@ -8405,6 +8413,7 @@ function Add-FormAttribute($attr, [int]$idx) {
 		if ($null -ne $caNode) { Insert-NodeAt $attrsSection $node $caNode $attrChildIndent }
 		else { Insert-IntoContainer -container $attrsSection -newNode $node -afterName $null -childIndent $attrChildIndent }
 		$script:addedAttrs += "  + $($node.GetAttribute('name')): $(Format-TypeNode ($node.SelectSingleNode('f:Type', $nsMgr))) (id=$attrId)"
+		[void](Add-AttrCollisionWarnings $node.GetAttribute('name'))
 	}
 }
 
@@ -8494,11 +8503,11 @@ function Remove-AttrColumn([string]$path, [int]$idx) {
 	}
 	$script:removeLog += "  - колонка $path"
 	$script:removedCount++
-	Add-ModuleCandidates "column '$path' removed" "\.\s*$([regex]::Escape($r.Name))(?![\wА-Яа-яЁё])"
+	Add-ModuleCandidates "column '$path' removed — Module.bsl may still refer to it, check these lines:" "\.\s*$([regex]::Escape($r.Name))(?![\wА-Яа-яЁё])"
 }
 
 # Строки модуля, где возможно обращение (к колонке — через строку таблицы, надёжно не найти): в отчёт
-function Add-ModuleCandidates([string]$what, [string]$pattern) {
+function Add-ModuleCandidates([string]$header, [string]$pattern) {
 	$scan = Get-ModuleScan
 	if (-not $scan.Exists) { return }
 	$hits = @()
@@ -8506,7 +8515,7 @@ function Add-ModuleCandidates([string]$what, [string]$pattern) {
 		if ([regex]::IsMatch($scan.Code[$i], $pattern, 'IgnoreCase')) { $hits += ($i + 1) }
 	}
 	if ($hits.Count -eq 0) { return }
-	$script:warnLog += "[WARN] ${what} — Module.bsl may still refer to it, check these lines:"
+	$script:warnLog += "[WARN] $header"
 	foreach ($l in $hits) { $script:warnLog += "  $(Format-ModuleLine $l)" }
 }
 
@@ -8556,6 +8565,406 @@ function Invoke-ParamSet($op, [int]$idx) {
 		foreach ($p in $props) { if ($p.Name -eq 'type' -and ($null -eq $p.Value -or "$($p.Value)" -eq '')) { Fail "${c}: тип обязателен — укажи новый" } }
 		Set-SectionNode $node $props $script:paramKeyTags { param($h, $x) $h['name'] = $x.Name; Get-ParameterProbe (New-DslSpec $h) } @{ Name = $name } "параметр $name" $c
 	}
+}
+
+# === 9g. Переименование: ссылки в форме, модуль, коллизии имён ===
+
+# Маска модуля: строки той же длины, литералы и комментарии — пробелами. Позиции в маске — позиции
+# в тексте, поэтому по ней правят модуль. Однострочные литералы — с позицией (многострочные — запросы).
+function Get-BslMask([string[]]$lines) {
+	$mask = New-Object System.Collections.ArrayList
+	$lits = New-Object System.Collections.ArrayList
+	$inStr = $false
+	for ($i = 0; $i -lt $lines.Count; $i++) {
+		$line = $lines[$i]
+		if (-not $inStr -and $line.IndexOf('"') -lt 0) {
+			$k = $line.IndexOf('//')
+			[void]$mask.Add($(if ($k -ge 0) { $line.Substring(0, $k) + (' ' * ($line.Length - $k)) } else { $line }))
+			continue
+		}
+		$ch = $line.ToCharArray()
+		$j = 0; $start = -1
+		if ($inStr) {
+			while ($j -lt $ch.Length -and ($ch[$j] -eq ' ' -or $ch[$j] -eq "`t")) { $j++ }
+			if ($j + 1 -lt $ch.Length -and $ch[$j] -eq '/' -and $ch[$j + 1] -eq '/') { [void]$mask.Add(' ' * $line.Length); continue }
+			if ($j -lt $ch.Length -and $ch[$j] -eq '|') { $ch[$j] = ' '; $j++ }
+			$start = -2
+		}
+		while ($j -lt $ch.Length) {
+			$c = $ch[$j]
+			if ($inStr) {
+				if ($c -eq '"') {
+					if ($j + 1 -lt $ch.Length -and $ch[$j + 1] -eq '"') { $ch[$j] = ' '; $ch[$j + 1] = ' '; $j += 2; continue }
+					$inStr = $false
+					if ($start -ge 0) { [void]$lits.Add(@{ Line = $i + 1; Col = $start; Text = $line.Substring($start, $j - $start); Prefix = [string]::new($ch, 0, $start - 1) }) }
+					$j++; continue
+				}
+				$ch[$j] = ' '; $j++; continue
+			}
+			if ($c -eq '/' -and $j + 1 -lt $ch.Length -and $ch[$j + 1] -eq '/') { for ($q = $j; $q -lt $ch.Length; $q++) { $ch[$q] = ' ' }; break }
+			if ($c -eq '"') { $inStr = $true; $start = $j + 1 }
+			$j++
+		}
+		[void]$mask.Add([string]::new($ch))
+	}
+	return @{ Mask = $mask.ToArray(); Lits = $lits.ToArray() }
+}
+
+$script:moduleMethods = $null
+$script:moduleDirty = $false
+$script:moduleLog = @()
+$script:noCtxDirective = '^\s*&\s*(НаСервереБезКонтекста|НаКлиентеНаСервереБезКонтекста|AtServerNoContext|AtClientAtServerNoContext)(?!\w)'
+
+# Методы модуля: границы, без контекста ли (реквизиты формы там не видны), параметры
+function Get-ModuleMethods {
+	if ($null -ne $script:moduleMethods) { return $script:moduleMethods }
+	$scan = Get-ModuleScan
+	$m = Get-BslMask $scan.Lines
+	$outline = Get-ModuleOutline $m.Mask
+	$methods = @()
+	foreach ($p in $outline.procs) {
+		$noCtx = $false; $hdr = $p.start - 1
+		for ($k = $p.start - 1; $k -lt $p.end; $k++) {
+			$l = $m.Mask[$k]
+			if ($l -match '^\s*&') { if ($l -match $script:noCtxDirective) { $noCtx = $true }; continue }
+			$hdr = $k; break
+		}
+		$sig = ''; $k = $hdr
+		while ($k -lt $p.end) { $sig += ' ' + $m.Mask[$k]; if ($sig.Contains(')')) { break }; $k++ }
+		$params = @()
+		if ($sig -match '\(([^)]*)\)') {
+			foreach ($x in ($Matches[1] -split ',')) { $x = ($x -replace '^\s*(Знач|Val)\s+', '').Split('=')[0].Trim(); if ($x) { $params += $x } }
+		}
+		$methods += [pscustomobject]@{ name = $p.name; start = $p.start; end = $p.end; header = $hdr + 1; noCtx = $noCtx; params = $params }
+	}
+	$script:moduleMethods = @{ Mask = $m.Mask; Lits = $m.Lits; Methods = $methods }
+	return $script:moduleMethods
+}
+
+function Get-MethodAt($mm, [int]$line) {
+	foreach ($x in $mm.Methods) { if ($line -ge $x.start -and $line -le $x.end) { return $x } }
+	return $null
+}
+
+# Обращения к имени в модуле — с позициями для правки. Реквизит: имя не после точки или после
+# ЭтаФорма./ЭтотОбъект. (в методах без контекста реквизитов нет); строкой — в известных вызовах.
+# Команда и параметр: Команды.Имя / Параметры.Имя.
+function Find-ModuleSpans([string]$name, [string]$kind) {
+	$scan = Get-ModuleScan
+	if (-not $scan.Exists) { return @() }
+	$mm = Get-ModuleMethods
+	$n = [regex]::Escape($name)
+	# Метод, где имя объявлено локально (Перем, параметр), — там это не реквизит
+	$locals = if ($kind -eq 'attribute') { (Find-ModuleDecl $name).Locals } else { @{} }
+	$spans = @()
+	for ($i = 0; $i -lt $mm.Mask.Count; $i++) {
+		$code = $mm.Mask[$i]
+		if ($code.IndexOf($name, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
+		$meth = Get-MethodAt $mm ($i + 1)
+		if ($kind -eq 'attribute') {
+			if ($null -ne $meth -and $meth.noCtx) { continue }
+			foreach ($m in [regex]::Matches($code, "(?<!\w)$n(?!\w)", 'IgnoreCase')) {
+				$before = $code.Substring(0, $m.Index)
+				$qual = $false
+				if ($before -match '\.\s*$') {
+					if (-not [regex]::IsMatch($before, '(?<![\w.])(ЭтаФорма|ЭтотОбъект|ThisForm|ThisObject)\s*\.\s*$', 'IgnoreCase')) { continue }
+					$qual = $true
+				}
+				if (-not $qual -and $null -ne $meth -and $locals.ContainsKey($meth.name)) { continue }
+				$spans += [pscustomobject]@{ Line = $i + 1; Col = $m.Index; Len = $m.Length; Method = $meth; Qualified = $qual }
+			}
+		} else {
+			$coll = if ($kind -eq 'command') { 'Команды|Commands' } else { 'Параметры|Parameters' }
+			foreach ($m in [regex]::Matches($code, "(?<!\w)(?:$coll)\s*\.\s*($n)(?!\w)", 'IgnoreCase')) {
+				$g = $m.Groups[1]
+				$spans += [pscustomobject]@{ Line = $i + 1; Col = $g.Index; Len = $g.Length; Method = $meth; Qualified = $true }
+			}
+		}
+	}
+	if ($kind -eq 'attribute') {
+		foreach ($lit in $mm.Lits) {
+			$t = $lit.Text
+			if (($t -eq $name -or $t.StartsWith("$name.", [System.StringComparison]::OrdinalIgnoreCase)) -and [regex]::IsMatch($lit.Prefix, $script:attrLiteralContext, 'IgnoreCase')) {
+				$spans += [pscustomobject]@{ Line = $lit.Line; Col = $lit.Col; Len = $name.Length; Method = (Get-MethodAt $mm $lit.Line); Qualified = $true }
+			}
+		}
+	}
+	return $spans
+}
+
+# Где имя объявлено в модуле: переменная модуля, локальная (Перем, параметр) — по методам;
+# присваивание без объявления в методе с контекстом (при реквизите с этим именем пишет в него)
+function Find-ModuleDecl([string]$name) {
+	$r = @{ ModuleVars = @(); Locals = @{}; Assigns = @() }
+	$scan = Get-ModuleScan
+	if (-not $scan.Exists) { return $r }
+	$mm = Get-ModuleMethods
+	$n = [regex]::Escape($name)
+	foreach ($x in $mm.Methods) { if ($x.params -contains $name) { $r.Locals[$x.name] = $x.header } }
+	for ($i = 0; $i -lt $mm.Mask.Count; $i++) {
+		$code = $mm.Mask[$i]
+		if ($code.IndexOf($name, [System.StringComparison]::OrdinalIgnoreCase) -lt 0) { continue }
+		if ($code -match '^\s*(?:Перем|Var)\s+([^;]*)') {
+			$names = @($Matches[1] -split ',' | ForEach-Object { ($_ -replace '\s+(Экспорт|Export)\s*$', '').Trim() })
+			if ($names -contains $name) {
+				$meth = Get-MethodAt $mm ($i + 1)
+				if ($null -eq $meth) { $r.ModuleVars += ($i + 1) } elseif (-not $r.Locals.ContainsKey($meth.name)) { $r.Locals[$meth.name] = $i + 1 }
+			}
+		}
+	}
+	for ($i = 0; $i -lt $mm.Mask.Count; $i++) {
+		$code = $mm.Mask[$i]
+		if (-not [regex]::IsMatch($code, "(^|;)\s*$n\s*=", 'IgnoreCase')) { continue }
+		$meth = Get-MethodAt $mm ($i + 1)
+		if ($null -eq $meth -or $meth.noCtx -or $r.Locals.ContainsKey($meth.name)) { continue }
+		$r.Assigns += ($i + 1)
+	}
+	return $r
+}
+
+# Новое имя реквизита против модуля: переменная модуля с тем же именем — модуль не скомпилируется;
+# присваивание без объявления начнёт писать в реквизит
+function Add-AttrCollisionWarnings([string]$name) {
+	$d = Find-ModuleDecl $name
+	foreach ($l in $d.ModuleVars) {
+		$script:warnLog += "[WARN] module variable '$name' has the same name as the form attribute — the module will not compile (`"Переменная с указанным именем уже определена`"); rename the variable:"
+		$script:warnLog += "  $(Format-ModuleLine $l)"
+	}
+	if ($d.Assigns.Count -gt 0) {
+		$script:warnLog += "[WARN] '$name' is assigned without declaration — it was a local variable, now these lines write to the form attribute; declare it (Перем) or rename it if that is not intended:"
+		foreach ($l in $d.Assigns) { $script:warnLog += "  $(Format-ModuleLine $l)" }
+	}
+	return $d
+}
+
+function Test-ModuleUtf8 {
+	$path = Join-Path ([System.IO.Path]::GetDirectoryName($resolvedFormPath)) "Form/Module.bsl"
+	try { [void](New-Object System.Text.UTF8Encoding($false, $true)).GetString([System.IO.File]::ReadAllBytes($path)); return $true }
+	catch { return $false }
+}
+
+# Правка модуля в памяти: вхождения заменяются по позициям; записывается после Form.xml
+function Edit-ModuleSpans($spans, [string]$new) {
+	$scan = Get-ModuleScan
+	foreach ($g in ($spans | Group-Object Line)) {
+		$i = [int]$g.Name - 1
+		$raw = $scan.RawLines[$i]
+		$cr = $raw.EndsWith("`r")
+		$text = $raw.TrimEnd("`r")
+		$seen = @{}
+		foreach ($s in ($g.Group | Sort-Object Col -Descending)) {
+			if ($seen.ContainsKey($s.Col)) { continue }
+			$seen[$s.Col] = $true
+			$text = $text.Substring(0, $s.Col) + $new + $text.Substring($s.Col + $s.Len)
+		}
+		$script:moduleLog += "  $(Format-ModuleLine ($i + 1)) → $($text.Trim())"
+		$scan.RawLines[$i] = $text + $(if ($cr) { "`r" } else { '' })
+	}
+	$scan.Raw = $scan.RawLines -join "`n"
+	$bsl = Get-BslScan $scan.Raw
+	$scan.Lines = $bsl.Lines; $scan.Code = $bsl.Code; $scan.Literals = $bsl.Literals
+	$script:moduleMethods = $null; $script:moduleOutline = $null
+	$script:moduleDirty = $true
+}
+
+function Save-ModuleEdits {
+	if (-not $script:moduleDirty) { return }
+	$path = Join-Path ([System.IO.Path]::GetDirectoryName($resolvedFormPath)) "Form/Module.bsl"
+	$bytes = [System.IO.File]::ReadAllBytes($path)
+	$bom = ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)
+	[System.IO.File]::WriteAllText($path, $script:moduleScan.Raw, (New-Object System.Text.UTF8Encoding($bom)))
+}
+
+# Обращения из модуля к переименованному: с renameInModule — переписать, без — перечислить
+function Rename-InModule([string]$old, [string]$new, [string]$kind, [bool]$inModule) {
+	$scan = Get-ModuleScan
+	if (-not $scan.Exists) { return }
+	$spans = @(Find-ModuleSpans $old $kind)
+	$skipped = @()
+	if ($kind -eq 'attribute') {
+		$decl = Add-AttrCollisionWarnings $new
+		# В методе, где новое имя — локальное, обращение по нему означало бы локальную
+		if ($decl.Locals.Count -gt 0) {
+			$skipped = @($spans | Where-Object { -not $_.Qualified -and $null -ne $_.Method -and $decl.Locals.ContainsKey($_.Method.name) })
+			$spans = @($spans | Where-Object { -not (-not $_.Qualified -and $null -ne $_.Method -and $decl.Locals.ContainsKey($_.Method.name)) })
+		}
+	}
+	if ($spans.Count -gt 0 -and $inModule -and -not (Test-ModuleUtf8)) {
+		$script:warnLog += "[WARN] Form module is not UTF-8 — references were not rewritten"
+		$inModule = $false
+	}
+	if ($spans.Count -gt 0) {
+		if ($inModule) {
+			Edit-ModuleSpans $spans $new
+		} else {
+			$script:warnLog += "[WARN] Module.bsl still refers to $kind '$old' — rename these to '$new' (or add `"renameInModule`": true):"
+			foreach ($l in @($spans | ForEach-Object { $_.Line } | Sort-Object -Unique)) { $script:warnLog += "  $(Format-ModuleLine $l)" }
+		}
+	}
+	if ($skipped.Count -gt 0) {
+		$script:warnLog += "[WARN] '$new' is a local name in these methods — a renamed reference would point to the local; left as is: qualify it as ЭтаФорма.$new or rename the local:"
+		foreach ($l in @($skipped | ForEach-Object { $_.Line } | Sort-Object -Unique)) { $script:warnLog += "  $(Format-ModuleLine $l)" }
+	}
+	if ($kind -eq 'attribute') {
+		# Без контекста реквизит доступен только через переданную форму — не переписываем, показываем
+		$mm = Get-ModuleMethods
+		$cand = @()
+		for ($i = 0; $i -lt $mm.Mask.Count; $i++) {
+			$meth = Get-MethodAt $mm ($i + 1)
+			if ($null -eq $meth -or -not $meth.noCtx) { continue }
+			if ([regex]::IsMatch($mm.Mask[$i], "\.\s*$([regex]::Escape($old))(?!\w)", 'IgnoreCase')) { $cand += ($i + 1) }
+		}
+		if ($cand.Count -gt 0) {
+			$script:warnLog += "[WARN] methods without form context were not rewritten — the form may be passed there as a parameter; check these lines:"
+			foreach ($l in $cand) { $script:warnLog += "  $(Format-ModuleLine $l)" }
+		}
+	}
+}
+
+# Путь от переименованного: Старое / Старое.X (и ~Старое…) → Новое…; не от него — $null
+function Rename-PathText([string]$t, [string]$old, [string]$new) {
+	$pre = ''
+	if ($t.StartsWith('~')) { $pre = '~'; $t = $t.Substring(1) }
+	if ($t -eq $old) { return "$pre$new" }
+	if ($t.StartsWith("$old.", [System.StringComparison]::OrdinalIgnoreCase)) { return "$pre$new$($t.Substring($old.Length))" }
+	return $null
+}
+
+# Ссылки формы на путь: данные элементов, условное оформление, командный интерфейс, сохранение и
+# «всегда использовать» реквизита, таблицы его доп. колонок
+function Rename-FormPaths([string]$old, [string]$new, $attrNode) {
+	$cnt = [ordered]@{}
+	$hit = { param($k) if ($cnt.Contains($k)) { $cnt[$k]++ } else { $cnt[$k] = 1 } }
+	foreach ($s in (Get-ElementScopes)) {
+		foreach ($t in @($s.SelectNodes(".//*"))) {
+			if (-not $t.LocalName.EndsWith('DataPath') -or $null -ne $t.SelectSingleNode('*')) { continue }
+			$r = Rename-PathText $t.InnerText.Trim() $old $new
+			if ($null -ne $r) { $t.InnerText = $r; & $hit $t.LocalName }
+		}
+	}
+	$ca = $root.SelectSingleNode("f:Attributes/f:ConditionalAppearance", $nsMgr)
+	if ($null -ne $ca) {
+		foreach ($t in @($ca.SelectNodes(".//dcsset:left | .//dcsset:right", $nsMgr))) {
+			if (-not $t.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance").EndsWith(':Field')) { continue }
+			$r = Rename-PathText $t.InnerText.Trim() $old $new
+			if ($null -ne $r) { $t.InnerText = $r; & $hit 'ConditionalAppearance' }
+		}
+	}
+	foreach ($t in @($root.SelectNodes("f:CommandInterface//f:Item/f:Attribute", $nsMgr))) {
+		$r = Rename-PathText $t.InnerText.Trim() $old $new
+		if ($null -ne $r) { $t.InnerText = $r; & $hit 'CommandInterface' }
+	}
+	foreach ($t in @($attrNode.SelectNodes("f:Save/f:Field | f:UseAlways/f:Field", $nsMgr))) {
+		$r = Rename-PathText $t.InnerText.Trim() $old $new
+		if ($null -ne $r) { $t.InnerText = $r; & $hit "$($t.ParentNode.LocalName)" }
+	}
+	foreach ($g in @($attrNode.SelectNodes("f:Columns/f:AdditionalColumns", $nsMgr))) {
+		$r = Rename-PathText $g.GetAttribute('table') $old $new
+		if ($null -ne $r) { $g.SetAttribute('table', $r); & $hit 'AdditionalColumns' }
+	}
+	if ($cnt.Count -eq 0) { return 'ссылок в форме нет' }
+	return "перепривязано: $(($cnt.Keys | ForEach-Object { "$_ ×$($cnt[$_])" }) -join ', ')"
+}
+
+# Заголовок, выведенный из имени (только ru, совпадает с выводом из старого имени), — следует за именем,
+# как в Конфигураторе; свой заголовок остаётся
+function Update-AutoTitle($node, [string]$old, [string]$new, [string]$label) {
+	$t = $node.SelectSingleNode("f:Title", $nsMgr)
+	if ($null -eq $t) { return }
+	$items = @($t.SelectNodes("v8:item", $nsMgr))
+	if ($items.Count -ne 1) { return }
+	$lang = $items[0].SelectSingleNode("v8:lang", $nsMgr)
+	$content = $items[0].SelectSingleNode("v8:content", $nsMgr)
+	if ($null -eq $lang -or $lang.InnerText -ne 'ru' -or $null -eq $content) { return }
+	if (-not [string]::Equals($content.InnerText, (Title-FromName $old), [System.StringComparison]::Ordinal)) { return }
+	$nt = Title-FromName $new
+	$script:changeLog += "  ~ ${label}: title `"$($content.InnerText)`" → `"$nt`""
+	$content.InnerText = $nt
+}
+
+# Общее у rename: ключи, новое имя, флаг модуля
+function Get-RenameArgs($op, [string]$section, [int]$idx) {
+	$c = "$section[$idx] rename '$($op.rename)'"
+	Assert-OpKeys $op @('rename','to','renameInModule') $c
+	$new = "$($op.to)"
+	if (-not $new) { Fail "${c}: укажи новое имя — to" }
+	if ($new -notmatch '^[^\W\d]\w*$') { Fail "${c}: '$new' — не имя: буквы, цифры и _, первая не цифра" }
+	$inModule = $false
+	if ($null -ne $op.PSObject.Properties['renameInModule']) {
+		if (-not ($op.renameInModule -is [bool])) { Fail "${c}: renameInModule — true или false" }
+		$inModule = $op.renameInModule
+	}
+	return @{ C = $c; Old = "$($op.rename)"; New = $new; InModule = $inModule }
+}
+
+function Invoke-AttrRename($op, [int]$idx) {
+	$a = Get-RenameArgs $op 'attributes' $idx
+	$c = $a.C; $new = $a.New
+	if ($a.Old.Contains('.')) {
+		$r = Resolve-ColumnPath $a.Old $c
+		if ($null -eq $r.Column) { Fail "${c}: колонка не найдена" }
+		$attrName = $r.Attr.GetAttribute('name')
+		if (Test-Borrowed $attrName 'attribute') { Fail "${c}: колонка заимствованного реквизита — имя задаёт исходная форма" }
+		$old = $r.Column.GetAttribute('name')
+		foreach ($x in $r.Container.SelectNodes("f:Column", $nsMgr)) { if ($x.GetAttribute('name') -eq $new -and -not (Same $x $r.Column)) { Fail "${c}: колонка '$new' уже есть" } }
+		$base = if ($null -ne $r.Table) { $r.Table } else { $attrName }
+		$summary = Rename-FormPaths "$base.$old" "$base.$new" $r.Attr
+		$r.Column.SetAttribute('name', $new)
+		$script:changeLog += "  ~ $base.$old → $base.${new}: $summary"
+		Update-AutoTitle $r.Column $old $new "$base.$new"
+		$script:sectionChanged++
+		# Колонку в коде достают через строку таблицы — к какой таблице относится строка, не понять
+		Add-ModuleCandidates "column '$base.$old' renamed to '$new' — columns are referenced through table rows, so code is not rewritten; check these lines:" "\.\s*$([regex]::Escape($old))(?![\wА-Яа-яЁё])"
+		return
+	}
+	$node = Find-SectionItem 'Attributes' 'Attribute' $a.Old
+	if ($null -eq $node) { Fail "${c}: реквизит не найден в форме" }
+	$old = $node.GetAttribute('name')
+	if (Test-Borrowed $old 'attribute') { Fail "${c}: заимствованный реквизит — имя задаёт исходная форма" }
+	if (Test-MainAttribute $node) { Fail "${c}: основной реквизит не переименовывается — от его имени идут пути всей формы" }
+	$other = Find-SectionItem 'Attributes' 'Attribute' $new
+	if ($null -ne $other -and -not (Same $other $node)) { Fail "${c}: реквизит '$new' уже есть в форме" }
+	$summary = Rename-FormPaths $old $new $node
+	$node.SetAttribute('name', $new)
+	$script:changeLog += "  ~ $old → ${new}: $summary"
+	Update-AutoTitle $node $old $new $new
+	$script:sectionChanged++
+	Rename-InModule $old $new 'attribute' $a.InModule
+}
+
+function Invoke-CmdRename($op, [int]$idx) {
+	$a = Get-RenameArgs $op 'commands' $idx
+	$c = $a.C; $new = $a.New
+	$node = Find-SectionItem 'Commands' 'Command' $a.Old
+	if ($null -eq $node) { Fail "${c}: команда не найдена в форме" }
+	$old = $node.GetAttribute('name')
+	if (Test-Borrowed $old 'command') { Fail "${c}: заимствованная команда — имя задаёт исходная форма" }
+	$other = Find-SectionItem 'Commands' 'Command' $new
+	if ($null -ne $other -and -not (Same $other $node)) { Fail "${c}: команда '$new' уже есть в форме" }
+	$n = 0
+	$refs = @()
+	foreach ($s in (Get-ElementScopes)) { $refs += @($s.SelectNodes(".//f:CommandName", $nsMgr)) }
+	$refs += @($root.SelectNodes("f:CommandInterface//f:Item/f:Command", $nsMgr))
+	foreach ($t in $refs) { if ($t.InnerText.Trim() -eq "Form.Command.$old") { $t.InnerText = "Form.Command.$new"; $n++ } }
+	$node.SetAttribute('name', $new)
+	$script:changeLog += "  ~ команда $old → ${new}: $(if ($n -gt 0) { "перепривязано кнопок и пунктов интерфейса: $n" } else { 'ссылок в форме нет' })"
+	Update-AutoTitle $node $old $new "команда $new"
+	$script:sectionChanged++
+	Rename-InModule $old $new 'command' $a.InModule
+}
+
+function Invoke-ParamRename($op, [int]$idx) {
+	$a = Get-RenameArgs $op 'parameters' $idx
+	$c = $a.C; $new = $a.New
+	$node = Find-SectionItem 'Parameters' 'Parameter' $a.Old
+	if ($null -eq $node) { Fail "${c}: параметр не найден в форме" }
+	$old = $node.GetAttribute('name')
+	$other = Find-SectionItem 'Parameters' 'Parameter' $new
+	if ($null -ne $other -and -not (Same $other $node)) { Fail "${c}: параметр '$new' уже есть в форме" }
+	$node.SetAttribute('name', $new)
+	$script:changeLog += "  ~ параметр $old → $new"
+	$script:sectionChanged++
+	Rename-InModule $old $new 'parameter' $a.InModule
 }
 
 # === 10. Elements: добавление, перенос, изменение, удаление — по порядку ===
@@ -8633,6 +9042,7 @@ if ($def.attributes) {
 				if ($rn.Contains('.')) { Remove-AttrColumn $rn $i } else { Remove-FormAttribute ([pscustomobject]@{ remove = $rn }) $i }
 			}
 		} elseif ($null -ne $op.PSObject.Properties['set']) { Invoke-AttrSet $op $i }
+		elseif ($null -ne $op.PSObject.Properties['rename']) { Invoke-AttrRename $op $i }
 		elseif ("$($op.name)".Contains('.')) { Add-AttrColumn $op $i }
 		else { Add-FormAttribute $op $i }
 	}
@@ -8652,6 +9062,7 @@ if ($def.commands) {
 			continue
 		}
 		if ($null -ne $op.PSObject.Properties['set']) { Invoke-CmdSet $op $i; continue }
+		if ($null -ne $op.PSObject.Properties['rename']) { Invoke-CmdRename $op $i; continue }
 		Assert-OpKeys $op $script:cmdKeys "commands[$i] '$($op.name)'"
 		$cmdsSection = Get-OrCreateRootSection 'Commands'
 		foreach ($c in $cmdsSection.SelectNodes("f:Command", $nsMgr)) {
@@ -8911,6 +9322,7 @@ $enc = New-Object System.Text.UTF8Encoding($targetBom)
 $targetEol = if ((Test-Path -LiteralPath $resolvedFormPath) -and ([System.IO.File]::ReadAllText($resolvedFormPath) -notmatch "`r`n")) { "`n" } else { "`r`n" }
 $content = ($content -replace "`r`n", "`n") -replace "`n", $targetEol
 [System.IO.File]::WriteAllText($resolvedFormPath, $content, $enc)
+Save-ModuleEdits
 $handlerReport = @(Update-FormModule $resolvedFormPath $FormPath)
 $script:moduleScan = $null
 
@@ -8977,6 +9389,12 @@ if ($addedCmds.Count -gt 0) {
 
 if ($handlerReport.Count -gt 0) {
 	foreach ($line in $handlerReport) { Write-Host $line }
+	Write-Host ""
+}
+
+if ($script:moduleLog.Count -gt 0) {
+	Write-Host "Module.bsl — references renamed (code outside the form module is not checked):"
+	foreach ($line in $script:moduleLog) { Write-Host $line }
 	Write-Host ""
 }
 
