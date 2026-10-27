@@ -55,7 +55,7 @@ node $RUN run <url> script.js   # exits when done, no session
 node $RUN run <url> script.js --timeout-min=10   # bound the script (default 30 min)
 ```
 
-The bound covers the script, not the 1C startup. `--timeout=<ms>`, `--timeout-min=<min>` and `WEB_TEST_EXEC_TIMEOUT_MS` work for `run` and `exec` alike. Exit code of `run`: `0` — ok, `1` — script error, `2` — the script hit the timeout (`timedOut: true` in the result, `output` keeps what was logged before it).
+The bound covers the script, not the 1C startup: `--timeout=<ms>`, `--timeout-min=<min>` or `WEB_TEST_EXEC_TIMEOUT_MS`. Exit code of `run`: `0` — ok, `1` — script error, `2` — timeout.
 
 ### Interactive mode (step-by-step development)
 
@@ -74,7 +74,7 @@ SCRIPT
 # 2b. Execute without video recording (for debugging/testing)
 cat script.js | node $RUN exec - --no-record
 
-# 2c. Override the exec timeout (default 30 min). Use for long scripts
+# 2c. Override exec HTTP timeout (default 30 min). Use for long scripts
 #     such as multi-block recordings + addNarration.
 cat script.js | node $RUN exec - --timeout-min=120
 cat script.js | node $RUN exec - --timeout=7200000
