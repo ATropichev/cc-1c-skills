@@ -1,4 +1,4 @@
-// web-test dom v1.20 — facade re-exporting injectable DOM scripts from dom/
+// web-test dom v1.21 — facade re-exporting injectable DOM scripts from dom/
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * Facade: re-exports DOM selector & semantic mapping script generators.
@@ -95,3 +95,5 @@ export {
 } from './dom/submenu.mjs';
 
 export { checkErrorsScript } from './dom/errors.mjs';
+
+export { resolveHtmlFieldScript } from './dom/html-field.mjs';

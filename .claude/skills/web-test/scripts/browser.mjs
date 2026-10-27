@@ -1,4 +1,4 @@
-// web-test browser v1.19 — engine facade: re-exports the public API from engine/*
+// web-test browser v1.20 — engine facade: re-exports the public API from engine/*
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * Public API of the web-test engine. Pure re-export facade — no logic here.
@@ -37,6 +37,7 @@ export {
 export { selectValue } from './engine/forms/select-value.mjs';
 export { fillFields, fillField } from './engine/forms/fill.mjs';
 export { closeForm } from './engine/forms/close.mjs';
+export { getHtmlFrame } from './engine/forms/html-field.mjs';
 
 // ── tables ────────────────────────────────────────────────────────────────
 export { readTable, deleteTableRow } from './engine/table/grid.mjs';

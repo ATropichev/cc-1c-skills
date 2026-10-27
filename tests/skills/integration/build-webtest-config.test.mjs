@@ -1441,6 +1441,89 @@ export const steps = [
 `,
   },
 
+  // Обработка ПоляHTML — поля HTML-документа (#89): getFormState().htmlFields + getHtmlFrame.
+  // Платформа создаёт iframe поля только при первом показе, поэтому все три способа спрятать
+  // поле здесь есть: неактивная страница, свёрнутая группа, Видимость=Ложь (с клиентской
+  // командой, которая её переключает). Табличный документ — негатив: тоже рендерится iframe-ами,
+  // но в htmlFields попадать не должен. В чате — скрытый дубль textarea (strict-режим
+  // Playwright) и кнопка, которая отвечает эхом.
+  {
+    name: 'meta-compile: Обработка ПоляHTML',
+    script: 'meta-compile/scripts/meta-compile',
+    input: {
+      type: 'DataProcessor', name: 'ПоляHTML',
+    },
+    args: { '-JsonPath': '{inputFile}', '-OutputDir': '{workDir}' },
+    validate: { script: 'meta-validate/scripts/meta-validate', flag: '-ObjectPath', path: 'DataProcessors/ПоляHTML' },
+  },
+  {
+    name: 'form-add: Форма обработки ПоляHTML',
+    script: 'form-add/scripts/form-add',
+    args: { '-ObjectPath': '{workDir}/DataProcessors/ПоляHTML.xml', '-FormName': 'ФормаОбработки' },
+  },
+  {
+    name: 'form-compile: Форма обработки ПоляHTML',
+    script: 'form-compile/scripts/form-compile',
+    input: {
+      title: 'Поля HTML',
+      events: { OnCreateAtServer: 'ПриСозданииНаСервере' },
+      attributes: [
+        { name: 'Объект', type: 'DataProcessorObject.ПоляHTML', main: true },
+        { name: 'ЧатHTML', type: 'string' },
+        { name: 'ЛогHTML', type: 'string' },
+        { name: 'СкрытоеHTML', type: 'string' },
+        { name: 'СправкаHTML', type: 'string' },
+        { name: 'ТаблицаОтчета', type: 'mxl:SpreadsheetDocument' },
+      ],
+      commands: [
+        { name: 'ПереключитьСкрытое', action: 'ПереключитьСкрытое', title: 'Переключить скрытое' },
+      ],
+      elements: [
+        { autoCmdBar: 'ФормаКоманднаяПанель', children: [
+          { button: 'ПереключитьСкрытое', command: 'ПереключитьСкрытое' },
+        ]},
+        { group: 'collapsible', name: 'ГруппаЛог', title: 'Лог', collapsed: true, showTitle: true, children: [
+          { html: 'ПолеЛога', path: 'ЛогHTML', titleLocation: 'none', height: 3 },
+        ]},
+        { html: 'ПолеСкрытое', path: 'СкрытоеHTML', titleLocation: 'none', height: 3, visible: false },
+        { pages: 'Страницы', children: [
+          { page: 'СтраницаОсновная', title: 'Основная', children: [
+            { html: 'ПолеЧата', path: 'ЧатHTML', title: 'Чат', titleLocation: 'top', height: 6 },
+            { spreadsheet: 'ТаблицаОтчета', path: 'ТаблицаОтчета', titleLocation: 'none', height: 4 },
+          ]},
+          { page: 'СтраницаСправка', title: 'Справка', children: [
+            { html: 'ПолеСправки', path: 'СправкаHTML', titleLocation: 'none', height: 4 },
+          ]},
+        ]},
+      ],
+    },
+    args: { '-JsonPath': '{inputFile}', '-OutputPath': '{workDir}/DataProcessors/ПоляHTML/Forms/ФормаОбработки/Ext/Form.xml' },
+    validate: { script: 'form-validate/scripts/form-validate', flag: '-FormPath', path: 'DataProcessors/ПоляHTML/Forms/ФормаОбработки/Ext/Form.xml' },
+  },
+  {
+    name: 'writeFile: ПоляHTML form Module.bsl',
+    writeFile: 'DataProcessors/ПоляHTML/Forms/ФормаОбработки/Ext/Form/Module.bsl',
+    content: `&НаСервере
+Процедура ПриСозданииНаСервере(Отказ, СтандартнаяОбработка)
+\tЧатHTML = "<html><body>
+\t|<textarea data-testid=""chat-message"" style=""display:none""></textarea>
+\t|<textarea data-testid=""chat-message""></textarea>
+\t|<button data-testid=""send-message"" onclick=""document.getElementById('out').innerText='echo:'+document.querySelectorAll('textarea')[1].value"">Отправить</button>
+\t|<div id=""out"" data-testid=""terminal-response""></div>
+\t|</body></html>";
+\tЛогHTML = "<html><body><pre data-testid=""log"">строка лога</pre></body></html>";
+\tСкрытоеHTML = "<html><body><b data-testid=""hidden-mark"">скрытое</b></body></html>";
+\tСправкаHTML = "<html><body><h1 data-testid=""help-title"">Справка</h1></body></html>";
+\tТаблицаОтчета.Область("R1C1").Текст = "Отчет";
+КонецПроцедуры
+
+&НаКлиенте
+Процедура ПереключитьСкрытое(Команда)
+\tЭлементы.ПолеСкрытое.Видимость = Не Элементы.ПолеСкрытое.Видимость;
+КонецПроцедуры
+`,
+  },
+
   // Обработка МножественныйВыбор — основная форма с 4 полями типа «список значений».
   {
     name: 'form-add: Основная форма МножественныйВыбор',

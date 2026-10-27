@@ -169,6 +169,8 @@ await clickElement(r.clicked.group, { expand: false });      // stable key — s
 
 **table** — backward-compatible alias for the first grid: `{ present, columns, rowCount }`.
 
+**htmlFields** — HTML document fields on screen: `[{ name, label? }]`. Enter one with `getHtmlFrame()`. A field on an inactive page, in a collapsed group or hidden by the form is not listed until shown.
+
 **reportSettings** — for DCS reports: human-readable filter settings instead of raw technical names:
 ```js
 const form = await getFormState();
@@ -183,6 +185,15 @@ const form = await getFormState();
 **confirmation** — if present, a Yes/No dialog is shown. Call `clickElement('Да')` or `clickElement('Нет')`.
 
 **errors.stateText** — array of SpreadsheetDocument state messages (e.g. `"Не установлено значение параметра \"X\""`, `"Отчет не сформирован..."`, `"Изменились настройки..."`). Present when the report area shows an info bar instead of data. The same info bar carries `"Поиск..."` while a list is still searching — actions do not return while it is up, so a filtered list never hands you the previous rows.
+
+#### `getHtmlFrame(name?)` → Playwright FrameLocator
+Entry into an HTML document field (its HTML or React app) of the active form, by field name or title from `htmlFields`. `name` may be omitted when the form shows one HTML field. Inside the frame the page is the application's own — work with it in plain Playwright:
+```js
+const app = await getHtmlFrame('Чат');
+await app.getByTestId('chat-message').filter({ visible: true }).fill('text');  // hidden duplicates
+await app.getByRole('button', { name: 'Отправить' }).click();
+```
+Throws (with the list of fields) when the name is unknown, when several fields are shown and no name is given, or when the field is not visible yet — open its page or expand its group first. Raw Playwright actions don't auto-detect 1C errors: after one that calls the 1C server, check `getFormState().errors`. Don't keep using a frame after a modal window opened over the form — clicks would land on the modal.
 
 ### Reading data
 

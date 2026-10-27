@@ -1,4 +1,4 @@
-// web-test dom shared v1.10 — embedded JS function constants
+// web-test dom shared v1.11 — embedded JS function constants
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * Shared function strings embedded into page.evaluate() generators.
@@ -106,6 +106,23 @@ export const TEXT_CLICK_POINT_FN = `function textClickPoint(el) {
  * @param base  element id prefix without suffix, e.g. `form1_ГруппаТовары`
  * @returns `true` collapsed, `false` expanded, `null` when the layout is unrecognised.
  */
+/**
+ * HTML document fields (ПолеHTMLДокумента) of the form with prefix p → [{ name, label?, visible }].
+ * Rendered as `<div id="form{N}_{Имя}" class="htmlDocContainer"><iframe>`; a spreadsheet field is
+ * `.moxelContainer` with iframes of its own, so the class is what tells them apart. The iframe is
+ * created only when the field is first shown (inactive page, collapsed group, Видимость=Ложь)
+ * and stays, 0×0, after it is hidden again — visible = iframe present and non-zero size.
+ */
+export const HTML_FIELDS_FN = `function htmlFields(p) {
+  return [...document.querySelectorAll('[id^="' + p + '"].htmlDocContainer')].map(c => {
+    const name = c.id.slice(p.length);
+    const t = document.getElementById(c.id + '#title_text');
+    const label = t ? (t.innerText || '').trim().replace(/:\\s*$/, '').replace(/\\u00a0/g, ' ') : '';
+    const visible = !!c.querySelector(':scope > iframe') && c.offsetWidth > 0 && c.offsetHeight > 0;
+    return label ? { name, label, visible } : { name, visible };
+  });
+}`;
+
 export const GROUP_STATE_FN = `function groupCollapsed(base) {
   const panelDiv = document.getElementById(base + '#panel_div');
   if (panelDiv) return getComputedStyle(panelDiv).display === 'none';
@@ -484,7 +501,7 @@ function detectForms() {
 }`;
 
 /** Read form state given prefix p. Returns { fields, buttons, tabs, texts, hyperlinks, table, iframes }. */
-export const READ_FORM_FN = HEADERLESS_GRID_FN + GROUP_STATE_FN + `
+export const READ_FORM_FN = HEADERLESS_GRID_FN + GROUP_STATE_FN + HTML_FIELDS_FN + `
 function readForm(p) {
   const result = {};
   const fields = [];
@@ -813,6 +830,10 @@ function readForm(p) {
     if (el.offsetWidth > 0 && el.offsetHeight > 0) iframeCount++;
   });
   if (iframeCount) result.iframes = iframeCount;
+
+  // HTML document fields — only those on screen; getHtmlFrame() explains the hidden ones.
+  const htmlFieldList = htmlFields(p).filter(f => f.visible).map(f => f.label ? { name: f.name, label: f.label } : { name: f.name });
+  if (htmlFieldList.length) result.htmlFields = htmlFieldList;
 
   // Collapsible / popup groups — surface that part of the form is hidden + its state.
   // Идентификация раскрываемой группы (есть заголовок <base>#title_text и один из признаков):
