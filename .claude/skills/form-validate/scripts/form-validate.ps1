@@ -2449,7 +2449,7 @@ function Get-VarDeclarations([string[]]$mask) {
 	$acc = 0
 	for ($k = 0; $k -lt $mask.Count; $k++) { $starts[$k] = $acc; $acc += $mask[$k].Length + 1 }
 	$out = @()
-	foreach ($m in [regex]::Matches($text, '(?im)(?:^|;)\s*(?:Перем|Var)\s+([^;]*)')) {
+	foreach ($m in [regex]::Matches($text, '(?im)(?:^|;)\s*(?:&[^\s;]+\s+)*(?:Перем|Var)\s+([^;]*)')) {
 		$off = $m.Groups[1].Index
 		foreach ($part in ($m.Groups[1].Value -split ',')) {
 			$nm = ($part -replace '\s+(Экспорт|Export)\s*$', '').Trim()

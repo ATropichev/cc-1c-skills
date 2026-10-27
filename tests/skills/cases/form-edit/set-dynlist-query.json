@@ -1,5 +1,5 @@
 {
-  "name": "Текст запроса динамического списка: остальные настройки остаются",
+  "name": "settings динамического списка: запрос, значение-умолчание поверх иного, отбор по частям — сортировка и прочие настройки остаются",
   "setup": "fixture:modify-form",
   "params": {
     "formPath": "Catalogs/Товары/Forms/ФормаСписка/Ext/Form.xml"
@@ -9,9 +9,30 @@
       {
         "set": "Список",
         "settings": {
-          "query": "ВЫБРАТЬ Т.Ссылка, Т.Наименование, Т.Цена ИЗ Справочник.Товары КАК Т"
+          "query": "ВЫБРАТЬ Т.Ссылка, Т.Наименование, Т.Цена ИЗ Справочник.Товары КАК Т",
+          "dynamicDataRead": false
+        }
+      },
+      {
+        "set": "Список",
+        "settings": {
+          "dynamicDataRead": true
+        }
+      },
+      {
+        "set": "Список",
+        "settings": {
+          "filter": [
+            "Цена > 100"
+          ]
         }
       }
+    ]
+  },
+  "expect": {
+    "stdoutContains": [
+      "settings.dynamicDataRead → DynamicDataRead",
+      "settings.filter → ListSettings/filter"
     ]
   }
 }

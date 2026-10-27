@@ -1157,7 +1157,7 @@ def get_var_declarations(mask):
         starts.append(acc)
         acc += len(l) + 1
     out = []
-    for m in re.finditer(r'(?:^|;)\s*(?:Перем|Var)\s+([^;]*)', text, re.I | re.M):
+    for m in re.finditer(r'(?:^|;)\s*(?:&[^\s;]+\s+)*(?:Перем|Var)\s+([^;]*)', text, re.I | re.M):
         off = m.start(1)
         for part in m.group(1).split(','):
             nm = re.sub(r'\s+(Экспорт|Export)\s*$', '', part, flags=re.I).strip()

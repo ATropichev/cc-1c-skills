@@ -7584,6 +7584,7 @@ function Test-Borrowed([string]$name, [string]$kind) {
 		'element' { ".//*[@name]" }
 		'command' { "f:Commands/f:Command" }
 		'attribute' { "f:Attributes/f:Attribute" }
+		'parameter' { "f:Parameters/f:Parameter" }
 	}
 	foreach ($n in $bf.SelectNodes($xp, $nsMgr)) {
 		if ($n.NamespaceURI -eq $formNs -and $n.GetAttribute("name") -eq $name) {
@@ -8132,6 +8133,11 @@ $script:colKeyTags = @{ title='Title'; type='Type'; fillCheck='FillCheck'; fillC
 $script:cmdKeyTags = @{ title='Title'; tooltip='ToolTip'; use='Use'; shortcut='Shortcut'; picture='Picture'; loadTransparent='Picture'; action='Action'; actions='Action'; callType='Action'; functionalOptions='FunctionalOptions'; representation='Representation'; modifiesSavedData='ModifiesSavedData'; currentRowUse='CurrentRowUse'; table='AssociatedTableElementId'; associatedTableElementId='AssociatedTableElementId'; 'используемаяТаблица'='AssociatedTableElementId' }
 $script:paramKeyTags = @{ type='Type'; key='KeyParameter' }
 
+# Ключи настроек динамического списка — теги, которые они пишут; отбор, параметры данных, сортировка и
+# оформление — части пользовательских настроек (ListSettings), меняются по отдельности
+$script:dlKeyTags = @{ query = @('ManualQuery','QueryText'); manualQuery = @('ManualQuery'); dynamicDataRead = @('DynamicDataRead'); autoFillAvailableFields = @('AutoFillAvailableFields'); fields = @('Field'); calculatedFields = @('CalculatedField'); parameters = @('Parameter'); keyType = @('KeyType'); keyFields = @('KeyField'); mainTable = @('MainTable'); getInvisibleFieldPresentations = @('GetInvisibleFieldPresentations'); autoSaveUserSettings = @('AutoSaveUserSettings'); listSettings = @('ListSettings') }
+$script:dlListParts = @{ filter = 'filter'; dataParameters = 'dataParameters'; order = 'order'; conditionalAppearance = 'conditionalAppearance' }
+
 # Порядок детей — как пишут эмиттеры (он же платформенный). Settings динамического списка — после Columns.
 $script:sectionChildOrder = @{
 	Attribute = @('Title','Type','Settings','MainAttribute','View','Edit','SavedData','Save','FillCheck','UseAlways','FunctionalOptions','Columns','Settings#DynamicList')
@@ -8139,6 +8145,7 @@ $script:sectionChildOrder = @{
 	Command = @('Title','ToolTip','Use','Shortcut','Picture','Action','FunctionalOptions','Representation','ModifiesSavedData','CurrentRowUse','AssociatedTableElementId')
 	Parameter = @('Type','KeyParameter')
 	# Настройки динамического списка — порядок корпуса (ERP, БП, УТ)
+	ListSettings = @('filter','dataParameters','order','conditionalAppearance','item','itemsViewMode','itemsUserSettingID','itemsUserSettingPresentation')
 	Settings = @('AutoFillAvailableFields','ManualQuery','DynamicDataRead','QueryText','Field','CalculatedField','Parameter','KeyType','MainTable','KeyField','AutoSaveUserSettings','GetInvisibleFieldPresentations','ListSettings')
 }
 
@@ -8263,6 +8270,9 @@ function Set-SectionNode($node, $props, $keyTags, [scriptblock]$probeOf, $x, [st
 			$h = [ordered]@{}
 			foreach ($p in $given) { $h[$p.Name] = $p.Value }
 			$probe = & $probeOf $h $x
+		} elseif ($tag -eq 'Title' -and $x.AutoTitle) {
+			# умолчание заголовка — как при добавлении: из имени
+			$probe = & $probeOf ([ordered]@{ '#auto' = $true }) $x
 		}
 		$beforeType = if ($tag -eq 'Type') { Format-TypeNode ($node.SelectSingleNode("f:Type", $nsMgr)) } else { $null }
 		Set-SectionTags $node $probe @($tag)
@@ -8327,12 +8337,21 @@ function Assert-AdditionalTable($r, [string]$c) {
 	$segs = $r.Segs
 	$an = $r.Attr.GetAttribute('name')
 	if ($r.Kind -eq 'table') {
-		$owner = $null
-		if ($null -ne $r.Columns) { foreach ($x in $r.Columns.SelectNodes("f:Column", $nsMgr)) { if ($x.GetAttribute('name') -eq $segs[1]) { $owner = $x; break } } }
-		if ($null -eq $owner) { Fail "${c}: у '$an' нет колонки '$($segs[1])' — путь вложенной таблицы идёт от колонки реквизита" }
-		# Вложенная таблица — колонка-таблица (в корпусе только ValueTable/ValueTree)
-		$ot = @($owner.SelectNodes("f:Type/v8:Type", $nsMgr) | ForEach-Object { $_.InnerText.Trim() })
-		if ($ot.Count -ne 1 -or @('v8:ValueTable','v8:ValueTree') -notcontains $ot[0]) { Fail "${c}: колонка '$an.$($segs[1])' — не таблица значений, вложенных колонок у неё нет" }
+		# Каждый уровень пути — колонка-таблица предыдущего (в корпусе только ValueTable/ValueTree)
+		$level = $r.Columns
+		for ($k = 1; $k -le $segs.Count - 2; $k++) {
+			$prefix = ($segs[0..($k - 1)]) -join '.'
+			if ($k -gt 1) {
+				$level = $null
+				foreach ($g in $r.Columns.SelectNodes("f:AdditionalColumns", $nsMgr)) { if ($g.GetAttribute('table') -eq $prefix) { $level = $g; break } }
+				if ($null -eq $level) { Fail "${c}: вложенной таблицы '$prefix' в форме нет — сначала добавь её колонки" }
+			}
+			$owner = $null
+			if ($null -ne $level) { foreach ($x in $level.SelectNodes("f:Column", $nsMgr)) { if ($x.GetAttribute('name') -eq $segs[$k]) { $owner = $x; break } } }
+			if ($null -eq $owner) { Fail "${c}: у '$prefix' нет колонки '$($segs[$k])' — путь вложенной таблицы идёт от колонки реквизита" }
+			$ot = @($owner.SelectNodes("f:Type/v8:Type", $nsMgr) | ForEach-Object { $_.InnerText.Trim() })
+			if ($ot.Count -ne 1 -or @('v8:ValueTable','v8:ValueTree') -notcontains $ot[0]) { Fail "${c}: колонка '$prefix.$($segs[$k])' — не таблица значений, вложенных колонок у неё нет" }
+		}
 		return
 	}
 	if ($segs.Count -eq 3 -and (Test-MainAttribute $r.Attr) -and -not $script:isExtension) {
@@ -8394,7 +8413,7 @@ function Invoke-AttrSet($op, [int]$idx) {
 					Fail "${c}: тип меняет вид реквизита ($($what[$kind]) → $($what[$nk])) — колонки, настройки и привязанные элементы не переносятся; такой реквизит удаляют и добавляют заново"
 				}
 			}
-			Set-SectionNode $node $rest $script:attrKeyTags { param($h, $x) $h['name'] = $x.Name; if (-not $h.Contains('title')) { $h['title'] = '' }; Get-AttrProbe (New-DslSpec $h) $x.Ind } @{ Name = $name; Ind = $ind } $name $c
+			Set-SectionNode $node $rest $script:attrKeyTags { param($h, $x) $h['name'] = $x.Name; if ($h.Contains('#auto')) { $h.Remove('#auto') } elseif (-not $h.Contains('title')) { $h['title'] = '' }; Get-AttrProbe (New-DslSpec $h) $x.Ind } @{ Name = $name; Ind = $ind; AutoTitle = -not $isMain } $name $c
 		}
 		if ($settingsOp.Count -gt 0) { Set-DynListSettings $node $settingsOp[0].Value $ind $c }
 	}
@@ -8406,15 +8425,48 @@ function Set-DynListSettings($node, $v, [string]$ind, [string]$c) {
 	$name = $node.GetAttribute('name')
 	if ((Get-AttrKind $node) -ne 'dynlist') { Fail "${c}: settings — настройки динамического списка, а '$name' не динамический список" }
 	if (-not ($v -is [System.Management.Automation.PSCustomObject]) -or @($v.PSObject.Properties).Count -eq 0) { Fail "${c}: settings — объект с меняемыми настройками, напр. { `"query`": `"…`" }" }
+	$keys = @($v.PSObject.Properties | ForEach-Object { $_.Name })
+	foreach ($k in $keys) {
+		if (-not $script:dlKeyTags.ContainsKey($k) -and -not $script:dlListParts.ContainsKey($k)) { Fail "${c}: settings — неизвестный ключ '$k'; допустимы: $((@($script:dlKeyTags.Keys) + @($script:dlListParts.Keys) | Sort-Object) -join ', ')" }
+	}
+	$parts = @($keys | Where-Object { $script:dlListParts.ContainsKey($_) })
+	if ($parts.Count -gt 0 -and $keys -contains 'listSettings') { Fail "${c}: settings — listSettings целиком или $($parts -join ', ') по частям, не вместе" }
 	$target = $null
 	foreach ($s in $node.SelectNodes("f:Settings", $nsMgr)) { if ($s.GetAttribute('type', 'http://www.w3.org/2001/XMLSchema-instance') -eq 'DynamicList') { $target = $s; break } }
 	if ($null -eq $target) { Fail "${c}: у '$name' нет настроек динамического списка" }
 	$with = (Get-AttrProbe (New-DslSpec ([ordered]@{ name = $name; title = ''; settings = $v })) $ind).SelectSingleNode("f:Settings", $nsMgr)
 	$without = (Get-AttrProbe (New-DslSpec ([ordered]@{ name = $name; title = ''; settings = [pscustomobject]@{ _ = $null } })) $ind).SelectSingleNode("f:Settings", $nsMgr)
+	# Теги — по ключам (значение, равное умолчанию, тоже записывается) и всё, что проба меняет помимо
+	# них; пользовательские настройки списка — только переданными частями
 	$d = Get-ProbeDiff $without $with
-	if (-not (Test-ProbeDiff $d)) { $script:changeLog += "  = ${name}: settings — без изменений"; return }
-	Set-SectionTags $target $with @($d.Tags)
-	$script:changeLog += "  ~ ${name}: settings.$((@($v.PSObject.Properties | ForEach-Object { $_.Name })) -join ', settings.') → $((Get-ProbeDiffLabel $d) -join ', ')"
+	$tags = @()
+	foreach ($k in $keys) { if ($script:dlKeyTags.ContainsKey($k)) { $tags += $script:dlKeyTags[$k] } }
+	foreach ($t in $d.Tags) { if ($t -ne 'ListSettings' -or $keys -contains 'listSettings') { $tags += $t } }
+	$tags = @($tags | Select-Object -Unique)
+	$labels = @($tags)
+	if ($tags.Count -gt 0) { Set-SectionTags $target $with $tags }
+	if ($parts.Count -gt 0) {
+		$tls = $target.SelectSingleNode("f:ListSettings", $nsMgr)
+		$pls = $with.SelectSingleNode("f:ListSettings", $nsMgr)
+		if ($null -eq $tls -or $null -eq (Get-FirstElementChild $tls)) {
+			Set-SectionTags $target $with @('ListSettings')
+			$labels += 'ListSettings'
+		} else {
+			$ci = Get-ChildIndent $tls
+			foreach ($k in $parts) {
+				$ln = $script:dlListParts[$k]
+				foreach ($x in @($tls.SelectNodes("dcsset:$ln", $nsMgr))) { Remove-NodeWithWs $x }
+				foreach ($pn in @($pls.SelectNodes("dcsset:$ln", $nsMgr))) {
+					$old = Get-NodeIndent $pn
+					$pls.RemoveChild($pn) | Out-Null
+					Insert-SectionChild $tls $pn $ci
+					Set-SubtreeIndent $pn $old $ci
+				}
+				$labels += "ListSettings/$ln"
+			}
+		}
+	}
+	$script:changeLog += "  ~ ${name}: settings.$($keys -join ', settings.') → $($labels -join ', ')"
 	$script:sectionChanged++
 }
 
@@ -8533,6 +8585,11 @@ function Remove-AttrColumn([string]$path, [int]$idx) {
 		}
 	}
 	if ($users.Count -gt 0) { Fail "${c}: к колонке привязаны: $(($users | Select-Object -Unique) -join '; ') — удали или перепривяжи их раньше (elements выполняются до attributes)" }
+	# Вложенные доп. колонки колонки-таблицы уходят вместе с ней (элементы на них — уже в проверке выше)
+	foreach ($g in @($r.Attr.SelectNodes("f:Columns/f:AdditionalColumns", $nsMgr))) {
+		$gt = $g.GetAttribute('table')
+		if (& $isPath $gt) { Remove-NodeWithWs $g; $script:removeLog += "  - доп. колонки $gt" }
+	}
 	foreach ($f in @($r.Attr.SelectNodes("f:Save/f:Field | f:UseAlways/f:Field", $nsMgr))) {
 		if (& $isPath ($f.InnerText.Trim().TrimStart('~'))) {
 			$box = $f.ParentNode
@@ -8599,7 +8656,7 @@ function Invoke-CmdSet($op, [int]$idx) {
 			$acts = @($node.SelectNodes("f:Action", $nsMgr))
 			if ($acts.Count -eq 1 -and $acts[0].HasAttribute('callType')) { $tp += [pscustomobject]@{ Name = 'callType'; Value = $acts[0].GetAttribute('callType') } }
 		}
-		Set-SectionNode $node $tp $script:cmdKeyTags { param($h, $x) $h['name'] = $x.Name; if (-not $h.Contains('title')) { $h['title'] = '' }; Get-CommandProbe (New-DslSpec $h) } @{ Name = $name } "команда $name" $c
+		Set-SectionNode $node $tp $script:cmdKeyTags { param($h, $x) $h['name'] = $x.Name; if ($h.Contains('#auto')) { $h.Remove('#auto') } elseif (-not $h.Contains('title')) { $h['title'] = '' }; Get-CommandProbe (New-DslSpec $h) } @{ Name = $name; AutoTitle = $true } "команда $name" $c
 	}
 }
 
@@ -8614,6 +8671,7 @@ function Invoke-ParamSet($op, [int]$idx) {
 		$node = Find-SectionItem 'Parameters' 'Parameter' $t
 		if ($null -eq $node) { Fail "${c}: параметр не найден в форме" }
 		$name = $node.GetAttribute('name')
+		if (Test-Borrowed $name 'parameter') { Fail "${c}: заимствованный параметр — его задаёт исходная форма" }
 		Assert-SetKeys $props $script:paramKeyTags $c "{ `"rename`": `"$name`", `"to`": `"НовоеИмя`" }"
 		foreach ($p in $props) { if ($p.Name -eq 'type' -and ($null -eq $p.Value -or "$($p.Value)" -eq '')) { Fail "${c}: тип обязателен — укажи новый" } }
 		Set-SectionNode $node $props $script:paramKeyTags { param($h, $x) $h['name'] = $x.Name; Get-ParameterProbe (New-DslSpec $h) } @{ Name = $name } "параметр $name" $c
@@ -8708,7 +8766,8 @@ function Find-ModuleSpans([string]$name, [string]$kind) {
 		foreach ($lit in $mm.Lits) {
 			$t = $lit.Text
 			if (($t -eq $name -or $t.StartsWith("$name.", [System.StringComparison]::OrdinalIgnoreCase)) -and [regex]::IsMatch($lit.Prefix, $script:attrLiteralContext, 'IgnoreCase')) {
-				$spans += [pscustomobject]@{ Line = $lit.Line; Col = $lit.Col; Len = $name.Length; Method = (Get-MethodAt $mm $lit.Line); Qualified = $true; Doubtful = $false }
+				$lm = Get-MethodAt $mm $lit.Line
+				$spans += [pscustomobject]@{ Line = $lit.Line; Col = $lit.Col; Len = $name.Length; Method = $lm; Qualified = $true; Doubtful = ($null -ne $lm -and $lm.noCtx) }
 			}
 		}
 	}
@@ -8723,7 +8782,7 @@ function Get-VarDeclarations([string[]]$mask) {
 	$acc = 0
 	for ($k = 0; $k -lt $mask.Count; $k++) { $starts[$k] = $acc; $acc += $mask[$k].Length + 1 }
 	$out = @()
-	foreach ($m in [regex]::Matches($text, '(?im)(?:^|;)\s*(?:Перем|Var)\s+([^;]*)')) {
+	foreach ($m in [regex]::Matches($text, '(?im)(?:^|;)\s*(?:&[^\s;]+\s+)*(?:Перем|Var)\s+([^;]*)')) {
 		$off = $m.Groups[1].Index
 		foreach ($part in ($m.Groups[1].Value -split ',')) {
 			$nm = ($part -replace '\s+(Экспорт|Export)\s*$', '').Trim()
@@ -8848,7 +8907,7 @@ function Rename-InModule([string]$old, [string]$new, [string]$kind, [bool]$inMod
 		$script:warnLog += "[WARN] '$new' is a local name in these methods — a renamed reference would point to the local; left as is: qualify it as ЭтаФорма.$new or rename the local:"
 		foreach ($l in @($skipped | ForEach-Object { $_.Line } | Sort-Object -Unique)) { $script:warnLog += "  $(Format-ModuleLine $l)" }
 	}
-	if ($doubt.Count -gt 0) {
+	if ($doubt.Count -gt 0 -and $kind -ne 'attribute') {
 		$w = if ($kind -eq 'command') { 'Команды' } else { 'Параметры' }
 		$script:warnLog += "[WARN] not rewritten — in these methods $w is not the form's (no form context, or a local of that name); check these lines:"
 		foreach ($l in @($doubt | ForEach-Object { $_.Line } | Sort-Object -Unique)) { $script:warnLog += "  $(Format-ModuleLine $l)" }
@@ -8863,6 +8922,8 @@ function Rename-InModule([string]$old, [string]$new, [string]$kind, [bool]$inMod
 			if ($null -eq $meth -or -not $meth.noCtx) { continue }
 			if ([regex]::IsMatch($mm.Mask[$i], "\.\s*$([regex]::Escape($old))(?!\w)", 'IgnoreCase')) { $cand += ($i + 1) }
 		}
+		# строкой — тоже не переписываем: без контекста это обычно поле списка, не реквизит
+		$cand = @(@($cand) + @($doubt | ForEach-Object { $_.Line }) | Sort-Object -Unique)
 		if ($cand.Count -gt 0) {
 			$script:warnLog += "[WARN] methods without form context were not rewritten — the form may be passed there as a parameter; check these lines:"
 			foreach ($l in $cand) { $script:warnLog += "  $(Format-ModuleLine $l)" }
@@ -9008,6 +9069,7 @@ function Invoke-ParamRename($op, [int]$idx) {
 	$node = Find-SectionItem 'Parameters' 'Parameter' $a.Old
 	if ($null -eq $node) { Fail "${c}: параметр не найден в форме" }
 	$old = $node.GetAttribute('name')
+	if (Test-Borrowed $old 'parameter') { Fail "${c}: заимствованный параметр — имя задаёт исходная форма" }
 	$other = Find-SectionItem 'Parameters' 'Parameter' $new
 	if ($null -ne $other -and -not (Same $other $node)) { Fail "${c}: параметр '$new' уже есть в форме" }
 	$node.SetAttribute('name', $new)
