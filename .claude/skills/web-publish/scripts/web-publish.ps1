@@ -1,4 +1,4 @@
-﻿# web-publish v1.16 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
+﻿# web-publish v1.17 — Publish 1C infobase via Apache (+_version_dir/_version_key: общий эталон db-семейства)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 <#
 .SYNOPSIS
@@ -476,7 +476,8 @@ function Get-OurHttpd {
 }
 
 # --- Check port availability ---
-$portCheck = Get-NetTCPConnection -LocalPort $Port -ErrorAction SilentlyContinue | Select-Object -First 1
+# Only a listening socket holds the port: TIME_WAIT leftovers of a just-stopped Apache (owner PID 0) do not
+$portCheck = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($portCheck) {
     $ourProc = Get-OurHttpd
     if ($ourProc) {
