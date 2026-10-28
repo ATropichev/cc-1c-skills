@@ -389,8 +389,7 @@ context and destroys whatever is wedged, so the run always moves on. The failure
 the next test recreates it) versus `slow`/`slow-network` (nothing is broken — raise `export const timeout`).
 A `hang` is never retried. Exit codes: `1` red tests, `2` `--global-timeout` fired (report written, seances
 released), `3` the shutdown itself wedged, `5` nothing ran — the filters matched no test, or every selected
-test is skipped (refused before `_hooks.mjs` is loaded, so `prepare()` does not run; the report is still
-written, with `state: "empty"`). Allure results are written per test as it finishes, so a hang
+test is skipped (check `--grep` / `--tags` / `only` / `skip`; the stand is left untouched, report written). Allure results are written per test as it finishes, so a hang
 cannot destroy the results collected before it — no external watchdog needed.
 
 **Output contract.** `test` behaves like a test runner: by default the human report (with the summary as the last line) goes to **stdout** — read the tail of stdout + exit code. The machine report is opt-in via `--report`: `--report=path` writes it to a file (default JSON; XML for `--format=junit`), `--report=-` writes it to stdout while progress moves to stderr. Allure needs `--format=allure` + a directory (`-` is invalid for allure). For detailed triage use `--report=path` or `--report=-`. **In `--report=-` mode never use `2>&1`** — it merges stderr progress into the stdout JSON. (In the default mode there is no JSON in stdout, so `… | tail` is safe.)

@@ -23,7 +23,7 @@ node .claude/skills/web-test/scripts/run.mjs test tests/web-test/ --grep=multi
 
 URL не передаём позиционно — берётся из `webtest.config.mjs` (`contexts.a.url` = `http://localhost:9191/webtest-runner/ru_RU`). Переопределить можно флагом `--url=<url>`.
 
-Exit code: 0 = все прошли, 1 = есть падения, 2 = сработал `--global-timeout` (отчёт записан, сеансы освобождены), 3 = зависло само сворачивание.
+Exit code: 0 = все прошли, 1 = есть падения, 2 = сработал `--global-timeout` (отчёт записан, сеансы освобождены), 3 = зависло само сворачивание, 5 = выполнять нечего (фильтры ни с чем не совпали или вся выборка `skip`; хуки не загружаются, стенд не трогается).
 
 ## CLI флаги runner'а
 
@@ -166,6 +166,23 @@ node tests/web-test/_run-timeout/check.mjs
 
 **Когда гонять:** правки `cli/commands/run.mjs`, `cli/exec-context.mjs` (`executeScript`) и закрытия браузера
 в `engine/core/session.mjs` (`disconnect`, `shutdownBrowser`); обновление Playwright.
+
+## Фикстура пустой выборки — `_selection/`
+
+Не часть регресса: проверяет отказ раннера `test`, когда выполнять нечего. Стенд и браузер не нужны —
+отказ происходит до них, поэтому гонять можно всегда.
+
+```bash
+node tests/web-test/_selection/check.mjs
+```
+
+Два мини-набора со своими `webtest.config.mjs` (URL фиктивный) и `_hooks.mjs`, который при импорте пишет
+маркер, а `prepare` бросает исключение: `basic/` (обычный тест + skipped) и `only/` (`only` на
+skipped-тесте). Проверяет: `--grep` и `--tags` мимо, выборка целиком skipped, `only` на skipped — везде
+код 5, причина в выводе и маркера нет (хуки не импортированы); с `--report=-` в stdout JSON с
+`state: "empty"`.
+
+**Когда гонять:** правки фильтрации, загрузки хуков и итогового кода выхода в `cli/commands/test.mjs`.
 
 ## Артефакты
 
