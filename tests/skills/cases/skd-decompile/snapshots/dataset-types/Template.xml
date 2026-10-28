@@ -4,6 +4,10 @@
 		<name>ИсточникДанных1</name>
 		<dataSourceType>Local</dataSourceType>
 	</dataSource>
+	<dataSource>
+		<name>Внешний</name>
+		<dataSourceType>Local</dataSourceType>
+	</dataSource>
 	<dataSet xsi:type="DataSetQuery">
 		<name>Запрос1</name>
 		<field xsi:type="DataSetFieldField">
@@ -19,6 +23,8 @@
 		</field>
 		<dataSource>ИсточникДанных1</dataSource>
 		<query>ВЫБРАТЬ Номенклатура.Наименование КАК Имя ИЗ Справочник.Номенклатура КАК Номенклатура</query>
+		<autoFillFields>false</autoFillFields>
+		<useQueryGroupIfPossible>false</useQueryGroupIfPossible>
 	</dataSet>
 	<dataSet xsi:type="DataSetObject">
 		<name>Журнал</name>
@@ -44,7 +50,7 @@
 				</v8:StringQualifiers>
 			</valueType>
 		</field>
-		<dataSource>ИсточникДанных1</dataSource>
+		<dataSource>Внешний</dataSource>
 		<objectName>ЖурналОшибок</objectName>
 	</dataSet>
 	<dataSet xsi:type="DataSetUnion">

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-compile v1.138 — Compile 1C DCS from JSON
+# skd-compile v1.139 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import json
@@ -1444,7 +1444,7 @@ def emit_data_set(lines, ds, indent, default_source, tag_name='dataSet'):
 
     # DataSource (not for Union)
     if ds_type != 'DataSetUnion':
-        src = str(ds['source']) if ds.get('source') else default_source
+        src = str(ds.get('source') or ds.get('dataSource') or default_source)
         lines.append(f'{indent}\t<dataSource>{esc_xml_text(src)}</dataSource>')
 
     # Type-specific content
@@ -1453,6 +1453,8 @@ def emit_data_set(lines, ds, indent, default_source, tag_name='dataSet'):
         lines.append(f'{indent}\t<query>{esc_xml_text(query_text)}</query>')
         if ds.get('autoFillFields') is False:
             lines.append(f'{indent}\t<autoFillFields>false</autoFillFields>')
+        if ds.get('useQueryGroupIfPossible') is False:
+            lines.append(f'{indent}\t<useQueryGroupIfPossible>false</useQueryGroupIfPossible>')
     elif ds_type == 'DataSetObject':
         lines.append(f'{indent}\t<objectName>{esc_xml_text(str(ds["objectName"]))}</objectName>')
     elif ds_type == 'DataSetUnion':

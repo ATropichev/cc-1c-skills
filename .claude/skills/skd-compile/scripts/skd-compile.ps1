@@ -1,4 +1,4 @@
-﻿# skd-compile v1.138 — Compile 1C DCS from JSON
+﻿# skd-compile v1.139 — Compile 1C DCS from JSON
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -1557,7 +1557,7 @@ function Emit-DataSet {
 
 	# DataSource (not for Union)
 	if ($dsType -ne "DataSetUnion") {
-		$src = if ($ds.source) { "$($ds.source)" } else { $defaultSource }
+		$src = if ($ds.source) { "$($ds.source)" } elseif ($ds.dataSource) { "$($ds.dataSource)" } else { $defaultSource }
 		X "$indent`t<dataSource>$(Esc-XmlText $src)</dataSource>"
 	}
 
@@ -1567,6 +1567,9 @@ function Emit-DataSet {
 		X "$indent`t<query>$(Esc-XmlText $queryText)</query>"
 		if ($ds.autoFillFields -eq $false) {
 			X "$indent`t<autoFillFields>false</autoFillFields>"
+		}
+		if ($ds.useQueryGroupIfPossible -eq $false) {
+			X "$indent`t<useQueryGroupIfPossible>false</useQueryGroupIfPossible>"
 		}
 	} elseif ($dsType -eq "DataSetObject") {
 		X "$indent`t<objectName>$(Esc-XmlText "$($ds.objectName)")</objectName>"

@@ -1,18 +1,25 @@
 {
-  "name": "DataSetQuery + DataSetObject + DataSetUnion в одной схеме",
+  "name": "DataSetQuery + DataSetObject + DataSetUnion в одной схеме, флаги набора-запроса, привязка к источнику",
   "preRun": [
     {
       "script": "skd-compile/scripts/skd-compile",
       "input": {
+        "dataSources": [
+          { "name": "ИсточникДанных1", "type": "Local" },
+          { "name": "Внешний", "type": "Local" }
+        ],
         "dataSets": [
           {
             "name": "Запрос1",
             "query": "ВЫБРАТЬ Номенклатура.Наименование КАК Имя ИЗ Справочник.Номенклатура КАК Номенклатура",
-            "fields": ["Имя: string"]
+            "fields": ["Имя: string"],
+            "autoFillFields": false,
+            "useQueryGroupIfPossible": false
           },
           {
             "name": "Журнал",
             "objectName": "ЖурналОшибок",
+            "source": "Внешний",
             "fields": ["Сообщение: string(150)", "Уровень: string"]
           },
           {

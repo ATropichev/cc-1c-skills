@@ -1,4 +1,4 @@
-﻿# skd-decompile v0.105 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+﻿# skd-decompile v0.106 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2861,6 +2861,10 @@ function Build-DataSet {
 		'DataSetQuery' {
 			$queryText = Get-Text $dsNode "r:query"
 			$ds['query'] = Maybe-ExternalizeQuery -queryText $queryText -datasetName $name
+			# Platform default is true (element omitted) — emit only false
+			foreach ($flag in @('autoFillFields', 'useQueryGroupIfPossible')) {
+				if ((Get-Text $dsNode "r:$flag") -ceq 'false') { $ds[$flag] = $false }
+			}
 		}
 		'DataSetObject' {
 			$ds['objectName'] = Get-Text $dsNode "r:objectName"
@@ -2912,7 +2916,7 @@ function Build-DataSet {
 	# dataSource attachment — omit if matches default (Union has no dataSource)
 	if ($xsiType -ne 'DataSetUnion') {
 		$dsSrc = Get-Text $dsNode "r:dataSource"
-		if ($emitDataSources -and $dsSrc) { $ds['dataSource'] = $dsSrc }
+		if ($emitDataSources -and $dsSrc) { $ds['source'] = $dsSrc }
 	}
 
 	return $ds

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# skd-decompile v0.105 — Decompile 1C DCS Template.xml to JSON DSL (draft)
+# skd-decompile v0.106 — Decompile 1C DCS Template.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -2986,6 +2986,10 @@ def build_data_set(ds_node, loc, emit_data_sources):
     if xsi_type == 'DataSetQuery':
         query_text = get_text(ds_node, "r:query")
         ds['query'] = maybe_externalize_query(query_text, name)
+        # Platform default is true (element omitted) — emit only false
+        for flag in ('autoFillFields', 'useQueryGroupIfPossible'):
+            if get_text(ds_node, f"r:{flag}") == 'false':
+                ds[flag] = False
     elif xsi_type == 'DataSetObject':
         ds['objectName'] = get_text(ds_node, "r:objectName")
     elif xsi_type == 'DataSetUnion':
@@ -3025,7 +3029,7 @@ def build_data_set(ds_node, loc, emit_data_sources):
     if xsi_type != 'DataSetUnion':
         ds_src = get_text(ds_node, "r:dataSource")
         if emit_data_sources and ds_src:
-            ds['dataSource'] = ds_src
+            ds['source'] = ds_src
 
     return ds
 

@@ -4,6 +4,10 @@
 		<name>ИсточникДанных1</name>
 		<dataSourceType>Local</dataSourceType>
 	</dataSource>
+	<dataSource>
+		<name>Внешний</name>
+		<dataSourceType>Local</dataSourceType>
+	</dataSource>
 	<dataSet xsi:type="DataSetQuery">
 		<name>Продажи</name>
 		<field xsi:type="DataSetFieldField">
@@ -43,8 +47,10 @@
 				</v8:NumberQualifiers>
 			</valueType>
 		</field>
-		<dataSource>ИсточникДанных1</dataSource>
+		<dataSource>Внешний</dataSource>
 		<query>ВЫБРАТЬ Остатки.Номенклатура, Остатки.КоличествоОстаток ИЗ РегистрНакопления.Остатки КАК Остатки</query>
+		<autoFillFields>false</autoFillFields>
+		<useQueryGroupIfPossible>false</useQueryGroupIfPossible>
 	</dataSet>
 	<dataSetLink>
 		<sourceDataSet>Продажи</sourceDataSet>

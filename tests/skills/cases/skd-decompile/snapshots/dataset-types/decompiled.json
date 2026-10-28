@@ -1,8 +1,9 @@
 {
+  "dataSources": [{ "name": "ИсточникДанных1", "type": "Local" }, { "name": "Внешний", "type": "Local" }],
   "dataSets": [
-    { "name": "Запрос1", "query": "ВЫБРАТЬ Номенклатура.Наименование КАК Имя ИЗ Справочник.Номенклатура КАК Номенклатура", "fields": ["Имя: string"] },
-    { "name": "Журнал", "objectName": "ЖурналОшибок", "fields": ["Сообщение: string(150)", "Уровень: string"] },
-    { "name": "Объединение", "items": [{ "name": "Часть1", "query": "ВЫБРАТЬ 1 КАК Поле", "fields": ["Поле: decimal(10,2)"] }, { "name": "Часть2", "query": "ВЫБРАТЬ 2 КАК Поле", "fields": ["Поле: decimal(10,2)"] }] }
+    { "name": "Запрос1", "query": "ВЫБРАТЬ Номенклатура.Наименование КАК Имя ИЗ Справочник.Номенклатура КАК Номенклатура", "autoFillFields": false, "useQueryGroupIfPossible": false, "fields": ["Имя: string"], "source": "ИсточникДанных1" },
+    { "name": "Журнал", "objectName": "ЖурналОшибок", "fields": ["Сообщение: string(150)", "Уровень: string"], "source": "Внешний" },
+    { "name": "Объединение", "items": [{ "name": "Часть1", "query": "ВЫБРАТЬ 1 КАК Поле", "fields": ["Поле: decimal(10,2)"], "source": "ИсточникДанных1" }, { "name": "Часть2", "query": "ВЫБРАТЬ 2 КАК Поле", "fields": ["Поле: decimal(10,2)"], "source": "ИсточникДанных1" }] }
   ],
   "settingsVariants": [{ "name": "Основной", "settings": { "selection": ["Имя", "Сообщение", "Уровень", "Поле"], "structure": "details" } }]
 }
