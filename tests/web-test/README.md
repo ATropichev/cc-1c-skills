@@ -167,6 +167,26 @@ node tests/web-test/_run-timeout/check.mjs
 **Когда гонять:** правки `cli/commands/run.mjs`, `cli/exec-context.mjs` (`executeScript`) и закрытия браузера
 в `engine/core/session.mjs` (`disconnect`, `shutdownBrowser`); обновление Playwright.
 
+## Фикстура корня набора — `_suite-root/`
+
+Не часть регресса: проверяет, откуда раннер берёт `webtest.config.mjs` и `_hooks.mjs`, когда ему передан
+подкаталог или файл. Ошибка здесь молчаливая — подхватились чужие хуки или никаких, а прогон всё равно зелёный.
+
+```bash
+# офлайн: правила подъёма на одноразовых деревьях, стенд не нужен
+node tests/web-test/_suite-root/check.mjs
+
+# сквозной: стенд должен быть уже опубликован
+node .claude/skills/web-test/scripts/run.mjs test tests/web-test/_suite-root/nested/
+```
+
+`check.mjs` закрепляет правила `findSuiteRoot`: побеждает ближайший маркер (конфиг или только `_hooks.mjs`);
+подъём останавливается на `.git` / `.v8-project.json`, а без них — на cwd (граничный каталог проверяется
+сам); маркера нет — `null`. Сквозной тест в `nested/` проходит, только если URL взят из конфига уровнем выше
+и `prepare()` оттуда же отработал (пишет `prepare-ran.txt`).
+
+**Когда гонять:** правки `cli/test-runner/suite-root.mjs` и разбора путей в `cli/commands/test.mjs`.
+
 ## Фикстура пустой выборки — `_selection/`
 
 Не часть регресса: проверяет отказ раннера `test`, когда выполнять нечего. Стенд и браузер не нужны —
