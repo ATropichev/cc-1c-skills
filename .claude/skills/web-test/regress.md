@@ -145,7 +145,7 @@ assert.*                   // see "Assertions" below
   attempt,          // 1..maxAttempts (1-based)
   maxAttempts,      // 1 + retry
   param,            // { ... } | undefined (only when export const params is set)
-  contexts: {       // mirrors config.contexts; includes custom fields like displayName
+  contexts: {       // mirrors config.contexts (custom fields like displayName too), minus password
     clerk:   { url, isolation, displayName, ... },
     manager: { ... },
   },
@@ -210,6 +210,15 @@ export default {
   //   manager: { url: 'http://localhost:9191/myapp-manager/ru_RU', displayName: 'Менеджер' },
   // },
   // defaultContext: 'clerk',
+
+  // Who logs in. Default — the publication's user (one publication per role, as above).
+  // Alternative when the set of users changes from task to task: one publication without a user,
+  // and user/password per context (or top-level next to `url`). The given user wins over the
+  // publication's. Never commit a real password — read it from the environment:
+  // contexts: {
+  //   clerk:   { url: 'http://localhost:9191/myapp/ru_RU', user: 'Кладовщик' },          // empty password
+  //   manager: { url: 'http://localhost:9191/myapp/ru_RU', user: 'Менеджер', password: process.env.MANAGER_PWD },
+  // },
 
   // Context-pool / 1C license management (all optional; omit = no cap, default stays open).
   // maxContexts: 2,            // cap on simultaneous 1C sessions; omit for unlimited

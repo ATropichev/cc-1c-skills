@@ -1,4 +1,4 @@
-// web-test cli/commands/test v1.10 — regression test runner
+// web-test cli/commands/test v1.11 — regression test runner
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import { existsSync, writeFileSync, mkdirSync, renameSync, copyFileSync, unlinkSync } from 'fs';
 import { resolve, dirname, basename, relative } from 'path';
@@ -127,6 +127,7 @@ export async function cmdTest(rawArgs) {
           `Pass the suite root (e.g. tests/myapp/) and narrow with --grep= / --tags=, or give --url=.`);
     }
     contextSpecs.default = { url: fallbackUrl };
+    if (config.user) Object.assign(contextSpecs.default, { user: config.user, password: config.password });
   }
   if (!contextSpecs[defaultContextName]) {
     die(`defaultContext "${defaultContextName}" not found in contexts: [${Object.keys(contextSpecs).join(', ')}]`);
@@ -462,7 +463,7 @@ export async function cmdTest(rawArgs) {
     if (browser.hasContext(name)) return;
     const spec = contextSpecs[name];
     if (!spec) throw new Error(`Unknown context "${name}". Defined: [${Object.keys(contextSpecs).join(', ')}]`);
-    await browser.createContext(name, spec.url, { isolation: spec.isolation || defaultIsolation });
+    await browser.createContext(name, spec.url, { isolation: spec.isolation || defaultIsolation, user: spec.user, password: spec.password });
     if (hooks.afterOpenContext && hookCtx) {
       try { await hooks.afterOpenContext(hookCtx, name, spec); }
       catch (e) { hookLog(`afterOpenContext("${name}") threw: ${e.message.split('\n')[0]}`); }
@@ -601,7 +602,11 @@ export async function cmdTest(rawArgs) {
           attempt,
           maxAttempts,
           param: t.param,
-          contexts: Object.fromEntries(testContextNames.map(n => [n, contextSpecs[n]])),
+          // The password stays out: testInfo is test-visible and may end up in logs or reports.
+          contexts: Object.fromEntries(testContextNames.map(n => {
+            const { password, ...spec } = contextSpecs[n];
+            return [n, spec];
+          })),
           primaryContext: testContextNames[0],
         };
         ctx.testResult = null;

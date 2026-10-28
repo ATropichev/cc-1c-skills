@@ -1,4 +1,4 @@
-// web-test core/session v1.25 — Browser session lifecycle: connect/disconnect/attach/detach, multi-context registry.
+// web-test core/session v1.26 — Browser session lifecycle: connect/disconnect/attach/detach, multi-context registry.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { chromium } from 'playwright';
@@ -156,8 +156,6 @@ async function waitForClientOrStartupBlock(pg, url, timeout = INIT_TIMEOUT) {
   }).catch(() => null);
   if (!evidence) return; // flicker — carry on exactly as before
 
-  const oneLine = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 300);
-
   if (evidence.kind === 'auth') {
     // The publication asks a human for credentials. The engine cannot answer, and until now it
     // did something worse than fail: it waited 66s and then closeModals()'s Escape dismissed the
@@ -165,8 +163,9 @@ async function waitForClientOrStartupBlock(pg, url, timeout = INIT_TIMEOUT) {
     // here (unlike the licence case) and holds a licence — callers release it before rethrowing.
     throw new Error(
       `1C requires interactive login before the web client loads: "${oneLine(evidence.text)}"` +
-      '\n  The engine cannot supply credentials — publish the infobase with a user' +
-      ' (web-publish -UserName … → Usr=/Pwd= in the vrd) or put one in the connection string.' +
+      '\n  Publish the infobase with a user (web-publish -UserName … → Usr=/Pwd= in the vrd), or log in' +
+      ' as a user: --user=/--password= for start/run, user/password in a webtest.config.mjs context,' +
+      ' or the same options of connect()/createContext().' +
       `\n  URL: ${url}`
     );
   }
@@ -181,13 +180,103 @@ async function waitForClientOrStartupBlock(pg, url, timeout = INIT_TIMEOUT) {
 }
 
 /**
+ * Credentials of the single-session (connect) path, kept so that a repeated connect() on a live
+ * browser logs in again instead of landing as the publication's user. In memory only.
+ */
+let connectCreds = null;
+
+const oneLine = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 300);
+
+/**
+ * Turn a refused POST <publication>/e1cib/start into a message. No seance exists at this point,
+ * so there is nothing to release. The body is JSON ({"exception":{reason, descr}}) or, for 412,
+ * an HTML page carrying the same JSON in <div id="exc">. Names the user, never the password.
+ *
+ * Measured on 8.3.20–8.5.1 (file infobase, standard authentication): 402 — wrong name or
+ * password; 412 — no right to run the web client; 403 and 400 with reason 9 — no free licence.
+ */
+function describeStartRefusal(status, body, url, user) {
+  let descr = '';
+  const m = (body || '').match(/"descr"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (m) {
+    try { descr = JSON.parse(`"${m[1]}"`); } catch { descr = m[1]; }
+    // Second line is the platform's "Ошибка при выполнении запроса POST к ресурсу …" — noise.
+    descr = oneLine(descr.split('\n')[0]);
+  }
+  const reason = ((body || '').match(/"reason"\s*:\s*"?(\d+)/) || [])[1];
+  const quoted = descr ? `: "${descr}"` : '';
+  const tail = `\n  URL: ${url}`;
+  if (status === 402) {
+    return `1C rejected the credentials of user "${user}"${quoted}` +
+      '\n  Check the user name and password.' + tail;
+  }
+  if (status === 412) {
+    return `User "${user}" may not run the web client${quoted}` +
+      '\n  The name and password are accepted, but no role of this user grants the web client.' +
+      ' Log in as another user or extend the user\'s roles.' + tail;
+  }
+  if (status === 403 || (status === 400 && reason === '9')) {
+    return `1C refused to start a seance for user "${user}": no free licence (HTTP ${status})${quoted}` +
+      '\n  Release 1C sessions and retry.' + tail;
+  }
+  return `1C refused to log in user "${user}": HTTP ${status}${quoted}` + tail;
+}
+
+/**
+ * Open the 1C web client in `pg`. Without credentials — a plain navigation, the publication
+ * decides who logs in. With `creds.user` — a form POST to <url>/e1cib/start (Usr, Pwd,
+ * AuthFailHandling=error), which logs in as that user even when the vrd names another one; the
+ * platform answers 301 into the client, or an error status that is turned into a message here.
+ * The form is built through DOM properties — the values never pass through HTML markup.
+ */
+async function navigateTo(pg, url, creds) {
+  if (!creds?.user) {
+    await pg.goto(url, { waitUntil: 'domcontentloaded', timeout: LOAD_TIMEOUT });
+    return;
+  }
+  const action = url.replace(/[?#].*$/, '').replace(/\/+$/, '') + '/e1cib/start';
+  await pg.goto('about:blank');
+  const started = pg.waitForResponse(
+    r => /\/e1cib\/start(?:[?#]|$)/.test(r.url()) && r.request().method() === 'POST',
+    { timeout: LOAD_TIMEOUT });
+  // submit() navigates away — the evaluate may lose its context; the response wait decides.
+  await pg.evaluate(({ action, fields }) => {
+    const form = document.createElement('form');
+    form.method = 'post';
+    form.action = action;
+    for (const [name, value] of fields) {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = name;
+      input.value = value;
+      form.appendChild(input);
+    }
+    document.body.appendChild(form);
+    form.submit();
+  }, { action, fields: [['Usr', creds.user], ['Pwd', creds.password ?? ''], ['AuthFailHandling', 'error']] })
+    .catch(() => {});
+  const resp = await started;
+  if (resp.status() >= 400) {
+    let body = '';
+    try { body = await resp.text(); } catch {}
+    throw new Error(describeStartRefusal(resp.status(), body, url, creds.user));
+  }
+  await pg.waitForLoadState('domcontentloaded', { timeout: LOAD_TIMEOUT }).catch(() => {});
+}
+
+/**
  * Open browser and navigate to 1C web client URL.
  * Waits for initialization (themesCell_theme_0 selector) and attempts to close startup modals.
+ *
+ * @param {string} url  publication URL
+ * @param {object} [opts]
+ * @param {string} [opts.extensionPath]  1C browser extension directory
+ * @param {string} [opts.user]      log in as this infobase user instead of the publication's one
+ * @param {string} [opts.password]  that user's password (omit for an empty one)
  */
-export async function connect(url, { extensionPath } = {}) {
-  if (isConnected()) {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: LOAD_TIMEOUT });
-  } else {
+export async function connect(url, { extensionPath, user, password } = {}) {
+  if (user) connectCreds = { user, password };
+  if (!isConnected()) {
     const extPath = findExtension(extensionPath);
     if (extPath) {
       // Launch with 1C browser extension via persistent context
@@ -226,14 +315,14 @@ export async function connect(url, { extensionPath } = {}) {
       const m = req.url().match(/^(https?:\/\/[^/]+\/[^/]+\/[^/]+)\/e1cib\/.+[?&]seanceId=([^&]+)/);
       if (m) { setSessionPrefix(m[1]); setSeanceId(m[2]); }
     });
-
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: LOAD_TIMEOUT });
   }
 
   // Wait for 1C to initialize — or fail fast if the startup shell blocks the client.
   // MUST run before closeModals(): that presses Escape 5x, which dismisses the auth dialog and
   // destroys the evidence (measured — one Escape blanks the page).
   try {
+    // A refused login throws from here too; the browser must not outlive it.
+    await navigateTo(page, url, connectCreds);
     await waitForClientOrStartupBlock(page, url);
   } catch (e) {
     // On the auth dialog a 1C seance already exists and holds a licence, and killing the process
@@ -278,6 +367,7 @@ async function logoutSlot(slot, waitMs = 500) {
  */
 export async function disconnect() {
   const wasMultiContext = contexts.size > 0;
+  connectCreds = null;
 
   // Multi-context path: stop recording + logout each slot before closing browser
   if (wasMultiContext) {
@@ -430,6 +520,10 @@ function attachSessionListeners(pg, slot, name) {
  *
  * Use this from run.mjs cmdTest only — exec/run/start use connect() and stay on the
  * legacy persistent-context path.
+ *
+ * Options: extensionPath, isolation ('tab' | 'window'), user/password — log the slot in as that
+ * infobase user (see navigateTo). Re-creating an existing slot reuses its login unless a new
+ * user is passed. Different users coexist in either isolation mode: the 1C seance is per page.
  */
 /**
  * Navigate the active slot to `url` and settle: client up, or a startup block raised.
@@ -440,8 +534,9 @@ function attachSessionListeners(pg, slot, name) {
  * abortContext also handles the tab-mode last-page teardown, so the next createContext relaunches.
  */
 async function openAndSettle(name, url) {
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: LOAD_TIMEOUT });
   try {
+    // A refused login (slot.creds) is a startup block as well: same teardown.
+    await navigateTo(page, url, contexts.get(name)?.creds);
     await waitForClientOrStartupBlock(page, url);
   } catch (e) {
     await softDeadline(abortContext(name), 10000, 'abortContext(startup-block)');
@@ -451,9 +546,10 @@ async function openAndSettle(name, url) {
   return await getPageState();
 }
 
-export async function createContext(name, url, { extensionPath, isolation = 'tab' } = {}) {
+export async function createContext(name, url, { extensionPath, isolation = 'tab', user, password } = {}) {
   if (contexts.has(name)) {
     await setActiveContext(name);
+    if (user) contexts.get(name).creds = { user, password };
     return await openAndSettle(name, url);
   }
 
@@ -517,6 +613,8 @@ export async function createContext(name, url, { extensionPath, isolation = 'tab
     sessionPrefix: null,
     seanceId: null,
     highlightMode: false,
+    // Login of this slot (null — the publication's user); in memory only, reused on re-open.
+    creds: user ? { user, password } : null,
   };
   contexts.set(name, slot);
 

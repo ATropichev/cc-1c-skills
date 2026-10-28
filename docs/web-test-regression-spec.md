@@ -216,8 +216,8 @@ ctx.testInfo = {
   attempt,          // 1..maxAttempts (1-based)
   maxAttempts,      // 1 + retry
   param,            // { ... } | undefined (для export const params)
-  contexts: {       // объект, всегда 1+ ключей; зеркалит config.contexts
-    a: { url, isolation, ...customFields },
+  contexts: {       // объект, всегда 1+ ключей; зеркалит config.contexts без password
+    a: { url, isolation, user, ...customFields },
     b: { ... },
   },
   primaryContext,   // 'a' — имя контекста, активного на входе в тест
@@ -478,6 +478,11 @@ export default {
   },
   defaultContext: 'clerk',
 
+  // Вход под пользователем (§8 «Вход под пользователем»): у контекста или на верхнем уровне
+  // рядом с `url`. Без `user` входит пользователь публикации.
+  //   contexts: { clerk: { url, user: 'Кладовщик', password: process.env.CLERK_PWD } }
+  // user: 'Кладовщик', password: process.env.CLERK_PWD,
+
   // Значения по умолчанию (переопределяются флагами CLI)
   timeout: 30000,
   globalTimeout: 0,          // потолок на весь прогон (мс); 0 = выключен
@@ -619,7 +624,7 @@ await step('Кладовщик проверяет статус', async () => {
 
 | Метод | Назначение |
 |-------|-----------|
-| `createContext(name, url, { isolation, extensionPath })` | Создаёт BrowserContext и переходит по URL. |
+| `createContext(name, url, { isolation, extensionPath, user, password })` | Создаёт BrowserContext и переходит по URL; с `user` — входит под этим пользователем. |
 | `setActiveContext(name)` | Переключает активный слот; при активной записи дописывает последние кадры старой страницы и переподключает screencast. |
 | `closeContext(name)` | Выход из 1С + закрытие (`page` для `tab`, `BrowserContext` для `window`), удаляет из реестра. Бросает исключение, если `name === active`. |
 | `listContexts()` / `hasContext(name)` / `getActiveContext()` | Только для чтения. |
@@ -637,6 +642,27 @@ await step('Кладовщик проверяет статус', async () => {
 | `'window'` | `chromium.launch()` + `newContext()` per context | N окон | полная изоляция | может не загружаться |
 
 Смешивать режимы в одном прогоне нельзя — `createContext` бросает явную ошибку. То есть `config.isolation` фактически становится режимом всего прогона, если хотя бы один контекст явно не переопределил его на тот же режим.
+
+### Вход под пользователем
+
+Без `user` контекст открывает URL как есть — входит пользователь публикации (`Usr=` в vrd), а на
+публикации без пользователя движок падает на диалоге входа (детектор `#authWindow`). С `user`
+(`createContext`, `connect`, `--user=` у `start`/`run`, поле контекста в конфиге) движок шлёт форму
+`POST <url>/e1cib/start` с полями `Usr`, `Pwd`, `AuthFailHandling=error` и дальше ждёт клиента как
+обычно. Пользователь из запроса перекрывает `Usr=` публикации.
+
+| Ответ `e1cib/start` | Значение | Сообщение движка |
+|---|---|---|
+| 301 | вход выполнен, переход в клиент | — |
+| 402 | неверное имя или пароль | `1C rejected the credentials of user "…"` |
+| 412 | нет права на вид клиента (тело — HTML, JSON в `<div id="exc">`) | `User "…" may not run the web client` |
+| 403; 400 с `reason: 9` | нет свободной лицензии | `…no free licence (HTTP …)` |
+
+При отказе сеанс не создаётся; слот снимается тем же путём, что и при стартовом блокере. Данные
+входа хранятся только в памяти слота и повторяются при переоткрытии; пароль не попадает в
+`testInfo.contexts`, ответ `start`, файл сессии и сообщения. Хуки `afterOpenContext` /
+`beforeCloseContext` получают запись конфига как есть. Офлайн-проверка отказов —
+`tests/web-test/_login/check.mjs`.
 
 ### Закрытие неактивных контекстов
 

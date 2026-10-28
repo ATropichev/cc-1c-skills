@@ -46,6 +46,18 @@ Read `.v8-project.json` from project root. Each database has `id` and optional `
 Construct URL as `http://localhost:8081/<id>` or use `webUrl` if set.
 Use `/web-publish` first if the database is not published.
 
+## Who logs in
+
+By default the session runs as the publication's user — pass nothing. To work as another infobase
+user, or when the publication has no user and 1C asks to log in, add `--user=` (and `--password=` unless
+it is empty) to `start` or `run`. The given user wins over the one in the publication.
+
+```bash
+node $RUN start <url> "--user=Иванов И.И." --password=secret
+```
+
+Take the password from the `.v8-project.json` entry with that `user`; no entry — ask the user.
+
 ## Execution modes
 
 ### Autonomous mode (preferred for complete scenarios)

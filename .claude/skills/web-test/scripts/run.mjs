@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// web-test run v1.20 — CLI entry-point (распилено по cli/)
+// web-test run v1.21 — CLI entry-point (распилено по cli/)
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * CLI runner for 1C web client automation.
@@ -10,6 +10,7 @@
  * Usage:
  *   node src/run.mjs start <url>            — launch browser, connect to 1C, serve requests
  *   node src/run.mjs run <url> <file|->     — autonomous: connect, execute script, disconnect
+ *     start/run: --user=<name> [--password=<pwd>] — log in as that infobase user
  *   node src/run.mjs exec <file|->          — run script against existing session
  *   node src/run.mjs shot [file]            — take screenshot
  *   node src/run.mjs stop                   — logout + close browser
@@ -36,6 +37,14 @@ const flags = {
   execTimeoutMs: (cmd === 'run' || cmd === 'exec') ? parseExecTimeoutMs(rawArgs) : undefined,
 };
 const args = rawArgs.filter(a => !a.startsWith('--'));
+
+// Login for start/run: --key=value like --timeout= (bare words are positional arguments).
+function flagValue(name) {
+  const a = rawArgs.find(x => x.startsWith(`--${name}=`));
+  return a === undefined ? undefined : a.slice(name.length + 3);
+}
+const login = { user: flagValue('user'), password: flagValue('password') };
+if ((cmd === 'start' || cmd === 'run') && login.password !== undefined && !login.user) die('--password= requires --user=');
 
 // Clipboard preservation: default ON. Disabled by --no-preserve-clipboard CLI flag
 // or WEB_TEST_PRESERVE_CLIPBOARD=0 env. cmdTest may further disable via config.
@@ -65,8 +74,8 @@ function parseExecTimeoutMs(argv) {
 }
 
 switch (cmd) {
-  case 'start':  await cmdStart(args[0]); break;
-  case 'run':    await cmdRun(args[0], args[1], flags.execTimeoutMs); break;
+  case 'start':  await cmdStart(args[0], login); break;
+  case 'run':    await cmdRun(args[0], args[1], flags.execTimeoutMs, login); break;
   case 'exec':   await cmdExec(args[0], flags); break;
   case 'shot':   await cmdShot(args[0]); break;
   case 'stop':   await cmdStop(); break;
