@@ -181,7 +181,8 @@ async function waitForClientOrStartupBlock(pg, url, timeout = INIT_TIMEOUT) {
 
 /**
  * Credentials of the single-session (connect) path, kept so that a repeated connect() on a live
- * browser logs in again instead of landing as the publication's user. In memory only.
+ * browser logs in again instead of landing as the publication's user. In memory only and never
+ * returned by the engine API — scripts cannot read them (same for slot.creds).
  */
 let connectCreds = null;
 
@@ -228,18 +229,22 @@ function describeStartRefusal(status, body, url, user) {
  * AuthFailHandling=error), which logs in as that user even when the vrd names another one; the
  * platform answers 301 into the client, or an error status that is turned into a message here.
  * The form is built through DOM properties — the values never pass through HTML markup.
+ * Launch parameters in the URL query (C=, L=, …) go into the form's action: the platform carries
+ * them through the 301 into the client (measured on 8.3.20/24, 8.5.1); as form fields they are lost.
  */
 async function navigateTo(pg, url, creds) {
   if (!creds?.user) {
     await pg.goto(url, { waitUntil: 'domcontentloaded', timeout: LOAD_TIMEOUT });
     return;
   }
-  const action = url.replace(/[?#].*$/, '').replace(/\/+$/, '') + '/e1cib/start';
+  const u = new URL(url);
+  const action = `${u.origin}${u.pathname.replace(/\/+$/, '')}/e1cib/start${u.search}`;
   await pg.goto('about:blank');
   const started = pg.waitForResponse(
     r => /\/e1cib\/start(?:[?#]|$)/.test(r.url()) && r.request().method() === 'POST',
     { timeout: LOAD_TIMEOUT });
   // submit() navigates away — the evaluate may lose its context; the response wait decides.
+  let submitError = null;
   await pg.evaluate(({ action, fields }) => {
     const form = document.createElement('form');
     form.method = 'post';
@@ -254,8 +259,16 @@ async function navigateTo(pg, url, creds) {
     document.body.appendChild(form);
     form.submit();
   }, { action, fields: [['Usr', creds.user], ['Pwd', creds.password ?? ''], ['AuthFailHandling', 'error']] })
-    .catch(() => {});
-  const resp = await started;
+    .catch(e => { submitError = e; });
+  let resp;
+  try {
+    resp = await started;
+  } catch {
+    throw new Error(`The login of user "${creds.user}" got no answer from ${action}` +
+      (submitError ? ` — the login form was not submitted: ${oneLine(submitError.message)}` : '') +
+      `
+  URL: ${url}`);
+  }
   if (resp.status() >= 400) {
     let body = '';
     try { body = await resp.text(); } catch {}
@@ -275,7 +288,8 @@ async function navigateTo(pg, url, creds) {
  * @param {string} [opts.password]  that user's password (omit for an empty one)
  */
 export async function connect(url, { extensionPath, user, password } = {}) {
-  if (user) connectCreds = { user, password };
+  // Kept only once the login succeeded: a failure before it must not leak into the next connect().
+  const creds = user ? { user, password } : connectCreds;
   if (!isConnected()) {
     const extPath = findExtension(extensionPath);
     if (extPath) {
@@ -322,7 +336,7 @@ export async function connect(url, { extensionPath, user, password } = {}) {
   // destroys the evidence (measured — one Escape blanks the page).
   try {
     // A refused login throws from here too; the browser must not outlive it.
-    await navigateTo(page, url, connectCreds);
+    await navigateTo(page, url, creds);
     await waitForClientOrStartupBlock(page, url);
   } catch (e) {
     // On the auth dialog a 1C seance already exists and holds a licence, and killing the process
@@ -331,6 +345,7 @@ export async function connect(url, { extensionPath, user, password } = {}) {
     await softDeadline(disconnect(), 20000, 'disconnect(startup-block)');
     throw e;
   }
+  connectCreds = creds;
 
   // Try to close startup modals (Путеводитель etc.)
   await closeModals();

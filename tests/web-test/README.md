@@ -216,11 +216,13 @@ node tests/web-test/_login/check.mjs
 
 Проверяет: форма уходит целиком (`Usr`, `Pwd`, `AuthFailHandling=error`, кириллица и спецсимволы не
 искажены); 402, 412 (тело HTML), 403 и 400 с `reason: 9` — ненулевой выход и названная причина;
-`--password=` без `--user=` отвергается до запроса; пароль не встречается в выводе. Успешный вход
+параметры запуска из query URL доходят до `e1cib/start`; пустой `--user=` и `--password=` без
+`--user=` отвергаются до запроса; раннер отвергает конфиги из `suites/` (`user` на верхнем уровне при
+`contexts`, `password` без `user` у контекста); пароль не встречается в выводе. Успешный вход
 требует настоящей 1С и здесь не проверяется.
 
-**Когда гонять:** правки `navigateTo` / `describeStartRefusal` в `engine/core/session.mjs` и разбора
-`--user=` / `--password=` в `run.mjs`.
+**Когда гонять:** правки `navigateTo` / `describeStartRefusal` в `engine/core/session.mjs`, разбора
+`--user=` / `--password=` в `run.mjs` и проверки полей входа в `cli/commands/test.mjs`.
 
 ## Артефакты
 

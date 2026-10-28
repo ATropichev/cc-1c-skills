@@ -127,7 +127,17 @@ export async function cmdTest(rawArgs) {
           `Pass the suite root (e.g. tests/myapp/) and narrow with --grep= / --tags=, or give --url=.`);
     }
     contextSpecs.default = { url: fallbackUrl };
-    if (config.user) Object.assign(contextSpecs.default, { user: config.user, password: config.password });
+    if (config.user !== undefined) Object.assign(contextSpecs.default, { user: config.user, password: config.password });
+  }
+  // Login fields that would be dropped silently: the run would go as the publication's user.
+  if (config.contexts && Object.keys(config.contexts).length && (config.user !== undefined || config.password !== undefined)) {
+    die('webtest.config.mjs: top-level user/password apply only without "contexts" — set them per context');
+  }
+  if (config.password !== undefined && config.user === undefined) die('webtest.config.mjs: password without user');
+  if (config.user === '') die('webtest.config.mjs: user is empty');
+  for (const [n, spec] of Object.entries(contextSpecs)) {
+    if (spec.user === '') die(`webtest.config.mjs: context "${n}": user is empty`);
+    if (spec.password !== undefined && spec.user === undefined) die(`webtest.config.mjs: context "${n}": password without user`);
   }
   if (!contextSpecs[defaultContextName]) {
     die(`defaultContext "${defaultContextName}" not found in contexts: [${Object.keys(contextSpecs).join(', ')}]`);

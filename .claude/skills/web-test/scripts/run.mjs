@@ -38,13 +38,20 @@ const flags = {
 };
 const args = rawArgs.filter(a => !a.startsWith('--'));
 
-// Login for start/run: --key=value like --timeout= (bare words are positional arguments).
-function flagValue(name) {
-  const a = rawArgs.find(x => x.startsWith(`--${name}=`));
+// Value of a --name=value flag (first occurrence), undefined when absent. Bare words are
+// positional arguments, so every valued flag uses this form.
+function flagValue(name, argv = rawArgs) {
+  const a = argv.find(x => x.startsWith(`--${name}=`));
   return a === undefined ? undefined : a.slice(name.length + 3);
 }
+
+// Login for start/run. An empty --user= usually means an unset shell variable — refuse rather
+// than fall back to the publication's user unnoticed.
 const login = { user: flagValue('user'), password: flagValue('password') };
-if ((cmd === 'start' || cmd === 'run') && login.password !== undefined && !login.user) die('--password= requires --user=');
+if (cmd === 'start' || cmd === 'run') {
+  if (login.user === '') die('--user= is empty');
+  if (login.password !== undefined && login.user === undefined) die('--password= requires --user=');
+}
 
 // Clipboard preservation: default ON. Disabled by --no-preserve-clipboard CLI flag
 // or WEB_TEST_PRESERVE_CLIPBOARD=0 env. cmdTest may further disable via config.
@@ -64,10 +71,10 @@ function parseExecTimeoutMs(argv) {
     }
     return Math.round(ms);
   };
-  const flagMs = argv.find(a => a.startsWith('--timeout='));
-  if (flagMs) return check(Number(flagMs.slice('--timeout='.length)), flagMs);
-  const flagMin = argv.find(a => a.startsWith('--timeout-min='));
-  if (flagMin) return check(Number(flagMin.slice('--timeout-min='.length)) * 60 * 1000, flagMin);
+  const ms = flagValue('timeout', argv);
+  if (ms !== undefined) return check(Number(ms), `--timeout=${ms}`);
+  const min = flagValue('timeout-min', argv);
+  if (min !== undefined) return check(Number(min) * 60 * 1000, `--timeout-min=${min}`);
   const env = process.env.WEB_TEST_EXEC_TIMEOUT_MS;
   if (env) return check(Number(env), `WEB_TEST_EXEC_TIMEOUT_MS=${env}`);
   return DEFAULT_MS;
