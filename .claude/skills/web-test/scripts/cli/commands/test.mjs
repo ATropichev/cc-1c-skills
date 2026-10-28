@@ -1,4 +1,4 @@
-// web-test cli/commands/test v1.11 — regression test runner
+// web-test cli/commands/test v1.12 — regression test runner
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import { existsSync, writeFileSync, mkdirSync, renameSync, copyFileSync, unlinkSync } from 'fs';
 import { resolve, dirname, basename, relative } from 'path';

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// web-test run v1.21 — CLI entry-point (распилено по cli/)
+// web-test run v1.22 — CLI entry-point
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 /**
  * CLI runner for 1C web client automation.

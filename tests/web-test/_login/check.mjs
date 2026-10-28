@@ -1,8 +1,8 @@
-// web-test _login/check v1.1 — login as a given user: what is sent, how a refusal reads
+// web-test _login/check v1.2 — login as a given user: what is sent, how a refusal reads
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 //
 // `run <url> - --user= --password=` posts the credentials to <url>/e1cib/start. A fake 1C answers
-// with the refusals measured on 8.3.20–8.5.1 (402, 412 as HTML, 403, 400 with reason 9); each must
+// with the refusals measured on 8.3.20–8.5.1 (402, 412 as HTML or XML, 403, 400 with reason 9); each must
 // end with a non-zero exit, a message naming the cause, and the password nowhere in the output.
 // Launch parameters of the URL must reach e1cib/start; login fields the CLI or the runner would drop
 // silently (empty --user=, top-level user next to contexts, password without user) are refused.
@@ -34,6 +34,10 @@ const answers = {
     body: '<html>\n<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"></head>\n<body>\n' +
       '<div id="exc" style="display:none">{"exception":{"clsid":"580392e6-ba49-4280-ac67-fcd6f2180121","reason":"412",' +
       '"descr":"Нет прав на запуск требуемого вида клиента","category":"0000000000000000000"}}</div>\n</body></html>' },
+  p412x: { status: 412, type: 'application/xml; charset=utf-8',
+    body: '<?xml version="1.0" encoding="UTF-8"?><exception xmlns="http://v8.1c.ru/8.2/virtual-resource-system" ' +
+      'clsid="580392e6-ba49-4280-ac67-fcd6f2180121" reason="412"><descr xmlns="http://v8.1c.ru/8.1/data/core">' +
+      'Нет прав на запуск требуемого вида клиента</descr></exception>' },
   p403: { status: 403, type: 'text/plain', body: '' },
   pq: json(402, 402, 'Неправильное имя пользователя или пароль'),
   p400: { status: 400, type: 'application/json; charset=utf-8',
@@ -77,6 +81,7 @@ const sentRight = (pub) => {
 const scenarios = [
   { name: '402 — неверное имя или пароль', pub: 'p402', text: /rejected the credentials of user "Тестов Т\."[^\n]*Неправильное имя пользователя или пароль/ },
   { name: '412 — нет права на веб-клиент (тело HTML)', pub: 'p412', text: /User "Тестов Т\." may not run the web client: "Нет прав на запуск требуемого вида клиента"/ },
+  { name: '412 — тело XML (автономный сервер)', pub: 'p412x', text: /User "Тестов Т\." may not run the web client: "Нет прав на запуск требуемого вида клиента"/ },
   { name: '403 — нет лицензии', pub: 'p403', text: /no free licence \(HTTP 403\)/ },
   { name: '400 reason 9 — нет лицензии', pub: 'p400', text: /no free licence \(HTTP 400\): "Не обнаружено свободной лицензии!"/ },
   { name: '--password= без --user=', args: [`${base}/p402`, '-', `--password=${SECRET}`], text: /--password= requires --user=/, nothingSent: 'p402' },

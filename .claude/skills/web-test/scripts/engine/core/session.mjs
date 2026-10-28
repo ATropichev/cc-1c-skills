@@ -1,4 +1,4 @@
-// web-test core/session v1.26 — Browser session lifecycle: connect/disconnect/attach/detach, multi-context registry.
+// web-test core/session v1.27 — Browser session lifecycle: connect/disconnect/attach/detach, multi-context registry.
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import { chromium } from 'playwright';
@@ -190,21 +190,26 @@ const oneLine = (s) => s.replace(/\s+/g, ' ').trim().slice(0, 300);
 
 /**
  * Turn a refused POST <publication>/e1cib/start into a message. No seance exists at this point,
- * so there is nothing to release. The body is JSON ({"exception":{reason, descr}}) or, for 412,
- * an HTML page carrying the same JSON in <div id="exc">. Names the user, never the password.
+ * so there is nothing to release. The body is JSON ({"exception":{reason, descr}}); for 412 it is
+ * an HTML page carrying the same JSON in <div id="exc"> (Apache) or XML <exception reason="…">
+ * with <descr> (standalone server ibsrv). Names the user, never the password.
  *
  * Measured on 8.3.20–8.5.1 (file infobase, standard authentication): 402 — wrong name or
  * password; 412 — no right to run the web client; 403 and 400 with reason 9 — no free licence.
  */
 function describeStartRefusal(status, body, url, user) {
+  const text = body || '';
   let descr = '';
-  const m = (body || '').match(/"descr"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  const m = text.match(/"descr"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  const x = text.match(/<descr\b[^>]*>([^<]*)<\/descr>/);
   if (m) {
     try { descr = JSON.parse(`"${m[1]}"`); } catch { descr = m[1]; }
-    // Second line is the platform's "Ошибка при выполнении запроса POST к ресурсу …" — noise.
-    descr = oneLine(descr.split('\n')[0]);
+  } else if (x) {
+    descr = x[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
   }
-  const reason = ((body || '').match(/"reason"\s*:\s*"?(\d+)/) || [])[1];
+  // Second line is the platform's "Ошибка при выполнении запроса POST к ресурсу …" — noise.
+  if (descr) descr = oneLine(descr.split('\n')[0]);
+  const reason = (text.match(/"reason"\s*:\s*"?(\d+)/) || text.match(/\breason="(\d+)"/) || [])[1];
   const quoted = descr ? `: "${descr}"` : '';
   const tail = `\n  URL: ${url}`;
   if (status === 402) {
