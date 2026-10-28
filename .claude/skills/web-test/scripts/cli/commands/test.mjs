@@ -1,4 +1,4 @@
-// web-test cli/commands/test v1.9 — regression test runner
+// web-test cli/commands/test v1.10 — regression test runner
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import { existsSync, writeFileSync, mkdirSync, renameSync, copyFileSync, unlinkSync } from 'fs';
 import { resolve, dirname, basename, relative } from 'path';
@@ -253,13 +253,6 @@ export async function cmdTest(rawArgs) {
     return true;
   });
 
-  // Load hooks
-  const hooksPath = resolve(suiteRoot, '_hooks.mjs');
-  let hooks = {};
-  if (existsSync(hooksPath)) {
-    hooks = await import('file:///' + hooksPath.replace(/\\/g, '/'));
-  }
-
   // Human-readable report goes to stdout (test-runner convention: jest/pytest/playwright).
   // In `--report -` mode the machine JSON/XML takes over stdout, so progress moves to stderr.
   const W = reportToStdout ? process.stderr : process.stdout;
@@ -387,6 +380,39 @@ export async function cmdTest(rawArgs) {
     }
   }
 
+  const declaredContextsOf = (t) => t.contexts && t.contexts.length ? t.contexts : [t.context || defaultContextName];
+  function recordSkipped(t) {
+    const reason = typeof t.skip === 'string' ? t.skip : '';
+    W.write(`  ○ ${t.name}${reason ? ` (skip: ${reason})` : ' (skip)'}\n`);
+    recordResult({ name: t.name, file: t.file, tags: t.tags, contexts: declaredContextsOf(t), status: 'skipped', duration: 0, attempts: 0, steps: [], output: '', error: null, screenshot: null });
+    skipCount++;
+  }
+
+  // Nothing to run → refuse BEFORE `_hooks.mjs` is imported and prepare() rebuilds the stand.
+  // A run where no test executed must not look green: the exit code is what the caller reads.
+  // Exit 5 (pytest's "no tests collected") keeps it apart from 1 = red tests.
+  if (!filtered.some(t => !t.skip)) {
+    if (!filtered.length) {
+      const by = [];
+      if (hasOnly) by.push('only');
+      if (tags) by.push(`--tags=${tags.join(',')}${ownArgs.some(a => a.startsWith('--tags=')) ? '' : ' (from webtest.config.mjs)'}`);
+      if (grep) by.push(`--grep=${grep.source}`);
+      W.write(`No tests to run: ${by.join(' + ') || 'the filters'} matched none of ${tests.length} discovered tests\n`);
+    } else {
+      W.write(`No tests to run: all ${filtered.length} selected tests are skipped\n`);
+      for (const t of filtered) recordSkipped(t);
+    }
+    W.write(`\n${passCount} passed, ${failCount} failed, ${skipCount} skipped (${formatDuration(0)})\n\n`);
+    writeFinalReport('empty');
+    process.exit(5);
+  }
+
+  const hooksPath = resolve(suiteRoot, '_hooks.mjs');
+  let hooks = {};
+  if (existsSync(hooksPath)) {
+    hooks = await import('file:///' + hooksPath.replace(/\\/g, '/'));
+  }
+
   const hookLog = (...a) => W.write(`[hooks] ${a.map(String).join(' ')}\n`);
   const hookEnv = { hookArgs, log: hookLog, config };
   // Deliberately unbounded and allowed to throw: prepare() rebuilds the stand (db-create +
@@ -493,16 +519,11 @@ export async function cmdTest(rawArgs) {
       testIdx++;
       // Buffer this test's diagnostics; they are flushed under its own result line below.
       diagSink = [];
-      const declaredContexts = t.contexts && t.contexts.length
-        ? t.contexts
-        : [t.context || defaultContextName];
+      const declaredContexts = declaredContextsOf(t);
 
       if (t.skip) {
-        const reason = typeof t.skip === 'string' ? t.skip : '';
-        W.write(`  ○ ${t.name}${reason ? ` (skip: ${reason})` : ' (skip)'}\n`);
+        recordSkipped(t);
         flushDiag();
-        recordResult({ name: t.name, file: t.file, tags: t.tags, contexts: declaredContexts, status: 'skipped', duration: 0, attempts: 0, steps: [], output: '', error: null, screenshot: null });
-        skipCount++;
         continue;
       }
 
@@ -843,6 +864,12 @@ export async function cmdTest(rawArgs) {
   writeFinalReport('complete');
 
   if (failCount > 0) process.exit(1);
+  // Unreachable while `skip` is static (the guard above catches it) — kept so no future path
+  // can turn "nothing passed" into a green exit.
+  if (passCount === 0) {
+    W.write(`No test passed — treating the run as empty (exit 5)\n`);
+    process.exit(5);
+  }
 
   /**
    * Allure results are already on disk (recordResult writes each test as it finishes), so this
