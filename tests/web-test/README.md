@@ -196,13 +196,16 @@ node .claude/skills/web-test/scripts/run.mjs test tests/web-test/_suite-root/nes
 node tests/web-test/_selection/check.mjs
 ```
 
-Два мини-набора со своими `webtest.config.mjs` (URL фиктивный) и `_hooks.mjs`, который при импорте пишет
-маркер, а `prepare` бросает исключение: `basic/` (обычный тест + skipped) и `only/` (`only` на
-skipped-тесте). Проверяет: `--grep` и `--tags` мимо, выборка целиком skipped, `only` на skipped — везде
+Три мини-набора со своими `webtest.config.mjs` (URL фиктивный) и `_hooks.mjs`, который при импорте пишет
+маркер, а `prepare` бросает исключение: `basic/` (обычный тест + skipped), `only/` (`only` на
+skipped-тесте) и `params/` (параметризованный skipped-тест). Проверяет: `--grep` и `--tags` мимо, выборка целиком skipped, `only` на skipped — везде
 код 5, причина в выводе и маркера нет (хуки не импортированы); с `--report=-` в stdout JSON с
-`state: "empty"`.
+`state: "empty"`. Заодно — подстановка параметров в имя теста: в отчёте пропущенного
+параметризованного теста имена уже развёрнуты, кириллические ключи (`{случай}`) подставляются наравне с
+латинскими.
 
-**Когда гонять:** правки фильтрации, загрузки хуков и итогового кода выхода в `cli/commands/test.mjs`.
+**Когда гонять:** правки фильтрации, загрузки хуков, итогового кода выхода и разворачивания `params` в
+`cli/commands/test.mjs` / `cli/util.mjs`.
 
 ## Фикстура входа под пользователем — `_login/`
 

@@ -1,4 +1,4 @@
-// web-test cli/util v1.5 — generic helpers for CLI commands
+// web-test cli/util v1.6 — generic helpers for CLI commands
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 // Wall-clock bounds live in the engine (session.mjs needs them too, and the engine must not
@@ -77,8 +77,9 @@ export function xmlEscape(s) {
     .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 }
 
+// Keys may be in any script: `\w` is ASCII-only, so `{случай}` would stay unsubstituted.
 export function interpolate(template, params) {
-  return String(template).replace(/\{(\w+)\}/g, (_, key) =>
+  return String(template).replace(/\{([\p{L}\p{N}_]+)\}/gu, (_, key) =>
     params[key] !== undefined ? String(params[key]) : `{${key}}`);
 }
 

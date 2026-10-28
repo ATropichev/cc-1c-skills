@@ -1,4 +1,4 @@
-// web-test _selection/check v1.0 — a run with nothing to execute must not look green
+// web-test _selection/check v1.1 — a run with nothing to execute must not look green
 // Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 //
 // Filters that match no test, or a selection where every test is skipped, must end with exit 5
@@ -43,6 +43,9 @@ const scenarios = [
     report: (j) => j?.state === 'empty' && j.summary.total === 0 },
   { name: 'всё skipped, --report=-', suite: 'basic', args: ['--grep=skipped', '--report=-'],
     report: (j) => j?.state === 'empty' && j.summary.skipped === 1 && j.tests[0]?.status === 'skipped' },
+  { name: 'params: плейсхолдеры в имени — и кириллические, и латинские ключи', suite: 'params', args: ['--report=-'],
+    report: (j) => JSON.stringify(j?.tests?.map((t) => t.name)) ===
+      JSON.stringify(['Параметр кириллица / latin', 'Параметр граница_1 / edge']) },
   { name: 'пустая выборка, JUnit в файл', suite: 'basic', args: ['--grep=missing', '--format=junit', `--report=${resolve(workDir, 'r.xml')}`],
     file: () => /<testsuites [^>]*tests="0"/.test(readText(resolve(workDir, 'r.xml'))) },
 ];
