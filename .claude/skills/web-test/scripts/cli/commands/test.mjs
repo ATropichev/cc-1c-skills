@@ -390,7 +390,9 @@ export async function cmdTest(rawArgs) {
 
   // Nothing to run → refuse BEFORE `_hooks.mjs` is imported and prepare() rebuilds the stand.
   // A run where no test executed must not look green: the exit code is what the caller reads.
-  // Exit 5 (pytest's "no tests collected") keeps it apart from 1 = red tests.
+  // Exit 5 (pytest's "no tests collected") keeps it apart from 1 = red tests. An all-skipped
+  // selection gets 5 too — stricter than pytest on purpose: `skip` is static, so a selection that
+  // skips everything is a suite mistake far more often than an intended state.
   if (!filtered.some(t => !t.skip)) {
     if (!filtered.length) {
       const by = [];
@@ -404,7 +406,9 @@ export async function cmdTest(rawArgs) {
     }
     W.write(`\n${passCount} passed, ${failCount} failed, ${skipCount} skipped (${formatDuration(0)})\n\n`);
     writeFinalReport('empty');
-    process.exit(5);
+    // exitCode + return, not exit(): a report piped out via `--report=-` gets to drain first.
+    process.exitCode = 5;
+    return;
   }
 
   const hooksPath = resolve(suiteRoot, '_hooks.mjs');
@@ -858,18 +862,18 @@ export async function cmdTest(rawArgs) {
     if (hooks.cleanup) await bounded(hooks.cleanup(hookEnv), D.hooks, 'hooks.cleanup');
   }
 
+  // Unreachable while `skip` is static (the guard above catches it) — kept so no future path
+  // can turn "nothing passed" into a green exit. Same verdict and report state as the guard.
+  const empty = passCount === 0 && failCount === 0;
+  if (empty) W.write(`No test passed — treating the run as empty\n`);
+
   const totalDuration = results.reduce((s, r) => s + r.duration, 0);
   W.write(`\n${passCount} passed, ${failCount} failed, ${skipCount} skipped (${formatDuration(totalDuration)})\n\n`);
 
-  writeFinalReport('complete');
+  writeFinalReport(empty ? 'empty' : 'complete');
 
   if (failCount > 0) process.exit(1);
-  // Unreachable while `skip` is static (the guard above catches it) — kept so no future path
-  // can turn "nothing passed" into a green exit.
-  if (passCount === 0) {
-    W.write(`No test passed — treating the run as empty (exit 5)\n`);
-    process.exit(5);
-  }
+  if (empty) process.exitCode = 5;
 
   /**
    * Allure results are already on disk (recordResult writes each test as it finishes), so this

@@ -9,7 +9,7 @@
 //
 // Exit codes: 0 — all scenarios hold; 1 — regressed.
 import { spawnSync } from 'child_process';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { tmpdir } from 'os';
@@ -32,6 +32,7 @@ function run(suite, args) {
 }
 
 const parse = (s) => { try { return JSON.parse(s); } catch { return null; } };
+const readText = (p) => { try { return readFileSync(p, 'utf8'); } catch { return ''; } };
 
 const scenarios = [
   { name: '--grep мимо', suite: 'basic', args: ['--grep=missing'], text: /matched none of 2 discovered tests/ },
@@ -42,6 +43,8 @@ const scenarios = [
     report: (j) => j?.state === 'empty' && j.summary.total === 0 },
   { name: 'всё skipped, --report=-', suite: 'basic', args: ['--grep=skipped', '--report=-'],
     report: (j) => j?.state === 'empty' && j.summary.skipped === 1 && j.tests[0]?.status === 'skipped' },
+  { name: 'пустая выборка, JUnit в файл', suite: 'basic', args: ['--grep=missing', '--format=junit', `--report=${resolve(workDir, 'r.xml')}`],
+    file: () => /<testsuites [^>]*tests="0"/.test(readText(resolve(workDir, 'r.xml'))) },
 ];
 
 mkdirSync(workDir, { recursive: true });
@@ -54,6 +57,7 @@ for (const s of scenarios) {
     [!r.hooked, '_hooks.mjs импортирован'],
     ...(s.text ? [[s.text.test(human), `в выводе нет ${s.text}`]] : []),
     ...(s.report ? [[s.report(parse(r.stdout)), 'машинный отчёт в stdout не тот']] : []),
+    ...(s.file ? [[s.file(), 'файл отчёта не записан или не тот']] : []),
   ];
   const bad = checks.filter(([ok]) => !ok).map(([, why]) => why);
   console.log(`  ${bad.length ? '✗' : '✓'} ${s.name}${bad.length ? `\n      ${bad.join('; ')}` : ''}`);
