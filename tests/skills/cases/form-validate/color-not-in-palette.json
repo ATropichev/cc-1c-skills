@@ -1,0 +1,35 @@
+{
+  "name": "Имена цветов web:/win: вне палитры платформы — ошибка (форма не загрузится); регистр, #RRGGBB и style: — без ошибки",
+  "setup": "fixture:module-handler-orphan",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "DataProcessors/БезДействия/Forms/Форма/Ext/Form.xml",
+        "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Form xmlns=\"http://v8.1c.ru/8.3/xcf/logform\" xmlns:dcscor=\"http://v8.1c.ru/8.1/data-composition-system/core\" xmlns:dcsset=\"http://v8.1c.ru/8.1/data-composition-system/settings\" xmlns:v8=\"http://v8.1c.ru/8.1/data/core\" xmlns:v8ui=\"http://v8.1c.ru/8.1/data/ui\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" version=\"2.17\">\n\t<AutoCommandBar name=\"ФормаКоманднаяПанель\" id=\"-1\"/>\n\t<Attributes>\n\t\t<Attribute name=\"Статус\" id=\"1\">\n\t\t\t<Type>\n\t\t\t\t<v8:Type>xs:string</v8:Type>\n\t\t\t</Type>\n\t\t</Attribute>\n\t\t<ConditionalAppearance>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter/>\n\t\t\t\t<dcsset:appearance>\n\t\t\t\t\t<dcscor:item xsi:type=\"dcsset:SettingsParameterValue\">\n\t\t\t\t\t\t<dcscor:parameter>ЦветТекста</dcscor:parameter>\n\t\t\t\t\t\t<dcscor:value xsi:type=\"v8ui:Color\">win:GrayText</dcscor:value>\n\t\t\t\t\t</dcscor:item>\n\t\t\t\t</dcsset:appearance>\n\t\t\t</dcsset:item>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter/>\n\t\t\t\t<dcsset:appearance>\n\t\t\t\t\t<dcscor:item xsi:type=\"dcsset:SettingsParameterValue\">\n\t\t\t\t\t\t<dcscor:parameter>ЦветТекста</dcscor:parameter>\n\t\t\t\t\t\t<dcscor:value xsi:type=\"v8ui:Color\">web:NoSuchColor</dcscor:value>\n\t\t\t\t\t</dcscor:item>\n\t\t\t\t</dcsset:appearance>\n\t\t\t</dcsset:item>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter/>\n\t\t\t\t<dcsset:appearance>\n\t\t\t\t\t<dcscor:item xsi:type=\"dcsset:SettingsParameterValue\">\n\t\t\t\t\t\t<dcscor:parameter>ЦветТекста</dcscor:parameter>\n\t\t\t\t\t\t<dcscor:value xsi:type=\"v8ui:Color\">web:red</dcscor:value>\n\t\t\t\t\t</dcscor:item>\n\t\t\t\t</dcsset:appearance>\n\t\t\t</dcsset:item>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter/>\n\t\t\t\t<dcsset:appearance>\n\t\t\t\t\t<dcscor:item xsi:type=\"dcsset:SettingsParameterValue\">\n\t\t\t\t\t\t<dcscor:parameter>ЦветТекста</dcscor:parameter>\n\t\t\t\t\t\t<dcscor:value xsi:type=\"v8ui:Color\">win:ButtonText</dcscor:value>\n\t\t\t\t\t</dcscor:item>\n\t\t\t\t</dcsset:appearance>\n\t\t\t</dcsset:item>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter/>\n\t\t\t\t<dcsset:appearance>\n\t\t\t\t\t<dcscor:item xsi:type=\"dcsset:SettingsParameterValue\">\n\t\t\t\t\t\t<dcscor:parameter>ЦветТекста</dcscor:parameter>\n\t\t\t\t\t\t<dcscor:value xsi:type=\"v8ui:Color\">#FF0000</dcscor:value>\n\t\t\t\t\t</dcscor:item>\n\t\t\t\t</dcsset:appearance>\n\t\t\t</dcsset:item>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter/>\n\t\t\t\t<dcsset:appearance>\n\t\t\t\t\t<dcscor:item xsi:type=\"dcsset:SettingsParameterValue\">\n\t\t\t\t\t\t<dcscor:parameter>ЦветТекста</dcscor:parameter>\n\t\t\t\t\t\t<dcscor:value xsi:type=\"v8ui:Color\">style:SpecialTextColor</dcscor:value>\n\t\t\t\t\t</dcscor:item>\n\t\t\t\t</dcsset:appearance>\n\t\t\t</dcsset:item>\n\t\t</ConditionalAppearance>\n\t</Attributes>\n</Form>\n"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "DataProcessors/БезДействия/Forms/Форма/Ext/Form/Module.bsl",
+        "content": ""
+      }
+    }
+  ],
+  "noSnapshot": "валидатор файлы не меняет; проверяется вывод",
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "27. Color 'win:GrayText' is not in the platform win: palette (the platform name is win:DisabledText)",
+      "27. Color 'web:NoSuchColor' is not in the platform web: palette"
+    ],
+    "stdoutNotContains": [
+      "'web:red'",
+      "'win:ButtonText'",
+      "'#FF0000'",
+      "'style:SpecialTextColor'"
+    ]
+  }
+}

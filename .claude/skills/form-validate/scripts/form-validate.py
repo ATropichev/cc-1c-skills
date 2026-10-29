@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.37 — Validate 1C managed form
+# form-validate v1.38 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -2540,6 +2540,53 @@ def main():
                 check26_ok = False
         if check26_ok:
             report_ok("26. Design-time values: resolvable")
+
+    # --- Check 27: имена цветов web:/win: — из палитры платформы ---
+    # Палитры — таблицы платформы (core83/core85.dll, одинаковы 8.3.20…8.5). Имя вне палитры — загрузка
+    # отвергает Form.xml целиком («Исключение XDTO»). Регистр платформа не различает (web:red → web:Red).
+    web_colors = {c.lower() for c in [
+        'AliceBlue', 'AntiqueWhite', 'Aqua', 'Aquamarine', 'Azure', 'Beige', 'Bisque', 'Black', 'BlanchedAlmond', 'Blue',
+        'BlueViolet', 'Brown', 'BurlyWood', 'CadetBlue', 'Chartreuse', 'Chocolate', 'Coral', 'CornFlowerBlue', 'CornSilk', 'Cream',
+        'Crimson', 'Cyan', 'DarkBlue', 'DarkCyan', 'DarkGoldenRod', 'DarkGray', 'DarkGreen', 'DarkKhaki', 'DarkMagenta', 'DarkOliveGreen',
+        'DarkOrange', 'DarkOrchid', 'DarkRed', 'DarkSalmon', 'DarkSeaGreen', 'DarkSlateBlue', 'DarkSlateGray', 'DarkTurquoise', 'DarkViolet', 'DeepPink',
+        'DeepSkyBlue', 'DimGray', 'DodgerBlue', 'FireBrick', 'FloralWhite', 'ForestGreen', 'Fuchsia', 'Gainsboro', 'GhostWhite', 'Gold',
+        'Goldenrod', 'Gray', 'Green', 'GreenYellow', 'HoneyDew', 'HotPink', 'IndianRed', 'Indigo', 'Ivory', 'Khaki',
+        'Lavender', 'LavenderBlush', 'LawnGreen', 'LemonChiffon', 'LightBlue', 'LightCoral', 'LightCyan', 'LightGoldenRod', 'LightGoldenRodYellow', 'LightGray',
+        'LightGreen', 'LightPink', 'LightSalmon', 'LightSeaGreen', 'LightSkyBlue', 'LightSlateGray', 'LightSlateBlue', 'LightSteelBlue', 'LightYellow', 'Lime',
+        'LimeGreen', 'Linen', 'Magenta', 'Maroon', 'MediumAquaMarine', 'MediumBlue', 'MediumGray', 'MediumGreen', 'MediumOrchid', 'MediumPurple',
+        'MediumSeaGreen', 'MediumSlateBlue', 'MediumSpringGreen', 'MediumTurquoise', 'MediumVioletRed', 'MidnightBlue', 'MintCream', 'MistyRose', 'Moccasin', 'NavajoWhite',
+        'Navy', 'OldLace', 'Olive', 'Olivedrab', 'Orange', 'OrangeRed', 'Orchid', 'PaleGoldenrod', 'PaleGreen', 'PaleTurquoise',
+        'PaleVioletRed', 'PapayaWhip', 'PeachPuff', 'Peru', 'Pink', 'Plum', 'PowderBlue', 'Purple', 'Red', 'RosyBrown',
+        'RoyalBlue', 'SaddleBrown', 'Salmon', 'SandyBrown', 'Seagreen', 'SeaShell', 'Sienna', 'Silver', 'SkyBlue', 'SlateBlue',
+        'SlateGray', 'Snow', 'SpringGreen', 'SteelBlue', 'Tan', 'Teal', 'Thistle', 'Tomato', 'Turquoise', 'Violet',
+        'VioletRed', 'Wheat', 'White', 'WhiteSmoke', 'Yellow', 'YellowGreen'
+    ]}
+    win_colors = {c.lower() for c in [
+        'ScrollBar', 'Desktop', 'ActiveTitleBar', 'InactiveTitleBar', 'MenuBar', 'WindowBackground', 'WindowFrame', 'MenuItemText', 'WindowText', 'ActiveTitleBarText',
+        'ActiveBorder', 'InactiveBorder', 'ApplicationWorkspace', 'Highlight', 'HighlightText', 'ButtonFace', 'ButtonShadow', 'DisabledText', 'ButtonText', 'InactiveTitleBarText',
+        'ButtonHighlight', 'ButtonDarkShadow', 'ButtonLightShadow', 'ToolTipText', 'ToolTip', 'HotLight', 'GradientActiveCaption', 'GradientInactiveCaption', 'MiddleGradientActiveCaption', 'MiddleGradientInactiveCaption'
+    ]}
+    if not stopped:
+        check27_ok = True
+        seen27 = set()
+        xsi_type = "{http://www.w3.org/2001/XMLSchema-instance}type"
+        for n in root.iter():
+            if not isinstance(n.tag, str) or len(n):
+                continue
+            if not ((n.get(xsi_type) or '').endswith(':Color') or etree.QName(n.tag).localname.endswith('Color')):
+                continue
+            v = (n.text or '').strip()
+            m = re.match(r'^(web|win):(\w+)$', v)
+            if not m or v in seen27:
+                continue
+            seen27.add(v)
+            palette = web_colors if m.group(1) == 'web' else win_colors
+            if m.group(2).lower() not in palette:
+                hint = " (the platform name is win:DisabledText)" if m.group(1) == 'win' and m.group(2) == 'GrayText' else ""
+                report_error(f"27. Color '{v}' is not in the platform {m.group(1)}: palette{hint} — the platform rejects the whole form on load")
+                check27_ok = False
+        if check27_ok:
+            report_ok("27. Color names: in platform palettes")
 
     # --- Finalize ---
     checks = ok_count + errors + warnings

@@ -1,4 +1,4 @@
-﻿# form-validate v1.37 — Validate 1C managed form
+﻿# form-validate v1.38 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2566,6 +2566,50 @@ if (-not $stopped) {
 		}
 	}
 	if ($check26Ok) { Report-OK "26. Design-time values: resolvable" }
+}
+
+# --- Check 27: имена цветов web:/win: — из палитры платформы ---
+# Палитры — таблицы платформы (core83/core85.dll, одинаковы 8.3.20…8.5). Имя вне палитры — загрузка
+# отвергает Form.xml целиком («Исключение XDTO»). Регистр платформа не различает (web:red → web:Red).
+$script:webColors = @(
+	'AliceBlue','AntiqueWhite','Aqua','Aquamarine','Azure','Beige','Bisque','Black','BlanchedAlmond','Blue',
+	'BlueViolet','Brown','BurlyWood','CadetBlue','Chartreuse','Chocolate','Coral','CornFlowerBlue','CornSilk','Cream',
+	'Crimson','Cyan','DarkBlue','DarkCyan','DarkGoldenRod','DarkGray','DarkGreen','DarkKhaki','DarkMagenta','DarkOliveGreen',
+	'DarkOrange','DarkOrchid','DarkRed','DarkSalmon','DarkSeaGreen','DarkSlateBlue','DarkSlateGray','DarkTurquoise','DarkViolet','DeepPink',
+	'DeepSkyBlue','DimGray','DodgerBlue','FireBrick','FloralWhite','ForestGreen','Fuchsia','Gainsboro','GhostWhite','Gold',
+	'Goldenrod','Gray','Green','GreenYellow','HoneyDew','HotPink','IndianRed','Indigo','Ivory','Khaki',
+	'Lavender','LavenderBlush','LawnGreen','LemonChiffon','LightBlue','LightCoral','LightCyan','LightGoldenRod','LightGoldenRodYellow','LightGray',
+	'LightGreen','LightPink','LightSalmon','LightSeaGreen','LightSkyBlue','LightSlateGray','LightSlateBlue','LightSteelBlue','LightYellow','Lime',
+	'LimeGreen','Linen','Magenta','Maroon','MediumAquaMarine','MediumBlue','MediumGray','MediumGreen','MediumOrchid','MediumPurple',
+	'MediumSeaGreen','MediumSlateBlue','MediumSpringGreen','MediumTurquoise','MediumVioletRed','MidnightBlue','MintCream','MistyRose','Moccasin','NavajoWhite',
+	'Navy','OldLace','Olive','Olivedrab','Orange','OrangeRed','Orchid','PaleGoldenrod','PaleGreen','PaleTurquoise',
+	'PaleVioletRed','PapayaWhip','PeachPuff','Peru','Pink','Plum','PowderBlue','Purple','Red','RosyBrown',
+	'RoyalBlue','SaddleBrown','Salmon','SandyBrown','Seagreen','SeaShell','Sienna','Silver','SkyBlue','SlateBlue',
+	'SlateGray','Snow','SpringGreen','SteelBlue','Tan','Teal','Thistle','Tomato','Turquoise','Violet',
+	'VioletRed','Wheat','White','WhiteSmoke','Yellow','YellowGreen'
+)
+$script:winColors = @(
+	'ScrollBar','Desktop','ActiveTitleBar','InactiveTitleBar','MenuBar','WindowBackground','WindowFrame','MenuItemText','WindowText','ActiveTitleBarText',
+	'ActiveBorder','InactiveBorder','ApplicationWorkspace','Highlight','HighlightText','ButtonFace','ButtonShadow','DisabledText','ButtonText','InactiveTitleBarText',
+	'ButtonHighlight','ButtonDarkShadow','ButtonLightShadow','ToolTipText','ToolTip','HotLight','GradientActiveCaption','GradientInactiveCaption','MiddleGradientActiveCaption','MiddleGradientInactiveCaption'
+)
+if (-not $stopped) {
+	$check27Ok = $true
+	$seen27 = @{}
+	foreach ($n in $xmlDoc.SelectNodes("//*[not(*)]", $nsMgr)) {
+		$xt = $n.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance")
+		if (-not ($xt.EndsWith(':Color') -or $n.LocalName.EndsWith('Color'))) { continue }
+		$v = $n.InnerText.Trim()
+		if ($v -notmatch '^(web|win):(\w+)$' -or $seen27.ContainsKey($v)) { continue }
+		$seen27[$v] = $true
+		$palette = if ($Matches[1] -eq 'web') { $script:webColors } else { $script:winColors }
+		if ($palette -notcontains $Matches[2]) {
+			$hint = if ($Matches[1] -eq 'win' -and $Matches[2] -eq 'GrayText') { " (the platform name is win:DisabledText)" } else { "" }
+			Report-Error "27. Color '$v' is not in the platform $($Matches[1]): palette$hint — the platform rejects the whole form on load"
+			$check27Ok = $false
+		}
+	}
+	if ($check27Ok) { Report-OK "27. Color names: in platform palettes" }
 }
 
 # --- Summary ---
