@@ -402,7 +402,7 @@ form-compile и form-edit дописывают в модуль формы (`<к�
 | `collapsedTitle` | string/object | Заголовок свёрнутого представления (`<CollapsedRepresentationTitle>`), мультиязычный текст |
 | `format` | string/object | Формат значения динамического заголовка (`<Format>`, мультиязычный) — парный к `titleDataPath` (доступен и у `page`). Напр. `{ "ru": "БЛ=; БИ=*", "en": "BF=; BT=*" }` для булева пути |
 | `children` | array | Вложенные элементы |
-| `showTitle` | bool | Показывать заголовок группы |
+| `showTitle` | bool | Показывать заголовок группы. Без ключа: у обычной группы показан, если задан `title` или `titleDataPath`, иначе скрыт (`<ShowTitle>false`); у `collapsible`/`popup` — показан (умолчание платформы, тег не пишется) |
 | `representation` | string | `none`, `normal`, `weak`, `strong` |
 | `currentRowUse` | string | Использование текущей строки группы (`<CurrentRowUse>`: `DontUse`/`Use`/…) — редкое |
 | `united` | bool | Объединение |

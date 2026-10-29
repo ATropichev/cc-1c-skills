@@ -151,15 +151,45 @@
 				</LabelField>
 			</ChildItems>
 		</UsualGroup>
+		<UsualGroup name="ГруппаСкрытыйЗаголовок" id="29">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Скрытый</v8:content>
+				</v8:item>
+			</Title>
+			<Group>Vertical</Group>
+			<ShowTitle>false</ShowTitle>
+			<ExtendedTooltip name="ГруппаСкрытыйЗаголовокРасширеннаяПодсказка" id="30"/>
+			<ChildItems>
+				<LabelField name="МеткаСкрытый" id="31">
+					<DataPath>Поле2</DataPath>
+					<ContextMenu name="МеткаСкрытыйКонтекстноеМеню" id="32"/>
+					<ExtendedTooltip name="МеткаСкрытыйРасширеннаяПодсказка" id="33"/>
+				</LabelField>
+			</ChildItems>
+		</UsualGroup>
+		<UsualGroup name="ГруппаЗаголовокИзДанных" id="34">
+			<Group>Vertical</Group>
+			<TitleDataPath>Поле2</TitleDataPath>
+			<ExtendedTooltip name="ГруппаЗаголовокИзДанныхРасширеннаяПодсказка" id="35"/>
+			<ChildItems>
+				<LabelField name="МеткаИзДанных" id="36">
+					<DataPath>Поле1</DataPath>
+					<ContextMenu name="МеткаИзДанныхКонтекстноеМеню" id="37"/>
+					<ExtendedTooltip name="МеткаИзДанныхРасширеннаяПодсказка" id="38"/>
+				</LabelField>
+			</ChildItems>
+		</UsualGroup>
 	</ChildItems>
 	<Attributes>
-		<Attribute name="Объект" id="29">
+		<Attribute name="Объект" id="39">
 			<Type>
 				<v8:Type>cfg:DataProcessorObject.СГруппами</v8:Type>
 			</Type>
 			<MainAttribute>true</MainAttribute>
 		</Attribute>
-		<Attribute name="Поле1" id="30">
+		<Attribute name="Поле1" id="40">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -174,7 +204,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="Поле2" id="31">
+		<Attribute name="Поле2" id="41">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -190,7 +220,7 @@
 				</v8:NumberQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="Поле3" id="32">
+		<Attribute name="Поле3" id="42">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -204,7 +234,7 @@
 				</v8:DateQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="Изменено" id="33">
+		<Attribute name="Изменено" id="43">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>

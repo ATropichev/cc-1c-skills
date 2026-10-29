@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.223 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.224 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -5734,7 +5734,7 @@ def emit_group(lines, el, name, eid, indent):
         lines.append(f'{inner}<CurrentRowUse>{el["currentRowUse"]}</CurrentRowUse>')
 
     # ShowTitle
-    # Обычная группа без showTitle: заголовок показан, если задан title, иначе скрыт — служебная группа
+    # Обычная группа без showTitle: заголовок показан, если он задан (title или titleDataPath), иначе скрыт — служебная группа
     # раскладки без заголовка давала бы пустую строку-заголовок (умолчание платформы — показан).
     # У сворачиваемой/всплывающей заголовок — переключатель: умолчание платформы, пишется лишь явный false.
     if behavior_val in ('collapsible', 'popup'):
@@ -5743,7 +5743,7 @@ def emit_group(lines, el, name, eid, indent):
     elif el.get('showTitle') is not None:
         if str(el['showTitle']).lower() != 'true':
             lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
-    elif not el.get('title'):
+    elif not el.get('title') and not el.get('titleDataPath'):
         lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
     # Заголовок свёрнутого представления (collapsible/popup) — мультиязычный текст
     if el.get('collapsedTitle'):
@@ -7073,7 +7073,8 @@ def emit_data_parameters(lines, items, indent, block_view_mode=None):
             for v in val:
                 v_str = ('true' if v else 'false') if isinstance(v, bool) else str(v)
                 if re.match(r'^[a-zA-Z]+:', avtype):
-                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="{avtype}">{esc_xml_text(normalize_design_time_value(v_str) if avtype == 'dcscor:DesignTimeValue' else v_str)}</dcscor:value>')
+                    av_str = normalize_design_time_value(v_str) if avtype == 'dcscor:DesignTimeValue' else v_str
+                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="{avtype}">{esc_xml_text(av_str)}</dcscor:value>')
                 elif re.match(r'^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.', v_str) or re.match(r'^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', v_str):
                     lines.append(f'{indent}\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(normalize_design_time_value(v_str))}</dcscor:value>')
                 else:

@@ -1,0 +1,11 @@
+{
+  "elements": [
+    { "group": "vertical", "name": "БезЗаголовкаПоказан", "showTitle": true },
+    { "group": "vertical", "name": "БезЗаголовкаСкрыт" },
+    { "group": "vertical", "name": "СЗаголовкомПоказан", "title": "Итоги" },
+    { "group": "vertical", "name": "СЗаголовкомСкрыт", "title": "Итоги", "showTitle": false },
+    { "group": "vertical", "name": "ИзДанныхСкрыт", "showTitle": false, "titleDataPath": "Реквизит" },
+    { "group": "vertical", "behavior": "collapsible", "name": "СворачиваемаяПоказан", "title": "Ещё" }
+  ],
+  "attributes": [{ "name": "Реквизит", "type": "string", "title": "" }]
+}

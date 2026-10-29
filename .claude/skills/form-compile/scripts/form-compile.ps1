@@ -1,4 +1,4 @@
-﻿# form-compile v1.223 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.224 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -5521,14 +5521,14 @@ function Emit-Group {
 	if ($el.currentRowUse) { X "$inner<CurrentRowUse>$($el.currentRowUse)</CurrentRowUse>" }
 
 	# ShowTitle
-	# Обычная группа без showTitle: заголовок показан, если задан title, иначе скрыт — служебная группа
+	# Обычная группа без showTitle: заголовок показан, если он задан (title или titleDataPath), иначе скрыт — служебная группа
 	# раскладки без заголовка давала бы пустую строку-заголовок (умолчание платформы — показан).
 	# У сворачиваемой/всплывающей заголовок — переключатель: умолчание платформы, пишется лишь явный false.
 	if (@('collapsible','popup') -contains $behaviorVal) {
 		if ($null -ne $el.showTitle -and -not $el.showTitle) { X "$inner<ShowTitle>false</ShowTitle>" }
 	} elseif ($null -ne $el.showTitle) {
 		if (-not ($el.showTitle -eq $true)) { X "$inner<ShowTitle>false</ShowTitle>" }
-	} elseif (-not $el.title) { X "$inner<ShowTitle>false</ShowTitle>" }
+	} elseif (-not $el.title -and -not $el.titleDataPath) { X "$inner<ShowTitle>false</ShowTitle>" }
 	# Заголовок свёрнутого представления (collapsible/popup) — мультиязычный текст
 	if ($el.collapsedTitle) { Emit-MLText -tag "CollapsedRepresentationTitle" -text $el.collapsedTitle -indent $inner }
 

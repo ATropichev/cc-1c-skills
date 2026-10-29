@@ -1,0 +1,38 @@
+{
+  "name": "Декомпиляция: showTitle обычной группы — ключ только при расхождении с умолчанием (заголовок задан → показан, нет → скрыт); сворачиваемая — факт",
+  "preRun": [
+    {
+      "script": "meta-compile/scripts/meta-compile",
+      "input": {
+        "type": "DataProcessor",
+        "name": "Группы"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
+    },
+    {
+      "script": "form-add/scripts/form-add",
+      "args": {
+        "-ObjectPath": "{workDir}/DataProcessors/Группы.xml",
+        "-FormName": "Форма"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "DataProcessors/Группы/Forms/Форма/Ext/Form.xml",
+        "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Form xmlns=\"http://v8.1c.ru/8.3/xcf/logform\" xmlns:v8=\"http://v8.1c.ru/8.1/data/core\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" version=\"2.17\">\n\t<AutoCommandBar name=\"ФормаКоманднаяПанель\" id=\"-1\"/>\n\t<ChildItems>\n\t\t<UsualGroup name=\"БезЗаголовкаПоказан\" id=\"1\">\n\t\t\t<Group>Vertical</Group>\n\t\t\t<ExtendedTooltip name=\"БезЗаголовкаПоказанРасширеннаяПодсказка\" id=\"2\"/>\n\t\t</UsualGroup>\n\t\t<UsualGroup name=\"БезЗаголовкаСкрыт\" id=\"3\">\n\t\t\t<Group>Vertical</Group>\n\t\t\t<ShowTitle>false</ShowTitle>\n\t\t\t<ExtendedTooltip name=\"БезЗаголовкаСкрытРасширеннаяПодсказка\" id=\"4\"/>\n\t\t</UsualGroup>\n\t\t<UsualGroup name=\"СЗаголовкомПоказан\" id=\"5\">\n\t\t\t<Title>\n\t\t\t\t<v8:item>\n\t\t\t\t\t<v8:lang>ru</v8:lang>\n\t\t\t\t\t<v8:content>Итоги</v8:content>\n\t\t\t\t</v8:item>\n\t\t\t</Title>\n\t\t\t<Group>Vertical</Group>\n\t\t\t<ExtendedTooltip name=\"СЗаголовкомПоказанРасширеннаяПодсказка\" id=\"6\"/>\n\t\t</UsualGroup>\n\t\t<UsualGroup name=\"СЗаголовкомСкрыт\" id=\"7\">\n\t\t\t<Title>\n\t\t\t\t<v8:item>\n\t\t\t\t\t<v8:lang>ru</v8:lang>\n\t\t\t\t\t<v8:content>Итоги</v8:content>\n\t\t\t\t</v8:item>\n\t\t\t</Title>\n\t\t\t<Group>Vertical</Group>\n\t\t\t<ShowTitle>false</ShowTitle>\n\t\t\t<ExtendedTooltip name=\"СЗаголовкомСкрытРасширеннаяПодсказка\" id=\"8\"/>\n\t\t</UsualGroup>\n\t\t<UsualGroup name=\"ИзДанныхСкрыт\" id=\"9\">\n\t\t\t<Group>Vertical</Group>\n\t\t\t<ShowTitle>false</ShowTitle>\n\t\t\t<TitleDataPath>Реквизит</TitleDataPath>\n\t\t\t<ExtendedTooltip name=\"ИзДанныхСкрытРасширеннаяПодсказка\" id=\"10\"/>\n\t\t</UsualGroup>\n\t\t<UsualGroup name=\"СворачиваемаяПоказан\" id=\"11\">\n\t\t\t<Title>\n\t\t\t\t<v8:item>\n\t\t\t\t\t<v8:lang>ru</v8:lang>\n\t\t\t\t\t<v8:content>Ещё</v8:content>\n\t\t\t\t</v8:item>\n\t\t\t</Title>\n\t\t\t<Group>Vertical</Group>\n\t\t\t<Behavior>Collapsible</Behavior>\n\t\t\t<ExtendedTooltip name=\"СворачиваемаяПоказанРасширеннаяПодсказка\" id=\"12\"/>\n\t\t</UsualGroup>\n\t</ChildItems>\n\t<Attributes>\n\t\t<Attribute name=\"Реквизит\" id=\"1\">\n\t\t\t<Type>\n\t\t\t\t<v8:Type>xs:string</v8:Type>\n\t\t\t</Type>\n\t\t</Attribute>\n\t</Attributes>\n</Form>\n"
+      }
+    }
+  ],
+  "params": {
+    "formPath": "DataProcessors/Группы/Forms/Форма/Ext/Form.xml",
+    "outputPath": "draft.json"
+  },
+  "expect": {
+    "files": [
+      "draft.json"
+    ]
+  }
+}

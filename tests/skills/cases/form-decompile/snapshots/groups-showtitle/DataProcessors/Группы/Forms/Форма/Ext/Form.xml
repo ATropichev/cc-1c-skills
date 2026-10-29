@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Form xmlns="http://v8.1c.ru/8.3/xcf/logform" xmlns:v8="http://v8.1c.ru/8.1/data/core" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="2.17">
+	<AutoCommandBar name="ФормаКоманднаяПанель" id="-1"/>
+	<ChildItems>
+		<UsualGroup name="БезЗаголовкаПоказан" id="1">
+			<Group>Vertical</Group>
+			<ExtendedTooltip name="БезЗаголовкаПоказанРасширеннаяПодсказка" id="2"/>
+		</UsualGroup>
+		<UsualGroup name="БезЗаголовкаСкрыт" id="3">
+			<Group>Vertical</Group>
+			<ShowTitle>false</ShowTitle>
+			<ExtendedTooltip name="БезЗаголовкаСкрытРасширеннаяПодсказка" id="4"/>
+		</UsualGroup>
+		<UsualGroup name="СЗаголовкомПоказан" id="5">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Итоги</v8:content>
+				</v8:item>
+			</Title>
+			<Group>Vertical</Group>
+			<ExtendedTooltip name="СЗаголовкомПоказанРасширеннаяПодсказка" id="6"/>
+		</UsualGroup>
+		<UsualGroup name="СЗаголовкомСкрыт" id="7">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Итоги</v8:content>
+				</v8:item>
+			</Title>
+			<Group>Vertical</Group>
+			<ShowTitle>false</ShowTitle>
+			<ExtendedTooltip name="СЗаголовкомСкрытРасширеннаяПодсказка" id="8"/>
+		</UsualGroup>
+		<UsualGroup name="ИзДанныхСкрыт" id="9">
+			<Group>Vertical</Group>
+			<ShowTitle>false</ShowTitle>
+			<TitleDataPath>Реквизит</TitleDataPath>
+			<ExtendedTooltip name="ИзДанныхСкрытРасширеннаяПодсказка" id="10"/>
+		</UsualGroup>
+		<UsualGroup name="СворачиваемаяПоказан" id="11">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Ещё</v8:content>
+				</v8:item>
+			</Title>
+			<Group>Vertical</Group>
+			<Behavior>Collapsible</Behavior>
+			<ExtendedTooltip name="СворачиваемаяПоказанРасширеннаяПодсказка" id="12"/>
+		</UsualGroup>
+	</ChildItems>
+	<Attributes>
+		<Attribute name="Реквизит" id="1">
+			<Type>
+				<v8:Type>xs:string</v8:Type>
+			</Type>
+		</Attribute>
+	</Attributes>
+</Form>

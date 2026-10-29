@@ -31,6 +31,12 @@
       ]},
       { "group": "vertical", "name": "ГруппаИтоги", "title": "Итоги", "children": [
         { "labelField": "МеткаИтоги", "path": "Поле2" }
+      ]},
+      { "group": "vertical", "name": "ГруппаСкрытыйЗаголовок", "title": "Скрытый", "showTitle": false, "children": [
+        { "labelField": "МеткаСкрытый", "path": "Поле2" }
+      ]},
+      { "group": "vertical", "name": "ГруппаЗаголовокИзДанных", "titleDataPath": "Поле2", "children": [
+        { "labelField": "МеткаИзДанных", "path": "Поле1" }
       ]}
     ],
     "attributes": [
