@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.221 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.222 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -1708,7 +1708,7 @@ def parse_filter_shorthand(s):
             elif re.match(r'^\d+(\.\d+)?$', val_part):
                 result['value'] = val_part
                 result['valueType'] = 'xs:decimal'
-            elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|ПланОбмена|Enum|Catalog|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|ExchangePlan)\.', val_part):
+            elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|ПланОбмена|Enum|Catalog|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|ExchangePlan)\.[^.]+\.[^.]+', val_part):
                 result['value'] = val_part
                 result['valueType'] = 'dcscor:DesignTimeValue'
             else:
@@ -2698,8 +2698,9 @@ def normalize_design_time_value(v):
     parts = str(v).split('.')
     if len(parts) < 3:
         return str(v)
-    parts[0] = DESIGN_TIME_REF_ROOTS.get(parts[0], parts[0])
-    if parts[0] == 'Перечисление' and len(parts) >= 4 and parts[2] in ENUM_VALUE_SYNONYMS:
+    # Сравнения без учёта регистра — как в PS-порте (ключи хэш-таблицы, -contains)
+    parts[0] = next((v for k, v in DESIGN_TIME_REF_ROOTS.items() if k.lower() == parts[0].lower()), parts[0])
+    if parts[0] == 'Перечисление' and len(parts) >= 4 and parts[2].lower() in {x.lower() for x in ENUM_VALUE_SYNONYMS}:
         parts = parts[:2] + parts[3:]
     if parts[-1] == 'EmptyRef':
         parts[-1] = 'ПустаяСсылка'
@@ -5739,7 +5740,7 @@ def emit_group(lines, el, name, eid, indent):
     if behavior_val in ('collapsible', 'popup'):
         if el.get('showTitle') is not None and not el['showTitle']:
             lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
-    elif el.get('showTitle') not in (True, 'true'):
+    elif str(el.get('showTitle')).lower() != 'true':
         lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
     # Заголовок свёрнутого представления (collapsible/popup) — мультиязычный текст
     if el.get('collapsedTitle'):
@@ -7069,7 +7070,7 @@ def emit_data_parameters(lines, items, indent, block_view_mode=None):
             for v in val:
                 v_str = ('true' if v else 'false') if isinstance(v, bool) else str(v)
                 if re.match(r'^[a-zA-Z]+:', avtype):
-                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="{avtype}">{esc_xml_text(v_str)}</dcscor:value>')
+                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="{avtype}">{esc_xml_text(normalize_design_time_value(v_str) if avtype == 'dcscor:DesignTimeValue' else v_str)}</dcscor:value>')
                 elif re.match(r'^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.', v_str) or re.match(r'^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', v_str):
                     lines.append(f'{indent}\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(normalize_design_time_value(v_str))}</dcscor:value>')
                 else:

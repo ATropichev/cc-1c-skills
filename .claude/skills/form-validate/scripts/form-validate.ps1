@@ -1,4 +1,4 @@
-﻿# form-validate v1.38 — Validate 1C managed form
+﻿# form-validate v1.39 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2559,8 +2559,8 @@ if (-not $stopped) {
 	foreach ($n in $xmlDoc.SelectNodes("//*[@xsi:type]", $nsMgr)) {
 		if (-not $n.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance").EndsWith(':DesignTimeValue')) { continue }
 		$v = $n.InnerText.Trim()
-		if ($v -match '^[^.]+\.[^.]+\.(EnumValue|ЗначениеПеречисления)\.(.+)$') {
-			$fixed = "Перечисление." + ($v -split '\.')[1] + "." + $Matches[2]
+		if ($v -match '^(Enum|Перечисление)\.([^.]+)\.(EnumValue|ЗначениеПеречисления)\.(.+)$') {
+			$fixed = "Перечисление." + $Matches[2] + "." + $Matches[4]
 			Report-Error "26. Design-time value '$v' — the platform does not resolve the EnumValue form here, the condition never matches; write '$fixed'"
 			$check26Ok = $false
 		}

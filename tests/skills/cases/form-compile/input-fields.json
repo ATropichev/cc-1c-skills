@@ -82,7 +82,7 @@
       { "filter": ["ДатаПоля > 2020-01-01T00:00:00"], "appearance": { "ЦветТекста": "web:Olive" } },
       { "filter": [{ "field": "ДатаПоля", "op": ">=", "value": "BeginningOfThisDay", "valueType": "v8:StandardBeginningDate" }], "appearance": { "ЦветТекста": "web:Silver" } },
       { "filter": [{ "field": "ОбычноеПоле", "op": "=", "value": "_", "valueType": "dcscor:Field" }], "appearance": { "ЦветТекста": "web:Maroon" } },
-      { "filter": [{ "field": "ОбычноеПоле", "op": "=", "value": "Enum.Статусы.EnumValue.Новый" }, "ОбычноеПоле <> Catalog.Валюты.EmptyRef",
+      { "filter": [{ "field": "ОбычноеПоле", "op": "=", "value": "Enum.Статусы.EnumValue.Новый" }, "ОбычноеПоле <> Catalog.Валюты.EmptyRef", "ОбычноеПоле <> Document.pdf",
           { "field": "ОбычноеПоле", "op": "in", "value": ["Enum.Статусы.Закрыт", "Перечисление.Статусы.Новый"] }],
         "appearance": { "ЦветТекста": "web:Maroon" } }
     ]

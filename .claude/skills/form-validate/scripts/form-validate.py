@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.38 — Validate 1C managed form
+# form-validate v1.39 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -2533,9 +2533,9 @@ def main():
             if not isinstance(n.tag, str) or not (n.get(xsi_type) or '').endswith(':DesignTimeValue'):
                 continue
             v = (n.text or '').strip()
-            m = re.match(r'^[^.]+\.([^.]+)\.(EnumValue|ЗначениеПеречисления)\.(.+)$', v)
+            m = re.match(r'^(Enum|Перечисление)\.([^.]+)\.(EnumValue|ЗначениеПеречисления)\.(.+)$', v, re.I)
             if m:
-                fixed = f"Перечисление.{m.group(1)}.{m.group(3)}"
+                fixed = f"Перечисление.{m.group(2)}.{m.group(4)}"
                 report_error(f"26. Design-time value '{v}' — the platform does not resolve the EnumValue form here, the condition never matches; write '{fixed}'")
                 check26_ok = False
         if check26_ok:
@@ -2582,7 +2582,7 @@ def main():
             seen27.add(v)
             palette = web_colors if m.group(1) == 'web' else win_colors
             if m.group(2).lower() not in palette:
-                hint = " (the platform name is win:DisabledText)" if m.group(1) == 'win' and m.group(2) == 'GrayText' else ""
+                hint = " (the platform name is win:DisabledText)" if m.group(1) == 'win' and m.group(2).lower() == 'graytext' else ""
                 report_error(f"27. Color '{v}' is not in the platform {m.group(1)}: palette{hint} — the platform rejects the whole form on load")
                 check27_ok = False
         if check27_ok:
