@@ -25,9 +25,10 @@ function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected
 		# PS 5.1 на пустой строке отдаёт $null, а не ошибку — навык уходил дальше с $null,
 		# тогда как py-порт падал. Проверяем сами, чтобы порты вели себя одинаково.
 		if ([string]::IsNullOrWhiteSpace($text)) { throw 'input is empty' }
-		# pwsh 6+ сам разворачивает массив верхнего уровня ([x] → x, [] → $null); в 5.1 ключа нет.
+		# pwsh 7+ сам разворачивает массив верхнего уровня ([x] → x, [] → $null). Ключ -NoEnumerate
+		# появился там же: в 5.1 и pwsh 6 его нет, поэтому спрашиваем командлет, а не версию.
 		$cfj = @{}
-		if ($PSVersionTable.PSVersion.Major -ge 6) { $cfj.NoEnumerate = $true }
+		if ((Get-Command ConvertFrom-Json).Parameters.ContainsKey('NoEnumerate')) { $cfj.NoEnumerate = $true }
 		$parsed = $text | ConvertFrom-Json @cfj
 	} catch {
 		$what = if ($expected) { "$source expects $expected" } else { "Invalid JSON in $source" }

@@ -19,8 +19,9 @@
 //   2. .ps1 в db-*/epf-*, запускающий платформу (Invoke-PlatformProcess / Start-Process),
 //      держит верхнеуровневый `trap { … exit 1 }`: любая необработанная ошибка — код 1.
 //      Рантайм-кейсом это не поймать: после правила 1 штатного способа уронить скрипт нет.
-//   3. `Write-Output -NoEnumerate` в .ps1 навыков запрещён — значение без разворачивания
-//      возвращается через `return ,$x`, одинаково на 5.1 и pwsh 7.
+//   3. `Write-Output -NoEnumerate` в .ps1 навыков запрещён (и через псевдонимы write/echo, и с
+//      сокращённым ключом) — значение без разворачивания возвращается через `return ,$x`,
+//      одинаково на 5.1 и pwsh 7.
 //
 // Почему гард, а не кейс с урезанным окружением: libuv на Windows возвращает TEMP в окружение
 // дочернего процесса, даже если его убрали (обязательная переменная), — «TEMP нет» из Node на
@@ -52,7 +53,9 @@ for (const skill of readdirSync(SKILLS)) {
         errors.push(`${skill}/${file}:${n}: $env:TEMP/$env:TMP есть только в Windows — `
           + `используйте [IO.Path]::GetTempPath()`);
       }
-      if (/\bWrite-Output\b.*-NoEnumerate\b/i.test(l)) {
+      // Командлет и его псевдонимы; ключ — любым префиксом: у Write-Output он однозначен уже с -N
+      if (/(?<![\w-])(Write-Output|write|echo)(?![\w-])/i.test(l)
+        && (l.match(/(?<![\w-])-[a-z]+\b/gi) || []).some(t => 'noenumerate'.startsWith(t.slice(1).toLowerCase()))) {
         errors.push(`${skill}/${file}:${n}: Write-Output -NoEnumerate на pwsh 7.6 заворачивает `
           + 'в List и одиночный объект — используйте `return ,$x`');
       }
