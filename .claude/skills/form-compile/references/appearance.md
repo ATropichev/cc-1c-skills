@@ -105,6 +105,7 @@
 
 - **Операторы:** `=` `<>` `>` `>=` `<` `<=`, `in` / `notIn`, `inHierarchy`, `contains` / `notContains`, `beginsWith` / `notBeginsWith`, `like` / `notLike` (`%`-шаблон), `filled` / `notFilled`.
 - **Флаги:** `@off` (отключён), `@user`, `@quickAccess`; `_` = пустое значение.
+- **Ссылка:** `Перечисление.Тип.Значение`, `Справочник.Тип.ИмяПредопределённого`, `Справочник.Тип.ПустаяСсылка` (так же `Документ.`, `ПланСчетов.`, `ПланВидовХарактеристик.` …).
 - **Группа:** `{ "group": "And"|"Or"|"Not", "items": [...], "use"? }`.
 - **Дата-значение:** ISO-дата `"2024-01-01T00:00:00"` — фиксированная дата; именованный относительный период — строкой `"BeginningOfThisWeek"` с `"valueType": "v8:StandardBeginningDate"` (варианты `BeginningOfThisDay`/`BeginningOfThisWeek`/`BeginningOfThisMonth`/`BeginningOfThisYear`/…).
 

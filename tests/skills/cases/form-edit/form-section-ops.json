@@ -49,6 +49,17 @@
         "appearance": {
           "ЦветТекста": "style:SpecialTextColor"
         }
+      },
+      {
+        "selection": [
+          "Номер"
+        ],
+        "filter": [
+          "Объект.Статус = Enum.Статусы.EnumValue.Закрыт"
+        ],
+        "appearance": {
+          "ЦветТекста": "style:SpecialTextColor"
+        }
       }
     ],
     "commandInterface": {
@@ -62,7 +73,7 @@
   },
   "expect": {
     "stdoutContains": [
-      "условное оформление: правил 1",
+      "условное оформление: правил 2",
       "командный интерфейс, CommandBar: пунктов 1"
     ]
   }

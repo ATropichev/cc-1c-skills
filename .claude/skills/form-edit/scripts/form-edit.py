@@ -1,4 +1,4 @@
-# form-edit v1.41 — Edit 1C managed form elements (Python port)
+# form-edit v1.42 — Edit 1C managed form elements (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import bisect
@@ -1267,6 +1267,28 @@ REF_ROOT_SYNONYMS = {
 
 ENUM_VALUE_SYNONYMS = {"EnumValue", "ЗначениеПеречисления"}
 
+
+# Значение ссылки в dcscor:DesignTimeValue (отборы, параметры) — к виду Конфигуратора:
+# "Enum.X.EnumValue.Y" / "Enum.X.Y" → "Перечисление.X.Y", "Catalog.X.EmptyRef" → "Справочник.X.ПустаяСсылка".
+# Вид с сегментом EnumValue платформа не разрешает: сравнение с ним всегда ложно (замер 8.3.24).
+DESIGN_TIME_REF_ROOTS = {
+    "Enum": "Перечисление", "Catalog": "Справочник", "Document": "Документ", "ChartOfAccounts": "ПланСчетов",
+    "ChartOfCharacteristicTypes": "ПланВидовХарактеристик", "ChartOfCalculationTypes": "ПланВидовРасчета",
+    "ExchangePlan": "ПланОбмена", "BusinessProcess": "БизнесПроцесс", "Task": "Задача",
+}
+
+
+def normalize_design_time_value(v):
+    parts = str(v).split('.')
+    if len(parts) < 3:
+        return str(v)
+    parts[0] = DESIGN_TIME_REF_ROOTS.get(parts[0], parts[0])
+    if parts[0] == 'Перечисление' and len(parts) >= 4 and parts[2] in ENUM_VALUE_SYNONYMS:
+        parts = parts[:2] + parts[3:]
+    if parts[-1] == 'EmptyRef':
+        parts[-1] = 'ПустаяСсылка'
+    return '.'.join(parts)
+
 _FMT_MARKUP_RE = re.compile(r'</>|<\s*(?:link|b|i|u|s|color|colorStyle|bgColor|bgColorStyle|font|fontSize|fontStyle|img)(?:\s|>)', re.I)
 
 COMPANION_STRUCT_KEYS = {
@@ -2435,7 +2457,7 @@ def parse_filter_shorthand(s):
             elif re.match(r'^\d+(\.\d+)?$', val_part):
                 result['value'] = val_part
                 result['valueType'] = 'xs:decimal'
-            elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета)\.', val_part):
+            elif re.match(r'^(Перечисление|Справочник|ПланСчетов|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|ПланОбмена|Enum|Catalog|Document|ChartOfAccounts|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|ExchangePlan)\.', val_part):
                 result['value'] = val_part
                 result['valueType'] = 'dcscor:DesignTimeValue'
             else:
@@ -2532,7 +2554,7 @@ def emit_filter_item(lines, item, indent):
         else:
             for v in val:
                 vt = _value_type_for(v, item.get('valueType'))
-                v_str = str(v).lower() if isinstance(v, bool) else esc_xml_text(str(v))
+                v_str = str(v).lower() if isinstance(v, bool) else esc_xml_text(normalize_design_time_value(v) if vt == 'dcscor:DesignTimeValue' else str(v))
                 ns_attr = _value_type_ns_attr(vt, v)
                 lines.append(f'{indent}\t<dcsset:right{ns_attr} xsi:type="{vt}">{v_str}</dcsset:right>')
     elif val is not None and (
@@ -2560,7 +2582,7 @@ def emit_filter_item(lines, item, indent):
         lines.append(f'{indent}\t<dcsset:right xsi:type="{vt}"/>')
     elif val is not None:
         vt = _value_type_for(val, item.get('valueType'))
-        v_str = str(val).lower() if isinstance(val, bool) else esc_xml_text(str(val))
+        v_str = str(val).lower() if isinstance(val, bool) else esc_xml_text(normalize_design_time_value(val) if vt == 'dcscor:DesignTimeValue' else str(val))
         ns_attr = _value_type_ns_attr(vt, val)
         lines.append(f'{indent}\t<dcsset:right{ns_attr} xsi:type="{vt}">{v_str}</dcsset:right>')
     if item.get('presentation'):
@@ -5806,14 +5828,14 @@ def emit_dl_value(lines, type_str, val, indent, value_list_allowed=False):
     elif re.match(r'^string', t):
         lines.append(f'{indent}<dcssch:value xsi:type="xs:string">{esc_xml_text(val_str)}</dcssch:value>')
     elif re.match(r'^(CatalogRef|DocumentRef|EnumRef|ChartOfAccountsRef|ChartOfCharacteristicTypesRef|ChartOfCalculationTypesRef|BusinessProcessRef|TaskRef|ExchangePlanRef)\.', t):
-        lines.append(f'{indent}<dcssch:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(val_str)}</dcssch:value>')
+        lines.append(f'{indent}<dcssch:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(normalize_design_time_value(val_str))}</dcssch:value>')
     else:
         if re.match(r'^\d{4}-\d{2}-\d{2}T', val_str):
             lines.append(f'{indent}<dcssch:value xsi:type="xs:dateTime">{esc_xml_text(val_str)}</dcssch:value>')
         elif val_str in ('true', 'false'):
             lines.append(f'{indent}<dcssch:value xsi:type="xs:boolean">{esc_xml_text(val_str)}</dcssch:value>')
         elif re.match(r'^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.', val_str) or re.match(r'^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', val_str):
-            lines.append(f'{indent}<dcssch:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(val_str)}</dcssch:value>')
+            lines.append(f'{indent}<dcssch:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(normalize_design_time_value(val_str))}</dcssch:value>')
         else:
             lines.append(f'{indent}<dcssch:value xsi:type="xs:string">{esc_xml_text(val_str)}</dcssch:value>')
 
@@ -5864,7 +5886,7 @@ def emit_dl_input_parameters(lines, ip, indent):
                         elif isinstance(v, (int, float)):
                             lines.append(f'{indent}\t\t\t\t<dcscor:value xsi:type="xs:decimal">{v}</dcscor:value>')
                         else:
-                            lines.append(f'{indent}\t\t\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(str(v))}</dcscor:value>')
+                            lines.append(f'{indent}\t\t\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(normalize_design_time_value(v))}</dcscor:value>')
                     lines.append(f'{indent}\t\t\t</dcscor:item>')
                 lines.append(f'{indent}\t\t</dcscor:value>')
         elif 'choiceParameterLinks' in item:
@@ -5998,7 +6020,7 @@ def emit_data_parameters(lines, items, indent, block_view_mode=None):
                 if re.match(r'^[a-zA-Z]+:', avtype):
                     lines.append(f'{indent}\t\t<dcscor:value xsi:type="{avtype}">{esc_xml_text(v_str)}</dcscor:value>')
                 elif re.match(r'^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.', v_str) or re.match(r'^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', v_str):
-                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(v_str)}</dcscor:value>')
+                    lines.append(f'{indent}\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(normalize_design_time_value(v_str))}</dcscor:value>')
                 else:
                     lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:string">{esc_xml_text(v_str)}</dcscor:value>')
         elif dp.get('nilValue') is True:
@@ -6041,7 +6063,7 @@ def emit_data_parameters(lines, items, indent, block_view_mode=None):
             elif re.match(r'^string', vtype):
                 lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:string">{esc_xml_text(str(val))}</dcscor:value>')
             elif re.match(r'^(ПланСчетов|Справочник|Перечисление|Документ|ПланВидовХарактеристик|ПланВидовРасчета|БизнесПроцесс|Задача|РегистрСведений|ПланОбмена)\.', str(val)) or re.match(r'^(ChartOfAccounts|Catalog|Enum|Document|ChartOfCharacteristicTypes|ChartOfCalculationTypes|BusinessProcess|Task|InformationRegister|ExchangePlan)\.', str(val)):
-                lines.append(f'{indent}\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(str(val))}</dcscor:value>')
+                lines.append(f'{indent}\t\t<dcscor:value xsi:type="dcscor:DesignTimeValue">{esc_xml_text(normalize_design_time_value(val))}</dcscor:value>')
             else:
                 lines.append(f'{indent}\t\t<dcscor:value xsi:type="xs:string">{esc_xml_text(str(val))}</dcscor:value>')
         if dp.get('viewMode'):
