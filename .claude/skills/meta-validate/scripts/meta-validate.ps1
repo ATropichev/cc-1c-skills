@@ -1,4 +1,4 @@
-﻿# meta-validate v1.42 — Validate 1C metadata object structure
+﻿# meta-validate v1.43 — Validate 1C metadata object structure
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2186,6 +2186,19 @@ foreach ($lnl in @($xmlDoc.SelectNodes("//md:LineNumberLength", $ns))) {
 	} elseif ([int]$raw -lt 5 -or [int]$raw -gt 9) {
 		Report-Error "19. LineNumberLength=$raw is out of range 5..9"
 	}
+}
+
+# --- Check 25: многоязычная строка (LocalStringType) — только элементы v8:item, без простого текста ---
+# Простой текст в таком теге платформа не загружает: «Ошибка преобразования данных XDTO … LocalStringType».
+$localStringTags = @('Synonym','ToolTip','Explanation','ObjectPresentation','ExtendedObjectPresentation','ListPresentation',
+	'ExtendedListPresentation','RecordPresentation','ExtendedRecordPresentation','ExtendedPresentation','Format','EditFormat')
+$lsXPath = ($localStringTags | ForEach-Object { "//md:$_|//xr:$_" }) -join '|'
+foreach ($ls in @($xmlDoc.SelectNodes($lsXPath, $ns))) {
+	$plain = (@($ls.ChildNodes | Where-Object { $_.NodeType -eq 'Text' -or $_.NodeType -eq 'CDATA' } | ForEach-Object { $_.Value }) -join '').Trim()
+	if (-not $plain) { continue }
+	$owner = $ls.ParentNode.SelectSingleNode("md:Name|xr:Name", $ns)
+	$where = if ($owner -and $owner.InnerText.Trim() -ne $objName) { " of '$($owner.InnerText.Trim())'" } else { "" }
+	Report-Error "25. <$($ls.LocalName)>$where holds plain text '$plain' — a multilingual string needs <v8:item> elements; the platform rejects the load"
 }
 
 # --- Check 17: MDObjectRef form — ссылка должна указывать на ОБЪЕКТ метаданных, а не на тип ссылки ---

@@ -1,4 +1,4 @@
-# meta-validate v1.42 — Validate 1C metadata object structure (Python port)
+# meta-validate v1.43 — Validate 1C metadata object structure (Python port)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import os
@@ -2131,6 +2131,19 @@ for lnl in find_all(root, "//md:LineNumberLength"):
         report_error(f"19. LineNumberLength='{raw}' — must be an integer 5..9")
     elif int(raw) < 5 or int(raw) > 9:
         report_error(f"19. LineNumberLength={raw} is out of range 5..9")
+
+# ── Check 25: многоязычная строка (LocalStringType) — только элементы v8:item, без простого текста ──
+# Простой текст в таком теге платформа не загружает: «Ошибка преобразования данных XDTO … LocalStringType».
+local_string_tags = ['Synonym', 'ToolTip', 'Explanation', 'ObjectPresentation', 'ExtendedObjectPresentation', 'ListPresentation',
+                     'ExtendedListPresentation', 'RecordPresentation', 'ExtendedRecordPresentation', 'ExtendedPresentation', 'Format', 'EditFormat']
+for ls in find_all(root, '|'.join(f"//md:{t}|//xr:{t}" for t in local_string_tags)):
+    plain = ((ls.text or '') + ''.join(ch.tail or '' for ch in ls)).strip()
+    if not plain:
+        continue
+    owner = find_all(ls.getparent(), "md:Name|xr:Name")
+    owner_name = inner_text(owner[0]).strip() if owner else ''
+    where = f" of '{owner_name}'" if owner_name and owner_name != obj_name else ''
+    report_error(f"25. <{local_name(ls)}>{where} holds plain text '{plain}' — a multilingual string needs <v8:item> elements; the platform rejects the load")
 
 # ── Check 17: MDObjectRef form — ссылка на ОБЪЕКТ метаданных, а не на тип ссылки ──
 # Owners/BasedOn/RegisterRecords/RegisteredDocuments/References содержат путь вида "Catalog.Валюты".

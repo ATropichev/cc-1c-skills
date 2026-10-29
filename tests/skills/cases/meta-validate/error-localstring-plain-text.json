@@ -1,0 +1,12 @@
+{
+  "name": "Валидатор находит ошибку: простой текст в многоязычной строке (свойство объекта и вложенного элемента)",
+  "setup": "fixture:catalog-localstring-plain-text",
+  "params": { "objectPath": "Catalogs/Договоры.xml" },
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "25. <ListPresentation> holds plain text 'Договоры с контрагентами'",
+      "25. <ToolTip> of 'Условия' holds plain text 'Условия договора'"
+    ]
+  }
+}
