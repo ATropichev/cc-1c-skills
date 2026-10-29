@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# subsystem-edit v1.28 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
+# subsystem-edit v1.29 — Edit existing 1C subsystem XML (+тип Bot; cfe-diff/cfe-borrow: недостающие типы)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse

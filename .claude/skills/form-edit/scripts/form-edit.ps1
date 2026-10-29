@@ -1,4 +1,4 @@
-﻿# form-edit v1.40 — Edit 1C managed form elements
+﻿# form-edit v1.41 — Edit 1C managed form elements
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -28,7 +28,11 @@ function ConvertFrom-JsonInput([string]$text, [string]$source, [string]$expected
 		# pwsh 7+ сам разворачивает массив верхнего уровня ([x] → x, [] → $null). Ключ -NoEnumerate
 		# появился там же: в 5.1 и pwsh 6 его нет, поэтому спрашиваем командлет, а не версию.
 		$cfj = @{}
-		if ((Get-Command ConvertFrom-Json).Parameters.ContainsKey('NoEnumerate')) { $cfj.NoEnumerate = $true }
+		$cfjKeys = (Get-Command ConvertFrom-Json).Parameters
+		if ($cfjKeys.ContainsKey('NoEnumerate')) { $cfj.NoEnumerate = $true }
+		# pwsh 7.5+ без -DateKind String превращает ISO-строки дат в DateTime, и в XML уходит формат
+		# локали; в 5.1 и pwsh до 7.5 ключа нет (5.1 даты и так не трогает).
+		if ($cfjKeys.ContainsKey('DateKind')) { $cfj.DateKind = 'String' }
 		$parsed = $text | ConvertFrom-Json @cfj
 	} catch {
 		$what = if ($expected) { "$source expects $expected" } else { "Invalid JSON in $source" }
@@ -6722,7 +6726,7 @@ function Invoke-Add($op, [string]$typeKey, [int]$idx) {
 	Assert-Placement $script:dslTagMap[$typeKey] $name $null $pos.Container $ctx
 
 	# Эмиттеру — копия элемента без ключей позиции (это не свойства элемента)
-	$el = ($op | ConvertTo-Json -Depth 100 -Compress | ConvertFrom-Json) | Select-Object -Property * -ExcludeProperty into, after, before, first
+	$el = (ConvertFrom-JsonInput ($op | ConvertTo-Json -Depth 100 -Compress) 'element copy') | Select-Object -Property * -ExcludeProperty into, after, before, first
 	Normalize-ElementSynonyms $el
 	# Таблица динамического списка получает поведение списка, как в form-compile
 	foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute", $nsMgr)) {
@@ -7196,7 +7200,7 @@ function Invoke-SetProbe($node, $props) {
 	$dp = $node.SelectSingleNode("f:DataPath", $nsMgr)
 	if ($null -ne $dp) { $h['path'] = $dp.InnerText }
 	foreach ($k in $props.Keys) { $h[$k] = $props[$k] }
-	$el = [pscustomobject]$h | ConvertTo-Json -Depth 100 -Compress | ConvertFrom-Json
+	$el = ConvertFrom-JsonInput ([pscustomobject]$h | ConvertTo-Json -Depth 100 -Compress) 'element from XML'
 	Normalize-ElementSynonyms $el
 	foreach ($a in $root.SelectNodes("f:Attributes/f:Attribute", $nsMgr)) {
 		$t = $a.SelectSingleNode("f:Type/v8:Type", $nsMgr)
@@ -8171,7 +8175,7 @@ function Insert-SectionChild($parent, $child, [string]$indent = $null) {
 	Insert-NodeAt $parent $child $ref $indent
 }
 
-function New-DslSpec($h) { return ([pscustomobject]$h | ConvertTo-Json -Depth 100 -Compress | ConvertFrom-Json) }
+function New-DslSpec($h) { return (ConvertFrom-JsonInput ([pscustomobject]$h | ConvertTo-Json -Depth 100 -Compress) 'DSL spec') }
 
 # Узел секции по имени (имена в 1С регистронезависимы)
 function Find-SectionItem([string]$section, [string]$tag, [string]$name) {
