@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-validate v1.36 — Validate 1C managed form
+# form-validate v1.37 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -2522,6 +2522,24 @@ def main():
                     check25_ok = False
             if check25_ok:
                 report_ok("25. Conditional appearance fields: rooted at form attributes")
+
+    # --- Check 26: значение ссылки в отборе/параметре (dcscor:DesignTimeValue) ---
+    # Вид "Enum.X.EnumValue.Y" (формат списка выбора) платформа здесь не разрешает: загрузка проходит,
+    # значение остаётся строкой, и условие с ним никогда не выполняется (замер 8.3.24).
+    if not stopped:
+        check26_ok = True
+        xsi_type = "{http://www.w3.org/2001/XMLSchema-instance}type"
+        for n in root.iter():
+            if not isinstance(n.tag, str) or not (n.get(xsi_type) or '').endswith(':DesignTimeValue'):
+                continue
+            v = (n.text or '').strip()
+            m = re.match(r'^[^.]+\.([^.]+)\.(EnumValue|ЗначениеПеречисления)\.(.+)$', v)
+            if m:
+                fixed = f"Перечисление.{m.group(1)}.{m.group(3)}"
+                report_error(f"26. Design-time value '{v}' — the platform does not resolve the EnumValue form here, the condition never matches; write '{fixed}'")
+                check26_ok = False
+        if check26_ok:
+            report_ok("26. Design-time values: resolvable")
 
     # --- Finalize ---
     checks = ok_count + errors + warnings

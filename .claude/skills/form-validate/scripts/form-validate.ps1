@@ -1,4 +1,4 @@
-﻿# form-validate v1.36 — Validate 1C managed form
+﻿# form-validate v1.37 — Validate 1C managed form
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -2549,6 +2549,23 @@ if (-not $stopped) {
 		}
 		if ($check25Ok) { Report-OK "25. Conditional appearance fields: rooted at form attributes" }
 	}
+}
+
+# --- Check 26: значение ссылки в отборе/параметре (dcscor:DesignTimeValue) ---
+# Вид "Enum.X.EnumValue.Y" (формат списка выбора) платформа здесь не разрешает: загрузка проходит,
+# значение остаётся строкой, и условие с ним никогда не выполняется (замер 8.3.24).
+if (-not $stopped) {
+	$check26Ok = $true
+	foreach ($n in $xmlDoc.SelectNodes("//*[@xsi:type]", $nsMgr)) {
+		if (-not $n.GetAttribute("type", "http://www.w3.org/2001/XMLSchema-instance").EndsWith(':DesignTimeValue')) { continue }
+		$v = $n.InnerText.Trim()
+		if ($v -match '^[^.]+\.[^.]+\.(EnumValue|ЗначениеПеречисления)\.(.+)$') {
+			$fixed = "Перечисление." + ($v -split '\.')[1] + "." + $Matches[2]
+			Report-Error "26. Design-time value '$v' — the platform does not resolve the EnumValue form here, the condition never matches; write '$fixed'"
+			$check26Ok = $false
+		}
+	}
+	if ($check26Ok) { Report-OK "26. Design-time values: resolvable" }
 }
 
 # --- Summary ---

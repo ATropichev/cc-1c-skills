@@ -1,0 +1,33 @@
+{
+  "name": "Значение ссылки в отборе условного оформления: вид Enum.X.EnumValue.Y — ошибка (платформа не разрешает); Перечисление.X.Y и Enum.X.Y — нет",
+  "setup": "fixture:module-handler-orphan",
+  "params": {
+    "formPath": "DataProcessors/БезДействия/Forms/Форма"
+  },
+  "preRun": [
+    {
+      "writeFile": {
+        "path": "DataProcessors/БезДействия/Forms/Форма/Ext/Form.xml",
+        "content": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<Form xmlns=\"http://v8.1c.ru/8.3/xcf/logform\" xmlns:dcscor=\"http://v8.1c.ru/8.1/data-composition-system/core\" xmlns:dcsset=\"http://v8.1c.ru/8.1/data-composition-system/settings\" xmlns:v8=\"http://v8.1c.ru/8.1/data/core\" xmlns:v8ui=\"http://v8.1c.ru/8.1/data/ui\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\" xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" version=\"2.17\">\n\t<AutoCommandBar name=\"ФормаКоманднаяПанель\" id=\"-1\"/>\n\t<Attributes>\n\t\t<Attribute name=\"Статус\" id=\"1\">\n\t\t\t<Type>\n\t\t\t\t<v8:Type>xs:string</v8:Type>\n\t\t\t</Type>\n\t\t</Attribute>\n\t\t<ConditionalAppearance>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter>\n\t\t\t\t\t<dcsset:item xsi:type=\"dcsset:FilterItemComparison\">\n\t\t\t\t\t\t<dcsset:left xsi:type=\"dcscor:Field\">Статус</dcsset:left>\n\t\t\t\t\t\t<dcsset:comparisonType>Equal</dcsset:comparisonType>\n\t\t\t\t\t\t<dcsset:right xsi:type=\"dcscor:DesignTimeValue\">Enum.СтатусыЗаявок.EnumValue.Утверждена</dcsset:right>\n\t\t\t\t\t</dcsset:item>\n\t\t\t\t</dcsset:filter>\n\t\t\t\t<dcsset:appearance/>\n\t\t\t</dcsset:item>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter>\n\t\t\t\t\t<dcsset:item xsi:type=\"dcsset:FilterItemComparison\">\n\t\t\t\t\t\t<dcsset:left xsi:type=\"dcscor:Field\">Статус</dcsset:left>\n\t\t\t\t\t\t<dcsset:comparisonType>Equal</dcsset:comparisonType>\n\t\t\t\t\t\t<dcsset:right xsi:type=\"dcscor:DesignTimeValue\">Перечисление.СтатусыЗаявок.Новая</dcsset:right>\n\t\t\t\t\t</dcsset:item>\n\t\t\t\t</dcsset:filter>\n\t\t\t\t<dcsset:appearance/>\n\t\t\t</dcsset:item>\n\t\t\t<dcsset:item>\n\t\t\t\t<dcsset:selection/>\n\t\t\t\t<dcsset:filter>\n\t\t\t\t\t<dcsset:item xsi:type=\"dcsset:FilterItemComparison\">\n\t\t\t\t\t\t<dcsset:left xsi:type=\"dcscor:Field\">Статус</dcsset:left>\n\t\t\t\t\t\t<dcsset:comparisonType>Equal</dcsset:comparisonType>\n\t\t\t\t\t\t<dcsset:right xsi:type=\"dcscor:DesignTimeValue\">Enum.СтатусыЗаявок.Отклонена</dcsset:right>\n\t\t\t\t\t</dcsset:item>\n\t\t\t\t</dcsset:filter>\n\t\t\t\t<dcsset:appearance/>\n\t\t\t</dcsset:item>\n\t\t</ConditionalAppearance>\n\t</Attributes>\n</Form>\n"
+      }
+    },
+    {
+      "writeFile": {
+        "path": "DataProcessors/БезДействия/Forms/Форма/Ext/Form/Module.bsl",
+        "content": ""
+      }
+    }
+  ],
+  "noSnapshot": "валидатор файлы не меняет; проверяется вывод",
+  "expectError": true,
+  "expect": {
+    "stdoutContains": [
+      "26. Design-time value 'Enum.СтатусыЗаявок.EnumValue.Утверждена'",
+      "write 'Перечисление.СтатусыЗаявок.Утверждена'"
+    ],
+    "stdoutNotContains": [
+      "'Перечисление.СтатусыЗаявок.Новая'",
+      "'Enum.СтатусыЗаявок.Отклонена'"
+    ]
+  }
+}
