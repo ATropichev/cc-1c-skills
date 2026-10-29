@@ -13,7 +13,7 @@ node tests/skills/runner.mjs cases/meta-compile/catalog-basic   # один ке�
 node tests/skills/runner.mjs --verbose                          # подробный вывод (дерево)
 node tests/skills/runner.mjs --update-snapshots                 # обновить эталоны
 node tests/skills/runner.mjs --runtime python                   # запуск на PY-версиях
-POWERSHELL=<путь к pwsh.exe> node tests/skills/runner.mjs cases/mxl-compile   # PS-порт на pwsh (ручная проверка)
+$env:POWERSHELL='<путь к pwsh.exe>'; node tests/skills/runner.mjs cases/mxl-compile   # PS-порт на pwsh (ручная проверка; в bash — POWERSHELL=… node …)
 node tests/skills/runner.mjs --json report.json                 # JSON-отчёт
 node tests/skills/runner.mjs --concurrency 4                    # ограничить параллельность
 node tests/skills/runner.mjs --with-validation                  # + платформенная валидация

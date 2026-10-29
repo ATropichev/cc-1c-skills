@@ -148,7 +148,10 @@ if (Test-Path -LiteralPath $srcPath) {
 		$old = Get-Content -LiteralPath $srcPath -Raw -Encoding UTF8 | ConvertFrom-Json @cfj
 		if ($old.versions -is [PSCustomObject]) {
 			foreach ($pr in $old.versions.PSObject.Properties) {
-				$srcVers[$pr.Name] = @{ ref = "$($pr.Value.ref)"; commit = "$($pr.Value.commit)"; fetched = "$($pr.Value.fetched)" }
+				# pwsh 6 и 7.0–7.4 ключа DateKind не знают — формат наш, возвращаем его без потерь
+				$f = $pr.Value.fetched
+				if ($f -is [datetime]) { $f = $f.ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ', [Globalization.CultureInfo]::InvariantCulture) }
+				$srcVers[$pr.Name] = @{ ref = "$($pr.Value.ref)"; commit = "$($pr.Value.commit)"; fetched = "$f" }
 			}
 		}
 	} catch { }
