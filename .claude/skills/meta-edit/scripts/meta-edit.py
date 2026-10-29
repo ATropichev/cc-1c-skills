@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# meta-edit v1.72 — Edit existing 1C metadata object XML
+# meta-edit v1.73 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 
 import argparse
@@ -956,16 +956,24 @@ def build_fill_value_xml(indent, type_str):
 
 
 def build_mltext_xml(indent, tag, text):
-    if not text:
+    # Строка → один язык (ru); словарь { "ru": ..., "en": ... } → по элементу на язык.
+    if isinstance(text, dict):
+        pairs = [(str(k), str(v)) for k, v in text.items()]
+    elif text is not None and str(text):
+        pairs = [("ru", str(text))]
+    else:
+        pairs = []
+    if not pairs:
         return f"{indent}<{tag}/>"
-    lines = [
-        f"{indent}<{tag}>",
-        f"{indent}\t<v8:item>",
-        f"{indent}\t\t<v8:lang>ru</v8:lang>",
-        f"{indent}\t\t<v8:content>{esc_xml_text(text)}</v8:content>",
-        f"{indent}\t</v8:item>",
-        f"{indent}</{tag}>",
-    ]
+    lines = [f"{indent}<{tag}>"]
+    for lang, content in pairs:
+        lines += [
+            f"{indent}\t<v8:item>",
+            f"{indent}\t\t<v8:lang>{lang}</v8:lang>",
+            f"{indent}\t\t<v8:content>{esc_xml_text(content)}</v8:content>",
+            f"{indent}\t</v8:item>",
+        ]
+    lines.append(f"{indent}</{tag}>")
     return "\r\n".join(lines)
 
 
@@ -2745,6 +2753,20 @@ def modify_properties(props_def):
             else:
                 die(f"Property '{prop_name}': could not create element")
 
+        # Многоязычная строка (синоним, представления, пояснение…): простой текст в таком теге платформа
+        # не загружает. Узел заменяется целиком — и пустой, и уже заполненный.
+        if prop_name in local_string_object_props:
+            ml_nodes = import_fragment(build_mltext_xml(get_child_indent(properties_el), prop_name, prop_value))
+            if ml_nodes:
+                idx = list(properties_el).index(prop_el)
+                ml_nodes[0].tail = prop_el.tail
+                properties_el.insert(idx + 1, ml_nodes[0])
+                remove_node_with_whitespace(prop_el)
+                shown = '; '.join(f"{k}: {v}" for k, v in prop_value.items()) if isinstance(prop_value, dict) else str(prop_value)
+                info(f"Modified property: {prop_name} = {shown}")
+                modify_count += 1
+            continue
+
         # Handle boolean values
         value_str = str(prop_value)
         if isinstance(prop_value, bool):
@@ -3179,6 +3201,13 @@ child_modify_keys = [
     "add", "remove", "modify", "name", "type", "synonym", "Format", "EditFormat", "ToolTip", "ChoiceForm", "MinValue",
     "MaxValue", "LinkByType", "ChoiceParameterLinks", "ChoiceParameters", "FillValue",
 ]
+
+# Свойства объекта типа LocalStringType (XSD MDClasses) — modify-property пишет их многоязычной строкой.
+local_string_object_props = {
+    'Synonym', 'ToolTip', 'Explanation', 'ObjectPresentation', 'ExtendedObjectPresentation', 'ListPresentation',
+    'ExtendedListPresentation', 'RecordPresentation', 'ExtendedRecordPresentation', 'ExtendedPresentation',
+    'Format', 'EditFormat',
+}
 
 known_child_props = {
     'AccountingFlag', 'Balance', 'BaseDimension', 'ChoiceFoldersAndItems', 'ChoiceForm', 'ChoiceHistoryOnInput',

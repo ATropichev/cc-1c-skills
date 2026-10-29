@@ -89,7 +89,8 @@
 		<ChildObjects>
 			<Attribute uuid="UUID-012">
 				<Properties>
-					<Name>КодНалогоплательщика</Name><Synonym>
+					<Name>КодНалогоплательщика</Name>
+					<Synonym>
 						<v8:item>
 							<v8:lang>ru</v8:lang>
 							<v8:content>Код налогоплательщика</v8:content>

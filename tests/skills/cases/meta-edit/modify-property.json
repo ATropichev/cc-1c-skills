@@ -1,14 +1,34 @@
 {
-  "name": "Изменение свойств объекта",
+  "name": "Изменение свойств объекта: скалярные и многоязычные (пустые и заполненные теги)",
   "preRun": [
     {
       "script": "meta-compile/scripts/meta-compile",
-      "input": { "type": "Catalog", "name": "Организации" },
-      "args": { "-JsonPath": "{inputFile}", "-OutputDir": "{workDir}" }
+      "input": {
+        "type": "Catalog",
+        "name": "Организации"
+      },
+      "args": {
+        "-JsonPath": "{inputFile}",
+        "-OutputDir": "{workDir}"
+      }
     }
   ],
-  "params": { "objectPath": "Catalogs/Организации" },
+  "params": {
+    "objectPath": "Catalogs/Организации"
+  },
   "input": {
-    "modify": { "properties": { "CodeLength": 11, "DescriptionLength": 150 } }
+    "modify": {
+      "properties": {
+        "CodeLength": 11,
+        "DescriptionLength": 150,
+        "Synonym": "Организации (новый синоним)",
+        "ObjectPresentation": "Организация",
+        "ListPresentation": {
+          "ru": "Организации",
+          "en": "Companies"
+        },
+        "Explanation": ""
+      }
+    }
   }
 }

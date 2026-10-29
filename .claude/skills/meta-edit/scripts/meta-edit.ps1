@@ -1,4 +1,4 @@
-﻿# meta-edit v1.72 — Edit existing 1C metadata object XML
+﻿# meta-edit v1.73 — Edit existing 1C metadata object XML
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -918,18 +918,27 @@ function Build-FillValueXml {
 }
 
 function Build-MLTextXml {
-	param([string]$indent, [string]$tag, [string]$text)
-	if (-not $text) {
+	param([string]$indent, [string]$tag, $text)
+	# Строка → один язык (ru); объект/словарь { "ru": ..., "en": ... } → по элементу на язык.
+	$pairs = @()
+	if ($text -is [System.Collections.IDictionary]) {
+		foreach ($k in $text.Keys) { $pairs += ,@("$k", "$($text[$k])") }
+	} elseif ($text -is [System.Management.Automation.PSCustomObject]) {
+		foreach ($p in $text.PSObject.Properties) { $pairs += ,@("$($p.Name)", "$($p.Value)") }
+	} elseif ("$text") {
+		$pairs += ,@("ru", "$text")
+	}
+	if ($pairs.Count -eq 0) {
 		return "$indent<$tag/>"
 	}
-	$lines = @(
-		"$indent<$tag>"
-		"$indent`t<v8:item>"
-		"$indent`t`t<v8:lang>ru</v8:lang>"
-		"$indent`t`t<v8:content>$(Esc-XmlText $text)</v8:content>"
-		"$indent`t</v8:item>"
-		"$indent</$tag>"
-	)
+	$lines = @("$indent<$tag>")
+	foreach ($pr in $pairs) {
+		$lines += "$indent`t<v8:item>"
+		$lines += "$indent`t`t<v8:lang>$($pr[0])</v8:lang>"
+		$lines += "$indent`t`t<v8:content>$(Esc-XmlText $pr[1])</v8:content>"
+		$lines += "$indent`t</v8:item>"
+	}
+	$lines += "$indent</$tag>"
 	return $lines -join "`r`n"
 }
 
@@ -2812,6 +2821,23 @@ function Modify-Properties($propsDef) {
 			}
 		}
 
+		# Многоязычная строка (синоним, представления, пояснение…): простой текст в таком теге платформа
+		# не загружает. Узел заменяется целиком — и пустой, и уже заполненный.
+		if ($script:localStringObjectProps -ccontains $propName) {
+			$mlNodes = Import-Fragment (Build-MLTextXml (Get-ChildIndent $script:propertiesEl) $propName $propValue)
+			if ($mlNodes.Count -gt 0) {
+				# InsertBefore+RemoveChild сохраняет whitespace позиции (как Set-AttrPropertyElement)
+				$script:propertiesEl.InsertBefore($mlNodes[0], $propEl) | Out-Null
+				$script:propertiesEl.RemoveChild($propEl) | Out-Null
+				$shown = if ($propValue -is [System.Management.Automation.PSCustomObject]) { ($propValue.PSObject.Properties | ForEach-Object { "$($_.Name): $($_.Value)" }) -join '; ' }
+					elseif ($propValue -is [System.Collections.IDictionary]) { ($propValue.Keys | ForEach-Object { "${_}: $($propValue[$_])" }) -join '; ' }
+					else { "$propValue" }
+				Info "Modified property: $propName = $shown"
+				$script:modifyCount++
+			}
+			return
+		}
+
 		# Handle boolean values
 		$valueStr = "$propValue"
 		if ($propValue -is [bool]) {
@@ -3066,8 +3092,8 @@ function Modify-ChildElements($modifyDef, [string]$childType) {
 								$synXml = Build-MLTextXml (Get-ChildIndent $propsEl) "Synonym" $newSynonym
 								$newSynNodes = Import-Fragment $synXml
 								if ($newSynNodes.Count -gt 0) {
-									$propsEl.InsertAfter($newSynNodes[0], $synEl) | Out-Null
-									Remove-NodeWithWhitespace $synEl
+									$propsEl.InsertBefore($newSynNodes[0], $synEl) | Out-Null
+									$propsEl.RemoveChild($synEl) | Out-Null
 								}
 							}
 						}
@@ -3090,8 +3116,8 @@ function Modify-ChildElements($modifyDef, [string]$childType) {
 
 					$newTypeNodes = Import-Fragment $newTypeXml
 					if ($typeEl -and $newTypeNodes.Count -gt 0) {
-						$propsEl.InsertAfter($newTypeNodes[0], $typeEl) | Out-Null
-						Remove-NodeWithWhitespace $typeEl
+						$propsEl.InsertBefore($newTypeNodes[0], $typeEl) | Out-Null
+						$propsEl.RemoveChild($typeEl) | Out-Null
 					} elseif ($newTypeNodes.Count -gt 0) {
 						# No existing Type — insert after Comment
 						$commentEl = $null
@@ -3117,8 +3143,8 @@ function Modify-ChildElements($modifyDef, [string]$childType) {
 						$newFillXml = Build-FillValueXml $fillIndent $newTypeStr
 						$newFillNodes = Import-Fragment $newFillXml
 						if ($newFillNodes.Count -gt 0) {
-							$propsEl.InsertAfter($newFillNodes[0], $fillValEl) | Out-Null
-							Remove-NodeWithWhitespace $fillValEl
+							$propsEl.InsertBefore($newFillNodes[0], $fillValEl) | Out-Null
+							$propsEl.RemoveChild($fillValEl) | Out-Null
 						}
 					}
 
@@ -3136,8 +3162,10 @@ function Modify-ChildElements($modifyDef, [string]$childType) {
 					$newSynXml = Build-MLTextXml $synIndent "Synonym" "$changeValue"
 					$newSynNodes = Import-Fragment $newSynXml
 					if ($synEl -and $newSynNodes.Count -gt 0) {
-						$propsEl.InsertAfter($newSynNodes[0], $synEl) | Out-Null
-						Remove-NodeWithWhitespace $synEl
+						# InsertBefore+RemoveChild сохраняет whitespace позиции (InsertAfter+Remove-NodeWithWhitespace
+						# склеивал узел с предыдущим: </Name><Synonym>)
+						$propsEl.InsertBefore($newSynNodes[0], $synEl) | Out-Null
+						$propsEl.RemoveChild($synEl) | Out-Null
 					}
 					Info "Changed synonym of $xmlTag '$elemName': $changeValue"
 					$script:modifyCount++
@@ -3332,6 +3360,13 @@ $script:knownObjectProps = @(
 	'StandardAttributes','StandardTabularSections','SubordinationUse','Synonym','Task','TaskNumberAutoPrefix',
 	'ToolTip','Type','UnpostInPrivilegedMode','UpdateDataHistoryImmediatelyAfterWrite','UseStandardCommands',
 	'VariantsStorage','WriteMode'
+)
+
+# Свойства объекта типа LocalStringType (XSD MDClasses) — modify-property пишет их многоязычной строкой.
+$script:localStringObjectProps = @(
+	'Synonym','ToolTip','Explanation','ObjectPresentation','ExtendedObjectPresentation','ListPresentation',
+	'ExtendedListPresentation','RecordPresentation','ExtendedRecordPresentation','ExtendedPresentation',
+	'Format','EditFormat'
 )
 
 # Известные свойства дочерних элементов (union Attribute/Dimension/Resource по корпусу) — allowlist default-ветки
