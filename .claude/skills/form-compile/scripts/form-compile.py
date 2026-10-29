@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.222 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.223 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -5734,13 +5734,16 @@ def emit_group(lines, el, name, eid, indent):
         lines.append(f'{inner}<CurrentRowUse>{el["currentRowUse"]}</CurrentRowUse>')
 
     # ShowTitle
-    # Обычная группа: умолчание DSL — заголовок скрыт (так у 92% обычных групп корпуса), showTitle: true —
-    # показать (тег не пишется, умолчание платформы). У сворачиваемой/всплывающей заголовок — переключатель:
-    # умолчание платформы, пишется лишь явный false.
+    # Обычная группа без showTitle: заголовок показан, если задан title, иначе скрыт — служебная группа
+    # раскладки без заголовка давала бы пустую строку-заголовок (умолчание платформы — показан).
+    # У сворачиваемой/всплывающей заголовок — переключатель: умолчание платформы, пишется лишь явный false.
     if behavior_val in ('collapsible', 'popup'):
         if el.get('showTitle') is not None and not el['showTitle']:
             lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
-    elif str(el.get('showTitle')).lower() != 'true':
+    elif el.get('showTitle') is not None:
+        if str(el['showTitle']).lower() != 'true':
+            lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
+    elif not el.get('title'):
         lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
     # Заголовок свёрнутого представления (collapsible/popup) — мультиязычный текст
     if el.get('collapsedTitle'):

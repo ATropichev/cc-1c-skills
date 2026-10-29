@@ -134,15 +134,32 @@
 				</LabelField>
 			</ChildItems>
 		</UsualGroup>
+		<UsualGroup name="ГруппаИтоги" id="24">
+			<Title>
+				<v8:item>
+					<v8:lang>ru</v8:lang>
+					<v8:content>Итоги</v8:content>
+				</v8:item>
+			</Title>
+			<Group>Vertical</Group>
+			<ExtendedTooltip name="ГруппаИтогиРасширеннаяПодсказка" id="25"/>
+			<ChildItems>
+				<LabelField name="МеткаИтоги" id="26">
+					<DataPath>Поле2</DataPath>
+					<ContextMenu name="МеткаИтогиКонтекстноеМеню" id="27"/>
+					<ExtendedTooltip name="МеткаИтогиРасширеннаяПодсказка" id="28"/>
+				</LabelField>
+			</ChildItems>
+		</UsualGroup>
 	</ChildItems>
 	<Attributes>
-		<Attribute name="Объект" id="24">
+		<Attribute name="Объект" id="29">
 			<Type>
 				<v8:Type>cfg:DataProcessorObject.СГруппами</v8:Type>
 			</Type>
 			<MainAttribute>true</MainAttribute>
 		</Attribute>
-		<Attribute name="Поле1" id="25">
+		<Attribute name="Поле1" id="30">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -157,7 +174,7 @@
 				</v8:StringQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="Поле2" id="26">
+		<Attribute name="Поле2" id="31">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -173,7 +190,7 @@
 				</v8:NumberQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="Поле3" id="27">
+		<Attribute name="Поле3" id="32">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
@@ -187,7 +204,7 @@
 				</v8:DateQualifiers>
 			</Type>
 		</Attribute>
-		<Attribute name="Изменено" id="28">
+		<Attribute name="Изменено" id="33">
 			<Title>
 				<v8:item>
 					<v8:lang>ru</v8:lang>
