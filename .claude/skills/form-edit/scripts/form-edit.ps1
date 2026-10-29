@@ -1,4 +1,4 @@
-﻿# form-edit v1.42 — Edit 1C managed form elements
+﻿# form-edit v1.43 — Edit 1C managed form elements
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -3988,8 +3988,12 @@ function Emit-Group {
 	if ($el.currentRowUse) { X "$inner<CurrentRowUse>$($el.currentRowUse)</CurrentRowUse>" }
 
 	# ShowTitle
-	# ShowTitle=true — умолчание платформы (в корпусе только false): пишем лишь false
-	if ($null -ne $el.showTitle -and -not $el.showTitle) { X "$inner<ShowTitle>false</ShowTitle>" }
+	# Обычная группа: умолчание DSL — заголовок скрыт (так у 92% обычных групп корпуса), showTitle: true —
+	# показать (тег не пишется, умолчание платформы). У сворачиваемой/всплывающей заголовок — переключатель:
+	# умолчание платформы, пишется лишь явный false.
+	if (@('collapsible','popup') -contains $behaviorVal) {
+		if ($null -ne $el.showTitle -and -not $el.showTitle) { X "$inner<ShowTitle>false</ShowTitle>" }
+	} elseif (-not ($el.showTitle -eq $true)) { X "$inner<ShowTitle>false</ShowTitle>" }
 	# Заголовок свёрнутого представления (collapsible/popup) — мультиязычный текст
 	if ($el.collapsedTitle) { Emit-MLText -tag "CollapsedRepresentationTitle" -text $el.collapsedTitle -indent $inner }
 

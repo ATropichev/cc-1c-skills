@@ -28,6 +28,7 @@
 	<ChildItems>
 		<UsualGroup name="ГруппаФайл" id="5">
 			<Group>Horizontal</Group>
+			<ShowTitle>false</ShowTitle>
 			<ExtendedTooltip name="ГруппаФайлРасширеннаяПодсказка" id="6"/>
 			<ChildItems>
 				<InputField name="ИмяФайла" id="7">

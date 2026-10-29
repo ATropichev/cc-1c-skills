@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-decompile v0.155 — Decompile 1C managed Form.xml to JSON DSL (draft)
+# form-decompile v0.156 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 #
@@ -2112,9 +2112,14 @@ def decompile_element(node):
         if rep:
             repmap = {'None': 'none', 'NormalSeparation': 'normal', 'WeakSeparation': 'weak', 'StrongSeparation': 'strong'}
             obj['representation'] = repmap[rep] if rep in repmap else rep
+        # Обычная группа: умолчание DSL — заголовок скрыт, поэтому false опускается, а отсутствие тега
+        # (умолчание платформы — показан) даёт showTitle: true. Сворачиваемая/всплывающая — факт. значение.
         st = get_child(node, 'ShowTitle')
-        if st is not None:
-            obj['showTitle'] = (st == 'true')
+        if behavior in ('Collapsible', 'PopUp'):
+            if st is not None:
+                obj['showTitle'] = (st == 'true')
+        elif st != 'false':
+            obj['showTitle'] = True
         cru = get_child(node, 'CurrentRowUse')
         if cru:
             obj['currentRowUse'] = cru

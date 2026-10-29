@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# form-compile v1.220 — Compile 1C managed form from JSON or object metadata
+# form-compile v1.221 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 import argparse
 import copy
@@ -873,7 +873,7 @@ def generate_catalog_item_dsl(meta, p, fd):
     # BSP group
     bsp_group = (p.get('additional') or {}).get('bspGroup', True)
     if bsp_group:
-        root_elements.append(OrderedDict([('group', 'vertical'), ('name', '\u0413\u0440\u0443\u043f\u043f\u0430\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0435\u0420\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u044b')]))
+        root_elements.append(OrderedDict([('group', 'vertical'), ('name', '\u0413\u0440\u0443\u043f\u043f\u0430\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0435\u0420\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u044b'), ('showTitle', True)]))
 
     # Properties
     form_props = OrderedDict()
@@ -1087,7 +1087,7 @@ def generate_document_item_dsl(meta, p, fd):
         else:
             add_page_children.extend(add_left_els + add_right_els)
         if add_bsp_group:
-            add_page_children.append(OrderedDict([('group', 'vertical'), ('name', '\u0413\u0440\u0443\u043f\u043f\u0430\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0435\u0420\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u044b')]))
+            add_page_children.append(OrderedDict([('group', 'vertical'), ('name', '\u0413\u0440\u0443\u043f\u043f\u0430\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0435\u0420\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u044b'), ('showTitle', True)]))
         additional_page = OrderedDict([('page', '\u0413\u0440\u0443\u043f\u043f\u0430\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u043e'), ('title', '\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u043e'), ('children', add_page_children)])
 
     # Build TS page elements
@@ -1114,7 +1114,7 @@ def generate_document_item_dsl(meta, p, fd):
         if footer_elements:
             root_elements.extend(footer_elements)
         if add_bsp_group and add_pos != 'none':
-            root_elements.append(OrderedDict([('group', 'vertical'), ('name', '\u0413\u0440\u0443\u043f\u043f\u0430\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0435\u0420\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u044b')]))
+            root_elements.append(OrderedDict([('group', 'vertical'), ('name', '\u0413\u0440\u0443\u043f\u043f\u0430\u0414\u043e\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044c\u043d\u044b\u0435\u0420\u0435\u043a\u0432\u0438\u0437\u0438\u0442\u044b'), ('showTitle', True)]))
     else:
         # Pages form
         if header_pos == 'abovePages':
@@ -1451,7 +1451,7 @@ def generate_chart_of_accounts_item_dsl(meta, p, fd, preset_data):
         for flag in meta['AccountingFlags']:
             flag_children.append(OrderedDict([('check', flag['Name']), ('path', f"\u041e\u0431\u044a\u0435\u043a\u0442.{flag['Name']}")]))
         elements.append(OrderedDict([
-            ('group', 'vertical'), ('name', '\u0413\u0440\u0443\u043f\u043f\u0430\u041f\u0440\u0438\u0437\u043d\u0430\u043a\u0438\u0423\u0447\u0435\u0442\u0430'), ('title', '\u041f\u0440\u0438\u0437\u043d\u0430\u043a\u0438 \u0443\u0447\u0435\u0442\u0430'),
+            ('group', 'vertical'), ('name', '\u0413\u0440\u0443\u043f\u043f\u0430\u041f\u0440\u0438\u0437\u043d\u0430\u043a\u0438\u0423\u0447\u0435\u0442\u0430'), ('showTitle', True), ('title', '\u041f\u0440\u0438\u0437\u043d\u0430\u043a\u0438 \u0443\u0447\u0435\u0442\u0430'),
             ('children', flag_children),
         ]))
 
@@ -5733,8 +5733,13 @@ def emit_group(lines, el, name, eid, indent):
         lines.append(f'{inner}<CurrentRowUse>{el["currentRowUse"]}</CurrentRowUse>')
 
     # ShowTitle
-    # ShowTitle=true — умолчание платформы (в корпусе только false): пишем лишь false
-    if el.get('showTitle') is not None and not el['showTitle']:
+    # Обычная группа: умолчание DSL — заголовок скрыт (так у 92% обычных групп корпуса), showTitle: true —
+    # показать (тег не пишется, умолчание платформы). У сворачиваемой/всплывающей заголовок — переключатель:
+    # умолчание платформы, пишется лишь явный false.
+    if behavior_val in ('collapsible', 'popup'):
+        if el.get('showTitle') is not None and not el['showTitle']:
+            lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
+    elif el.get('showTitle') not in (True, 'true'):
         lines.append(f'{inner}<ShowTitle>false</ShowTitle>')
     # Заголовок свёрнутого представления (collapsible/popup) — мультиязычный текст
     if el.get('collapsedTitle'):

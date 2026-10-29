@@ -1,4 +1,4 @@
-﻿# form-compile v1.220 — Compile 1C managed form from JSON or object metadata
+﻿# form-compile v1.221 — Compile 1C managed form from JSON or object metadata
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 [CmdletBinding(PositionalBinding=$false)]
 param(
@@ -688,7 +688,7 @@ function Generate-CatalogItemDSL($meta, [hashtable]$p, [hashtable]$fd) {
 	# BSP group
 	$bspGroup = if ($p.additional -and $null -ne $p.additional.bspGroup) { $p.additional.bspGroup } else { $true }
 	if ($bspGroup) {
-		$rootElements += [ordered]@{ group = "vertical"; name = "ГруппаДополнительныеРеквизиты" }
+		$rootElements += [ordered]@{ group = "vertical"; name = "ГруппаДополнительныеРеквизиты"; showTitle = $true }
 	}
 
 	# Properties
@@ -917,7 +917,7 @@ function Generate-DocumentItemDSL($meta, [hashtable]$p, [hashtable]$fd) {
 			$addPageChildren += @($addLeftEls + $addRightEls)
 		}
 		if ($addBspGroup) {
-			$addPageChildren += [ordered]@{ group = "vertical"; name = "ГруппаДополнительныеРеквизиты" }
+			$addPageChildren += [ordered]@{ group = "vertical"; name = "ГруппаДополнительныеРеквизиты"; showTitle = $true }
 		}
 		$additionalPage = [ordered]@{ page = "ГруппаДополнительно"; title = "Дополнительно"; children = $addPageChildren }
 	}
@@ -948,7 +948,7 @@ function Generate-DocumentItemDSL($meta, [hashtable]$p, [hashtable]$fd) {
 		$rootElements += $headerGroup
 		if ($footerElements.Count -gt 0) { $rootElements += $footerElements }
 		if ($addBspGroup -and $addPos -ne "none") {
-			$rootElements += [ordered]@{ group = "vertical"; name = "ГруппаДополнительныеРеквизиты" }
+			$rootElements += [ordered]@{ group = "vertical"; name = "ГруппаДополнительныеРеквизиты"; showTitle = $true }
 		}
 	} else {
 		# Pages form
@@ -1296,7 +1296,7 @@ function Generate-ChartOfAccountsItemDSL($meta, [hashtable]$p, [hashtable]$fd, [
 			$flagChildren += [ordered]@{ check = $flag.Name; path = "Объект.$($flag.Name)" }
 		}
 		$elements += [ordered]@{
-			group = "vertical"; name = "ГруппаПризнакиУчета"; title = "Признаки учета"
+			group = "vertical"; name = "ГруппаПризнакиУчета"; showTitle = $true; title = "Признаки учета"
 			children = $flagChildren
 		}
 	}
@@ -5521,8 +5521,12 @@ function Emit-Group {
 	if ($el.currentRowUse) { X "$inner<CurrentRowUse>$($el.currentRowUse)</CurrentRowUse>" }
 
 	# ShowTitle
-	# ShowTitle=true — умолчание платформы (в корпусе только false): пишем лишь false
-	if ($null -ne $el.showTitle -and -not $el.showTitle) { X "$inner<ShowTitle>false</ShowTitle>" }
+	# Обычная группа: умолчание DSL — заголовок скрыт (так у 92% обычных групп корпуса), showTitle: true —
+	# показать (тег не пишется, умолчание платформы). У сворачиваемой/всплывающей заголовок — переключатель:
+	# умолчание платформы, пишется лишь явный false.
+	if (@('collapsible','popup') -contains $behaviorVal) {
+		if ($null -ne $el.showTitle -and -not $el.showTitle) { X "$inner<ShowTitle>false</ShowTitle>" }
+	} elseif (-not ($el.showTitle -eq $true)) { X "$inner<ShowTitle>false</ShowTitle>" }
 	# Заголовок свёрнутого представления (collapsible/popup) — мультиязычный текст
 	if ($el.collapsedTitle) { Emit-MLText -tag "CollapsedRepresentationTitle" -text $el.collapsedTitle -indent $inner }
 

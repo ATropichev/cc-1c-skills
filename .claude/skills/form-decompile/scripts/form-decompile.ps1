@@ -1,4 +1,4 @@
-﻿# form-decompile v0.155 — Decompile 1C managed Form.xml to JSON DSL (draft)
+﻿# form-decompile v0.156 — Decompile 1C managed Form.xml to JSON DSL (draft)
 # Source: https://github.com/Nikolay-Shirokov/cc-1c-skills
 # ВНИМАНИЕ: раундтрип не гарантируется. Навык исключён из авто-использования моделью.
 [CmdletBinding(PositionalBinding=$false)]
@@ -1925,7 +1925,11 @@ function Decompile-Element {
 			Add-CommonProps $obj $node $name
 			$rep = Get-Child $node 'Representation'
 			if ($rep) { $repmap=@{'None'='none';'NormalSeparation'='normal';'WeakSeparation'='weak';'StrongSeparation'='strong'}; if ($repmap.ContainsKey($rep)) { $obj['representation']=$repmap[$rep] } else { $obj['representation']=$rep } }
-			$st = Get-Child $node 'ShowTitle'; if ($null -ne $st) { $obj['showTitle'] = ($st -eq 'true') }  # факт. значение (явный true тоже)
+			# Обычная группа: умолчание DSL — заголовок скрыт, поэтому false опускается, а отсутствие тега
+			# (умолчание платформы — показан) даёт showTitle: true. Сворачиваемая/всплывающая — факт. значение.
+			$st = Get-Child $node 'ShowTitle'
+			if (@('Collapsible','PopUp') -contains $behavior) { if ($null -ne $st) { $obj['showTitle'] = ($st -eq 'true') } }
+			elseif ($st -ne 'false') { $obj['showTitle'] = $true }
 			$cru = Get-Child $node 'CurrentRowUse'; if ($cru) { $obj['currentRowUse'] = $cru }   # использование текущей строки группы
 			$crt = $node.SelectSingleNode("lf:CollapsedRepresentationTitle", $ns); if ($crt) { $ct = Get-LangText $crt; if ($null -ne $ct -and $ct -ne '') { $obj['collapsedTitle'] = $ct } }
 			if ((Get-Child $node 'United') -eq 'false') { $obj['united'] = $false }

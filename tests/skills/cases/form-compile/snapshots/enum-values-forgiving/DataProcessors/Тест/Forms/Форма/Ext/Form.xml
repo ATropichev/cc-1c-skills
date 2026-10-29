@@ -15,6 +15,7 @@
 			<Group>Vertical</Group>
 			<ChildrenAlign>ItemsLeftTitlesLeft</ChildrenAlign>
 			<ChildItemsWidth>Equal</ChildItemsWidth>
+			<ShowTitle>false</ShowTitle>
 			<ExtendedTooltip name="ГруппаРасширеннаяПодсказка" id="5"/>
 			<ChildItems>
 				<LabelDecoration name="Надпись" id="6">

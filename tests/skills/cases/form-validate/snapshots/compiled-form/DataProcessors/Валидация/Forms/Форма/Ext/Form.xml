@@ -23,6 +23,7 @@
 		</CheckBoxField>
 		<UsualGroup name="Группа" id="7">
 			<Group>Horizontal</Group>
+			<ShowTitle>false</ShowTitle>
 			<ExtendedTooltip name="ГруппаРасширеннаяПодсказка" id="8"/>
 			<ChildItems>
 				<InputField name="Поле2" id="9">

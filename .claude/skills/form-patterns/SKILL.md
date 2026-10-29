@@ -175,7 +175,7 @@ allowed-tools: []
 Группа «картинка + надпись», скрыта по умолчанию, показывается программно:
 
 ```json
-{ "group": "horizontal", "name": "ГруппаПредупреждение", "showTitle": false,
+{ "group": "horizontal", "name": "ГруппаПредупреждение",
   "visible": false, "children": [
     { "picture": "ПредупреждениеКартинка" },
     { "label": "ПредупреждениеНадпись", "title": "Текст", "maxWidth": 76, "autoMaxWidth": false }

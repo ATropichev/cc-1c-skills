@@ -153,7 +153,7 @@ powershell.exe -NoProfile -File "${CLAUDE_SKILL_DIR}/scripts/form-compile.ps1" -
 | Ключ | Описание |
 |------|----------|
 | `behavior` | `collapsible` — сворачиваемая, `popup` — всплывающая; не указан — обычная |
-| `showTitle: true` | Показывать заголовок |
+| `showTitle: true` | Показывать заголовок (без ключа у обычной группы заголовок скрыт, у сворачиваемой и всплывающей — показан) |
 | `representation` | `none` / `normal` / `weak` / `strong` — рамка группы |
 | `united: false` | Выравнивать поля только внутри группы, а не вместе с соседними |
 | `children` | Вложенные элементы |

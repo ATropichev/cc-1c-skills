@@ -25,6 +25,9 @@
       ]},
       { "group": "vertical", "name": "ГруппаПодвал", "behavior": "collapsible", "collapsed": true, "title": { "ru": "Подвал", "en": "Footer" }, "collapsedTitle": "Развернуть подвал", "titleDataPath": "Изменено", "format": { "ru": "БЛ=; БИ=*", "en": "BF=; BT=*" }, "showLeftMargin": false, "enableContentChange": false, "verticalSpacing": "None", "displayImportance": "Low", "children": [
         { "input": "Поле3", "path": "Поле3", "title": "Поле 3" }
+      ]},
+      { "group": "vertical", "name": "ГруппаСлужебная", "children": [
+        { "labelField": "МеткаСлужебная", "path": "Поле2" }
       ]}
     ],
     "attributes": [

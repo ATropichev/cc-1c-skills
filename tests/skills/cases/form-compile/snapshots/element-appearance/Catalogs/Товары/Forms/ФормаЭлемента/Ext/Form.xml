@@ -59,6 +59,7 @@
 			<ExtendedTooltip name="ОКРасширеннаяПодсказка" id="11"/>
 		</Button>
 		<UsualGroup name="ГруппаОформление" id="12">
+			<ShowTitle>false</ShowTitle>
 			<BackColor>web:Honeydew</BackColor>
 			<ExtendedTooltip name="ГруппаОформлениеРасширеннаяПодсказка" id="13"/>
 			<ChildItems>
